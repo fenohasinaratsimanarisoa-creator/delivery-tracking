@@ -1,34 +1,30 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './hooks/AuthContext';
 import LoginPage from './features/auth/LoginPage';
 import DashboardPage from './features/dashboard/DashboardPage';
 import PublicTrackingPage from './features/map/PublicTrackingPage';
-import NotificationBell from './components/NotificationBell';
+import Sidebar from './components/Sidebar';
+import ProtectedRoute from './components/ProtectedRoute';
+import NotFoundPage from './pages/NotFoundPage';
+import AccessDeniedPage from './pages/AccessDeniedPage';
+import DeliveriesPage from './pages/DeliveriesPage';
+import FleetPage from './pages/FleetPage';
+import DriversPage from './pages/DriversPage';
+import MapPage from './pages/MapPage';
+import FuelPage from './pages/FuelPage';
+import ReportsPage from './pages/ReportsPage';
+import UsersPage from './pages/UsersPage';
+import SettingsPage from './pages/SettingsPage';
+import MyDeliveriesPage from './pages/MyDeliveriesPage';
+import MyPositionPage from './pages/MyPositionPage';
+import MyVehiclePage from './pages/MyVehiclePage';
+import MyOrdersPage from './pages/MyOrdersPage';
+import ClientTrackingPage from './pages/ClientTrackingPage';
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem('accessToken');
-  if (!token) return <Navigate to="/login" replace />;
+function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <header style={{
-        display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
-        padding: '8px 20px', background: '#fff', borderBottom: '1px solid #ddd',
-        position: 'sticky', top: 0, zIndex: 100, gap: '12px',
-      }}>
-        <NotificationBell />
-        <button
-          onClick={() => {
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-            window.location.href = '/login';
-          }}
-          style={{
-            background: 'none', border: '1px solid #dc3545', color: '#dc3545',
-            borderRadius: '4px', padding: '4px 12px', cursor: 'pointer', fontSize: '0.85rem',
-          }}
-        >
-          Logout
-        </button>
-      </header>
+    <div style={{ display: 'flex', height: '100vh' }}>
+      <Sidebar />
       <div style={{ flex: 1, overflow: 'auto' }}>
         {children}
       </div>
@@ -38,14 +34,93 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/tracking/:token" element={<PublicTrackingPage />} />
-      <Route
-        path="/dashboard"
-        element={<PrivateRoute><DashboardPage /></PrivateRoute>}
-      />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/tracking/:token" element={<PublicTrackingPage />} />
+        <Route path="/403" element={<AccessDeniedPage />} />
+
+        {/* Admin + Dispatcher routes */}
+        <Route path="/dashboard" element={
+          <ProtectedRoute roles={['admin', 'dispatcher']}>
+            <AppLayout><DashboardPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/deliveries" element={
+          <ProtectedRoute roles={['admin', 'dispatcher']}>
+            <AppLayout><DeliveriesPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/vehicles" element={
+          <ProtectedRoute roles={['admin', 'dispatcher']}>
+            <AppLayout><FleetPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/drivers" element={
+          <ProtectedRoute roles={['admin', 'dispatcher']}>
+            <AppLayout><DriversPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/map" element={
+          <ProtectedRoute roles={['admin', 'dispatcher']}>
+            <AppLayout><MapPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        {/* Admin-only routes */}
+        <Route path="/fuel-consumption" element={
+          <ProtectedRoute roles={['admin']}>
+            <AppLayout><FuelPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/reports" element={
+          <ProtectedRoute roles={['admin']}>
+            <AppLayout><ReportsPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/users" element={
+          <ProtectedRoute roles={['admin']}>
+            <AppLayout><UsersPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/settings" element={
+          <ProtectedRoute roles={['admin']}>
+            <AppLayout><SettingsPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        {/* Driver routes */}
+        <Route path="/my-deliveries" element={
+          <ProtectedRoute roles={['driver']}>
+            <AppLayout><MyDeliveriesPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/my-position" element={
+          <ProtectedRoute roles={['driver']}>
+            <AppLayout><MyPositionPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/my-vehicle" element={
+          <ProtectedRoute roles={['driver']}>
+            <AppLayout><MyVehiclePage /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        {/* Client routes */}
+        <Route path="/my-orders" element={
+          <ProtectedRoute roles={['client']}>
+            <AppLayout><MyOrdersPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/tracking" element={
+          <ProtectedRoute roles={['client']}>
+            <AppLayout><ClientTrackingPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </AuthProvider>
   );
 }

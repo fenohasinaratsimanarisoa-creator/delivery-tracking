@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -22,7 +22,7 @@ export class VehiclesService {
   }
 
   async findAll(companyId: string, filter: VehicleFilterDto) {
-    const where: any = { companyId };
+    const where: any = { companyId, deletedAt: null };
 
     if (filter.search) {
       where.OR = [
@@ -55,7 +55,7 @@ export class VehiclesService {
 
   async findOne(companyId: string, id: string) {
     const vehicle = await this.prisma.vehicle.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
     return vehicle;
@@ -81,6 +81,19 @@ export class VehiclesService {
 
   async remove(companyId: string, id: string) {
     await this.findOne(companyId, id);
-    return this.prisma.vehicle.delete({ where: { id } });
+
+    const inProgress = await this.prisma.delivery.findFirst({
+      where: { vehicleId: id, status: 'in_progress', deletedAt: null },
+    });
+    if (inProgress) {
+      throw new BadRequestException(
+        'Cannot delete vehicle assigned to an in-progress delivery',
+      );
+    }
+
+    return this.prisma.vehicle.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

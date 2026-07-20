@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
@@ -22,7 +22,7 @@ export class DriversService {
 
   async findAll(companyId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
-    const where = { companyId };
+    const where = { companyId, deletedAt: null };
 
     const [data, total] = await Promise.all([
       this.prisma.driver.findMany({
@@ -43,7 +43,7 @@ export class DriversService {
 
   async findOne(companyId: string, id: string) {
     const driver = await this.prisma.driver.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
     });
     if (!driver) throw new NotFoundException('Driver not found');
@@ -67,6 +67,19 @@ export class DriversService {
 
   async remove(companyId: string, id: string) {
     await this.findOne(companyId, id);
-    return this.prisma.driver.delete({ where: { id } });
+
+    const inProgress = await this.prisma.delivery.findFirst({
+      where: { driverId: id, status: 'in_progress', deletedAt: null },
+    });
+    if (inProgress) {
+      throw new BadRequestException(
+        'Cannot delete driver assigned to an in-progress delivery',
+      );
+    }
+
+    return this.prisma.driver.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

@@ -54,7 +54,7 @@ export default function DashboardPage() {
   if (error) return <div style={{ padding: 20, color: 'red' }}>{error}</div>;
 
   return (
-    <div style={{ padding: '20px', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+    <div style={{ padding: '20px', display: 'flex', flexDirection: 'column' }}>
       <h1>Dashboard</h1>
 
       {/* KPI Cards */}

@@ -40,7 +40,7 @@ export class DeliveriesService {
     status?: DeliveryStatus,
   ) {
     const skip = (page - 1) * limit;
-    const where: any = { companyId };
+    const where: any = { companyId, deletedAt: null };
     if (status) where.status = status;
 
     const [data, total] = await Promise.all([
@@ -65,7 +65,7 @@ export class DeliveriesService {
 
   async findOne(companyId: string, id: string) {
     const delivery = await this.prisma.delivery.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, deletedAt: null },
       include: {
         vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } },
         driver: { select: { id: true, firstName: true, lastName: true } },
@@ -77,12 +77,15 @@ export class DeliveriesService {
 
   async update(companyId: string, id: string, dto: UpdateDeliveryDto) {
     await this.findOne(companyId, id);
+
+    const updateData: any = { ...dto };
+    if (dto.scheduledDate) {
+      updateData.scheduledDate = new Date(dto.scheduledDate);
+    }
+
     return this.prisma.delivery.update({
       where: { id },
-      data: {
-        ...dto,
-        scheduledDate: dto.scheduledDate ? new Date(dto.scheduledDate) : undefined,
-      },
+      data: updateData,
       include: { vehicle: true, driver: true },
     });
   }
@@ -131,8 +134,17 @@ export class DeliveriesService {
   }
 
   async remove(companyId: string, id: string) {
-    await this.findOne(companyId, id);
-    return this.prisma.delivery.delete({ where: { id } });
+    const delivery = await this.findOne(companyId, id);
+    if (delivery.status === 'in_progress') {
+      throw new BadRequestException(
+        'Cannot delete a delivery that is in progress',
+      );
+    }
+
+    return this.prisma.delivery.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 
   static isValidTransition(from: DeliveryStatus, to: DeliveryStatus): boolean {

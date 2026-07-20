@@ -4,6 +4,8 @@ import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @Controller('drivers')
@@ -11,6 +13,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class DriversController {
   constructor(private readonly driversService: DriversService) {}
 
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
   @Post()
   create(@CurrentUser('companyId') companyId: string, @Body() dto: CreateDriverDto) {
     return this.driversService.create(companyId, dto);
@@ -30,11 +34,15 @@ export class DriversController {
     return this.driversService.findOne(companyId, id);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
   @Patch(':id')
   update(@CurrentUser('companyId') companyId: string, @Param('id') id: string, @Body() dto: UpdateDriverDto) {
     return this.driversService.update(companyId, id, dto);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Delete(':id')
   remove(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
     return this.driversService.remove(companyId, id);

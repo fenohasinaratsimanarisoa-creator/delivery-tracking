@@ -23,6 +23,7 @@ export interface Delivery {
   status: 'pending' | 'assigned' | 'in_progress' | 'delivered' | 'failed' | 'cancelled';
   pickupAddress: string;
   deliveryAddress: string;
+  createdAt: string;
   vehicle?: Vehicle;
   driver?: { id: string; firstName: string; lastName: string };
 }
