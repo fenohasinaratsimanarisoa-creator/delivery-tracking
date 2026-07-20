@@ -59,6 +59,25 @@ export class TrackingService {
     });
   }
 
+  async getDeliveryInfo(deliveryId: string, companyId: string) {
+    const delivery = await this.prisma.delivery.findFirst({
+      where: { id: deliveryId, companyId },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        pickupAddress: true,
+        deliveryAddress: true,
+        pickupLat: true,
+        pickupLng: true,
+        deliveryLat: true,
+        deliveryLng: true,
+      },
+    });
+    if (!delivery) throw new Error('Delivery not found');
+    return delivery;
+  }
+
   async calculateDistance(deliveryId: string, companyId: string): Promise<{ meters: number; kilometers: number }> {
     const positions = await this.getPositionsByDelivery(deliveryId, companyId);
     if (positions.length < 2) return { meters: 0, kilometers: 0 };
