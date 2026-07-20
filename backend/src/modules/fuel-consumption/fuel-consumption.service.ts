@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NotificationType, NotificationPriority } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
 import { FuelFilterDto } from './dto/fuel-filter.dto';
 
@@ -12,6 +14,7 @@ export class FuelConsumptionService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
+    private notifications: NotificationsService,
   ) {
     this.anomalyThresholdPercent = this.configService.get<number>(
       'FUEL_ANOMALY_THRESHOLD_PERCENT',
@@ -104,10 +107,27 @@ export class FuelConsumptionService {
 
   private async analyzeFuelLog(fuelLogId: string, companyId: string) {
     const { processFuelAnalysis } = await import('./jobs/fuel-analysis.job');
-    await processFuelAnalysis(
+    const result = await processFuelAnalysis(
       { fuelLogId, vehicleId: '', companyId },
       this.prisma,
       this.anomalyThresholdPercent,
     );
+
+    if (result?.isAnomaly) {
+      const log = await this.prisma.fuelLog.findUnique({
+        where: { id: fuelLogId },
+        include: { vehicle: true },
+      });
+      if (log) {
+        await this.notifications.create(companyId, {
+          type: NotificationType.fuel_anomaly,
+          priority: NotificationPriority.high,
+          title: 'Fuel Consumption Anomaly',
+          message: `Vehicle ${log.vehicle.licensePlate} exceeded consumption threshold: ${result.calculatedConsumption?.toFixed(1)} L/100km (expected ${result.expectedConsumption?.toFixed(1)} L/100km)`,
+          link: `/fuel-consumption`,
+          deliveryId: undefined,
+        });
+      }
+    }
   }
 }

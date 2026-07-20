@@ -59,6 +59,7 @@ describe('CRUD Operations (e2e)', () => {
   }, 15000);
 
   afterAll(async () => {
+    await prisma.notification.deleteMany({ where: { companyId } });
     await prisma.delivery.deleteMany({ where: { companyId } });
     await prisma.driver.deleteMany({ where: { companyId } });
     await prisma.vehicle.deleteMany({ where: { companyId } });

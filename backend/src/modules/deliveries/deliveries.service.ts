@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { DeliveryStatus } from '@prisma/client';
+import { DeliveryStatus, NotificationType, NotificationPriority } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 import { UpdateDeliveryStatusDto } from './dto/update-delivery-status.dto';
@@ -16,7 +17,10 @@ const TRANSITION_MATRIX: Record<DeliveryStatus, DeliveryStatus[]> = {
 
 @Injectable()
 export class DeliveriesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+  ) {}
 
   async create(companyId: string, dto: CreateDeliveryDto) {
     return this.prisma.delivery.create({
@@ -102,11 +106,28 @@ export class DeliveriesService {
       updateData.completedAt = new Date();
     }
 
-    return this.prisma.delivery.update({
+    const updated = await this.prisma.delivery.update({
       where: { id },
       data: updateData,
-      include: { vehicle: true, driver: true },
+      include: { vehicle: true, driver: true, assignedDriver: true },
     });
+
+    await this.notifications.create(companyId, {
+      type: NotificationType.delivery_status,
+      priority:
+        dto.status === DeliveryStatus.delivered
+          ? NotificationPriority.low
+          : dto.status === DeliveryStatus.failed
+            ? NotificationPriority.high
+            : NotificationPriority.medium,
+      title: `Delivery ${dto.status}`,
+      message: `Delivery "${updated.title}" is now ${dto.status.replace('_', ' ')}`,
+      link: `/deliveries/${id}`,
+      userId: updated.assignedDriverId ?? undefined,
+      deliveryId: id,
+    });
+
+    return updated;
   }
 
   async remove(companyId: string, id: string) {

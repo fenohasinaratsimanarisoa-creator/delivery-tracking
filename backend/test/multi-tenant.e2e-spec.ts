@@ -57,6 +57,7 @@ describe('Multi-tenant isolation (e2e)', () => {
     });
     expect(crossVehicles).toHaveLength(0);
 
+    await prisma.notification.deleteMany({ where: { companyId: { in: [companyA.id, companyB.id] } } });
     await prisma.vehicle.deleteMany({ where: { id: { in: [vehicleA.id, vehicleB.id] } } });
     await prisma.company.deleteMany({ where: { id: { in: [companyA.id, companyB.id] } } });
   });
@@ -105,6 +106,7 @@ describe('Multi-tenant isolation (e2e)', () => {
     expect(deliveriesB).toHaveLength(1);
     expect(deliveriesB[0].id).toBe(deliveryB.id);
 
+    await prisma.notification.deleteMany({ where: { companyId: { in: [companyA.id, companyB.id] } } });
     await prisma.delivery.deleteMany({ where: { companyId: { in: [companyA.id, companyB.id] } } });
     await prisma.vehicle.deleteMany({ where: { companyId: { in: [companyA.id, companyB.id] } } });
     await prisma.company.deleteMany({ where: { id: { in: [companyA.id, companyB.id] } } });

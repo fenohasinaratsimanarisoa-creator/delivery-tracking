@@ -11,7 +11,7 @@ export async function processFuelAnalysis(
   data: FuelAnalysisJobData,
   prisma: PrismaService,
   anomalyThresholdPercent: number,
-): Promise<void> {
+): Promise<{ isAnomaly: boolean; calculatedConsumption: number | null; expectedConsumption: number | null } | void> {
   const logger = new Logger('FuelAnalysisJob');
 
   try {
@@ -33,10 +33,9 @@ export async function processFuelAnalysis(
 
     let anomalyFlag = false;
     let anomalyReason: string | null = null;
+    const theoretical = fuelLog.vehicle.theoreticalConsumption;
 
     if (calculatedConsumption !== null) {
-      const theoretical = fuelLog.vehicle.theoreticalConsumption;
-
       if (theoretical && theoretical > 0) {
         const deviation =
           (Math.abs(calculatedConsumption - theoretical) / theoretical) * 100;
@@ -47,7 +46,6 @@ export async function processFuelAnalysis(
         }
       }
     }
-
     await prisma.fuelLog.update({
       where: { id: data.fuelLogId },
       data: {
@@ -60,6 +58,8 @@ export async function processFuelAnalysis(
     logger.log(
       `FuelLog ${data.fuelLogId}: consumption=${calculatedConsumption?.toFixed(2)} L/100km, anomaly=${anomalyFlag}`,
     );
+
+    return { isAnomaly: anomalyFlag, calculatedConsumption, expectedConsumption: theoretical };
   } catch (error) {
     logger.error(`Failed to process fuel analysis for ${data.fuelLogId}: ${error}`);
   }

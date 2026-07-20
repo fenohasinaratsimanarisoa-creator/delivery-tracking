@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DeliveryStatus } from '@prisma/client';
 import { DeliveriesService } from './deliveries.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 describe('DeliveriesService - State Machine', () => {
   let service: DeliveriesService;
@@ -18,11 +19,20 @@ describe('DeliveriesService - State Machine', () => {
     },
   };
 
+  const mockNotifications = {
+    create: jest.fn(),
+    findAll: jest.fn(),
+    countUnread: jest.fn(),
+    markRead: jest.fn(),
+    markAllRead: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DeliveriesService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: NotificationsService, useValue: mockNotifications },
       ],
     }).compile();
 

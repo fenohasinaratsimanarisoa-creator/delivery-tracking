@@ -24,6 +24,7 @@ describe('Authentication (e2e)', () => {
   });
 
   afterAll(async () => {
+    await prisma.notification.deleteMany({ where: { companyId } });
     await prisma.user.deleteMany({ where: { companyId } });
     await prisma.company.delete({ where: { id: companyId } });
     await app.close();

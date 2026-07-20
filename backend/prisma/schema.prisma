@@ -45,6 +45,7 @@ model Company {
   deliveries        Delivery[]
   fuelLogs          FuelLog[]
   maintenanceRecords MaintenanceRecord[]
+  notifications       Notification[]
 
   @@map("companies")
 }
@@ -67,6 +68,7 @@ model User {
 
   assignedDeliveries Delivery[] @relation("AssignedDriverDeliveries")
   driver            Driver?
+  notifications     Notification[]
 
   @@map("users")
 }
@@ -152,6 +154,7 @@ model Delivery {
   assignedDriver   User?   @relation("AssignedDriverDeliveries", fields: [assignedDriverId], references: [id])
 
   gpsPositions GpsPosition[]
+  notifications Notification[]
 
   @@index([companyId])
   @@index([status])
@@ -224,4 +227,43 @@ model MaintenanceRecord {
 
   @@index([vehicleId])
   @@map("maintenance_records")
+}
+
+enum NotificationType {
+  delivery_status
+  fuel_anomaly
+  maintenance_due
+  system
+}
+
+enum NotificationPriority {
+  low
+  medium
+  high
+  critical
+}
+
+model Notification {
+  id        String             @id @default(uuid()) @db.Uuid
+  type      NotificationType
+  priority  NotificationPriority @default(medium)
+  title     String
+  message   String
+  link      String?            // optional deep-link URL
+  readAt    DateTime?          @map("read_at")
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  companyId String @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  userId    String? @map("user_id") @db.Uuid
+  user      User?   @relation(fields: [userId], references: [id])
+
+  deliveryId String?  @map("delivery_id") @db.Uuid
+  delivery   Delivery? @relation(fields: [deliveryId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("notifications")
 }

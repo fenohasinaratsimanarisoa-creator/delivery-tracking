@@ -56,6 +56,7 @@ describe('Fuel Consumption (e2e)', () => {
   }, 15000);
 
   afterAll(async () => {
+    await prisma.notification.deleteMany({ where: { companyId } });
     await prisma.fuelLog.deleteMany({ where: { companyId } });
     await prisma.vehicle.delete({ where: { id: vehicleId } });
     await prisma.user.deleteMany({ where: { companyId } });

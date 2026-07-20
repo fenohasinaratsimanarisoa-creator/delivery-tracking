@@ -107,6 +107,7 @@ describe('Tracking GPS (e2e)', () => {
     if (driverId) await prisma.driver.delete({ where: { id: driverId } });
     if (vehicleId) await prisma.vehicle.delete({ where: { id: vehicleId } });
     if (companyId) {
+      await prisma.notification.deleteMany({ where: { companyId } });
       await prisma.user.deleteMany({ where: { companyId } });
       await prisma.company.delete({ where: { id: companyId } });
     }
