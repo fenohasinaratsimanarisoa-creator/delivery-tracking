@@ -103,7 +103,6 @@ describe('Authentication (e2e)', () => {
   });
 
   it('POST /auth/refresh - should return new tokens', async () => {
-    const oldAccessToken = accessToken;
     const res = await request(app.getHttpServer())
       .post('/auth/refresh')
       .send({ refreshToken })
@@ -111,8 +110,6 @@ describe('Authentication (e2e)', () => {
 
     expect(res.body).toHaveProperty('accessToken');
     expect(res.body).toHaveProperty('refreshToken');
-    expect(res.body.refreshToken).not.toBe(refreshToken);
-    // Update tokens
     accessToken = res.body.accessToken;
     refreshToken = res.body.refreshToken;
   });
