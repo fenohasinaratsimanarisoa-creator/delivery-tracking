@@ -18,6 +18,10 @@ async function bootstrap() {
     credentials: true,
   });
 
+  app.getHttpAdapter().get('/health', (_req: any, res: any) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
   const port = process.env.PORT || 3000;
   await app.listen(port);
   console.log(`Application running on http://localhost:${port}`);
