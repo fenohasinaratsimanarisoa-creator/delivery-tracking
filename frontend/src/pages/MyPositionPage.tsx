@@ -95,6 +95,7 @@ const labelStyle: React.CSSProperties = {
 export default function MyPositionPage() {
   const { t } = useTranslation();
   const [tracking, setTracking] = useState(false);
+  const [startingTracking, setStartingTracking] = useState(false);
   const [position, setPosition] = useState<{
     lat: number; lng: number; speed?: number; heading?: number;
     altitude?: number; accuracy?: number;
@@ -369,20 +370,28 @@ export default function MyPositionPage() {
   const startTracking = () => {
     if (!navigator.geolocation) { setStatusMsg(t('myPosition.geoNotSupported')); return; }
     if (!selectedDelivery) { setStatusMsg(t('myPosition.selectDelivery')); return; }
-    setStatusMsg(t('myPosition.searchingPosition'));
+    if (!vehicleId) { setStatusMsg(t('myPosition.noVehicleAssigned')); return; }
+
+    setStartingTracking(true);
     setTracking(true);
+    setStatusMsg(t('myPosition.searchingPosition'));
     setPoorAccuracy(false);
     setConfidenceLevel(1);
 
-    sensorFusion.init().then((avail) => setSensorAvailable(avail));
+    sensorFusion.init().then((avail) => setSensorAvailable(avail)).catch(() => {});
 
     kalmanRef.current = null;
     filteredPosRef.current = null;
 
-    watchRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude, speed, heading, altitude, accuracy } = pos.coords;
-        const acc = accuracy ?? 50;
+    let triedLowAccuracy = false;
+
+    const tryWatch = (highAccuracy: boolean) => {
+      if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
+      watchRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          setStartingTracking(false);
+          const { latitude, longitude, speed, heading, altitude, accuracy } = pos.coords;
+          const acc = accuracy ?? 50;
 
         if (!kalmanRef.current) {
           kalmanRef.current = new KalmanFilter(latitude, longitude, acc);
@@ -432,13 +441,23 @@ export default function MyPositionPage() {
         }
       },
       (err) => {
+        if (highAccuracy && !triedLowAccuracy && (err.code === 2 || err.code === 3)) {
+          triedLowAccuracy = true;
+          setStatusMsg(t('myPosition.gpsLowAccuracy'));
+          tryWatch(false);
+          return;
+        }
+        setStartingTracking(false);
         const errMap: Record<number, string> = { 1: t('myPosition.gpsPermissionDenied'), 2: t('myPosition.gpsUnavailable'), 3: t('myPosition.gpsTimeout') };
         const msg = errMap[err.code] || t('myPosition.gpsError', { error: err.message });
         setStatusMsg(msg);
         setTracking(false);
       },
-      { enableHighAccuracy: true, maximumAge: 30000, timeout: 27000 },
+      { enableHighAccuracy: highAccuracy, maximumAge: highAccuracy ? 30000 : 60000, timeout: highAccuracy ? 15000 : 30000 },
     );
+    };
+
+    tryWatch(true);
     intervalRef.current = setInterval(sendPosition, INTERVAL_DEFAULT);
     startRoutingRecalc();
     drainIntervalRef.current = setInterval(() => { drainQueue(); }, DRAIN_INTERVAL_MS);
@@ -452,6 +471,7 @@ export default function MyPositionPage() {
     lastMovingRef.current = Date.now();
     intervalDurationRef.current = INTERVAL_DEFAULT;
     setTracking(false); setQueueCount(0); setPoorAccuracy(false);
+    setStartingTracking(false);
     setStatusMsg(t('myPosition.sharingStopped'));
     stopRoutingRecalc();
     setNavigationMode(false);
@@ -726,10 +746,10 @@ export default function MyPositionPage() {
                     <Button
                       variant="primary"
                       size="sm"
-                      disabled={!selectedDelivery || !vehicleId}
+                      loading={startingTracking}
                       onClick={startTracking}
                     >
-                      {t('myPosition.startSharing')}
+                      {startingTracking ? t('myPosition.startingSharing') : t('myPosition.startSharing')}
                     </Button>
                   ) : (
                     <>

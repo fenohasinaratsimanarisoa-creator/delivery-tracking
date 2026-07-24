@@ -505,6 +505,8 @@
     "selectDefault": "-- Select --",
     "noDeliveriesAvailable": "No deliveries available. Create a delivery and assign it to this driver first.",
     "startSharing": "Start sharing",
+    "startingSharing": "Starting...",
+    "gpsLowAccuracy": "High-accuracy GPS unavailable — trying low accuracy...",
     "stopSharing": "Stop sharing",
     "accuracy": "Accuracy: {accuracy}m",
     "accuracyNA": "Accuracy: N/A",

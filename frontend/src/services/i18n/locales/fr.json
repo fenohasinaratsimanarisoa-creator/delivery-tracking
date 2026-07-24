@@ -505,6 +505,8 @@
     "selectDefault": "-- Sélectionner --",
     "noDeliveriesAvailable": "Aucune livraison disponible. Créez d'abord une livraison et assignez-la à ce conducteur.",
     "startSharing": "Démarrer le partage",
+    "startingSharing": "Démarrage...",
+    "gpsLowAccuracy": "GPS haute précision indisponible — recherche basse précision...",
     "stopSharing": "Arrêter le partage",
     "accuracy": "Précision: {accuracy}m",
     "accuracyNA": "Précision: N/A",
