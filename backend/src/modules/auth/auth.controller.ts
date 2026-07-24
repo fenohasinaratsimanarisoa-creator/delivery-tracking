@@ -259,6 +259,13 @@ export class AuthController {
   }
 
   @Public()
+  @Get('google/status')
+  googleStatus() {
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    return { configured: !!(clientId && clientId !== '...') };
+  }
+
+  @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Get('google')
   @HttpCode(HttpStatus.FOUND)

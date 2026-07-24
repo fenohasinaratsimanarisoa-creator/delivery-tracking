@@ -1,4 +1,4 @@
-import { useState, useMemo, type FormEvent } from 'react';
+import { useState, useMemo, useEffect, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, UserPlus } from 'lucide-react';
 import { useTranslation, Trans } from 'react-i18next';
@@ -221,6 +221,14 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [focused, setFocused] = useState<string | null>(null);
+  const [googleConfigured, setGoogleConfigured] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/auth/google/status')
+      .then(r => r.json())
+      .then(d => setGoogleConfigured(d.configured))
+      .catch(() => setGoogleConfigured(false));
+  }, []);
 
   const rules = useMemo(() => RULES.map((r) => ({ ...r, passed: r.test(password) })), [password]);
   const allPassed = rules.every((r) => r.passed);
@@ -469,43 +477,47 @@ export default function RegisterPage() {
             </button>
           </form>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20, marginBottom: 16 }}>
-            <span style={{ flex: 1, height: 1, background: 'var(--color-input-border)' }} />
-            <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{t('common.or')}</span>
-            <span style={{ flex: 1, height: 1, background: 'var(--color-input-border)' }} />
-          </div>
+          {googleConfigured && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20, marginBottom: 16 }}>
+                <span style={{ flex: 1, height: 1, background: 'var(--color-input-border)' }} />
+                <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{t('common.or')}</span>
+                <span style={{ flex: 1, height: 1, background: 'var(--color-input-border)' }} />
+              </div>
 
-          <button
-            type="button"
-            onClick={() => { window.location.href = '/api/auth/google'; }}
-            style={{
-              width: '100%',
-              padding: '10px 24px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--color-input-border)',
-              background: 'var(--color-input-bg)',
-              fontSize: 13,
-              fontWeight: 500,
-              color: 'var(--color-text-secondary)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              transition: 'border-color 0.15s, background 0.15s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--color-accent)';
-              e.currentTarget.style.background = 'var(--color-accent-muted)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--color-input-border)';
-              e.currentTarget.style.background = 'var(--color-input-bg)';
-            }}
-          >
-            <span style={{ fontWeight: 700, fontSize: 15, color: '#4285f4' }}>G</span>
-            {t('auth.register.googleLogin')}
-          </button>
+              <button
+                type="button"
+                onClick={() => { window.location.href = '/api/auth/google'; }}
+                style={{
+                  width: '100%',
+                  padding: '10px 24px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--color-input-border)',
+                  background: 'var(--color-input-bg)',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: 'var(--color-text-secondary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  transition: 'border-color 0.15s, background 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-accent)';
+                  e.currentTarget.style.background = 'var(--color-accent-muted)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-input-border)';
+                  e.currentTarget.style.background = 'var(--color-input-bg)';
+                }}
+              >
+                <span style={{ fontWeight: 700, fontSize: 15, color: '#4285f4' }}>G</span>
+                {t('auth.register.googleLogin')}
+              </button>
+            </>
+          )}
 
           <div style={styles.footer}>
             {t('auth.register.haveAccount')}{' '}

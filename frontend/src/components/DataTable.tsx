@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pencil, Trash2 } from 'lucide-react';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface Column<T> {
   key: string;
@@ -28,6 +29,7 @@ export default function DataTable<T>({
   onPageChange, onEdit, onDelete, loading, emptyMessage, keyExtractor,
 }: Props<T>) {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -95,8 +97,115 @@ export default function DataTable<T>({
     );
   }
 
+  if (isMobile) {
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)',
+      }}>
+        {sorted.map((row) => (
+          <div key={keyExtractor(row)} style={{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border-subtle)',
+            borderRadius: 'var(--radius-lg)',
+            padding: 'var(--space-md)',
+          }}>
+            {columns.map((col) => (
+              <div key={col.key} style={{
+                display: 'flex', justifyContent: 'space-between',
+                padding: 'var(--space-xs) 0',
+                fontSize: 'var(--text-sm)',
+                borderBottom: '1px solid var(--color-border-subtle)',
+                gap: 'var(--space-sm)',
+              }}>
+                <span style={{
+                  fontWeight: 600,
+                  fontSize: 'var(--text-xs)',
+                  color: 'var(--color-text-secondary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  flexShrink: 0,
+                  minWidth: 80,
+                }}>
+                  {col.label}
+                </span>
+                <span style={{
+                  textAlign: 'right',
+                  color: 'var(--color-text)',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
+                  hyphens: 'auto',
+                }}>
+                  {col.render ? col.render(row) : (row as any)[col.key] ?? '-'}
+                </span>
+              </div>
+            ))}
+            {(onEdit || onDelete) && (
+              <div style={{
+                display: 'flex', gap: 'var(--space-sm)',
+                justifyContent: 'flex-end',
+                paddingTop: 'var(--space-sm)',
+                marginTop: 'var(--space-xs)',
+              }}>
+                {onEdit && (
+                  <button
+                    onClick={() => onEdit(row)}
+                    style={{ ...actionBtn, minWidth: 44, minHeight: 44 }}
+                    aria-label={t('components.dataTable.editAria')}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    onClick={() => onDelete(row)}
+                    style={{ ...actionBtn, minWidth: 44, minHeight: 44 }}
+                    aria-label={t('components.dataTable.deleteAria')}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+        {totalPages > 1 && (
+          <div style={{
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            gap: 'var(--space-xs)',
+            padding: 'var(--space-md) 0',
+          }}>
+            <button
+              disabled={page <= 1}
+              onClick={() => onPageChange(page - 1)}
+              style={pageBtnStyle(page <= 1)}
+              aria-label={t('common.previousPage')}
+            >
+              ←
+            </button>
+            <span style={{
+              fontSize: 'var(--text-sm)',
+              color: 'var(--color-text-secondary)',
+              fontFamily: 'var(--font-mono)',
+              padding: '0 var(--space-sm)',
+            }}>
+              {page} / {totalPages}
+            </span>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => onPageChange(page + 1)}
+              style={pageBtnStyle(page >= totalPages)}
+              aria-label={t('common.nextPage')}
+            >
+              →
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="dt-responsive" data-mode="table" style={{
+    <div style={{
       background: 'var(--color-surface)',
       borderRadius: 'var(--radius-lg)',
       border: '1px solid var(--color-border-subtle)',
@@ -165,7 +274,7 @@ export default function DataTable<T>({
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >
                   {columns.map((col) => (
-                    <td key={col.key} data-label={col.label} style={{
+                    <td key={col.key} style={{
                       padding: 'var(--space-md) var(--space-lg)',
                       fontSize: 'var(--text-sm)',
                       color: 'var(--color-text)',
@@ -208,7 +317,7 @@ export default function DataTable<T>({
       </div>
 
       {totalPages > 1 && (
-        <div className="dt-pagination" style={{
+        <div style={{
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           gap: 'var(--space-xs)',
           padding: 'var(--space-md) var(--space-lg)',

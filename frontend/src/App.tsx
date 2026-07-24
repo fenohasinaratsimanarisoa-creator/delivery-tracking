@@ -80,64 +80,6 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
 function MobileResponsiveStyles() {
   return <style>{`
-/* ─── DataTable: card layout on mobile ─── */
-@media (max-width: 640px) {
-  .dt-responsive[data-mode="table"] {
-    border: 0 !important;
-    background: transparent !important;
-    border-radius: 0 !important;
-  }
-  .dt-responsive[data-mode="table"] thead {
-    display: none !important;
-  }
-  .dt-responsive[data-mode="table"] tbody,
-  .dt-responsive[data-mode="table"] tr,
-  .dt-responsive[data-mode="table"] th,
-  .dt-responsive[data-mode="table"] td {
-    display: block !important;
-  }
-  .dt-responsive[data-mode="table"] tr {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border-subtle);
-    border-radius: var(--radius-lg);
-    padding: var(--space-md);
-    margin-bottom: var(--space-sm);
-  }
-  .dt-responsive[data-mode="table"] td {
-    padding: var(--space-xs) 0 !important;
-    border: none !important;
-    white-space: normal !important;
-    font-size: var(--text-sm);
-    display: flex !important;
-    align-items: center;
-    gap: var(--space-sm);
-  }
-  .dt-responsive[data-mode="table"] td::before {
-    content: attr(data-label);
-    font-weight: 600;
-    font-size: var(--text-xs);
-    color: var(--color-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    min-width: 80px;
-    flex-shrink: 0;
-  }
-  .dt-responsive[data-mode="table"] td:last-child {
-    justify-content: flex-end;
-    padding-top: var(--space-sm) !important;
-    border-top: 1px solid var(--color-border-subtle) !important;
-    margin-top: var(--space-sm);
-  }
-  .dt-responsive[data-mode="table"] td:last-child::before {
-    display: none;
-  }
-  .dt-responsive[data-mode="table"] .dt-pagination {
-    justify-content: center;
-    gap: var(--space-xs);
-    padding: var(--space-md) 0;
-  }
-}
-
 /* ─── Page wrappers: prevent horizontal scroll ─── */
 @media (max-width: 640px) {
   .page-padding {

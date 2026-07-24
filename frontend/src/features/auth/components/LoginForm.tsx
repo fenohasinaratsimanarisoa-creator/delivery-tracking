@@ -277,8 +277,15 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
   const [focused, setFocused] = useState<'email' | 'password' | null>(null);
   const emailRef = useRef<HTMLInputElement>(null);
 
+  const [googleConfigured, setGoogleConfigured] = useState(true);
+
+  useEffect(() => { emailRef.current?.focus(); }, []);
+
   useEffect(() => {
-    emailRef.current?.focus();
+    fetch('/api/auth/google/status')
+      .then(r => r.json())
+      .then(d => setGoogleConfigured(d.configured))
+      .catch(() => setGoogleConfigured(false));
   }, []);
 
   const emailErr = touched.email && email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -464,36 +471,38 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
           </div>
         </div>
 
-        <div style={animate(0.30)}>
-          <div style={s('divider')}>
-            <span style={s('dividerLine')} />
-            <span style={s('dividerText')}>{t('common.or')}</span>
-            <span style={s('dividerLine')} />
-          </div>
-          <button
-            type="button"
-            style={s('ssoButton')}
-            onClick={() => { window.location.href = '/api/auth/google'; }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--color-accent)';
-              e.currentTarget.style.background = 'var(--color-accent-muted)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--color-input-border)';
-              e.currentTarget.style.background = 'var(--color-input-bg)';
-            }}
-          >
-            <span style={{ fontWeight: 700, fontSize: 15, color: '#4285f4' }}>G</span>
-            {t('auth.login.googleLogin')}
-          </button>
+        {googleConfigured && (
+          <div style={animate(0.30)}>
+            <div style={s('divider')}>
+              <span style={s('dividerLine')} />
+              <span style={s('dividerText')}>{t('common.or')}</span>
+              <span style={s('dividerLine')} />
+            </div>
+            <button
+              type="button"
+              style={s('ssoButton')}
+              onClick={() => { window.location.href = '/api/auth/google'; }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--color-accent)';
+                e.currentTarget.style.background = 'var(--color-accent-muted)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--color-input-border)';
+                e.currentTarget.style.background = 'var(--color-input-bg)';
+              }}
+            >
+              <span style={{ fontWeight: 700, fontSize: 15, color: '#4285f4' }}>G</span>
+              {t('auth.login.googleLogin')}
+            </button>
 
-          <div style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--color-text-secondary)' } as React.CSSProperties}>
-            {t('auth.login.noAccount')}{' '}
-            <Link to="/register" style={{ color: 'var(--color-accent)', fontWeight: 600, textDecoration: 'none' }}>
-              {t('auth.login.createAccount')}
-            </Link>
+            <div style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--color-text-secondary)' } as React.CSSProperties}>
+              {t('auth.login.noAccount')}{' '}
+              <Link to="/register" style={{ color: 'var(--color-accent)', fontWeight: 600, textDecoration: 'none' }}>
+                {t('auth.login.createAccount')}
+              </Link>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </>
   );
