@@ -19,9 +19,10 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       console.warn('Google OAuth not configured — strategy will be inactive');
     }
 
+    const appUrl = configService.get<string>('APP_URL') || 'http://localhost:5173';
     const callbackURL = configService.get<string>(
       'GOOGLE_CALLBACK_URL',
-      'https://deliverytrack-api.onrender.com/auth/google/callback',
+      `${appUrl}/api/auth/google/callback`,
     );
 
     super({

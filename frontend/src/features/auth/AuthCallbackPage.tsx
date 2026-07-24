@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/AuthContext';
@@ -28,13 +28,20 @@ export default function AuthCallbackPage() {
   const { isInitializing, isAuthenticated, user, login } = useAuth();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
-  const [redirected, setRedirected] = useState(false);
+  const processedRef = useRef(false);
+  const loginRef = useRef(login);
+  loginRef.current = login;
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
 
   useEffect(() => {
+    if (processedRef.current) return;
+
     const error = searchParams.get('error');
     if (error) {
+      processedRef.current = true;
       setStatus('error');
-      setErrorMessage(t(ERROR_MESSAGES[error]) || t(ERROR_MESSAGES.google_auth_failed));
+      setErrorMessage(t(ERROR_MESSAGES[error] || t(ERROR_MESSAGES.google_auth_failed)));
       return;
     }
 
@@ -53,28 +60,32 @@ export default function AuthCallbackPage() {
           firstName: (payload.firstName || payload.given_name || '') as string,
           lastName: (payload.lastName || payload.family_name || '') as string,
         };
+        processedRef.current = true;
         setAccessToken(tokenFromHash);
-        login(u, tokenFromHash);
-        setRedirected(true);
+        loginRef.current(u, tokenFromHash);
         setStatus('success');
         const target = ROLE_REDIRECT[u.role] || '/dashboard';
-        navigate(target, { replace: true });
+        navigateRef.current(target, { replace: true });
         return;
       }
     }
 
     if (isInitializing) return;
 
-    if (isAuthenticated && user && !redirected) {
-      setRedirected(true);
+    if (isAuthenticated && user) {
+      processedRef.current = true;
       setStatus('success');
       const target = ROLE_REDIRECT[user.role] || '/dashboard';
-      navigate(target, { replace: true });
-    } else if (!isInitializing && !isAuthenticated) {
+      navigateRef.current(target, { replace: true });
+      return;
+    }
+
+    if (!isInitializing && !isAuthenticated) {
+      processedRef.current = true;
       setStatus('error');
       setErrorMessage(t('auth.callback.finalizeError'));
     }
-  }, [isInitializing, isAuthenticated, user, searchParams, navigate, redirected, login]);
+  }, [isInitializing, isAuthenticated, user, searchParams, t]);
 
   const containerStyle: React.CSSProperties = {
     display: 'flex',

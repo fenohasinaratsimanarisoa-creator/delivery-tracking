@@ -68,7 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const u = userFromToken(token);
         if (u) setUser(u);
       } catch {
-        if (!currentToken) {
+        const storedToken = getAccessToken();
+        if (!storedToken) {
           setAccessToken(null);
           setUser(null);
         }

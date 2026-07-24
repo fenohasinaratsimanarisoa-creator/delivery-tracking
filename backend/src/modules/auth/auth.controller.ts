@@ -12,6 +12,7 @@ import {
   Delete,
   Param,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
@@ -53,6 +54,8 @@ const CSRF_COOKIE_OPTIONS = {
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly totpService: TotpService,
@@ -278,17 +281,23 @@ export class AuthController {
   @Get('google/callback')
   async googleCallback(@Req() req: Request, @Res() res: Response) {
     const frontendUrl = this.configService.get<string>('APP_URL') || 'http://localhost:5173';
-    passport.authenticate('google', { session: false }, (err: any, user: any, info: any) => {
-      if (err || !user) {
-        let error = 'google_auth_failed';
-        if (!user && info && info.message === 'access_denied') error = 'access_denied';
-        else if (err?.message === 'Email not verified') error = 'email_not_verified';
-        else if (err?.message === 'Domain not found') error = 'account_not_found';
-        return res.redirect(`${frontendUrl}/auth/callback?error=${error}`);
-      }
-      const tokenParam = encodeURIComponent(user.accessToken);
-      res.cookie('refreshToken', user.refreshToken, REFRESH_COOKIE_OPTIONS);
-      return res.redirect(`${frontendUrl}/auth/callback#accessToken=${tokenParam}`);
-    })(req, res);
+    try {
+      passport.authenticate('google', { session: false }, (err: any, user: any, info: any) => {
+        if (err || !user) {
+          let error = 'google_auth_failed';
+          if (!user && info && info.message === 'access_denied') error = 'access_denied';
+          else if (err?.message === 'Email not verified') error = 'email_not_verified';
+          else if (err?.message === 'Account deactivated') error = 'account_deactivated';
+          else if (err?.message === 'Domain not found') error = 'account_not_found';
+          return res.redirect(`${frontendUrl}/auth/callback?error=${error}`);
+        }
+        const tokenParam = encodeURIComponent(user.accessToken);
+        res.cookie('refreshToken', user.refreshToken, REFRESH_COOKIE_OPTIONS);
+        return res.redirect(`${frontendUrl}/auth/callback#accessToken=${tokenParam}`);
+      })(req, res);
+    } catch (err: any) {
+      this.logger.error('Google callback passport error', err?.message || err);
+      return res.redirect(`${frontendUrl}/auth/callback?error=google_auth_failed`);
+    }
   }
 }
