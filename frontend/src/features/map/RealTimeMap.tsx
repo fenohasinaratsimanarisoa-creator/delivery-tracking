@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { MapContainer, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Search, X } from 'lucide-react';
 import { getSocket, PositionUpdate } from '../../services/socket/socket';
 import { formatDate, formatTime } from '../../services/i18n/formatDate';
 import { useDevicePerformance } from '../../hooks/useDevicePerformance';
@@ -430,6 +431,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
   const [routingETA, setRoutingETA] = useState<string | null>(null);
   const [routingDistance, setRoutingDistance] = useState<number>(0);
   const [routingLoading, setRoutingLoading] = useState(false);
+  const [driverFilter, setDriverFilter] = useState('');
   const styleInjected = useRef(false);
   const devPerf = useDevicePerformance();
 
@@ -451,10 +453,17 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
   setRoutingLoadingRef.current = setRoutingLoading;
 
   const allPositions = Array.from(vehicles.values());
+  const filteredVehicles = useMemo(() => {
+    if (!driverFilter.trim()) return allPositions;
+    const q = driverFilter.toLowerCase();
+    return allPositions.filter((v) =>
+      v.name.toLowerCase().includes(q)
+    );
+  }, [allPositions, driverFilter]);
   const visibleVehicles = useMemo(() => {
-    if (allPositions.length <= devPerf.maxAnimatedMarkers) return allPositions;
-    return allPositions.slice(0, devPerf.maxAnimatedMarkers);
-  }, [allPositions, devPerf.maxAnimatedMarkers]);
+    if (filteredVehicles.length <= devPerf.maxAnimatedMarkers) return filteredVehicles;
+    return filteredVehicles.slice(0, devPerf.maxAnimatedMarkers);
+  }, [filteredVehicles, devPerf.maxAnimatedMarkers]);
 
   useEffect(() => {
     if (!styleInjected.current) {
@@ -643,6 +652,47 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
       <MapStyleOverrider />
       <MapLayerSwitcher />
       <MapFocusHandler focusId={focusId} focusCenter={focusCenter} vehicles={allPositions} />
+
+      <div style={{
+        position: 'absolute', top: 10, left: 50, zIndex: 1000,
+        display: 'flex', alignItems: 'center', gap: 6,
+        background: 'var(--color-glass, rgba(18,27,46,0.92))',
+        border: '1px solid var(--color-glass-border, rgba(242,169,60,0.15))',
+        borderRadius: 'var(--radius-md, 8px)',
+        padding: '4px 10px',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        boxShadow: 'var(--shadow-md, 0 4px 20px rgba(0,0,0,0.4))',
+      }}>
+        <Search size={14} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
+        <input
+          placeholder="Rechercher un chauffeur…"
+          value={driverFilter}
+          onChange={(e) => setDriverFilter(e.target.value)}
+          style={{
+            background: 'transparent', border: 'none', outline: 'none',
+            color: 'var(--color-text)', fontSize: '0.75rem',
+            width: 180, fontFamily: 'var(--font-body)',
+          }}
+        />
+        {driverFilter && (
+          <button
+            onClick={() => setDriverFilter('')}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: 0, display: 'flex', alignItems: 'center',
+              color: 'var(--color-text-tertiary)',
+            }}
+          >
+            <X size={14} />
+          </button>
+        )}
+        {driverFilter && filteredVehicles.length > 0 && (
+          <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+            {filteredVehicles.length}/{allPositions.length}
+          </span>
+        )}
+      </div>
       <MapBoundsUpdater positions={allPositions.map((v) => ({ latitude: v.lat, longitude: v.lng }))} />
 
       {routePath.length > 1 && (
