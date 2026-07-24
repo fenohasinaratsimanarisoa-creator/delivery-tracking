@@ -312,7 +312,7 @@ export class AuthService {
         passwordHash,
         firstName,
         lastName,
-        role: 'dispatcher',
+        role: 'admin',
         companyId: company.id,
         googleId,
       },
