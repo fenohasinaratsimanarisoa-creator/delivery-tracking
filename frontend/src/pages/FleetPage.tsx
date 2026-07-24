@@ -105,6 +105,7 @@ export default function FleetPage() {
     mutationFn: (id: string) => api.delete(`/vehicles/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles', 'list'] });
       toast('Véhicule supprimé');
       setDeleting(null);
     },
@@ -119,6 +120,7 @@ export default function FleetPage() {
       api.patch(`/vehicles/${id}`, { isActive }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles', 'list'] });
     },
     onError: (err: any) => {
       toast(err?.response?.data?.message || 'Erreur', 'error');
@@ -142,6 +144,7 @@ export default function FleetPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles', 'list'] });
       const id = editing?.id || '';
       setHighlightedId(id);
       setTimeout(() => setHighlightedId(null), 1500);
