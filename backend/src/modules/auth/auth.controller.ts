@@ -32,7 +32,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const isSecure = isProduction || (process.env.CORS_ORIGIN || '').startsWith('https');
-const sameSite = isProduction ? 'none' as const : 'lax' as const;
+const sameSite = isProduction ? ('none' as const) : ('lax' as const);
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -268,7 +268,6 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Get('google')
-  @HttpCode(HttpStatus.FOUND)
   async googleAuth(@Req() req: Request, @Res() res: Response) {
     const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
     if (!clientId || clientId === '...') {
@@ -280,6 +279,18 @@ export class AuthController {
       });
       return;
     }
+    try {
+      passport.authenticate('google', { session: false })(req, res);
+    } catch (err: any) {
+      this.logger.error('Google auth failed', err?.stack || err?.message);
+      res.status(500).json({
+        statusCode: 500,
+        message: err?.message || 'Google OAuth authentication failed',
+        timestamp: new Date().toISOString(),
+        path: req.url,
+      });
+    }
+  }
     passport.authenticate('google', { session: false })(req, res);
   }
 
