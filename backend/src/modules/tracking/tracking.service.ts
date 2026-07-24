@@ -334,7 +334,7 @@ export class TrackingService {
         location: locationStr,
         timestamp: ts,
         deliveryId: dto.deliveryId,
-        vehicleId: dto.vehicleId,
+        vehicleId: dto.vehicleId!,
         driverId,
       },
     });

@@ -172,7 +172,6 @@ export function useDriverTracking() {
     const dId = deliveryIdRef.current;
     const vId = vehicleId;
     if (!p) { isSendingRef.current = false; return; }
-    if (!vId) { isSendingRef.current = false; return; }
 
     const acc = p.accuracy ?? 50;
     if (acc >= ACCURACY_REJECT) {
@@ -193,8 +192,9 @@ export function useDriverTracking() {
       speed: p.speed ?? undefined, heading: p.heading,
       altitude: p.altitude, accuracy: acc,
       confidence,
-      timestamp: now, vehicleId: vId,
+      timestamp: now,
     };
+    if (vId) payload.vehicleId = vId;
     if (dId) payload.deliveryId = dId;
     const socket = getSocket();
     if (socket.connected) {
@@ -290,7 +290,7 @@ export function useDriverTracking() {
   }, [recalcInterval]);
 
   const startTracking = useCallback(() => {
-    if (!navigator.geolocation || !vehicleId) return;
+    if (!navigator.geolocation) return;
     setGeolocationDenied(false);
     setPoorAccuracy(false);
     setConfidenceLevel(1);

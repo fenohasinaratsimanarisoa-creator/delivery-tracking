@@ -38,7 +38,20 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
         color: 'var(--color-text-tertiary)',
       }}>
         <Radio size={12} />
-        En attente
+        GPS en attente
+      </div>
+    );
+  }
+
+  if (!status.position) {
+    return (
+      <div style={{
+        ...containerStyle,
+        background: 'var(--color-accent-muted)',
+        color: 'var(--color-accent)',
+      }}>
+        <Radio size={12} />
+        Recherche signal...
       </div>
     );
   }
