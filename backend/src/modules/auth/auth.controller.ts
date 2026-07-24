@@ -13,6 +13,7 @@ import {
   Param,
   BadRequestException,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { Response, Request } from 'express';
 import * as passport from 'passport';
@@ -266,30 +267,10 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @UseGuards(AuthGuard('google'))
   @Get('google')
-  async googleAuth(@Req() req: Request, @Res() res: Response) {
-    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
-    if (!clientId || clientId === '...') {
-      res.status(400).json({
-        statusCode: 400,
-        message: "Google OAuth is not configured. Contact the administrator.",
-        timestamp: new Date().toISOString(),
-        path: req.url,
-      });
-      return;
-    }
-    try {
-      passport.authenticate('google', { session: false })(req, res);
-    } catch (err: any) {
-      this.logger.error('Google auth failed', err?.stack || err?.message);
-      res.status(500).json({
-        statusCode: 500,
-        message: err?.message || 'Google OAuth authentication failed',
-        timestamp: new Date().toISOString(),
-        path: req.url,
-      });
-    }
+  googleAuth() {
+    // Guard handles redirect to Google
   }
     passport.authenticate('google', { session: false })(req, res);
   }
