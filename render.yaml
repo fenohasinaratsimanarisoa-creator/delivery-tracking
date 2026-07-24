@@ -88,7 +88,7 @@ envVarGroups:
       - key: BILLING_ENABLED
         value: 'false'
       - key: RESET_DATABASE
-        value: 'true'
+        value: 'false'
 
       # ── Optional (set via Render Dashboard) ──
       - key: RESEND_API_KEY
