@@ -19,11 +19,13 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       console.warn('Google OAuth not configured — strategy will be inactive');
     }
 
-    const appUrl = configService.get<string>('APP_URL') || 'http://localhost:5173';
+    const appUrl = (configService.get<string>('APP_URL') || 'http://localhost:5173').replace(/\/+$/, '');
     const callbackURL = configService.get<string>(
       'GOOGLE_CALLBACK_URL',
       `${appUrl}/api/auth/google/callback`,
     );
+
+    Logger.log(`Google OAuth callback URL: ${callbackURL}`, 'GoogleStrategy');
 
     super({
       clientID,

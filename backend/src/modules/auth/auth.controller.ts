@@ -63,13 +63,30 @@ export class AuthController {
     private readonly prisma: PrismaService,
   ) {}
 
+  private getRefreshCookieOpts() {
+    const domain = this.configService.get<string>('COOKIE_DOMAIN');
+    if (domain) {
+      return { ...REFRESH_COOKIE_OPTIONS, domain };
+    }
+    return REFRESH_COOKIE_OPTIONS;
+  }
+
+  private getCsrfCookieOpts() {
+    const domain = this.configService.get<string>('COOKIE_DOMAIN');
+    if (domain) {
+      return { ...CSRF_COOKIE_OPTIONS, domain };
+    }
+    return CSRF_COOKIE_OPTIONS;
+  }
+
   @SkipThrottle()
   @Get('csrf-token')
   getCsrfToken(@Res({ passthrough: true }) res: Response) {
     const configuredSecret = this.configService.get<string>('CSRF_SECRET');
     const secret = configuredSecret || getDevFallbackSecret();
     const { token, hmac } = CsrfGuard.generateToken(secret);
-    res.cookie('csrf-token', token, CSRF_COOKIE_OPTIONS);
+    const opts = this.getCsrfCookieOpts();
+    res.cookie('csrf-token', token, opts);
     return { csrfToken: token, csrfHmac: hmac };
   }
 
@@ -79,7 +96,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.register(dto);
-    res.cookie('refreshToken', result.refreshToken, REFRESH_COOKIE_OPTIONS);
+    const opts = this.getRefreshCookieOpts();
+    res.cookie('refreshToken', result.refreshToken, opts);
     return { accessToken: result.accessToken, user: result.user };
   }
 
@@ -95,7 +113,8 @@ export class AuthController {
     const ip = req.ip || '';
     const userAgent = req.headers?.['user-agent'] || '';
     const result = await this.authService.login(dto, ip, userAgent);
-    res.cookie('refreshToken', result.refreshToken, REFRESH_COOKIE_OPTIONS);
+    const opts = this.getRefreshCookieOpts();
+    res.cookie('refreshToken', result.refreshToken, opts);
     return {
       accessToken: result.accessToken,
       user: result.user,
@@ -118,7 +137,8 @@ export class AuthController {
       req.ip || '',
       req.headers?.['user-agent'] || '',
     );
-    res.cookie('refreshToken', result.refreshToken, REFRESH_COOKIE_OPTIONS);
+    const opts = this.getRefreshCookieOpts();
+    res.cookie('refreshToken', result.refreshToken, opts);
     return { accessToken: result.accessToken, user: result.user };
   }
 
@@ -266,7 +286,7 @@ export class AuthController {
   @Get('google/status')
   googleStatus() {
     const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
-    return { configured: !!(clientId && clientId !== '...') };
+    return { configured: !!(clientId && clientId !== '...' && clientId !== 'unconfigured') };
   }
 
   @Public()
@@ -277,27 +297,51 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @SkipThrottle()
   @Get('google/callback')
-  async googleCallback(@Req() req: Request, @Res() res: Response) {
+  googleCallback(@Req() req: Request, @Res() res: Response) {
     const frontendUrl = this.configService.get<string>('APP_URL') || 'http://localhost:5173';
-    try {
-      passport.authenticate('google', { session: false }, (err: any, user: any, info: any) => {
+    const refreshOpts = this.getRefreshCookieOpts();
+    const csrfOpts = this.getCsrfCookieOpts();
+
+    const handleError = (errorCode: string, logMsg?: string) => {
+      if (logMsg) this.logger.error(logMsg);
+      res.redirect(`${frontendUrl}/auth/callback?error=${errorCode}`);
+    };
+
+    const authenticate = passport.authenticate(
+      'google',
+      { session: false },
+      (err: any, user: any, info: any) => {
         if (err || !user) {
           let error = 'google_auth_failed';
-          if (!user && info && info.message === 'access_denied') error = 'access_denied';
+          if (!user && info?.message === 'access_denied') error = 'access_denied';
           else if (err?.message === 'Email not verified') error = 'email_not_verified';
           else if (err?.message === 'Account deactivated') error = 'account_deactivated';
           else if (err?.message === 'Domain not found') error = 'account_not_found';
+          this.logger.error('Google OAuth callback failed', err?.message || info?.message || 'no user');
           return res.redirect(`${frontendUrl}/auth/callback?error=${error}`);
         }
+
+        this.logger.log(`Google OAuth success for user ${user.user?.id}`);
+
         const tokenParam = encodeURIComponent(user.accessToken);
-        res.cookie('refreshToken', user.refreshToken, REFRESH_COOKIE_OPTIONS);
+        res.cookie('refreshToken', user.refreshToken, refreshOpts);
+
+        const configuredSecret = this.configService.get<string>('CSRF_SECRET');
+        const secret = configuredSecret || getDevFallbackSecret();
+        const { token: csrfTok } = CsrfGuard.generateToken(secret);
+        res.cookie('csrf-token', csrfTok, csrfOpts);
+
         return res.redirect(`${frontendUrl}/auth/callback#accessToken=${tokenParam}`);
-      })(req, res);
-    } catch (err: any) {
-      this.logger.error('Google callback passport error', err?.message || err);
-      return res.redirect(`${frontendUrl}/auth/callback?error=google_auth_failed`);
-    }
+      },
+    );
+
+    authenticate(req, res, (nextErr?: any) => {
+      if (nextErr) {
+        this.logger.error('Google callback passport next() error', nextErr?.message || nextErr);
+        res.redirect(`${frontendUrl}/auth/callback?error=google_auth_failed`);
+      }
+    });
   }
 }

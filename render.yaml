@@ -99,6 +99,8 @@ envVarGroups:
         sync: false
       - key: GOOGLE_CALLBACK_URL
         sync: false
+      - key: COOKIE_DOMAIN
+        sync: false
       - key: SENTRY_DSN
         sync: false
       - key: ALERT_SLACK_WEBHOOK

@@ -277,7 +277,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
   const [focused, setFocused] = useState<'email' | 'password' | null>(null);
   const emailRef = useRef<HTMLInputElement>(null);
 
-  const [googleConfigured, setGoogleConfigured] = useState(true);
+  const [googleConfigured, setGoogleConfigured] = useState<boolean | null>(null);
 
   useEffect(() => { emailRef.current?.focus(); }, []);
 
@@ -471,7 +471,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
           </div>
         </div>
 
-        {googleConfigured && (
+        {googleConfigured === true && (
           <div style={animate(0.30)}>
             <div style={s('divider')}>
               <span style={s('dividerLine')} />

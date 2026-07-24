@@ -11,6 +11,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   access_denied: 'auth.callback.googleRefused',
   email_not_verified: 'auth.callback.emailNotVerified',
   account_not_found: 'auth.callback.accountNotFound',
+  account_deactivated: 'auth.callback.accountDeactivated',
   google_auth_failed: 'auth.callback.googleAuthFailed',
 };
 

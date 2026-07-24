@@ -43,6 +43,14 @@ export default function LoginPage() {
   const cached = readSessionCache();
 
   useEffect(() => {
+    let authError: string | null = null;
+    try { authError = sessionStorage.getItem('dt_auth_error'); sessionStorage.removeItem('dt_auth_error'); } catch {}
+    if (authError === 'session_expired') {
+      setError(t('auth.login.sessionExpired'));
+    }
+  }, [t]);
+
+  useEffect(() => {
     if (!isInitializing && isAuthenticated) {
       navigate('/dashboard', { replace: true });
     }

@@ -66,6 +66,7 @@ api.interceptors.response.use(
     const isRefreshRequest = error.config.url?.includes('/auth/refresh');
     if (isRefreshRequest) {
       setAccessToken(null);
+      try { sessionStorage.setItem('dt_auth_error', 'session_expired'); } catch {}
       window.location.href = '/login';
       return Promise.reject(error);
     }

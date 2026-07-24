@@ -53,6 +53,7 @@
       "emailNotVerified": "Your Google email is not verified. Please verify your email before signing in.",
       "accountNotFound": "This email does not match any account. Please create an account first.",
       "googleAuthFailed": "Google sign-in failed. Please try again or use another method.",
+      "accountDeactivated": "Your account has been deactivated. Please contact an administrator.",
       "invalidParams": "Invalid sign-in parameters.",
       "finalizeError": "Unable to complete sign-in. Please try again.",
       "connecting": "Connecting...",
@@ -80,6 +81,7 @@
       "error401": "These credentials don't match any account. Check your email and password.",
       "error429": "Too many attempts. Please try again in a few moments.",
       "errorGeneric": "Something went wrong. Please try again.",
+      "sessionExpired": "Your session has expired. Please sign in again.",
       "brand": "DeliveryTrack",
       "secure": "Secure platform",
       "uptime": "99.9% uptime"
