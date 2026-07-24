@@ -80,6 +80,8 @@ interface VehicleData {
   routeDuration?: number;
   accuracy?: number;
   confidence?: number;
+  vehicleId?: string;
+  deliveryId?: string;
 }
 
 function buildIcon(vehicle: VehicleData, focused: boolean) {
@@ -352,6 +354,28 @@ function MapBoundsUpdater({ positions }: { positions: { latitude: number; longit
   return null;
 }
 
+function MapFlyToDriver({ lat, lng }: { lat: number; lng: number }) {
+  const map = useMap();
+  const prevRef = useRef({ lat: 0, lng: 0 });
+
+  useEffect(() => {
+    if (prevRef.current.lat === lat && prevRef.current.lng === lng) return;
+    prevRef.current = { lat, lng };
+    map.flyTo([lat, lng], 16, { duration: 0.8 });
+  }, [lat, lng, map]);
+
+  return null;
+}
+
+function DetailRow({ label, value, color, mono }: { label: string; value: string; color?: string; mono?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+      <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.7rem', flexShrink: 0 }}>{label}</span>
+      <span style={{ fontWeight: 500, color: color || 'var(--color-text)', fontFamily: mono ? 'var(--font-mono)' : 'var(--font-body)', fontSize: '0.75rem', textAlign: 'right' }}>{value}</span>
+    </div>
+  );
+}
+
 function MapFocusHandler({ focusId, focusCenter, vehicles }: { focusId?: string | null; focusCenter?: { lat: number; lng: number } | null; vehicles: VehicleData[] }) {
   const map = useMap();
   const lastFocus = useRef<string | null>(null);
@@ -432,6 +456,8 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
   const [routingDistance, setRoutingDistance] = useState<number>(0);
   const [routingLoading, setRoutingLoading] = useState(false);
   const [driverFilter, setDriverFilter] = useState('');
+  const [selectedDriver, setSelectedDriver] = useState<VehicleData | null>(null);
+  const [searchFocused, setSearchFocused] = useState(false);
   const styleInjected = useRef(false);
   const devPerf = useDevicePerformance();
 
@@ -545,6 +571,8 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
         speed: update.speed,
         heading: update.heading,
         accuracy: update.accuracy,
+        vehicleId: update.vehicleId,
+        deliveryId: update.deliveryId,
         confidence: (update as any).confidence ?? (update.accuracy ? Math.max(0.1, 1 - update.accuracy / 50) : 1),
         timestamp: update.timestamp,
         status: update.speed && update.speed > 0.5 ? 'moving' : 'static',
@@ -655,45 +683,164 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
 
       <div style={{
         position: 'absolute', top: 10, left: 50, zIndex: 1000,
-        display: 'flex', alignItems: 'center', gap: 6,
-        background: 'var(--color-glass, rgba(18,27,46,0.92))',
-        border: '1px solid var(--color-glass-border, rgba(242,169,60,0.15))',
-        borderRadius: 'var(--radius-md, 8px)',
-        padding: '4px 10px',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        boxShadow: 'var(--shadow-md, 0 4px 20px rgba(0,0,0,0.4))',
       }}>
-        <Search size={14} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
-        <input
-          placeholder="Rechercher un chauffeur…"
-          value={driverFilter}
-          onChange={(e) => setDriverFilter(e.target.value)}
-          style={{
-            background: 'transparent', border: 'none', outline: 'none',
-            color: 'var(--color-text)', fontSize: '0.75rem',
-            width: 180, fontFamily: 'var(--font-body)',
-          }}
-        />
-        {driverFilter && (
-          <button
-            onClick={() => setDriverFilter('')}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'var(--color-glass, rgba(18,27,46,0.92))',
+          border: '1px solid var(--color-glass-border, rgba(242,169,60,0.15))',
+          borderRadius: 'var(--radius-md, 8px)',
+          padding: '4px 10px',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          boxShadow: 'var(--shadow-md, 0 4px 20px rgba(0,0,0,0.4))',
+        }}>
+          <Search size={14} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
+          <input
+            placeholder="Rechercher chauffeur ou livraison…"
+            value={driverFilter}
+            onChange={(e) => setDriverFilter(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
             style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: 0, display: 'flex', alignItems: 'center',
-              color: 'var(--color-text-tertiary)',
+              background: 'transparent', border: 'none', outline: 'none',
+              color: 'var(--color-text)', fontSize: '0.75rem',
+              width: 220, fontFamily: 'var(--font-body)',
             }}
-          >
-            <X size={14} />
-          </button>
-        )}
-        {driverFilter && filteredVehicles.length > 0 && (
-          <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-            {filteredVehicles.length}/{allPositions.length}
-          </span>
+          />
+          {driverFilter && (
+            <button
+              onClick={() => { setDriverFilter(''); setSelectedDriver(null); }}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: 0, display: 'flex', alignItems: 'center',
+                color: 'var(--color-text-tertiary)',
+              }}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        {driverFilter && searchFocused && (
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
+            maxHeight: 240, overflowY: 'auto',
+            background: 'var(--color-glass, rgba(18,27,46,0.95))',
+            border: '1px solid var(--color-glass-border, rgba(242,169,60,0.15))',
+            borderRadius: 'var(--radius-md, 8px)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            boxShadow: 'var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5))',
+          }}>
+            {filteredVehicles.length === 0 ? (
+              <div style={{ padding: '10px 14px', fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
+                Aucun résultat
+              </div>
+            ) : (
+              filteredVehicles.map((v) => (
+                <div
+                  key={v.id}
+                  onClick={() => {
+                    setSelectedDriver(v);
+                    setDriverFilter('');
+                  }}
+                  style={{
+                    padding: '8px 14px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    fontSize: '0.75rem', color: 'var(--color-text)',
+                    borderBottom: '1px solid var(--color-border-subtle)',
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-accent-muted)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <span style={{ fontSize: '1rem' }}>🚗</span>
+                  <div>
+                    <div style={{ fontWeight: 500 }}>{v.name}</div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>
+                      {v.status === 'moving' ? `En route · ${(v.speed ?? 0) * 3.6 > 0 ? `${((v.speed ?? 0) * 3.6).toFixed(0)} km/h` : ''}` : 'À l\'arrêt'}
+                      {v.accuracy !== undefined ? ` · ±${Math.round(v.accuracy)}m` : ''}
+                      {' · '}{formatTime(v.timestamp)}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
       <MapBoundsUpdater positions={allPositions.map((v) => ({ latitude: v.lat, longitude: v.lng }))} />
+
+      {selectedDriver && (
+        <>
+          <MapFlyToDriver lat={selectedDriver.lat} lng={selectedDriver.lng} />
+          <div style={{
+            position: 'absolute', bottom: 20, right: 10, zIndex: 1000,
+            width: 300, maxHeight: 400, overflowY: 'auto',
+            background: 'var(--color-glass, rgba(18,27,46,0.95))',
+            border: '1px solid var(--color-glass-border, rgba(242,169,60,0.15))',
+            borderRadius: 'var(--radius-lg, 12px)',
+            padding: 16,
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            boxShadow: 'var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5))',
+            fontSize: '0.75rem',
+            color: 'var(--color-text)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>🚗 {selectedDriver.name}</div>
+              <button
+                onClick={() => setSelectedDriver(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: 2 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <DetailRow label="Statut" value={selectedDriver.status === 'moving' ? 'En mouvement' : 'À l\'arrêt'} color={selectedDriver.status === 'moving' ? 'var(--color-accent)' : 'var(--color-teal)'} />
+              {selectedDriver.speed !== undefined && (
+                <DetailRow label="Vitesse" value={`${(selectedDriver.speed * 3.6).toFixed(1)} km/h`} />
+              )}
+              {selectedDriver.heading !== undefined && (
+                <DetailRow label="Direction" value={`${selectedDriver.heading.toFixed(0)}°`} />
+              )}
+              <DetailRow label="Position" value={`${selectedDriver.lat.toFixed(5)}, ${selectedDriver.lng.toFixed(5)}`} mono />
+              {selectedDriver.accuracy !== undefined && (
+                <DetailRow label="Précision GPS" value={`±${Math.round(selectedDriver.accuracy)}m`} />
+              )}
+              {selectedDriver.confidence !== undefined && (
+                <DetailRow label="Confiance Kalman" value={`${(selectedDriver.confidence * 100).toFixed(0)}%`} />
+              )}
+              <DetailRow label="Dernière position" value={formatTime(selectedDriver.timestamp)} />
+              <DetailRow label="Date" value={formatDate(selectedDriver.timestamp)} />
+              {selectedDriver.eta && (
+                <DetailRow label="ETA destination" value={selectedDriver.eta} color="var(--color-teal)" />
+              )}
+              {selectedDriver.vehicleId && (
+                <DetailRow label="Véhicule ID" value={selectedDriver.vehicleId.slice(0, 8)} mono />
+              )}
+              {selectedDriver.deliveryId && (
+                <DetailRow label="Livraison ID" value={selectedDriver.deliveryId.slice(0, 8)} mono />
+              )}
+              {selectedDriver.routeDistance !== undefined && (
+                <DetailRow label="Distance restante" value={formatDistance(selectedDriver.routeDistance)} />
+              )}
+            </div>
+
+            {(!selectedDriver.timestamp || Date.now() - new Date(selectedDriver.timestamp).getTime() > 120_000) && (
+              <div style={{
+                marginTop: 12, padding: '8px 12px',
+                background: 'var(--color-red-muted)',
+                borderRadius: 'var(--radius-md, 6px)',
+                fontSize: '0.7rem', color: 'var(--color-red)',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                ⚠️ Position non actualisée depuis plus de 2 minutes
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {routePath.length > 1 && (
         <Polyline
