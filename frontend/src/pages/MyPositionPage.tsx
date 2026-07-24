@@ -431,8 +431,13 @@ export default function MyPositionPage() {
           if (shouldRecalcRoute(latitude, longitude)) recalcRoute(latitude, longitude);
         }
       },
-      (err) => { setStatusMsg(t('myPosition.gpsError', { error: err.message })); setTracking(false); },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 },
+      (err) => {
+        const errMap: Record<number, string> = { 1: t('myPosition.gpsPermissionDenied'), 2: t('myPosition.gpsUnavailable'), 3: t('myPosition.gpsTimeout') };
+        const msg = errMap[err.code] || t('myPosition.gpsError', { error: err.message });
+        setStatusMsg(msg);
+        setTracking(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 27000 },
     );
     intervalRef.current = setInterval(sendPosition, INTERVAL_DEFAULT);
     startRoutingRecalc();
@@ -591,6 +596,11 @@ export default function MyPositionPage() {
                     ))}
                   </select>
                 </div>
+                {deliveries.filter((d) => d.status === 'assigned' || d.status === 'in_progress').length === 0 && !tracking && (
+                  <div style={{ marginTop: 8, fontSize: 'var(--text-xs, 0.625rem)', color: 'var(--color-text-tertiary, #7A8BA3)' }}>
+                    {t('myPosition.noDeliveriesAvailable')}
+                  </div>
+                )}
               </div>
 
               {hasDestination && routingETA && (
