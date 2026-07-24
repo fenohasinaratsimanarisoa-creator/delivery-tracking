@@ -17,6 +17,7 @@ COPY --from=builder /app/prisma ./prisma
 COPY package*.json ./
 ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
 ENV PRISMA_QUERY_ENGINE_BINARY=/app/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
+RUN chown -R node:node /app/node_modules/@prisma/engines /app/node_modules/.prisma
 USER node
 EXPOSE 3000
-CMD npx prisma migrate deploy && node dist/src/main
+CMD /app/node_modules/.bin/prisma migrate deploy && node dist/src/main
