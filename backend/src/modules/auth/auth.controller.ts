@@ -272,8 +272,6 @@ export class AuthController {
   googleAuth() {
     // Guard handles redirect to Google
   }
-    passport.authenticate('google', { session: false })(req, res);
-  }
 
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
