@@ -19,4 +19,4 @@ ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/node_modules/.prisma/client/libquery_engine
 ENV PRISMA_QUERY_ENGINE_BINARY=/app/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
 USER node
 EXPOSE 3000
-CMD ["node", "dist/src/main"]
+CMD npx prisma migrate deploy && node dist/src/main
