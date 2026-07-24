@@ -5,12 +5,13 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
 
 @Injectable()
 export class DriversService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private dataUpdateBus: DataUpdateBus) {}
 
   async create(companyId: string, dto: CreateDriverDto) {
     const existing = await this.prisma.driver.findUnique({
@@ -34,10 +35,12 @@ export class DriversService {
       }
     }
 
-    return this.prisma.driver.create({
+    const driver = await this.prisma.driver.create({
       data: { ...dto, companyId },
       include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
     });
+    this.dataUpdateBus.emitUpdate({ companyId, entity: 'driver', action: 'created', payload: { id: driver.id } });
+    return driver;
   }
 
   async findByUserId(userId: string) {
@@ -105,11 +108,13 @@ export class DriversService {
       }
     }
 
-    return this.prisma.driver.update({
+    const driver = await this.prisma.driver.update({
       where: { id },
       data: dto,
       include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
     });
+    this.dataUpdateBus.emitUpdate({ companyId, entity: 'driver', action: 'updated', payload: { id: driver.id } });
+    return driver;
   }
 
   async remove(companyId: string, id: string) {
@@ -122,9 +127,11 @@ export class DriversService {
       throw new BadRequestException('Cannot delete driver assigned to an in-progress delivery');
     }
 
-    return this.prisma.driver.update({
+    const driver = await this.prisma.driver.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
+    this.dataUpdateBus.emitUpdate({ companyId, entity: 'driver', action: 'deleted', payload: { id: driver.id } });
+    return driver;
   }
 }

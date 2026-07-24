@@ -13,6 +13,7 @@ import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 import { WsAuthService } from '../../common/auth/ws-auth.service';
 import { TrackingService } from './tracking.service';
 import { UpdatePositionDto, BatchPositionDto } from './dto/update-position.dto';
+import { DataUpdateBus } from '../../common/events/data-update.bus';
 
 @WebSocketGateway({
   cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:5173' },
@@ -28,7 +29,18 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
   constructor(
     private trackingService: TrackingService,
     private wsAuthService: WsAuthService,
-  ) {}
+    private dataUpdateBus: DataUpdateBus,
+  ) {
+    this.dataUpdateBus.on('dataUpdate', (event) => {
+      if (event.companyId) {
+        this.server.to(`company:${event.companyId}`).emit('dataUpdate', {
+          entity: event.entity,
+          action: event.action,
+          ...(event.payload || {}),
+        });
+      }
+    });
+  }
 
   async handleConnection(client: Socket) {
     try {
@@ -36,6 +48,9 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
       if (user.role === 'driver') {
         client.join(`driver:${user.id}`);
         this.disconnectedDrivers.delete(user.id);
+      }
+      if (user.companyId) {
+        client.join(`company:${user.companyId}`);
       }
     } catch {
       client.emit('error', 'Invalid token');
@@ -208,5 +223,9 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
 
     client.leave(`company:${user.companyId}`);
     return { event: 'unsubscribed', data: { companyId: user.companyId } };
+  }
+
+  broadcastDataUpdate(companyId: string, type: string, payload?: Record<string, unknown>) {
+    this.server.to(`company:${companyId}`).emit('dataUpdate', { type, ...payload });
   }
 }

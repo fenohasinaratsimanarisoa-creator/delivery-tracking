@@ -8,6 +8,7 @@ import Sidebar from './components/Sidebar';
 import ProtectedRoute from './components/ProtectedRoute';
 import CookieConsentBanner from './components/CookieConsentBanner';
 import ErrorBoundary from './components/ErrorBoundary';
+import { useDataUpdates } from './hooks/useDataUpdates';
 
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./features/auth/RegisterPage'));
@@ -67,6 +68,7 @@ function SuspenseWrapper({ children }: { children: React.ReactNode }) {
 }
 
 function AppLayout({ children }: { children: React.ReactNode }) {
+  useDataUpdates();
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--color-bg)' }}>
       <Sidebar />

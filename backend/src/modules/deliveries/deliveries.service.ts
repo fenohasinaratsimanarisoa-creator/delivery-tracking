@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 import { UpdateDeliveryStatusDto } from './dto/update-delivery-status.dto';
@@ -30,6 +31,7 @@ export class DeliveriesService {
     private notifications: NotificationsService,
     private webhooks: WebhooksService,
     private configService: ConfigService,
+    private dataUpdateBus: DataUpdateBus,
   ) {}
 
   async create(companyId: string, dto: CreateDeliveryDto) {
@@ -57,6 +59,8 @@ export class DeliveriesService {
       title: delivery.title,
       status: delivery.status,
     });
+
+    this.dataUpdateBus.emitUpdate({ companyId, entity: 'delivery', action: delivery.status, payload: { id: delivery.id } });
 
     return delivery;
   }
@@ -154,6 +158,8 @@ export class DeliveriesService {
     });
 
     await this.dispatchWebhook(companyId, updated, dto.status);
+
+    this.dataUpdateBus.emitUpdate({ companyId, entity: 'delivery', action: dto.status, payload: { id } });
 
     return updated;
   }
@@ -278,6 +284,8 @@ export class DeliveriesService {
     });
 
     await this.dispatchWebhook(companyId, updated, dto.status);
+
+    this.dataUpdateBus.emitUpdate({ companyId, entity: 'delivery', action: dto.status, payload: { id } });
 
     return updated;
   }

@@ -36,6 +36,7 @@ import { AlertsModule } from './modules/alerts/alerts.module';
 import { GeocodingModule } from './modules/geocoding/geocoding.module';
 import { RedisModule } from './common/redis/redis.module';
 import { CacheModule } from './common/cache/cache.module';
+import { DataUpdateModule } from './common/events/data-update.module';
 
 @Module({
   imports: [
@@ -104,6 +105,7 @@ import { CacheModule } from './common/cache/cache.module';
     MonitoringModule,
     AlertModule,
     EncryptionModule,
+    DataUpdateModule,
     HealthModule,
     MetricsModule,
     QueueModule,
