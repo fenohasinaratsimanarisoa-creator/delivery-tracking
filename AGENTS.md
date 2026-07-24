@@ -9,7 +9,7 @@ Render auto-deploys both backend (`deliverytrack-api`) and frontend (`deliverytr
 1. **Verify builds** (both must succeed):
    - Backend: `cd backend && npm run build`
    - Frontend: `cd frontend && npx tsc --noEmit && npm run build`
-2. **Commit & push**: `git add -A && git commit -m "description" && git push origin main`
+2. **Commit & push**: `git add -A && git commit -m "description" && git push origin master:main`
 3. Render builds both Docker images, runs Prisma migrations, and deploys.
 
 ## Docker Compose (local/staging)
