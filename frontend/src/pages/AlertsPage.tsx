@@ -35,7 +35,7 @@ interface AlertStats {
   prevTotal: number | null;
 }
 
-const PRIORITY_COLORS: Record<string, string> = { critical: '#dc2626', high: '#f97316', medium: '#eab308', low: '#22c55e' };
+const PRIORITY_COLORS: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' };
 const PERIOD_VALUES = ['today', '7d', '30d', 'all'] as const;
 
 export default function AlertsPage() {

@@ -219,3 +219,46 @@ Corrections : `1.15rem` → `var(--text-lg)`, couleurs hardcodées → CSS vars.
 | Mode navigation guidée chauffeur | ✅ inchangé |
 | Notifications (position + delete) | ✅ inchangé |
 | Paramètres (mdp, 2FA, préférences) | ✅ inchangé |
+
+---
+
+## PHASE 3 — FINITION DES PAGES AJOUTÉES (Juillet 2026)
+
+### Pages auditées : Alertes, Preuves de livraison, écrans chauffeur (ProximityAlert, TrackingStatusIndicator)
+
+### Corrections appliquées
+
+| Page | Problème | Correction |
+|------|---------|-----------|
+| AlertsPage | Critical red `#dc2626` contrast 3.56:1 (échec AA small text) | → `#ef4444` (contrast 4.5:1+) |
+| AlertsPage | Filtres collés sans structure | → 4 groupes distincts avec labels de section |
+| Sidebar | "Preuves" hardcodé FR, pas d'i18n | → `nav.deliveryProofs` avec traductions fr/en |
+| Sidebar | Icône Package dupliquée (Deliveries + Preuves) | → Icône Bell distincte |
+
+### WCAG contrast — couleurs de gravité Alerts
+
+| Couleur | Texte | Contraste | Verdict |
+|---------|-------|-----------|---------|
+| `#ef4444` (critical) | #121B2E | 4.5:1+ | AA ✅ |
+| `#f97316` (high) | #121B2E | 6.13:1 | AA ✅ |
+| `#eab308` (medium) | #121B2E | 8.96:1 | AA ✅ |
+| `#22c55e` (low) | #121B2E | 7.54:1 | AA ✅ |
+| `#F2A93C` (accent) | #121B2E | 8.61:1 | AA ✅ |
+
+### Cohérence globale
+
+- ProximityAlert (bannière livraison) : utilise `var(--color-accent)` + `dt-fade-in-up` animation — conforme au token system
+- TrackingStatusIndicator : 4 états visuels avec icônes Lucide cohérentes
+- DeliveryProofsPage : DataTable conforme, filtres avec le même pattern de chips
+- Toutes les pages ajoutées après l'audit initial respectent les tokens CSS
+
+### Validation
+
+| Parcours | Résultat |
+|----------|---------|
+| Résolution d'alerte | ✅ Fonctionnel |
+| Filtrage alertes | ✅ Fonctionnel |
+| Affichage preuves de livraison | ✅ Fonctionnel |
+| Tracking chauffeur | ✅ Inchangé |
+| CRUD livraisons | ✅ Inchangé |
+| Mode navigation | ✅ Inchangé |
