@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/AuthContext';
+import { setAccessToken } from '../../services/auth/tokenStore';
+import { parseToken } from '../../services/jwt';
+import type { User } from '../../types';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -22,7 +25,7 @@ export default function AuthCallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { isInitializing, isAuthenticated, user } = useAuth();
+  const { isInitializing, isAuthenticated, user, login } = useAuth();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [redirected, setRedirected] = useState(false);
@@ -35,11 +38,29 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    const statusParam = searchParams.get('status');
-    if (statusParam !== 'success') {
-      setStatus('error');
-      setErrorMessage(t('auth.callback.invalidParams'));
-      return;
+    const hash = window.location.hash.slice(1);
+    const hashParams = new URLSearchParams(hash);
+    const tokenFromHash = hashParams.get('accessToken');
+
+    if (tokenFromHash) {
+      const payload = parseToken(tokenFromHash);
+      if (payload) {
+        const u: User = {
+          id: (payload.sub || payload.id) as string,
+          email: payload.email as string,
+          role: payload.role as User['role'],
+          companyId: payload.companyId as string,
+          firstName: (payload.firstName || payload.given_name || '') as string,
+          lastName: (payload.lastName || payload.family_name || '') as string,
+        };
+        setAccessToken(tokenFromHash);
+        login(u, tokenFromHash);
+        setRedirected(true);
+        setStatus('success');
+        const target = ROLE_REDIRECT[u.role] || '/dashboard';
+        navigate(target, { replace: true });
+        return;
+      }
     }
 
     if (isInitializing) return;
@@ -53,7 +74,7 @@ export default function AuthCallbackPage() {
       setStatus('error');
       setErrorMessage(t('auth.callback.finalizeError'));
     }
-  }, [isInitializing, isAuthenticated, user, searchParams, navigate, redirected]);
+  }, [isInitializing, isAuthenticated, user, searchParams, navigate, redirected, login]);
 
   const containerStyle: React.CSSProperties = {
     display: 'flex',

@@ -286,8 +286,9 @@ export class AuthController {
         else if (err?.message === 'Domain not found') error = 'account_not_found';
         return res.redirect(`${frontendUrl}/auth/callback?error=${error}`);
       }
+      const tokenParam = encodeURIComponent(user.accessToken);
       res.cookie('refreshToken', user.refreshToken, REFRESH_COOKIE_OPTIONS);
-      return res.redirect(`${frontendUrl}/auth/callback?status=success`);
+      return res.redirect(`${frontendUrl}/auth/callback#accessToken=${tokenParam}`);
     })(req, res);
   }
 }
