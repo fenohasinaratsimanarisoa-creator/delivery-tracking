@@ -738,11 +738,36 @@ describe('AuthService', () => {
       await expect(service.validateGoogleUser(profile)).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should throw UnauthorizedException when domain is not found', async () => {
+    it('should auto-create company when no company matches the domain', async () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       mockPrisma.company.findFirst.mockResolvedValueOnce(null);
+      const newCompany = { id: 'new-company-id', name: 'Jane Smith', email: 'user@example.com' };
+      mockPrisma.company.create.mockResolvedValueOnce(newCompany);
+      mockPrisma.user.create.mockResolvedValueOnce({ ...baseUser, companyId: 'new-company-id', googleId: 'google-123', role: 'dispatcher' });
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ firstName: 'Jane', lastName: 'Smith' })
+        .mockResolvedValueOnce(baseUser);
+      mockJwtService.sign.mockReturnValueOnce('access_token').mockReturnValueOnce('refresh_token');
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_refresh');
 
-      await expect(service.validateGoogleUser(profile)).rejects.toThrow(UnauthorizedException);
+      const result = await service.validateGoogleUser(profile);
+
+      expect(mockPrisma.company.create).toHaveBeenCalledWith({
+        data: { name: 'Jane Smith', email: 'user@example.com' },
+      });
+      expect(mockPrisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            companyId: 'new-company-id',
+            role: 'dispatcher',
+          }),
+        }),
+      );
+      expect(result).toEqual({
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
+        user: baseUser,
+      });
     });
   });
 });

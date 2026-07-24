@@ -295,12 +295,14 @@ export class AuthService {
     }
 
     const domain = email.split('@')[1];
-    const company = await this.prisma.company.findFirst({
+    let company = await this.prisma.company.findFirst({
       where: { email: { not: null, endsWith: '@' + domain } },
     });
 
     if (!company) {
-      throw new UnauthorizedException('Domain not found');
+      company = await this.prisma.company.create({
+        data: { name: `${firstName} ${lastName}`, email },
+      });
     }
 
     const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
