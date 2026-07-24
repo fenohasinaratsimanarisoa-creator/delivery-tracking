@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { io, Socket } from 'socket.io-client';
+import { useQuery } from '@tanstack/react-query';
 import { Bell, Trash2 } from 'lucide-react';
 import { formatDateTime } from '../services/i18n/formatDate';
 import api from '../services/api/client';
@@ -31,25 +32,49 @@ export default function NotificationBell() {
 
   const token = getAccessToken();
 
+  const { data: notifData, refetch: refetchNotifs } = useQuery({
+    queryKey: ['notifications', 'list'],
+    queryFn: () => api.get('/notifications?limit=20').then((r) => r.data),
+    enabled: !!token,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const { data: unreadData, refetch: refetchUnread } = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: () => api.get('/notifications/unread-count').then((r) => r.data),
+    enabled: !!token,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
+  useEffect(() => {
+    if (notifData) setNotifications(notifData);
+  }, [notifData]);
+
+  useEffect(() => {
+    if (unreadData) setUnreadCount(unreadData.count ?? 0);
+  }, [unreadData]);
+
   useEffect(() => {
     if (!token) return;
 
-    fetchNotifications();
-    fetchUnreadCount();
-
     const socket = io('/notifications', {
-      auth: { token },
+      auth: (cb) => cb({ token: getAccessToken() }),
       transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
     });
     socketRef.current = socket;
 
-    socket.on('notification', (notif: Notification) => {
-      setNotifications((prev) => [notif, ...prev]);
-      setUnreadCount((c) => c + 1);
+    socket.on('notification', () => {
+      refetchNotifs();
+      refetchUnread();
     });
 
     return () => { socket.close(); };
-  }, [token]);
+  }, [token, refetchNotifs, refetchUnread]);
 
   useEffect(() => {
     if (!open) return;
@@ -77,20 +102,6 @@ export default function NotificationBell() {
       document.removeEventListener('mousedown', handleClick);
     };
   }, [open]);
-
-  async function fetchNotifications() {
-    try {
-      const res = await api.get('/notifications?limit=20');
-      setNotifications(res.data);
-    } catch { /* ignore */ }
-  }
-
-  async function fetchUnreadCount() {
-    try {
-      const res = await api.get('/notifications/unread-count');
-      setUnreadCount(res.data.count ?? 0);
-    } catch { /* ignore */ }
-  }
 
   async function handleMarkRead(id: string) {
     try {

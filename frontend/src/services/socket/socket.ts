@@ -15,9 +15,13 @@ export function getSocket(): Socket {
     });
 
     socket.on('disconnect', (reason) => {
-      if (reason === 'io server disconnect' && getAccessToken()) {
+      if ((reason === 'io server disconnect' || reason === 'transport close') && getAccessToken()) {
         socket?.connect();
       }
+    });
+
+    socket.io.on('reconnect_attempt', () => {
+      if (socket) socket.auth = { token: getAccessToken() };
     });
   }
   return socket;

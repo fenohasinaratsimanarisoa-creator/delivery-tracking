@@ -7,6 +7,7 @@ import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import { formatDateTime } from '../services/i18n/formatDate';
 import { io } from 'socket.io-client';
+import { getAccessToken } from '../services/auth/tokenStore';
 
 interface AlertItem {
   id: string;
@@ -93,14 +94,16 @@ export default function AlertsPage() {
   });
 
   useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
     let socket: any;
     try {
       socket = io('/notifications', {
-        auth: { token: typeof localStorage !== 'undefined' ? '' : '' },
+        auth: (cb: (data: { token: string }) => void) => cb({ token: getAccessToken() || '' }),
         transports: ['websocket'],
+        reconnection: true,
+        reconnectionDelay: 1000,
       });
-      const token = (window as any).__ACCESS_TOKEN__;
-      if (token) socket.auth = { token };
       socket.on('notification', () => {
         setLiveCount((c) => c + 1);
         queryClient.invalidateQueries({ queryKey: ['alerts'] });
