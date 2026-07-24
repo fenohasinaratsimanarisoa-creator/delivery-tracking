@@ -20,4 +20,4 @@ ENV PRISMA_QUERY_ENGINE_BINARY=/app/node_modules/.prisma/client/libquery_engine-
 RUN chown -R node:node /app/node_modules/@prisma/engines /app/node_modules/.prisma
 USER node
 EXPOSE 3000
-CMD sh -c 'if [ "$RESET_DATABASE" = "true" ]; then npx prisma db push --force-reset --accept-data-loss; fi && npx prisma migrate deploy && node dist/src/main'
+CMD sh -c 'if [ "$RESET_DATABASE" = "true" ]; then npx prisma db push --force-reset --accept-data-loss; fi && npx prisma db push --accept-data-loss && node dist/src/main'

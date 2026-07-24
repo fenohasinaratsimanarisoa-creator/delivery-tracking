@@ -33,8 +33,9 @@ export class UpdatePositionDto {
   @IsDateString()
   timestamp: string;
 
+  @IsOptional()
   @IsString()
-  deliveryId: string;
+  deliveryId?: string;
 
   @IsString()
   vehicleId: string;

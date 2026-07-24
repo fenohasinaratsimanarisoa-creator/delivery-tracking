@@ -852,6 +852,9 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
               {selectedDriver.deliveryId && (
                 <DetailRow label="Livraison ID" value={selectedDriver.deliveryId.slice(0, 8)} mono />
               )}
+              {!selectedDriver.deliveryId && (
+                <DetailRow label="Statut" value="Disponible" color="var(--color-teal)" />
+              )}
               {selectedDriver.routeDistance !== undefined && (
                 <DetailRow label="Distance restante" value={formatDistance(selectedDriver.routeDistance)} />
               )}

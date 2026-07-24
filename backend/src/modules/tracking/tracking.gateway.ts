@@ -77,13 +77,15 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     const user = client.data.user;
     if (!user || user.role !== 'driver') return;
 
-    try {
-      await this.trackingService.verifyDriverAssignment(dto.deliveryId, user.id);
-    } catch {
-      this.logger.warn(
-        `Position rejected: driver ${user.id} not assigned to delivery ${dto.deliveryId}`,
-      );
-      return;
+    if (dto.deliveryId) {
+      try {
+        await this.trackingService.verifyDriverAssignment(dto.deliveryId, user.id);
+      } catch {
+        this.logger.warn(
+          `Position rejected: driver ${user.id} not assigned to delivery ${dto.deliveryId}`,
+        );
+        return;
+      }
     }
 
     const driver = await this.trackingService.findDriverByUserId(user.id);
@@ -110,7 +112,7 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (!position) return;
 
     this.logger.log(
-      `[POSITION] driver=${driver.id} lat=${dto.latitude.toFixed(6)} lng=${dto.longitude.toFixed(6)} speed=${speed?.toFixed(2)} heading=${dto.heading} delivery=${dto.deliveryId} company=${user.companyId}`,
+      `[POSITION] driver=${driver.id} lat=${dto.latitude.toFixed(6)} lng=${dto.longitude.toFixed(6)} speed=${speed?.toFixed(2)} heading=${dto.heading} delivery=${dto.deliveryId || 'none'} company=${user.companyId}`,
     );
 
     const broadcast = {
@@ -128,7 +130,9 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
       vehicleId: dto.vehicleId,
     };
 
-    this.server.to(`delivery:${dto.deliveryId}`).emit('positionUpdate', broadcast);
+    if (dto.deliveryId) {
+      this.server.to(`delivery:${dto.deliveryId}`).emit('positionUpdate', broadcast);
+    }
     this.server.to(`company:${user.companyId}`).emit('positionUpdate', broadcast);
 
     return { event: 'positionSaved', data: { id: position.id, suspect: position.suspect } };

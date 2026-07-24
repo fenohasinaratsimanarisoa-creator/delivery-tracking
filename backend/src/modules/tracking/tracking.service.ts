@@ -232,7 +232,7 @@ export class TrackingService {
         );
         // Use smoothed average speed over last N positions to avoid false delay alerts
         // on momentary slowdowns (traffic light, yield)
-        const avgSpeedMs = await this.getAverageSpeed(dto.vehicleId, dto.deliveryId);
+        const avgSpeedMs = dto.deliveryId ? await this.getAverageSpeed(dto.vehicleId, dto.deliveryId) : null;
         const effectiveSpeed = avgSpeedMs ?? dto.speed;
         if (effectiveSpeed > 0) {
           const etaSec = distanceRemaining / effectiveSpeed;
@@ -248,7 +248,7 @@ export class TrackingService {
                 title: 'Delay Alert',
                 message: `Estimated arrival ${delayMin} min late (scheduled: ${delivery.scheduledDate.toLocaleString()})`,
                 link: `/tracking/${dto.deliveryId}`,
-                deliveryId: dto.deliveryId,
+                deliveryId: dto.deliveryId ?? undefined,
               }),
             );
           }
@@ -274,12 +274,14 @@ export class TrackingService {
       }
     }
 
-    const geofenceEvent = await this.geofenceService.checkGeofences(
-      dto.deliveryId,
-      dto.vehicleId,
-      dto.latitude,
-      dto.longitude,
-    );
+    const geofenceEvent = dto.deliveryId
+      ? await this.geofenceService.checkGeofences(
+          dto.deliveryId,
+          dto.vehicleId,
+          dto.latitude,
+          dto.longitude,
+        )
+      : null;
     if (geofenceEvent) {
       tasks.push(
         this.notifications.create(companyId, {
@@ -300,7 +302,7 @@ export class TrackingService {
     this.metrics.received++;
     const ts = new Date(dto.timestamp);
 
-    const isDup = await this.isDuplicateByTimestamp(dto.vehicleId, dto.deliveryId, ts);
+    const isDup = await this.isDuplicateByTimestamp(dto.vehicleId, dto.deliveryId || '', ts);
     if (isDup) {
       this.metrics.deduped++;
       this.logger.debug(
@@ -361,7 +363,9 @@ export class TrackingService {
     const saved: any[] = [];
     for (const pos of positions) {
       try {
-        await this.verifyDriverAssignment(pos.deliveryId, userId);
+        if (pos.deliveryId) {
+          await this.verifyDriverAssignment(pos.deliveryId, userId);
+        }
       } catch {
         this.logger.warn(
           `Batch position rejected (wrong driver): delivery=${pos.deliveryId} driver=${driverId}`,

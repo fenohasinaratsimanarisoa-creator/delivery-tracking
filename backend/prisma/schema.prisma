@@ -415,8 +415,8 @@ model GpsPosition {
   timestamp DateTime
   createdAt DateTime @default(now()) @map("created_at")
 
-  deliveryId String @map("delivery_id") @db.Uuid
-  delivery   Delivery @relation(fields: [deliveryId], references: [id])
+  deliveryId String? @map("delivery_id") @db.Uuid
+  delivery   Delivery? @relation(fields: [deliveryId], references: [id])
 
   vehicleId String @map("vehicle_id") @db.Uuid
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id])

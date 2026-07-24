@@ -171,7 +171,7 @@ export function useDriverTracking() {
     const filtered = filteredPosRef.current;
     const dId = deliveryIdRef.current;
     const vId = vehicleId;
-    if (!p || !dId) { isSendingRef.current = false; return; }
+    if (!p) { isSendingRef.current = false; return; }
     if (!vId) { isSendingRef.current = false; return; }
 
     const acc = p.accuracy ?? 50;
@@ -193,8 +193,9 @@ export function useDriverTracking() {
       speed: p.speed ?? undefined, heading: p.heading,
       altitude: p.altitude, accuracy: acc,
       confidence,
-      timestamp: now, deliveryId: dId, vehicleId: vId,
+      timestamp: now, vehicleId: vId,
     };
+    if (dId) payload.deliveryId = dId;
     const socket = getSocket();
     if (socket.connected) {
       socket.emit('updatePosition', payload, () => { isSendingRef.current = false; });
@@ -289,7 +290,7 @@ export function useDriverTracking() {
   }, [recalcInterval]);
 
   const startTracking = useCallback(() => {
-    if (!navigator.geolocation || !autoDeliveryId || !vehicleId) return;
+    if (!navigator.geolocation || !vehicleId) return;
     setGeolocationDenied(false);
     setPoorAccuracy(false);
     setConfidenceLevel(1);
@@ -302,7 +303,7 @@ export function useDriverTracking() {
     tryWatch(true, triedLowAccuracyRef);
     intervalRef.current = setInterval(sendPosition, INTERVAL_DEFAULT);
     drainIntervalRef.current = setInterval(() => { drainQueue(); }, DRAIN_INTERVAL_MS);
-  }, [autoDeliveryId, vehicleId, tryWatch, sendPosition, drainQueue]);
+  }, [vehicleId, tryWatch, sendPosition, drainQueue]);
 
   const stopTracking = useCallback(() => {
     if (watchRef.current !== null) {
@@ -341,7 +342,7 @@ export function useDriverTracking() {
   }, [drainQueue]);
 
   useEffect(() => {
-    if (!driver || !autoDeliveryId) {
+    if (!driver) {
       if (startedRef.current) {
         stopTracking();
         startedRef.current = false;
@@ -356,10 +357,10 @@ export function useDriverTracking() {
       }, 1500);
       return () => clearTimeout(timeout);
     }
-  }, [driver, autoDeliveryId, startTracking, stopTracking]);
+  }, [driver, startTracking, stopTracking]);
 
   const trackingStatus: TrackingStatus = {
-    active: startedRef.current && autoDeliveryId !== '',
+    active: startedRef.current,
     position,
     confidence: confidenceLevel,
     poorAccuracy,
