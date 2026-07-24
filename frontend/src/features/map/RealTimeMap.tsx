@@ -3,6 +3,8 @@ import { MapContainer, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Search, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import api from '../../services/api/client';
 import { getSocket, PositionUpdate } from '../../services/socket/socket';
 import { formatDate, formatTime } from '../../services/i18n/formatDate';
 import { useDevicePerformance } from '../../hooks/useDevicePerformance';
@@ -457,9 +459,16 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
   const [routingLoading, setRoutingLoading] = useState(false);
   const [driverFilter, setDriverFilter] = useState('');
   const [selectedDriver, setSelectedDriver] = useState<VehicleData | null>(null);
-  const [searchFocused, setSearchFocused] = useState(false);
   const styleInjected = useRef(false);
   const devPerf = useDevicePerformance();
+
+  const { data: driversData } = useQuery({
+    queryKey: ['drivers', 'list'],
+    queryFn: () => api.get('/drivers?limit=100').then((r: any) => r.data?.data ?? r.data ?? []),
+    staleTime: 60_000,
+  });
+
+  const allDrivers: Array<{ id: string; firstName: string; lastName: string; licenseNumber: string; vehicle?: { licensePlate: string } }> = driversData ?? [];
 
   const lastRouteCalcPos = useRef<{ lat: number; lng: number } | null>(null);
   const lastRouteCalcTime = useRef<number>(0);
@@ -479,12 +488,30 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
   setRoutingLoadingRef.current = setRoutingLoading;
 
   const allPositions = Array.from(vehicles.values());
+  const searchResults = useMemo(() => {
+    if (!driverFilter.trim()) return [];
+    const q = driverFilter.toLowerCase();
+    const active = allPositions.filter((v) => v.name.toLowerCase().includes(q));
+    const activeIds = new Set(active.map((v) => v.id));
+    const offline = allDrivers
+      .filter((d) => !activeIds.has(d.id) && `${d.firstName} ${d.lastName}`.toLowerCase().includes(q))
+      .map((d) => ({
+        id: d.id,
+        lat: 0,
+        lng: 0,
+        name: `${d.firstName} ${d.lastName}`,
+        status: 'offline' as const,
+        timestamp: new Date().toISOString(),
+        vehiclePlate: d.vehicle?.licensePlate,
+        licenseNumber: d.licenseNumber,
+      }));
+    return [...active.map((v) => ({ ...v, isOffline: false })), ...offline.map((v) => ({ ...v, isOffline: true }))];
+  }, [allPositions, allDrivers, driverFilter]);
+
   const filteredVehicles = useMemo(() => {
     if (!driverFilter.trim()) return allPositions;
     const q = driverFilter.toLowerCase();
-    return allPositions.filter((v) =>
-      v.name.toLowerCase().includes(q)
-    );
+    return allPositions.filter((v) => v.name.toLowerCase().includes(q));
   }, [allPositions, driverFilter]);
   const visibleVehicles = useMemo(() => {
     if (filteredVehicles.length <= devPerf.maxAnimatedMarkers) return filteredVehicles;
@@ -696,11 +723,9 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
         }}>
           <Search size={14} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
           <input
-            placeholder="Rechercher chauffeur ou livraison…"
+            placeholder="Rechercher un chauffeur…"
             value={driverFilter}
             onChange={(e) => setDriverFilter(e.target.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
             style={{
               background: 'transparent', border: 'none', outline: 'none',
               color: 'var(--color-text)', fontSize: '0.75rem',
@@ -720,7 +745,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
             </button>
           )}
         </div>
-        {driverFilter && searchFocused && (
+        {driverFilter && (
           <div style={{
             position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
             maxHeight: 240, overflowY: 'auto',
@@ -731,35 +756,40 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
             WebkitBackdropFilter: 'blur(12px)',
             boxShadow: 'var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5))',
           }}>
-            {filteredVehicles.length === 0 ? (
+            {searchResults.length === 0 ? (
               <div style={{ padding: '10px 14px', fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
                 Aucun résultat
               </div>
             ) : (
-              filteredVehicles.map((v) => (
+              searchResults.map((v: any) => (
                 <div
                   key={v.id}
-                  onClick={() => {
-                    setSelectedDriver(v);
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    if (!v.isOffline) {
+                      setSelectedDriver(v);
+                    }
                     setDriverFilter('');
                   }}
                   style={{
-                    padding: '8px 14px', cursor: 'pointer',
+                    padding: '8px 14px', cursor: v.isOffline ? 'default' : 'pointer',
                     display: 'flex', alignItems: 'center', gap: 8,
                     fontSize: '0.75rem', color: 'var(--color-text)',
                     borderBottom: '1px solid var(--color-border-subtle)',
                     transition: 'background 0.1s',
+                    opacity: v.isOffline ? 0.5 : 1,
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-accent-muted)'; }}
+                  onMouseEnter={(e) => { if (!v.isOffline) e.currentTarget.style.background = 'var(--color-accent-muted)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >
-                  <span style={{ fontSize: '1rem' }}>🚗</span>
+                  <span style={{ fontSize: '1rem' }}>{v.isOffline ? '⏸️' : '🚗'}</span>
                   <div>
                     <div style={{ fontWeight: 500 }}>{v.name}</div>
                     <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>
-                      {v.status === 'moving' ? `En route · ${(v.speed ?? 0) * 3.6 > 0 ? `${((v.speed ?? 0) * 3.6).toFixed(0)} km/h` : ''}` : 'À l\'arrêt'}
-                      {v.accuracy !== undefined ? ` · ±${Math.round(v.accuracy)}m` : ''}
-                      {' · '}{formatTime(v.timestamp)}
+                      {v.isOffline
+                        ? 'Hors ligne — aucune position récente'
+                        : `${v.status === 'moving' ? 'En route' : 'À l\'arrêt'} · ${v.accuracy !== undefined ? `±${Math.round(v.accuracy)}m · ` : ''}${formatTime(v.timestamp)}`
+                      }
                     </div>
                   </div>
                 </div>
