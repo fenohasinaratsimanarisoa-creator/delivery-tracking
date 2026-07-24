@@ -10,7 +10,7 @@ RUN npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
-RUN addgroup --system app && adduser --system --ingroup app app
+RUN apk add --no-cache openssl openssl1.1-compat && addgroup --system app && adduser --system --ingroup app app
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
