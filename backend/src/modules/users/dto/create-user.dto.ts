@@ -21,4 +21,12 @@ export class CreateUserDto {
 
   @IsEnum(UserRole)
   role: UserRole;
+
+  @IsString()
+  @IsOptional()
+  licenseNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  vehicleId?: string;
 }

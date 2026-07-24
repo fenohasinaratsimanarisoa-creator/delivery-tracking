@@ -107,16 +107,44 @@ export class InvitationsService {
     // Create user account
     const passwordHash = await bcrypt.hash(userData.password, 12);
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: invitation.email,
-        passwordHash,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        phone: userData.phone,
-        role: invitation.role,
-        companyId: invitation.companyId,
-      },
+    const user = await this.prisma.$transaction(async (tx) => {
+      const createdUser = await tx.user.create({
+        data: {
+          email: invitation.email,
+          passwordHash,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          phone: userData.phone,
+          role: invitation.role,
+          companyId: invitation.companyId,
+        },
+      });
+
+      if (invitation.role === 'driver') {
+        const existingDriver = await tx.driver.findFirst({
+          where: { companyId: invitation.companyId, email: invitation.email, deletedAt: null },
+        });
+        if (existingDriver) {
+          await tx.driver.update({
+            where: { id: existingDriver.id },
+            data: { userId: createdUser.id },
+          });
+        } else {
+          await tx.driver.create({
+            data: {
+              firstName: userData.firstName,
+              lastName: userData.lastName,
+              email: invitation.email,
+              phone: userData.phone,
+              licenseNumber: `DRV-${createdUser.id.slice(0, 8)}`,
+              companyId: invitation.companyId,
+              userId: createdUser.id,
+            },
+          });
+        }
+      }
+
+      return createdUser;
     });
 
     // Mark invitation as accepted

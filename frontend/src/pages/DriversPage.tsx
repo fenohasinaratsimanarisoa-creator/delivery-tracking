@@ -1,10 +1,9 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Power, PowerOff } from 'lucide-react';
+import { Search, Power, PowerOff } from 'lucide-react';
 import Button from '../components/Button';
 import api from '../services/api/client';
 import DataTable from '../components/DataTable';
-import ConfirmDialog from '../components/ConfirmDialog';
 import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
 import { useEntityForm, type FieldDef, type FormSection } from '../hooks/useEntityForm';
 import { useToast } from '../components/Toast';
@@ -69,7 +68,6 @@ export default function DriversPage() {
   const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Driver | null>(null);
-  const [deleting, setDeleting] = useState<Driver | null>(null);
   const [_highlightedId, setHighlightedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
@@ -88,9 +86,7 @@ export default function DriversPage() {
   const allVehicles: VehicleListItem[] = vehiclesData ?? [];
 
   const availableVehicles = useMemo(() => {
-    return editing
-      ? allVehicles.filter((v) => !v.driver || v.driver.id === editing.id)
-      : allVehicles.filter((v) => !v.driver);
+    return allVehicles.filter((v) => !v.driver || (editing && v.driver.id === editing.id));
   }, [allVehicles, editing]);
 
   const drivers: Driver[] = data?.data ?? [];
@@ -110,20 +106,6 @@ export default function DriversPage() {
     clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => setSearch(val), 200);
   }, []);
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/drivers/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['drivers'] });
-      queryClient.invalidateQueries({ queryKey: ['vehicles', 'list'] });
-      toast('Chauffeur supprimé');
-      setDeleting(null);
-    },
-    onError: (err: any) => {
-      toast(err?.response?.data?.message || 'Erreur lors de la suppression', 'error');
-      setDeleting(null);
-    },
-  });
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
@@ -192,8 +174,8 @@ export default function DriversPage() {
     if (drawerOpen) driverForm.reset();
   }, [drawerOpen, editing?.id]);
 
-  const drawerTitle = editing ? `Modifier ${editing.firstName} ${editing.lastName}` : 'Nouveau chauffeur';
-  const drawerSubtitle = editing ? `Permis : ${editing.licenseNumber}` : 'Ajoutez un chauffeur à votre flotte';
+  const drawerTitle = editing ? `${editing.firstName} ${editing.lastName}` : '';
+  const drawerSubtitle = editing ? `Permis : ${editing.licenseNumber} — Assignation du véhicule` : '';
   const onCancel = () => { setDrawerOpen(false); setEditing(null); };
 
   return (
@@ -221,12 +203,9 @@ export default function DriversPage() {
             fontSize: 'var(--text-sm)',
             color: 'var(--color-text-secondary)',
           }}>
-            {meta.total > 0 ? `${meta.total} chauffeur${meta.total > 1 ? 's' : ''} dans votre flotte` : 'Gérez vos chauffeurs'}
+            {meta.total > 0 ? `${meta.total} chauffeur${meta.total > 1 ? 's' : ''} dans votre flotte` : 'Les chauffeurs apparaissent ici après création depuis Utilisateurs (rôle "Chauffeur")'}
           </p>
         </div>
-        <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
-          Nouveau chauffeur
-        </Button>
       </div>
 
       <div style={{
@@ -315,26 +294,21 @@ export default function DriversPage() {
               color: 'var(--color-accent)',
               fontSize: 24,
             }}>
-              <Plus size={24} />
+              <Search size={24} />
             </div>
             <p style={{
               margin: 0, fontSize: 'var(--text-md)', fontWeight: 500,
               color: 'var(--color-text-secondary)', textAlign: 'center',
             }}>
-              {search ? 'Aucun chauffeur ne correspond à cette recherche' : 'Aucun chauffeur enregistré'}
-            </p>
-            <p style={{
-              margin: 0, fontSize: 'var(--text-sm)',
-              color: 'var(--color-text-tertiary)', textAlign: 'center',
-            }}>
-              {search ? 'Essayez un autre terme' : 'Ajoutez le premier chauffeur à votre flotte'}
-            </p>
-            {!search && (
-              <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
-                Ajouter un chauffeur
-              </Button>
-            )}
-          </div>
+            {search ? 'Aucun chauffeur ne correspond à cette recherche' : 'Aucun chauffeur enregistré'}
+          </p>
+          <p style={{
+            margin: 0, fontSize: 'var(--text-sm)',
+            color: 'var(--color-text-tertiary)', textAlign: 'center',
+          }}>
+            {search ? 'Essayez un autre terme' : 'Créez un chauffeur depuis Utilisateurs → Nouvel utilisateur → rôle Chauffeur'}
+          </p>
+        </div>
         ) : (
           <DataTable
             columns={[
@@ -363,7 +337,6 @@ export default function DriversPage() {
             limit={20}
             onPageChange={setPage}
             onEdit={(r) => { setEditing(r); setDrawerOpen(true); }}
-            onDelete={(r) => setDeleting(r)}
             loading={false}
             emptyMessage=""
             keyExtractor={(r) => r.id}
@@ -381,7 +354,7 @@ export default function DriversPage() {
             form="entity-form"
             loading={driverForm.saving}
             onCancel={onCancel}
-            submitLabel={editing ? 'Enregistrer' : 'Créer le chauffeur'}
+            submitLabel="Enregistrer"
             error={driverForm.serverError}
           />
         }
@@ -404,6 +377,7 @@ export default function DriversPage() {
                         value={val}
                         onChange={(e) => driverForm.setValue(fieldName as keyof DriverFormValues, e.target.value)}
                         onBlur={() => driverForm.handleBlur(fieldName as keyof DriverFormValues)}
+                        disabled={fieldName !== 'vehicleId'}
                       >
                         {effectiveDef.options?.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
@@ -418,6 +392,7 @@ export default function DriversPage() {
                         onBlur={() => driverForm.handleBlur(fieldName as keyof DriverFormValues)}
                         placeholder={effectiveDef.placeholder || ''}
                         autoFocus={effectiveDef.autoFocus}
+                        readOnly={fieldName !== 'vehicleId'}
                       />
                     )}
                   </DialogField>
@@ -427,20 +402,6 @@ export default function DriversPage() {
           ))}
         </form>
       </EntityDialog>
-
-      <ConfirmDialog
-        open={!!deleting}
-        title="Supprimer le chauffeur"
-        message={
-          deleting
-            ? `Supprimer ${deleting.firstName} ${deleting.lastName} (permis ${deleting.licenseNumber}) ? Cette action est irréversible.`
-            : ''
-        }
-        variant="danger"
-        confirmLabel="Supprimer"
-        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
-        onCancel={() => setDeleting(null)}
-      />
     </div>
   );
 }

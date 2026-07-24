@@ -9,11 +9,12 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
 import { useEntityForm, type FieldDef, type FormSection } from '../hooks/useEntityForm';
 import { useToast } from '../components/Toast';
-import type { AppUser } from '../types';
+import type { AppUser, VehicleListItem } from '../types';
 
 interface UserFormValues {
   firstName: string; lastName: string; email: string;
   phone: string; role: string; password: string;
+  licenseNumber: string; vehicleId: string;
 }
 
 const userFields: FieldDef<UserFormValues>[] = [
@@ -36,12 +37,16 @@ const userFields: FieldDef<UserFormValues>[] = [
       pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).+$/,
       patternMessage: '12 caractères min, une majuscule, une minuscule, un chiffre, un caractère spécial',
     } },
+  { name: 'licenseNumber', label: 'Numéro de permis', type: 'text', required: true, section: 'license',
+    rules: { minLength: 3, maxLength: 30 } },
+  { name: 'vehicleId', label: 'Véhicule assigné', type: 'select', section: 'license' },
 ];
 
-const userSections: FormSection[] = [
+const userSectionsTemplate: FormSection[] = [
   { title: 'Identité', fields: ['firstName', 'lastName'] },
   { title: 'Contact', fields: ['email', 'phone'] },
   { title: 'Compte', fields: ['role', 'password'] },
+  { title: 'Permis chauffeur', fields: ['licenseNumber', 'vehicleId'] },
 ];
 
 function SkeletonRows() {
@@ -81,6 +86,13 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default function UsersPage() {
+  const { data: vehiclesData } = useQuery({
+    queryKey: ['vehicles', 'list'],
+    queryFn: () => api.get('/vehicles/list').then((r) => r.data),
+  });
+  const allVehicles: VehicleListItem[] = vehiclesData ?? [];
+  const availableVehicles = useMemo(() => allVehicles.filter((v) => !v.driver), [allVehicles]);
+
   const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<AppUser | null>(null);
@@ -148,12 +160,18 @@ export default function UsersPage() {
         phone: body.phone || undefined,
       };
       if (!editing || body.password) payload.password = body.password;
+      if (body.role === 'driver') {
+        if (body.licenseNumber) payload.licenseNumber = body.licenseNumber;
+        if (body.vehicleId) payload.vehicleId = body.vehicleId;
+      }
       return editing
         ? api.patch(`/users/${editing.id}`, payload)
         : api.post('/users', payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['drivers'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles', 'list'] });
       const id = editing?.id || '';
       setHighlightedId(id);
       setTimeout(() => setHighlightedId(null), 1500);
@@ -168,6 +186,17 @@ export default function UsersPage() {
 
   const isEdit = !!editing;
 
+  const vehicleOpts = useMemo(() => {
+    const opts = [{ value: '', label: 'Aucun véhicule' }];
+    for (const v of availableVehicles) {
+      opts.push({
+        value: v.id,
+        label: `${v.licensePlate} — ${v.brand} ${v.model} (${v.fuelType})`,
+      });
+    }
+    return opts;
+  }, [availableVehicles]);
+
   const userForm = useEntityForm<UserFormValues>({
     initial: editing ? {
       firstName: editing.firstName,
@@ -176,11 +205,17 @@ export default function UsersPage() {
       phone: editing.phone || '',
       role: editing.role,
       password: '',
-    } : { firstName: '', lastName: '', email: '', phone: '', role: 'dispatcher', password: '' },
-    fields: userFields,
-    sections: userSections,
+    } : { firstName: '', lastName: '', email: '', phone: '', role: 'dispatcher', password: '', licenseNumber: '', vehicleId: '' },
+    fields: userFields.map(f => f.name === 'vehicleId' ? { ...f, options: vehicleOpts } : f),
+    sections: userSectionsTemplate,
     onSubmit: async (values) => { saveMutation.mutate(values); },
   });
+
+  const visibleSections = useMemo(() => {
+    return userForm.values.role === 'driver'
+      ? userSectionsTemplate
+      : userSectionsTemplate.filter(s => s.title !== 'Permis chauffeur');
+  }, [userForm.values.role]);
 
   useEffect(() => {
     if (drawerOpen) userForm.reset();
@@ -211,7 +246,7 @@ export default function UsersPage() {
             Utilisateurs
           </h1>
           <p style={{ margin: 'var(--space-xs) 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            {meta.total > 0 ? `${meta.total} utilisateur${meta.total > 1 ? 's' : ''}` : 'Gérez les accès à votre plateforme'}
+            {meta.total > 0 ? `${meta.total} utilisateur${meta.total > 1 ? 's' : ''}` : 'Gérez les accès à votre plateforme. Créez un chauffeur en sélectionnant le rôle "Chauffeur".'}
           </p>
         </div>
         <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
@@ -374,7 +409,7 @@ export default function UsersPage() {
         }
       >
         <form id="entity-form" onSubmit={userForm.handleSubmit}>
-          {userSections.map((sec) => (
+          {visibleSections.map((sec) => (
             <DialogSection key={sec.title} title={sec.title}>
               {sec.fields.map((fieldName) => {
                 const def = userFields.find((f) => f.name === fieldName)!;

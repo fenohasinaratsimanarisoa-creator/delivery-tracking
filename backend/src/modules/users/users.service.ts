@@ -54,22 +54,25 @@ export class UsersService {
           where: { companyId, email: dto.email, deletedAt: null },
         });
         if (existingDriver) {
+          const updateData: any = { userId: user.id };
+          if (dto.licenseNumber) updateData.licenseNumber = dto.licenseNumber;
+          if (dto.vehicleId) updateData.vehicleId = dto.vehicleId;
           await tx.driver.update({
             where: { id: existingDriver.id },
-            data: { userId: user.id },
+            data: updateData,
           });
         } else {
-          await tx.driver.create({
-            data: {
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              email: dto.email,
-              phone: dto.phone,
-              licenseNumber: `DRV-${user.id.slice(0, 8)}`,
-              companyId,
-              userId: user.id,
-            },
-          });
+          const driverData: any = {
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            email: dto.email,
+            phone: dto.phone,
+            licenseNumber: dto.licenseNumber || `DRV-${user.id.slice(0, 8)}`,
+            companyId,
+            userId: user.id,
+          };
+          if (dto.vehicleId) driverData.vehicleId = dto.vehicleId;
+          await tx.driver.create({ data: driverData });
         }
       }
 
