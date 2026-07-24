@@ -1,25 +1,49 @@
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 
 export default function NotFoundPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      height: '100%', color: '#666', padding: 40, textAlign: 'center',
+      height: '100%', padding: 40, textAlign: 'center',
+      background: 'var(--color-bg, #0B1220)',
     }}>
-      <div style={{ fontSize: '4rem', fontWeight: 700, color: '#dc3545', marginBottom: 8 }}>404</div>
-      <h2 style={{ margin: '0 0 8px', color: '#333' }}>Page introuvable</h2>
-      <p style={{ margin: '0 0 24px', fontSize: '0.9rem' }}>
-        La page que vous cherchez n'existe pas.
+      <div style={{
+        fontSize: '4rem', fontWeight: 700,
+        color: 'var(--color-red, #E8544C)', marginBottom: 8,
+        fontFamily: 'var(--font-display, Space Grotesk, sans-serif)',
+      }}>
+        404
+      </div>
+      <h2 style={{
+        margin: '0 0 8px',
+        color: 'var(--color-text, #E8ECF3)',
+        fontFamily: 'var(--font-display, Space Grotesk, sans-serif)',
+      }}>
+        {t('errors.404.heading')}
+      </h2>
+      <p style={{
+        margin: '0 0 24px', fontSize: 'var(--text-sm, 0.875rem)',
+        color: 'var(--color-text-secondary, #9BA6B9)',
+      }}>
+        {t('errors.404.message')}
       </p>
       <button
         onClick={() => navigate('/dashboard')}
         style={{
-          padding: '10px 24px', background: '#007bff', color: '#fff',
-          border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.9rem',
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          padding: '11px 24px',
+          background: 'var(--color-accent, #F2A93C)',
+          color: 'var(--color-bg, #0B1220)',
+          border: 'none', borderRadius: 'var(--radius-md, 6px)',
+          cursor: 'pointer', fontSize: 'var(--text-sm, 0.875rem)',
+          fontWeight: 600, fontFamily: 'var(--font-body, Inter, sans-serif)',
         }}
       >
-        Retour au Dashboard
+        <ArrowLeft size={16} /> {t('errors.404.backToDashboard')}
       </button>
     </div>
   );

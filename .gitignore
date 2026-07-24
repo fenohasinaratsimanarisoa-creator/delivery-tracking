@@ -5,3 +5,35 @@ build/
 *.log
 coverage/
 .DS_Store
+*.tsbuildinfo
+bundle-report.html
+osrm/data/
+scripts/
+start.sh
+
+# Audit / diagnostic files (never committed)
+*_AUDIT.md
+*_DEBUG.md
+*.AUDIT.md
+AUDIT_*.md
+BILLING_STATUS.md
+DESIGN_POLISH.md
+DEV_ENVIRONMENT_FIX.md
+FUNCTIONAL_AUDIT.md
+GPS_SCALING.md
+I18N_AUDIT.md
+MARKER_DEBUG_HARDCORE.md
+NOTES_GPS.md
+PERFORMANCE_AUDIT.md
+PRECISION_GPS.md
+TESTING_GPS.md
+TRACKING_*.md
+UX_AUDIT_*.md
+
+# Backend diagnostic
+backend/DPA.md
+backend/INTEGRATION.md
+backend/LEGAL.md
+backend/OBSERVABILITY.md
+backend/REGRESSION_TRACKING_LIVE.md
+backend/SECURITY_AUDIT.md

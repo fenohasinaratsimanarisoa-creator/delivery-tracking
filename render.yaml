@@ -1,0 +1,109 @@
+databases:
+  - name: deliverytrack-db
+    databaseName: delivery_tracking
+    region: frankfurt
+    plan: starter
+
+  - name: deliverytrack-redis
+    region: frankfurt
+    plan: free
+    type: redis
+
+services:
+  - type: web
+    name: deliverytrack-api
+    runtime: docker
+    repo: https://github.com/fenohasinaratsimanarisoa-creator/delivery-tracking
+    branch: main
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: frankfurt
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: deliverytrack-secrets
+
+  - type: web
+    name: deliverytrack-web
+    runtime: docker
+    repo: https://github.com/fenohasinaratsimanarisoa-creator/delivery-tracking
+    branch: main
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    region: frankfurt
+    plan: starter
+    healthCheckPath: /
+    envVars:
+      - key: BACKEND_URL
+        fromService:
+          name: deliverytrack-api
+          type: web
+          property: url
+
+envVarGroups:
+  - name: deliverytrack-secrets
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: deliverytrack-db
+          property: connectionString
+      - key: REDIS_URL
+        fromDatabase:
+          name: deliverytrack-redis
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRATION
+        value: 15m
+      - key: JWT_REFRESH_EXPIRATION
+        value: 7d
+      - key: CORS_ORIGIN
+        fromService:
+          name: deliverytrack-web
+          type: web
+          property: url
+      - key: CSRF_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: TOTP_ISSUER
+        value: DeliveryTracking
+      - key: FUEL_ANOMALY_THRESHOLD_PERCENT
+        value: '20'
+      - key: LOG_LEVEL
+        value: info
+      - key: APP_URL
+        fromService:
+          name: deliverytrack-web
+          type: web
+          property: url
+      - key: ENFORCE_HTTPS
+        value: 'true'
+      - key: BILLING_ENABLED
+        value: 'false'
+
+      # ── Optional (set via Render Dashboard) ──
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: ALERT_SLACK_WEBHOOK
+        sync: false
+      - key: ALERT_DISCORD_WEBHOOK
+        sync: false
+      - key: ALERT_ON_ERROR
+        value: 'true'

@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NotificationType, NotificationPriority } from '@prisma/client';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
@@ -15,6 +17,7 @@ export class FuelConsumptionService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private notifications: NotificationsService,
+    @Optional() @InjectQueue('fuel-analysis') private fuelAnalysisQueue: Queue,
   ) {
     this.anomalyThresholdPercent = this.configService.get<number>(
       'FUEL_ANOMALY_THRESHOLD_PERCENT',
@@ -36,8 +39,17 @@ export class FuelConsumptionService {
       include: { vehicle: true },
     });
 
-    // Run analysis synchronously (no Redis needed)
-    await this.analyzeFuelLog(fuelLog.id, companyId);
+    try {
+      if (this.fuelAnalysisQueue) {
+        await this.fuelAnalysisQueue.add('analyze', {
+          fuelLogId: fuelLog.id,
+          vehicleId: fuelLog.vehicleId,
+          companyId,
+        });
+      }
+    } catch (e: any) {
+      this.logger.warn(`Failed to dispatch fuel analysis job: ${e.message}`);
+    }
 
     return this.prisma.fuelLog.findUnique({
       where: { id: fuelLog.id },
@@ -59,7 +71,9 @@ export class FuelConsumptionService {
         skip,
         take: limit,
         orderBy: { fillDate: 'desc' },
-        include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
+        include: {
+          vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } },
+        },
       }),
       this.prisma.fuelLog.count({ where }),
     ]);
@@ -75,7 +89,7 @@ export class FuelConsumptionService {
       where: { id, companyId },
       include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
     });
-    if (!log) throw new Error('Fuel log not found');
+    if (!log) throw new NotFoundException('Fuel log not found');
     return log;
   }
 
@@ -105,29 +119,23 @@ export class FuelConsumptionService {
     };
   }
 
-  private async analyzeFuelLog(fuelLogId: string, companyId: string) {
-    const { processFuelAnalysis } = await import('./jobs/fuel-analysis.job');
-    const result = await processFuelAnalysis(
-      { fuelLogId, vehicleId: '', companyId },
-      this.prisma,
-      this.anomalyThresholdPercent,
-    );
+  private async analyzeFuelLog(
+    fuelLogId: string,
+    companyId: string,
+    licensePlate: string,
+    calcConsumption: number | null,
+    expectedConsumption: number | null,
+    isAnomaly: boolean,
+  ) {
+    if (!isAnomaly) return;
 
-    if (result?.isAnomaly) {
-      const log = await this.prisma.fuelLog.findUnique({
-        where: { id: fuelLogId },
-        include: { vehicle: true },
-      });
-      if (log) {
-        await this.notifications.create(companyId, {
-          type: NotificationType.fuel_anomaly,
-          priority: NotificationPriority.high,
-          title: 'Fuel Consumption Anomaly',
-          message: `Vehicle ${log.vehicle.licensePlate} exceeded consumption threshold: ${result.calculatedConsumption?.toFixed(1)} L/100km (expected ${result.expectedConsumption?.toFixed(1)} L/100km)`,
-          link: `/fuel-consumption`,
-          deliveryId: undefined,
-        });
-      }
-    }
+    await this.notifications.create(companyId, {
+      type: NotificationType.fuel_anomaly,
+      priority: NotificationPriority.high,
+      title: 'Fuel Consumption Anomaly',
+      message: `Vehicle ${licensePlate} exceeded consumption threshold: ${calcConsumption?.toFixed(1)} L/100km (expected ${expectedConsumption?.toFixed(1)} L/100km)`,
+      link: `/fuel-consumption`,
+      deliveryId: undefined,
+    });
   }
 }

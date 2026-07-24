@@ -3,6 +3,7 @@ import { DeliveryStatus } from '@prisma/client';
 import { DeliveriesService } from './deliveries.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 describe('DeliveriesService - State Machine', () => {
   let service: DeliveriesService;
@@ -27,12 +28,17 @@ describe('DeliveriesService - State Machine', () => {
     markAllRead: jest.fn(),
   };
 
+  const mockWebhooks = {
+    dispatch: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DeliveriesService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: NotificationsService, useValue: mockNotifications },
+        { provide: WebhooksService, useValue: mockWebhooks },
       ],
     }).compile();
 

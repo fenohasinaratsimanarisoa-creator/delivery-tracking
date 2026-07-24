@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Delete, Param, Query, UseGuards } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
@@ -19,26 +19,27 @@ export class NotificationsController {
   }
 
   @Get('unread-count')
-  countUnread(
-    @CurrentUser('companyId') companyId: string,
-    @CurrentUser('id') userId: string,
-  ) {
+  countUnread(@CurrentUser('companyId') companyId: string, @CurrentUser('id') userId: string) {
     return this.notificationsService.countUnread(companyId, userId);
   }
 
   @Patch(':id/read')
-  markRead(
-    @Param('id') id: string,
-    @CurrentUser('companyId') companyId: string,
-  ) {
+  markRead(@Param('id') id: string, @CurrentUser('companyId') companyId: string) {
     return this.notificationsService.markRead(id, companyId);
   }
 
   @Patch('read-all')
-  markAllRead(
-    @CurrentUser('companyId') companyId: string,
-    @CurrentUser('id') userId: string,
-  ) {
+  markAllRead(@CurrentUser('companyId') companyId: string, @CurrentUser('id') userId: string) {
     return this.notificationsService.markAllRead(companyId, userId);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentUser('companyId') companyId: string) {
+    return this.notificationsService.remove(id, companyId);
+  }
+
+  @Delete()
+  removeAll(@CurrentUser('companyId') companyId: string, @CurrentUser('id') userId: string) {
+    return this.notificationsService.removeAll(companyId, userId);
   }
 }

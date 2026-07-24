@@ -1,50 +1,104 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api/client';
 import { useAuth } from '../../hooks/AuthContext';
+import LoginLayout from './components/LoginLayout';
+import VisualPanel from './components/VisualPanel';
+import LoginForm from './components/LoginForm';
+
+const ROLE_REDIRECT: Record<string, string> = {
+  admin: '/dashboard',
+  dispatcher: '/dashboard',
+  driver: '/my-deliveries',
+  client: '/my-orders',
+};
+
+const SESSION_KEY = 'dt_welcome';
+
+function readSessionCache(): { name?: string; email?: string } {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSessionCache(name: string, email: string) {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ name, email }));
+  } catch {
+    /* noop */
+  }
+}
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const { login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const { login, isAuthenticated, isInitializing } = useAuth();
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const cached = readSessionCache();
+
+  useEffect(() => {
+    if (!isInitializing && isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isInitializing, isAuthenticated, navigate]);
+
+  const handleLogin = async (email: string, password: string) => {
+    setLoading(true);
+    setError('');
     try {
       const res = await api.post('/auth/login', { email, password });
-      const { accessToken, refreshToken, user } = res.data;
-      login(user, accessToken, refreshToken);
-      navigate('/dashboard');
-    } catch {
-      setError('Invalid credentials');
+      const { accessToken, user } = res.data;
+      login(user, accessToken);
+      writeSessionCache(user.firstName, user.email);
+      const target = ROLE_REDIRECT[user.role] || '/dashboard';
+      navigate(target, { replace: true });
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 401) {
+        setError(t('auth.login.error401'));
+      } else if (status === 429) {
+        setError(t('auth.login.error429'));
+      } else {
+        setError(t('auth.login.errorGeneric'));
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
+  if (isInitializing) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        background: 'var(--color-bg, #0B1220)',
+      }}>
+        <div style={{ color: 'var(--color-text-tertiary, #7A8BA3)', fontSize: 'var(--text-base, 0.875rem)' }}>{t('common.loading')}</div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) return null;
+
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-      <form onSubmit={handleSubmit} style={{ width: '300px', padding: '20px', border: '1px solid #ddd', borderRadius: '8px' }}>
-        <h2>Login</h2>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        <div style={{ marginBottom: '10px' }}>
-          <input
-            type="email" placeholder="Email" value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-          />
-        </div>
-        <div style={{ marginBottom: '10px' }}>
-          <input
-            type="password" placeholder="Password" value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-          />
-        </div>
-        <button type="submit" style={{ width: '100%', padding: '10px', background: '#007bff', color: '#fff', border: 'none', borderRadius: '4px' }}>
-          Login
-        </button>
-      </form>
-    </div>
+    <LoginLayout
+      visualPanel={<VisualPanel />}
+    >
+      <LoginForm
+        onSubmit={handleLogin}
+        error={error}
+        loading={loading}
+        cachedName={cached.name}
+        cachedEmail={cached.email}
+      />
+    </LoginLayout>
   );
 }

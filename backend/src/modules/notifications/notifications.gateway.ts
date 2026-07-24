@@ -5,43 +5,45 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
+import { UseGuards } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
+import { WsAuthService } from '../../common/auth/ws-auth.service';
 
 @WebSocketGateway({
   namespace: '/notifications',
   cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:5173' },
 })
-export class NotificationsGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+@UseGuards(WsJwtGuard)
+export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
-  handleConnection(client: Socket) {
-    const companyId = client.handshake.query.companyId as string;
-    const userId = client.handshake.query.userId as string;
-    if (companyId) {
-      client.join(`company:${companyId}`);
-    }
-    if (userId) {
-      client.join(`user:${userId}`);
+  constructor(private wsAuthService: WsAuthService) {}
+
+  async handleConnection(client: Socket) {
+    try {
+      const user = await this.wsAuthService.verify(client);
+      client.join(`company:${user.companyId}`);
+      client.join(`user:${user.id}`);
+    } catch {
+      client.emit('error', 'Invalid token');
+      client.disconnect();
     }
   }
 
-  handleDisconnect(_client: Socket) {
-    // rooms auto-leave on disconnect
-  }
+  handleDisconnect(_client: Socket) {}
 
   @SubscribeMessage('subscribe')
-  handleSubscribe(
-    client: Socket,
-    payload: { companyId: string; userId?: string },
-  ) {
-    if (payload.companyId) {
+  handleSubscribe(client: Socket, payload: { companyId: string; userId?: string }) {
+    const user = client.data.user;
+    if (!user) return;
+    if (payload.companyId && payload.companyId === user.companyId) {
       client.join(`company:${payload.companyId}`);
     }
-    if (payload.userId) {
+    if (payload.userId && payload.userId === user.id) {
       client.join(`user:${payload.userId}`);
     }
   }
-}
+
+  }

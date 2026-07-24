@@ -27,16 +27,22 @@ describe('Multi-tenant isolation (e2e)', () => {
 
     const vehicleA = await prisma.vehicle.create({
       data: {
-        brand: 'Toyota', model: 'Hilux', year: 2023,
-        licensePlate: 'AB-123-CD', fuelType: 'diesel',
+        brand: 'Toyota',
+        model: 'Hilux',
+        year: 2023,
+        licensePlate: 'AB-123-CD',
+        fuelType: 'diesel',
         companyId: companyA.id,
       },
     });
 
     const vehicleB = await prisma.vehicle.create({
       data: {
-        brand: 'Ford', model: 'Ranger', year: 2023,
-        licensePlate: 'EF-456-GH', fuelType: 'diesel',
+        brand: 'Ford',
+        model: 'Ranger',
+        year: 2023,
+        licensePlate: 'EF-456-GH',
+        fuelType: 'diesel',
         companyId: companyB.id,
       },
     });
@@ -57,7 +63,9 @@ describe('Multi-tenant isolation (e2e)', () => {
     });
     expect(crossVehicles).toHaveLength(0);
 
-    await prisma.notification.deleteMany({ where: { companyId: { in: [companyA.id, companyB.id] } } });
+    await prisma.notification.deleteMany({
+      where: { companyId: { in: [companyA.id, companyB.id] } },
+    });
     await prisma.vehicle.deleteMany({ where: { id: { in: [vehicleA.id, vehicleB.id] } } });
     await prisma.company.deleteMany({ where: { id: { in: [companyA.id, companyB.id] } } });
   });
@@ -68,32 +76,42 @@ describe('Multi-tenant isolation (e2e)', () => {
 
     const vehicleA = await prisma.vehicle.create({
       data: {
-        brand: 'Test', model: 'Test', year: 2023,
-        licensePlate: 'TEST-A1', fuelType: 'gasoline',
+        brand: 'Test',
+        model: 'Test',
+        year: 2023,
+        licensePlate: 'TEST-A1',
+        fuelType: 'gasoline',
         companyId: companyA.id,
       },
     });
 
     const vehicleB = await prisma.vehicle.create({
       data: {
-        brand: 'Test', model: 'Test', year: 2023,
-        licensePlate: 'TEST-B1', fuelType: 'gasoline',
+        brand: 'Test',
+        model: 'Test',
+        year: 2023,
+        licensePlate: 'TEST-B1',
+        fuelType: 'gasoline',
         companyId: companyB.id,
       },
     });
 
     const deliveryA = await prisma.delivery.create({
       data: {
-        title: 'Delivery A', pickupAddress: '123 Main St',
-        deliveryAddress: '456 Oak Ave', companyId: companyA.id,
+        title: 'Delivery A',
+        pickupAddress: '123 Main St',
+        deliveryAddress: '456 Oak Ave',
+        companyId: companyA.id,
         vehicleId: vehicleA.id,
       },
     });
 
     const deliveryB = await prisma.delivery.create({
       data: {
-        title: 'Delivery B', pickupAddress: '789 Pine Rd',
-        deliveryAddress: '321 Elm St', companyId: companyB.id,
+        title: 'Delivery B',
+        pickupAddress: '789 Pine Rd',
+        deliveryAddress: '321 Elm St',
+        companyId: companyB.id,
         vehicleId: vehicleB.id,
       },
     });
@@ -106,7 +124,9 @@ describe('Multi-tenant isolation (e2e)', () => {
     expect(deliveriesB).toHaveLength(1);
     expect(deliveriesB[0].id).toBe(deliveryB.id);
 
-    await prisma.notification.deleteMany({ where: { companyId: { in: [companyA.id, companyB.id] } } });
+    await prisma.notification.deleteMany({
+      where: { companyId: { in: [companyA.id, companyB.id] } },
+    });
     await prisma.delivery.deleteMany({ where: { companyId: { in: [companyA.id, companyB.id] } } });
     await prisma.vehicle.deleteMany({ where: { companyId: { in: [companyA.id, companyB.id] } } });
     await prisma.company.deleteMany({ where: { id: { in: [companyA.id, companyB.id] } } });

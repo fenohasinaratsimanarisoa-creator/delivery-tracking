@@ -1,32 +1,118 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus, Search, Power, PowerOff } from 'lucide-react';
+import Button from '../components/Button';
 import api from '../services/api/client';
+import { formatDate } from '../services/i18n/formatDate';
 import DataTable from '../components/DataTable';
 import ConfirmDialog from '../components/ConfirmDialog';
+import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
+import { useEntityForm, type FieldDef, type FormSection } from '../hooks/useEntityForm';
 import { useToast } from '../components/Toast';
+import type { AppUser } from '../types';
 
-interface AppUser {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-  isActive: boolean;
-  createdAt: string;
+interface UserFormValues {
+  firstName: string; lastName: string; email: string;
+  phone: string; role: string; password: string;
 }
+
+const userFields: FieldDef<UserFormValues>[] = [
+  { name: 'firstName', label: 'Prénom', type: 'text', required: true, section: 'identity', autoFocus: true,
+    rules: { minLength: 2, maxLength: 50 } },
+  { name: 'lastName', label: 'Nom', type: 'text', required: true, section: 'identity',
+    rules: { minLength: 2, maxLength: 50 } },
+  { name: 'email', label: 'Adresse email', type: 'email', required: true, section: 'contact' },
+  { name: 'phone', label: 'Téléphone', type: 'tel', section: 'contact',
+    rules: { pattern: /^0[1-9][0-9]{8}$/, patternMessage: 'Le numéro doit commencer par 0 et faire 10 chiffres' } },
+  { name: 'role', label: 'Rôle', type: 'select', required: true, section: 'account',
+    options: [
+      { value: 'admin', label: 'Administrateur' },
+      { value: 'dispatcher', label: 'Dispatcher' },
+      { value: 'driver', label: 'Chauffeur' },
+      { value: 'client', label: 'Client' },
+    ] },
+  { name: 'password', label: 'Mot de passe', type: 'password', section: 'account',
+    rules: { minLength: 12,
+      pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).+$/,
+      patternMessage: '12 caractères min, une majuscule, une minuscule, un chiffre, un caractère spécial',
+    } },
+];
+
+const userSections: FormSection[] = [
+  { title: 'Identité', fields: ['firstName', 'lastName'] },
+  { title: 'Contact', fields: ['email', 'phone'] },
+  { title: 'Compte', fields: ['role', 'password'] },
+];
+
+function SkeletonRows() {
+  const shimmer = {
+    height: 14, background: 'var(--color-skeleton)', borderRadius: 4,
+    animation: 'dt-shimmer 1.5s infinite linear',
+    backgroundImage: 'linear-gradient(90deg, var(--color-skeleton) 25%, rgba(255,255,255,0.05) 50%, var(--color-skeleton) 75%)',
+    backgroundSize: '200% 100%',
+  };
+  return (
+    <>
+      {[1, 2, 3, 4].map((i) => (
+        <tr key={`sk-${i}`} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+          {[50, 40, 30, 25, 25].map((w, j) => (
+            <td key={j} style={{ padding: 'var(--space-md) var(--space-lg)' }}>
+              <div style={{ ...shimmer, width: `${w}%` }} />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+const ROLE_COLORS: Record<string, string> = {
+  admin: 'var(--color-red)',
+  dispatcher: 'var(--color-accent)',
+  driver: 'var(--color-teal)',
+  client: 'var(--color-text-tertiary)',
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  dispatcher: 'Dispatcher',
+  driver: 'Chauffeur',
+  client: 'Client',
+};
 
 export default function UsersPage() {
   const [page, setPage] = useState(1);
-  const [showForm, setShowForm] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<AppUser | null>(null);
   const [deleting, setDeleting] = useState<AppUser | null>(null);
+  const [_highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const { data, isLoading } = useQuery({
     queryKey: ['users', page],
     queryFn: () => api.get(`/users?page=${page}&limit=20`).then((r) => r.data),
   });
+
+  const users: AppUser[] = data?.data ?? [];
+  const meta = data?.meta ?? { total: 0, page: 1, limit: 20, totalPages: 1 };
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return users;
+    const q = search.toLowerCase();
+    return users.filter((u) =>
+      `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
+      u.role.toLowerCase().includes(q)
+    );
+  }, [users, search]);
+
+  const handleSearch = useCallback((val: string) => {
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearch(val), 200);
+  }, []);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/users/${id}`),
@@ -41,92 +127,321 @@ export default function UsersPage() {
     },
   });
 
-  const saveMutation = useMutation({
-    mutationFn: (body: any) =>
-      editing ? api.patch(`/users/${editing.id}`, body) : api.post('/users', body),
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      api.patch(`/users/${id}`, { isActive }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      toast(editing ? 'Utilisateur modifié' : 'Utilisateur créé');
-      setShowForm(false);
-      setEditing(null);
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.message;
-      toast(Array.isArray(msg) ? msg[0] : (msg || 'Erreur'), 'error');
+      toast(err?.response?.data?.message || 'Erreur', 'error');
     },
   });
 
-  const users: AppUser[] = data?.data ?? [];
-  const meta = data?.meta ?? { total: 0, page: 1, limit: 20, totalPages: 1 };
+  const saveMutation = useMutation({
+    mutationFn: (body: UserFormValues) => {
+      const payload: any = {
+        email: body.email,
+        firstName: body.firstName,
+        lastName: body.lastName,
+        role: body.role,
+        phone: body.phone || undefined,
+      };
+      if (!editing || body.password) payload.password = body.password;
+      return editing
+        ? api.patch(`/users/${editing.id}`, payload)
+        : api.post('/users', payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      const id = editing?.id || '';
+      setHighlightedId(id);
+      setTimeout(() => setHighlightedId(null), 1500);
+      toast(editing ? 'Utilisateur modifié' : 'Utilisateur créé');
+      setDrawerOpen(false);
+      setEditing(null);
+    },
+    onError: (err: any) => {
+      toast(err?.response?.data?.message || 'Erreur lors de l\'enregistrement', 'error');
+    },
+  });
+
+  const isEdit = !!editing;
+
+  const userForm = useEntityForm<UserFormValues>({
+    initial: editing ? {
+      firstName: editing.firstName,
+      lastName: editing.lastName,
+      email: editing.email,
+      phone: editing.phone || '',
+      role: editing.role,
+      password: '',
+    } : { firstName: '', lastName: '', email: '', phone: '', role: 'dispatcher', password: '' },
+    fields: userFields,
+    sections: userSections,
+    onSubmit: async (values) => { saveMutation.mutate(values); },
+  });
+
+  useEffect(() => {
+    if (drawerOpen) userForm.reset();
+  }, [drawerOpen, editing?.id]);
+
+  const drawerTitle = editing ? `${editing.firstName} ${editing.lastName}` : 'Nouvel utilisateur';
+  const drawerSubtitle = editing ? `Rôle : ${ROLE_LABELS[editing.role] || editing.role}` : 'Créez un compte pour un membre de votre équipe';
+  const onCancel = () => { setDrawerOpen(false); setEditing(null); };
 
   return (
-    <div style={{ padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h1 style={{ margin: 0 }}>Utilisateurs</h1>
-        <button onClick={() => { setEditing(null); setShowForm(!showForm); }} style={addBtnStyle}>
-          + Nouvel utilisateur
-        </button>
+    <div style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <style>{`
+        @keyframes dt-row-highlight {
+          0% { background: var(--color-accent-muted); }
+          100% { background: transparent; }
+        }
+      `}</style>
+
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-sm)',
+      }}>
+        <div>
+          <h1 style={{
+            fontFamily: 'var(--font-display)', fontSize: 'var(--text-xl)', fontWeight: 700,
+            color: 'var(--color-text)', letterSpacing: '-0.02em', margin: 0,
+          }}>
+            Utilisateurs
+          </h1>
+          <p style={{ margin: 'var(--space-xs) 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+            {meta.total > 0 ? `${meta.total} utilisateur${meta.total > 1 ? 's' : ''}` : 'Gérez les accès à votre plateforme'}
+          </p>
+        </div>
+        <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
+          Nouvel utilisateur
+        </Button>
       </div>
 
-      {showForm && (
-        <UserForm
-          initial={editing}
-          onSubmit={(body) => saveMutation.mutate(body)}
-          onCancel={() => { setShowForm(false); setEditing(null); }}
-          saving={saveMutation.isPending}
-        />
-      )}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
+        marginBottom: 'var(--space-lg)',
+      }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
+          <Search size={14} style={{
+            position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+            color: 'var(--color-text-tertiary)', pointerEvents: 'none',
+          }} />
+          <input
+            placeholder="Rechercher un utilisateur…"
+            onChange={(e) => handleSearch(e.target.value)}
+            style={{
+              width: '100%', padding: 'var(--space-sm) var(--space-sm) var(--space-sm) 36px',
+              background: 'var(--color-input-bg)',
+              border: '1px solid var(--color-input-border)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--color-text)',
+              fontSize: 'var(--text-sm)',
+              fontFamily: 'var(--font-body)',
+              outline: 'none',
+            }}
+          />
+        </div>
+      </div>
 
-      <DataTable
-        columns={[
-          {
-            key: 'name', label: 'Nom',
-            render: (r: AppUser) => `${r.firstName} ${r.lastName}`,
-          },
-          { key: 'email', label: 'Email' },
-          {
-            key: 'role', label: 'Rôle',
-            render: (r: AppUser) => (
-              <span style={{
-                background: r.role === 'admin' ? '#dc3545' : r.role === 'dispatcher' ? '#17a2b8' : '#6c757d',
-                color: '#fff', padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem',
-              }}>
-                {r.role}
-              </span>
-            ),
-          },
-          {
-            key: 'isActive', label: 'Actif',
-            render: (r: AppUser) => (
-              <span style={{
-                background: r.isActive ? '#28a745' : '#dc3545',
-                color: '#fff', padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem',
-              }}>
-                {r.isActive ? 'Oui' : 'Non'}
-              </span>
-            ),
-          },
-          {
-            key: 'createdAt', label: 'Créé le',
-            render: (r: AppUser) => new Date(r.createdAt).toLocaleDateString(),
-          },
-        ]}
-        data={users}
-        total={meta.total}
-        page={page}
-        limit={20}
-        onPageChange={setPage}
-        onEdit={(r) => { setEditing(r); setShowForm(true); }}
-        onDelete={(r) => setDeleting(r)}
-        loading={isLoading}
-        emptyMessage="Aucun utilisateur pour le moment."
-        keyExtractor={(r) => r.id}
-      />
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {isLoading ? (
+          <div style={{
+            background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--color-border-subtle)',
+          }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+              <thead>
+                <tr style={{ background: 'var(--color-surface-alt)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                  {['Nom', 'Email', 'Rôle', 'Statut', 'Inscrit le', ''].map((l) => (
+                    <th key={l} style={{
+                      padding: 'var(--space-md) var(--space-lg)', fontWeight: 600,
+                      fontSize: 'var(--text-xs)', textTransform: 'uppercase',
+                      letterSpacing: '0.05em', color: 'var(--color-text-secondary)',
+                      textAlign: l === '' ? 'right' : 'left', whiteSpace: 'nowrap',
+                    }}>
+                      {l}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <SkeletonRows />
+              </tbody>
+            </table>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            padding: 'var(--space-4xl)',
+            background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--color-border-subtle)', gap: 'var(--space-md)',
+          }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 'var(--radius-full)',
+              background: 'var(--color-accent-muted)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--color-accent)', fontSize: 24,
+            }}>
+              <Plus size={24} />
+            </div>
+            <p style={{
+              margin: 0, fontSize: 'var(--text-md)', fontWeight: 500,
+              color: 'var(--color-text-secondary)', textAlign: 'center',
+            }}>
+              {search ? 'Aucun utilisateur ne correspond' : 'Aucun utilisateur enregistré'}
+            </p>
+            <p style={{
+              margin: 0, fontSize: 'var(--text-sm)',
+              color: 'var(--color-text-tertiary)', textAlign: 'center',
+            }}>
+              {search ? 'Essayez un autre terme' : 'Invitez les membres de votre équipe'}
+            </p>
+            {!search && (
+              <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
+                Inviter un utilisateur
+              </Button>
+            )}
+          </div>
+        ) : (
+          <DataTable
+            columns={[
+              {
+                key: 'name', label: 'Nom', sortable: true,
+                render: (r: AppUser) => `${r.firstName} ${r.lastName}`,
+              },
+              { key: 'email', label: 'Email', sortable: true },
+              {
+                key: 'role', label: 'Rôle', sortable: true,
+                render: (r: AppUser) => (
+                  <span style={{
+                    display: 'inline-block',
+                    padding: '2px 8px',
+                    borderRadius: 'var(--radius-full)',
+                    fontSize: 'var(--text-xs)',
+                    fontWeight: 500,
+                    fontFamily: 'var(--font-mono)',
+                    background: `${ROLE_COLORS[r.role] || 'var(--color-text-tertiary)'}18`,
+                    color: ROLE_COLORS[r.role] || 'var(--color-text-tertiary)',
+                  }}>
+                    {ROLE_LABELS[r.role] || r.role}
+                  </span>
+                ),
+              },
+              {
+                key: 'isActive', label: 'Statut',
+                render: (r: AppUser) => (
+                  <Button variant="ghost" size="sm" icon={r.isActive ? <Power size={14} /> : <PowerOff size={14} />} onClick={() => toggleMutation.mutate({ id: r.id, isActive: !r.isActive })} title={r.isActive ? 'Désactiver' : 'Activer'} />
+                ),
+              },
+              {
+                key: 'createdAt', label: 'Inscrit le', sortable: true,
+                render: (r: AppUser) => (
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                    {formatDate(r.createdAt)}
+                  </span>
+                ),
+              },
+            ]}
+            data={filtered}
+            total={meta.total}
+            page={page}
+            limit={20}
+            onPageChange={setPage}
+            onEdit={(r) => { setEditing(r); setDrawerOpen(true); }}
+            onDelete={(r) => setDeleting(r)}
+            loading={false}
+            emptyMessage=""
+            keyExtractor={(r) => r.id}
+          />
+        )}
+      </div>
+
+      <EntityDialog
+        open={drawerOpen}
+        onClose={onCancel}
+        title={drawerTitle}
+        subtitle={drawerSubtitle}
+        footer={
+          <DialogSubmitBar
+            form="entity-form"
+            loading={userForm.saving}
+            onCancel={onCancel}
+            submitLabel={isEdit ? 'Enregistrer' : 'Créer l\'utilisateur'}
+            error={userForm.serverError}
+          />
+        }
+      >
+        <form id="entity-form" onSubmit={userForm.handleSubmit}>
+          {userSections.map((sec) => (
+            <DialogSection key={sec.title} title={sec.title}>
+              {sec.fields.map((fieldName) => {
+                const def = userFields.find((f) => f.name === fieldName)!;
+                if (fieldName === 'password' && isEdit && !userForm.touched.has('password')) {
+                  const val = userForm.values.password as string;
+                  return (
+                    <DialogField key={fieldName} label={def.label} error={null}>
+                      <input
+                        className="dialog-input"
+                        type="password"
+                        value={val}
+                        onChange={(e) => userForm.setValue(fieldName, e.target.value)}
+                        onBlur={() => userForm.handleBlur(fieldName)}
+                        placeholder="Laisser vide pour conserver l'actuel"
+                        autoFocus={def.autoFocus}
+                      />
+                      <p style={{
+                        margin: 'var(--space-xs) 0 0',
+                        fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)',
+                      }}>
+                        Laissez vide pour conserver le mot de passe actuel
+                      </p>
+                    </DialogField>
+                  );
+                }
+                const val = userForm.values[fieldName as keyof UserFormValues] as string;
+                const err = userForm.touched.has(fieldName) ? userForm.errors[fieldName] : null;
+                return (
+                  <DialogField key={fieldName} label={def.label} error={err} required={def.required}>
+                    {def.type === 'select' ? (
+                      <select
+                        className="dialog-select"
+                        value={val}
+                        onChange={(e) => userForm.setValue(fieldName as keyof UserFormValues, e.target.value)}
+                        onBlur={() => userForm.handleBlur(fieldName as keyof UserFormValues)}
+                      >
+                        {def.options?.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        className="dialog-input"
+                        type={def.type || 'text'}
+                        value={val}
+                        onChange={(e) => userForm.setValue(fieldName as keyof UserFormValues, e.target.value)}
+                        onBlur={() => userForm.handleBlur(fieldName as keyof UserFormValues)}
+                        placeholder={def.placeholder || ''}
+                        autoFocus={def.autoFocus}
+                      />
+                    )}
+                  </DialogField>
+                );
+              })}
+            </DialogSection>
+          ))}
+        </form>
+      </EntityDialog>
 
       <ConfirmDialog
         open={!!deleting}
         title="Supprimer l'utilisateur"
-        message={`Supprimer ${deleting?.firstName} ${deleting?.lastName} ?`}
+        message={
+          deleting
+            ? `Supprimer ${deleting.firstName} ${deleting.lastName} (${deleting.email}) ? Cette action est irréversible.`
+            : ''
+        }
         variant="danger"
         confirmLabel="Supprimer"
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
@@ -135,56 +450,3 @@ export default function UsersPage() {
     </div>
   );
 }
-
-function UserForm({
-  initial, onSubmit, onCancel, saving,
-}: {
-  initial: any; onSubmit: (body: any) => void; onCancel: () => void; saving: boolean;
-}) {
-  const [email, setEmail] = useState(initial?.email ?? '');
-  const [password, setPassword] = useState('');
-  const [firstName, setFirstName] = useState(initial?.firstName ?? '');
-  const [lastName, setLastName] = useState(initial?.lastName ?? '');
-  const [role, setRole] = useState(initial?.role ?? 'dispatcher');
-  const [phone, setPhone] = useState(initial?.phone ?? '');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const body: any = { email, firstName, lastName, role, phone };
-    if (!initial || password) body.password = password;
-    onSubmit(body);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} style={{ background: '#f9f9f9', padding: 16, borderRadius: 8, marginBottom: 16 }}>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-        <input placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
-        <input placeholder={initial ? 'Nouveau mot de passe (laisser vide)' : 'Mot de passe'} type="password" value={password}
-          onChange={(e) => setPassword(e.target.value)} style={inputStyle} required={!initial} />
-        <input placeholder="Prénom" value={firstName} onChange={(e) => setFirstName(e.target.value)} style={inputStyle} required />
-        <input placeholder="Nom" value={lastName} onChange={(e) => setLastName(e.target.value)} style={inputStyle} required />
-        <input placeholder="Téléphone" value={phone} onChange={(e) => setPhone(e.target.value)} style={inputStyle} />
-        <select value={role} onChange={(e) => setRole(e.target.value)} style={inputStyle}>
-          <option value="admin">Admin</option>
-          <option value="dispatcher">Dispatcher</option>
-          <option value="driver">Chauffeur</option>
-          <option value="client">Client</option>
-        </select>
-      </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button type="submit" disabled={saving} style={{ ...addBtnStyle, background: '#28a745' }}>
-          {saving ? 'Enregistrement...' : (initial ? 'Modifier' : 'Créer')}
-        </button>
-        <button type="button" onClick={onCancel} style={{ ...addBtnStyle, background: '#6c757d' }}>Annuler</button>
-      </div>
-    </form>
-  );
-}
-
-const addBtnStyle: React.CSSProperties = {
-  padding: '8px 16px', background: '#007bff', color: '#fff',
-  border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem',
-};
-const inputStyle: React.CSSProperties = {
-  padding: '8px 12px', border: '1px solid #ddd', borderRadius: 4, fontSize: '0.9rem', flex: 1, minWidth: 150, boxSizing: 'border-box' as const,
-};

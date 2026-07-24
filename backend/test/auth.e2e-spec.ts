@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { AppModule } from '../src/app.module';
 
@@ -15,7 +16,9 @@ describe('Authentication (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     prisma = app.get(PrismaService);
 
@@ -35,113 +38,265 @@ describe('Authentication (e2e)', () => {
     password: 'StrongPass123',
     firstName: 'John',
     lastName: 'Doe',
-    role: 'dispatcher' as const,
   };
 
   let accessToken: string;
-  let refreshToken: string;
 
-  it('POST /auth/register - should register a new user', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/auth/register')
-      .send({ ...testUser, companyId })
-      .expect(201);
+  describe('POST /auth/register', () => {
+    it('should register a new user with company creation', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({
+          companyName: 'New Test Company',
+          email: 'new@example.com',
+          password: 'StrongPass123!',
+          firstName: 'Jane',
+          lastName: 'Smith',
+        })
+        .expect(200);
 
-    expect(res.body).toHaveProperty('accessToken');
-    expect(res.body).toHaveProperty('refreshToken');
-    expect(res.body.user.email).toBe(testUser.email);
-    expect(res.body.user.role).toBe(testUser.role);
-    accessToken = res.body.accessToken;
-    refreshToken = res.body.refreshToken;
+      expect(res.body).toHaveProperty('accessToken');
+      expect(res.body).not.toHaveProperty('refreshToken');
+      expect(res.body.user.email).toBe('new@example.com');
+      expect(res.body.user.role).toBe('admin');
+      accessToken = res.body.accessToken;
+
+      // Cleanup
+      await prisma.user.delete({ where: { email: 'new@example.com' } });
+      // The company was created — find it by name
+      const createdCompany = await prisma.company.findFirst({
+        where: { name: 'New Test Company' },
+      });
+      if (createdCompany) {
+        await prisma.company.delete({ where: { id: createdCompany.id } });
+      }
+    });
+
+    it('should reject duplicate email', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({
+          companyName: 'Dup Company',
+          email: 'new@example.com',
+          password: 'StrongPass123!',
+          firstName: 'A',
+          lastName: 'B',
+        })
+        .expect(409);
+    });
+
+    it('should reject weak password', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({
+          companyName: 'Weak Co',
+          email: 'weak@example.com',
+          password: 'short',
+          firstName: 'A',
+          lastName: 'B',
+        })
+        .expect(400);
+    });
   });
 
-  it('POST /auth/register - should reject duplicate email', async () => {
-    await request(app.getHttpServer())
-      .post('/auth/register')
-      .send({ ...testUser, companyId })
-      .expect(409);
+  describe('POST /auth/login', () => {
+    beforeAll(async () => {
+      const hash = await bcrypt.hash('StrongPass123', 12);
+      await prisma.user.create({
+        data: {
+          email: testUser.email,
+          passwordHash: hash,
+          firstName: testUser.firstName,
+          lastName: testUser.lastName,
+          role: 'dispatcher',
+          companyId,
+        },
+      });
+    });
+
+    afterAll(async () => {
+      await prisma.user.deleteMany({ where: { companyId } });
+    });
+
+    it('should login and return tokens', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: testUser.email, password: 'StrongPass123' })
+        .expect(200);
+
+      expect(res.body).toHaveProperty('accessToken');
+      expect(res.body).not.toHaveProperty('refreshToken');
+      expect(res.body.user.email).toBe(testUser.email);
+      accessToken = res.body.accessToken;
+    });
+
+    it('should reject wrong password', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: testUser.email, password: 'wrong' })
+        .expect(401);
+    });
+
+    it('should set refresh token as httpOnly cookie', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: testUser.email, password: 'StrongPass123' });
+
+      const cookies = res.headers['set-cookie'];
+      expect(cookies).toBeDefined();
+      const refreshCookie = Array.isArray(cookies)
+        ? cookies.find((c: string) => c.startsWith('refreshToken='))
+        : cookies;
+      expect(refreshCookie).toBeDefined();
+      expect(refreshCookie).toContain('HttpOnly');
+      expect(refreshCookie).toContain('Path=/');
+    });
   });
 
-  it('POST /auth/login - should login and return tokens', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: testUser.email, password: testUser.password })
-      .expect(200);
+  describe('POST /auth/forgot-password', () => {
+    it('should always return the same generic message', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/forgot-password')
+        .send({ email: 'nonexistent@test.com' })
+        .expect(200);
 
-    expect(res.body).toHaveProperty('accessToken');
-    expect(res.body).toHaveProperty('refreshToken');
-    accessToken = res.body.accessToken;
-    refreshToken = res.body.refreshToken;
+      expect(res.body.message).toContain('Si un compte existe');
+    });
+
+    it('should return success even for existing user (no enumeration)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/forgot-password')
+        .send({ email: testUser.email })
+        .expect(200);
+
+      expect(res.body.message).toContain('Si un compte existe');
+    });
+
+    it('should create a reset token in database', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/forgot-password')
+        .send({ email: testUser.email });
+
+      const user = await prisma.user.findUnique({ where: { email: testUser.email } });
+      expect(user?.resetTokenHash).not.toBeNull();
+      expect(user?.resetTokenExpiry).not.toBeNull();
+    });
   });
 
-  it('POST /auth/login - should reject wrong password', async () => {
-    await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: testUser.email, password: 'wrong' })
-      .expect(401);
+  describe('POST /auth/reset-password', () => {
+    let resetToken: string;
+
+    beforeAll(async () => {
+      // Create a reset token for the test user
+      resetToken = 'valid-reset-token-' + Date.now();
+      const hashedToken = await bcrypt.hash(resetToken, 10);
+      const expiry = new Date(Date.now() + 30 * 60 * 1000);
+      await prisma.user.update({
+        where: { email: testUser.email },
+        data: { resetTokenHash: hashedToken, resetTokenExpiry: expiry },
+      });
+    });
+
+    afterAll(async () => {
+      await prisma.user.update({
+        where: { email: testUser.email },
+        data: { resetTokenHash: null, resetTokenExpiry: null },
+      });
+    });
+
+    it('should reset password with valid token', async () => {
+      const newPassword = 'NewStrongPass123!';
+      await request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({ token: resetToken, password: newPassword })
+        .expect(200);
+
+      // Verify new password works
+      const res = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: testUser.email, password: newPassword })
+        .expect(200);
+
+      expect(res.body).toHaveProperty('accessToken');
+    });
+
+    it('should reject expired token', async () => {
+      const expiredToken = 'expired-token';
+      const hashedToken = await bcrypt.hash(expiredToken, 10);
+      const expiry = new Date(Date.now() - 60 * 1000); // 1 minute ago
+      await prisma.user.update({
+        where: { email: testUser.email },
+        data: { resetTokenHash: hashedToken, resetTokenExpiry: expiry },
+      });
+
+      await request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({ token: expiredToken, password: 'NewStrongPass456!' })
+        .expect(400);
+    });
+
+    it('should reject invalid token', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({ token: 'completely-fake-token', password: 'NewStrongPass456!' })
+        .expect(400);
+    });
+
+    it('should invalidate refresh tokens after reset', async () => {
+      // Login first to get a refresh token
+      const loginRes = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: testUser.email, password: 'NewStrongPass123!' });
+
+      const refreshCookie = loginRes.headers['set-cookie'];
+
+      // Reset password
+      const newToken = 'another-valid-token-' + Date.now();
+      const hashedToken = await bcrypt.hash(newToken, 10);
+      await prisma.user.update({
+        where: { email: testUser.email },
+        data: {
+          resetTokenHash: hashedToken,
+          resetTokenExpiry: new Date(Date.now() + 30 * 60 * 1000),
+        },
+      });
+
+      await request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({ token: newToken, password: 'FinalPass123!' });
+
+      // Old refresh token should no longer work
+      const refreshRes = await request(app.getHttpServer())
+        .post('/auth/refresh')
+        // The refresh endpoint reads from cookie, not body
+        .set(
+          'Cookie',
+          Array.isArray(refreshCookie) ? refreshCookie.join('; ') : refreshCookie || '',
+        )
+        .expect(401);
+    });
   });
 
-  it('GET /users/me - should access protected route with valid token', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/users/me')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
+  describe('POST /auth/reset-password validation', () => {
+    it('should reject password shorter than 12 chars', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({ token: 'some-token', password: 'Short1!' })
+        .expect(400);
+    });
 
-    expect(res.body.email).toBe(testUser.email);
-  });
+    it('should reject password without uppercase', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({ token: 'some-token', password: 'lowercaseonly1!' })
+        .expect(400);
+    });
 
-  it('GET /users/me - should reject request without token', async () => {
-    await request(app.getHttpServer())
-      .get('/users/me')
-      .expect(401);
-  });
-
-  it('GET /users/me - should reject request with invalid token', async () => {
-    await request(app.getHttpServer())
-      .get('/users/me')
-      .set('Authorization', 'Bearer invalid-token')
-      .expect(401);
-  });
-
-  it('POST /auth/refresh - should return new tokens', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/auth/refresh')
-      .send({ refreshToken })
-      .expect(200);
-
-    expect(res.body).toHaveProperty('accessToken');
-    expect(res.body).toHaveProperty('refreshToken');
-    accessToken = res.body.accessToken;
-    refreshToken = res.body.refreshToken;
-  });
-
-  it('POST /auth/refresh - should reject invalid refresh token', async () => {
-    await request(app.getHttpServer())
-      .post('/auth/refresh')
-      .send({ refreshToken: 'invalid-refresh-token' })
-      .expect(401);
-  });
-
-  it('POST /auth/logout - should invalidate refresh token', async () => {
-    await request(app.getHttpServer())
-      .post('/auth/logout')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(204);
-
-    // Refresh should now fail
-    await request(app.getHttpServer())
-      .post('/auth/refresh')
-      .send({ refreshToken })
-      .expect(401);
-  });
-
-  it('POST /auth/login - should still work after logout', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: testUser.email, password: testUser.password })
-      .expect(200);
-
-    expect(res.body).toHaveProperty('accessToken');
-    accessToken = res.body.accessToken;
+    it('should reject password without special character', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({ token: 'some-token', password: 'NoSpecialChar1' })
+        .expect(400);
+    });
   });
 });

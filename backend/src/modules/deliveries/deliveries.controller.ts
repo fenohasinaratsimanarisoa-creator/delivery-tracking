@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { DeliveryStatus } from '@prisma/client';
 import { DeliveriesService } from './deliveries.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
@@ -7,6 +17,7 @@ import { UpdateDeliveryStatusDto } from './dto/update-delivery-status.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { UsageGuard } from '../../common/guards/usage.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -15,13 +26,49 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class DeliveriesController {
   constructor(private readonly deliveriesService: DeliveriesService) {}
 
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, UsageGuard)
   @Roles('admin', 'dispatcher')
   @Post()
   create(@CurrentUser('companyId') companyId: string, @Body() dto: CreateDeliveryDto) {
     return this.deliveriesService.create(companyId, dto);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('client')
+  @Get('my-orders')
+  findMyOrders(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('companyId') companyId: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    return this.deliveriesService.findMyOrders(userId, companyId, +page, +limit);
+  }
+
+  @Get('my-deliveries')
+  findMyDeliveries(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('companyId') companyId: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    return this.deliveriesService.findMyDeliveries(userId, companyId, +page, +limit);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('driver')
+  @Patch(':id/driver-status')
+  updateDriverStatus(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('companyId') companyId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateDeliveryStatusDto,
+  ) {
+    return this.deliveriesService.updateDriverStatus(companyId, id, userId, dto);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
   @Get()
   findAll(
     @CurrentUser('companyId') companyId: string,
@@ -32,6 +79,8 @@ export class DeliveriesController {
     return this.deliveriesService.findAll(companyId, +page, +limit, status);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
   @Get(':id')
   findOne(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
     return this.deliveriesService.findOne(companyId, id);
@@ -40,7 +89,11 @@ export class DeliveriesController {
   @UseGuards(RolesGuard)
   @Roles('admin', 'dispatcher')
   @Patch(':id')
-  update(@CurrentUser('companyId') companyId: string, @Param('id') id: string, @Body() dto: UpdateDeliveryDto) {
+  update(
+    @CurrentUser('companyId') companyId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateDeliveryDto,
+  ) {
     return this.deliveriesService.update(companyId, id, dto);
   }
 
@@ -53,6 +106,13 @@ export class DeliveriesController {
     @Body() dto: UpdateDeliveryStatusDto,
   ) {
     return this.deliveriesService.updateStatus(companyId, id, dto);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
+  @Patch(':id/resolve-mismatch')
+  resolveMismatch(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
+    return this.deliveriesService.resolveMismatch(companyId, id);
   }
 
   @UseGuards(RolesGuard)

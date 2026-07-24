@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsDateString, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsDateString, IsEnum, MinLength } from 'class-validator';
+import { DeliveryStatus } from '@prisma/client';
 
 export class CreateDeliveryDto {
   @IsString()
@@ -8,6 +9,10 @@ export class CreateDeliveryDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsEnum(DeliveryStatus)
+  status?: DeliveryStatus;
 
   @IsString()
   @MinLength(1)
@@ -19,6 +24,10 @@ export class CreateDeliveryDto {
   @IsOptional()
   pickupLng?: number;
 
+  @IsOptional()
+  @IsString()
+  pickupLocationLabel?: string;
+
   @IsString()
   @MinLength(1)
   deliveryAddress: string;
@@ -28,6 +37,10 @@ export class CreateDeliveryDto {
 
   @IsOptional()
   deliveryLng?: number;
+
+  @IsOptional()
+  @IsString()
+  deliveryLocationLabel?: string;
 
   @IsOptional()
   @IsDateString()

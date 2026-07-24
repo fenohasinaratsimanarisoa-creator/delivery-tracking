@@ -1,63 +1,82 @@
 import { useEffect, useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { io, Socket } from 'socket.io-client';
+import { Bell, Trash2 } from 'lucide-react';
+import { formatDateTime } from '../services/i18n/formatDate';
 import api from '../services/api/client';
+import { getAccessToken } from '../services/auth/tokenStore';
+import type { Notification } from '../types';
 
-interface Notification {
-  id: string;
-  type: string;
-  priority: string;
-  title: string;
-  message: string;
-  link?: string;
-  readAt: string | null;
-  createdAt: string;
-}
-
-function parseToken(token: string) {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return { companyId: payload.companyId, userId: payload.sub || payload.id };
-  } catch {
-    return { companyId: '', userId: '' };
+function getPriorityColor(priority: string) {
+  switch (priority) {
+    case 'critical': return 'var(--color-red)';
+    case 'high': return 'var(--color-accent)';
+    default: return 'var(--color-teal)';
   }
 }
 
-export default function NotificationBell() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [open, setOpen] = useState(false);
-  const socketRef = useRef<Socket | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+const PANEL_WIDTH = 360;
+const PANEL_MAX_HEIGHT = 420;
+const MOBILE_BREAKPOINT = 480;
 
-  const token = localStorage.getItem('accessToken');
-  const { companyId, userId } = token ? parseToken(token) : { companyId: '', userId: '' };
+export default function NotificationBell() {
+  const { t } = useTranslation();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
+  const socketRef = useRef<Socket | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const token = getAccessToken();
 
   useEffect(() => {
-    if (!companyId) return;
+    if (!token) return;
 
     fetchNotifications();
+    fetchUnreadCount();
 
     const socket = io('/notifications', {
-      query: { companyId, userId },
+      auth: { token },
       transports: ['websocket', 'polling'],
     });
     socketRef.current = socket;
 
     socket.on('notification', (notif: Notification) => {
       setNotifications((prev) => [notif, ...prev]);
+      setUnreadCount((c) => c + 1);
     });
 
     return () => { socket.close(); };
-  }, [companyId, userId]);
+  }, [token]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const update = () => setViewportHeight(window.innerHeight);
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [open]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    if (open) {
+      document.addEventListener('keydown', handleEscape);
+      document.addEventListener('mousedown', handleClick);
+    }
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('mousedown', handleClick);
+    };
+  }, [open]);
 
   async function fetchNotifications() {
     try {
@@ -68,105 +87,255 @@ export default function NotificationBell() {
 
   async function fetchUnreadCount() {
     try {
-      await api.get('/notifications/unread-count');
+      const res = await api.get('/notifications/unread-count');
+      setUnreadCount(res.data.count ?? 0);
     } catch { /* ignore */ }
   }
 
-  useEffect(() => {
-    fetchUnreadCount();
-  }, []);
-
   async function handleMarkRead(id: string) {
-    await api.patch(`/notifications/${id}/read`);
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n)),
-    );
+    try {
+      await api.patch(`/notifications/${id}/read`);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n)),
+      );
+    } catch { /* ignore */ }
   }
 
   async function handleMarkAllRead() {
-    await api.patch('/notifications/read-all');
-    setNotifications((prev) => prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() })));
+    try {
+      await api.patch('/notifications/read-all');
+      setNotifications((prev) => prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() })));
+      setUnreadCount(0);
+    } catch { /* ignore */ }
   }
 
-  if (!companyId) return null;
+  async function handleDelete(id: string) {
+    try {
+      await api.delete(`/notifications/${id}`);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      const removed = notifications.find((n) => n.id === id);
+      if (removed && !removed.readAt) setUnreadCount((c) => Math.max(0, c - 1));
+    } catch { /* ignore */ }
+  }
 
-  const unread = notifications.filter((n) => !n.readAt).length;
+  async function handleDeleteAll() {
+    try {
+      await api.delete('/notifications');
+      setNotifications([]);
+      setUnreadCount(0);
+    } catch { /* ignore */ }
+  }
+
+  if (!token) return null;
+
+  const isMobile = window.innerWidth < MOBILE_BREAKPOINT;
+  const panelWidth = isMobile ? Math.min(window.innerWidth - 16, 400) : Math.min(PANEL_WIDTH, window.innerWidth - 32);
 
   return (
-    <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
+    <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
       <button
+        ref={buttonRef}
         onClick={() => setOpen(!open)}
         style={{
-          background: 'none', border: 'none', cursor: 'pointer', position: 'relative',
-          fontSize: '1.4rem', padding: '4px 8px', color: '#555',
+          background: 'none', border: 'none', cursor: 'pointer',
+          position: 'relative', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', padding: 6,
+          color: 'var(--color-text-secondary)',
+          borderRadius: 'var(--radius-md)',
+          transition: 'background 0.12s, color 0.12s',
         }}
-        aria-label="Notifications"
+        aria-label={unreadCount > 0 ? t('components.notificationBell.unreadCount', { count: unreadCount }) : t('components.notificationBell.title')}
       >
-        🔔
-        {unread > 0 && (
+        <Bell size={18} />
+        {unreadCount > 0 && (
           <span style={{
-            position: 'absolute', top: 0, right: 0, background: '#dc3545', color: '#fff',
-            borderRadius: '50%', padding: '2px 6px', fontSize: '0.7rem', lineHeight: '1',
+            position: 'absolute', top: 1, right: 1,
+            background: 'var(--color-red)',
+            color: '#fff',
+            borderRadius: 'var(--radius-full)',
+            padding: '1px 5px',
+            fontSize: '0.6rem',
+            fontWeight: 700,
+            lineHeight: '14px',
+            minWidth: 16,
+            textAlign: 'center',
+            fontFamily: 'var(--font-mono)',
           }}>
-            {unread > 99 ? '99+' : unread}
+            {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
         <div style={{
-          position: 'absolute', right: 0, top: '100%', width: '360px', maxHeight: '400px',
-          overflowY: 'auto', background: '#fff', border: '1px solid #ddd', borderRadius: '8px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 1000, marginTop: '4px',
+          position: 'fixed',
+          top: 'var(--space-lg, 16px)',
+          right: isMobile ? 8 : 'var(--space-lg, 16px)',
+          width: panelWidth,
+          maxHeight: Math.min(PANEL_MAX_HEIGHT, viewportHeight - 32),
+          overflowY: 'auto', overflowX: 'hidden',
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-lg)',
+          zIndex: 1300,
+          animation: 'dt-fade-in-up 0.15s ease-out',
         }}>
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '12px 16px', borderBottom: '1px solid #eee',
+            padding: 'var(--space-md) var(--space-lg)',
+            borderBottom: '1px solid var(--color-border-subtle)',
+            position: 'sticky', top: 0,
+            background: 'var(--color-surface)',
           }}>
-            <strong>Notifications</strong>
-            {unread > 0 && (
-              <button
-                onClick={handleMarkAllRead}
-                style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', fontSize: '0.85rem' }}
-              >
-                Mark all read
-              </button>
-            )}
+            <span style={{
+              fontWeight: 600, fontSize: 'var(--text-sm)',
+              color: 'var(--color-text)',
+              fontFamily: 'var(--font-display)',
+            }}>
+              {t('components.notificationBell.title')}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm, 8px)' }}>
+              {notifications.length > 0 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteAll(); }}
+                  style={{
+                    background: 'none', border: 'none',
+                    color: 'var(--color-text-tertiary)',
+                    cursor: 'pointer',
+                    fontSize: 'var(--text-xs)', fontWeight: 500,
+                    fontFamily: 'var(--font-body)',
+                    display: 'flex', alignItems: 'center', gap: 3,
+                    padding: '2px 4px',
+                    borderRadius: 'var(--radius-sm)',
+                    transition: 'color var(--transition-fast, 150ms) ease, background var(--transition-fast, 150ms) ease',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-red)'; e.currentTarget.style.background = 'var(--color-red-muted)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)'; e.currentTarget.style.background = 'transparent'; }}
+                  title={t('notificationBell.deleteAllTitle')}
+                >
+                  <Trash2 size={12} />
+                  {t('notificationBell.deleteAll')}
+                </button>
+              )}
+              {unreadCount > 0 && (
+                <button
+                  onClick={handleMarkAllRead}
+                  style={{
+                    background: 'none', border: 'none',
+                    color: 'var(--color-accent)', cursor: 'pointer',
+                    fontSize: 'var(--text-xs)', fontWeight: 500,
+                    fontFamily: 'var(--font-body)',
+                    padding: '2px 4px',
+                    borderRadius: 'var(--radius-sm)',
+                    transition: 'background var(--transition-fast, 150ms) ease',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-accent-muted)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {t('components.notificationBell.markAllRead')}
+                </button>
+              )}
+            </div>
           </div>
 
-          {notifications.length === 0 && (
-            <div style={{ padding: '20px', textAlign: 'center', color: '#888' }}>No notifications</div>
-          )}
-
-          {notifications.map((n) => (
-            <div
-              key={n.id}
-              onClick={() => !n.readAt && handleMarkRead(n.id)}
-              style={{
-                padding: '12px 16px', borderBottom: '1px solid #f5f5f5',
-                cursor: n.readAt ? 'default' : 'pointer',
-                background: n.readAt ? '#fff' : '#f0f7ff',
-                transition: 'background 0.2s',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <strong style={{ fontSize: '0.9rem' }}>{n.title}</strong>
-                <span style={{
-                  fontSize: '0.7rem', padding: '1px 6px', borderRadius: '4px',
-                  background:
-                    n.priority === 'critical' ? '#dc3545' :
-                    n.priority === 'high' ? '#ffc107' : '#e9ecef',
-                  color: n.priority === 'high' ? '#000' : '#fff',
-                }}>
-                  {n.priority}
-                </span>
+          <div style={{ padding: 'var(--space-xs) 0' }}>
+            {notifications.length === 0 && (
+              <div style={{
+                padding: 'var(--space-xl)',
+                textAlign: 'center',
+                color: 'var(--color-text-tertiary)',
+                fontSize: 'var(--text-sm)',
+              }}>
+                {t('components.notificationBell.empty')}
               </div>
-              <div style={{ fontSize: '0.85rem', color: '#555' }}>{n.message}</div>
-              <div style={{ fontSize: '0.75rem', color: '#999', marginTop: '4px' }}>
-                {new Date(n.createdAt).toLocaleString()}
-              </div>
-            </div>
-          ))}
+            )}
+            {notifications.map((n) => {
+              const isUnread = !n.readAt;
+              const pColor = getPriorityColor(n.priority);
+              return (
+                <div
+                  key={n.id}
+                  onClick={() => { if (isUnread) handleMarkRead(n.id); }}
+                  style={{
+                    padding: 'var(--space-md) var(--space-lg)',
+                    paddingRight: 'var(--space-sm)',
+                    borderBottom: '1px solid var(--color-border-subtle)',
+                    cursor: isUnread ? 'pointer' : 'default',
+                    background: isUnread ? 'var(--color-accent-muted)' : 'transparent',
+                    transition: 'background 0.1s',
+                    opacity: isUnread ? 1 : 0.6,
+                  }}
+                  onMouseEnter={(e) => {
+                    const del = e.currentTarget.querySelector('[data-del]') as HTMLElement;
+                    if (del) del.style.opacity = '1';
+                  }}
+                  onMouseLeave={(e) => {
+                    const del = e.currentTarget.querySelector('[data-del]') as HTMLElement;
+                    if (del) del.style.opacity = '0';
+                  }}
+                >
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    gap: 'var(--space-sm)',
+                  }}>
+                    <div style={{
+                      width: 8, height: 8,
+                      borderRadius: 'var(--radius-full)',
+                      background: pColor,
+                      marginTop: 5,
+                      flexShrink: 0,
+                    }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontWeight: isUnread ? 600 : 400,
+                        fontSize: 'var(--text-sm)',
+                        color: 'var(--color-text)',
+                        marginBottom: 2,
+                      }}>
+                        {n.title}
+                      </div>
+                      <div style={{
+                        fontSize: 'var(--text-xs)',
+                        color: 'var(--color-text-secondary)',
+                        lineHeight: 1.4,
+                      }}>
+                        {n.message}
+                      </div>
+                      <div style={{
+                        fontSize: 'var(--text-xs)',
+                        color: 'var(--color-text-tertiary)',
+                        fontFamily: 'var(--font-mono)',
+                        marginTop: 'var(--space-xs)',
+                      }}>
+                        {formatDateTime(n.createdAt)}
+                      </div>
+                    </div>
+                    <button
+                      data-del
+                      onClick={(e) => { e.stopPropagation(); handleDelete(n.id); }}
+                      style={{
+                        background: 'none', border: 'none',
+                        cursor: 'pointer', padding: 4,
+                        color: 'var(--color-text-tertiary)',
+                        borderRadius: 'var(--radius-sm)',
+                        opacity: 0, flexShrink: 0,
+                        transition: 'opacity 0.15s ease, color 0.15s ease, background 0.15s ease',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-red)'; e.currentTarget.style.background = 'var(--color-red-muted)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)'; e.currentTarget.style.background = 'transparent'; }}
+                      title={t('notificationBell.deleteTitle')}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

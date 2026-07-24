@@ -1,0 +1,1158 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "confirm": "Confirmer",
+    "search": "Rechercher",
+    "noData": "Aucune donnée.",
+    "error": "Erreur",
+    "close": "Fermer",
+    "back": "Retour",
+    "actions": "Actions",
+    "edit": "Modifier",
+    "previousPage": "Page précédente",
+    "nextPage": "Page suivante",
+    "show": "Afficher",
+    "hide": "Masquer",
+    "yes": "Oui",
+    "no": "Non",
+    "or": "OU",
+    "comingSoon": "— bientôt disponible",
+    "saving": "Enregistrement...",
+    "processing": "En cours...",
+    "saveError": "Erreur lors de l'enregistrement"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "deliveries": "Livraisons",
+    "fleet": "Flotte",
+    "drivers": "Chauffeurs",
+    "map": "Carte temps réel",
+    "fuel": "Carburant",
+    "reports": "Rapports",
+    "users": "Utilisateurs",
+    "settings": "Paramètres",
+    "billing": "Facturation",
+    "myDeliveries": "Mes livraisons",
+    "myPosition": "Ma position",
+    "myVehicle": "Mon véhicule",
+    "myOrders": "Mes commandes",
+    "tracking": "Suivi livraison",
+    "alerts": "Alertes",
+    "logout": "Déconnexion",
+    "expandSidebar": "Développer la barre latérale",
+    "collapseSidebar": "Réduire la barre latérale",
+    "closeMenu": "Fermer le menu",
+    "openMenu": "Ouvrir le menu"
+  },
+  "auth": {
+    "callback": {
+      "googleRefused": "Vous avez refusé la connexion avec Google. Veuillez réessayer ou utiliser un autre mode de connexion.",
+      "emailNotVerified": "Votre adresse email Google n'est pas vérifiée. Veuillez vérifier votre email avant de vous connecter.",
+      "accountNotFound": "Cette adresse email ne correspond à aucun compte. Veuillez d'abord créer un compte.",
+      "googleAuthFailed": "La connexion avec Google a échoué. Veuillez réessayer ou utiliser un autre mode de connexion.",
+      "invalidParams": "Paramètres de connexion invalides.",
+      "finalizeError": "Impossible de finaliser la connexion. Veuillez réessayer.",
+      "connecting": "Connexion en cours...",
+      "loginSuccess": "Connexion réussie — redirection...",
+      "backToLogin": "Retour à la connexion"
+    },
+    "login": {
+      "title": "Se connecter",
+      "email": "Adresse email",
+      "password": "Mot de passe",
+      "rememberMe": "Se souvenir de moi",
+      "forgotPassword": "Mot de passe oublié ?",
+      "submit": "Se connecter",
+      "submitting": "Connexion...",
+      "noAccount": "Pas encore de compte ?",
+      "createAccount": "Créer un compte",
+      "secureConnection": "Connexion sécurisée — chiffrement de bout en bout",
+      "invalidEmail": "Format email invalide",
+      "passwordRequired": "Mot de passe requis",
+      "welcomeBack": "Content de vous revoir",
+      "welcome": "Bienvenue",
+      "enterPassword": "Entrez votre mot de passe pour vous connecter",
+      "loginPrompt": "Connectez-vous pour accéder à votre espace",
+      "googleLogin": "Se connecter avec Google",
+      "error401": "Ces identifiants ne correspondent à aucun compte. Vérifiez votre email et votre mot de passe.",
+      "error429": "Trop de tentatives. Veuillez réessayer dans quelques instants.",
+      "errorGeneric": "Un problème est survenu. Veuillez réessayer.",
+      "brand": "DeliveryTrack",
+      "secure": "Plateforme sécurisée",
+      "uptime": "99.9% disponibilité"
+    },
+    "register": {
+      "title": "Créer un compte",
+      "subtitle": "Créez votre espace entreprise en quelques secondes.",
+      "companyName": "Nom de l'entreprise",
+      "email": "Email professionnel",
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "password": "Mot de passe",
+      "confirmPassword": "Confirmer le mot de passe",
+      "passwordMismatch": "Les mots de passe ne correspondent pas.",
+      "acceptCgu": "J'accepte les conditions générales d'utilisation",
+      "submit": "Créer mon compte",
+      "submitting": "Création du compte...",
+      "googleLogin": "Se connecter avec Google",
+      "haveAccount": "Déjà un compte ?",
+      "login": "Se connecter",
+      "error429": "Trop de tentatives. Veuillez réessayer dans quelques instants.",
+      "error409": "Un compte avec cet email existe déjà.",
+      "errorGeneric": "Une erreur est survenue. Veuillez réessayer.",
+      "passwordRules": {
+        "minLength": "Au moins 12 caractères",
+        "uppercase": "Une majuscule",
+        "lowercase": "Une minuscule",
+        "digit": "Un chiffre",
+        "special": "Un caractère spécial"
+      }
+    },
+    "forgotPassword": {
+      "title": "Mot de passe oublié",
+      "description": "Saisissez votre adresse email. Si un compte existe, nous vous enverrons un lien pour réinitialiser votre mot de passe.",
+      "email": "Adresse email",
+      "submit": "Envoyer le lien",
+      "sending": "Envoi en cours...",
+      "success": "Si un compte existe avec cet email, vous recevrez un lien de réinitialisation sous quelques minutes. Pensez à vérifier vos spams.",
+      "backToLogin": "Retour à la connexion",
+      "errorGeneric": "Une erreur est survenue. Veuillez réessayer."
+    },
+    "resetPassword": {
+      "title": "Nouveau mot de passe",
+      "subtitle": "Choisissez un mot de passe robuste pour sécuriser votre compte.",
+      "newPassword": "Nouveau mot de passe",
+      "confirmPassword": "Confirmer le mot de passe",
+      "passwordMismatch": "Les mots de passe ne correspondent pas.",
+      "submit": "Réinitialiser le mot de passe",
+      "submitting": "Réinitialisation...",
+      "successTitle": "Mot de passe réinitialisé",
+      "successMessage": "Votre mot de passe a été modifié avec succès. Vous pouvez dès à présent vous connecter.",
+      "login": "Se connecter",
+      "errorInvalid": "Le lien de réinitialisation est invalide ou a expiré.",
+      "errorNoToken": "Lien invalide. Veuillez demander un nouveau lien de réinitialisation.",
+      "requestNewLink": "Demander un nouveau lien",
+      "passwordRules": {
+        "minLength": "Au moins 12 caractères",
+        "uppercase": "Une majuscule",
+        "lowercase": "Une minuscule",
+        "digit": "Un chiffre",
+        "special": "Un caractère spécial"
+      }
+    }
+  },
+  "deliveries": {
+    "title": "Livraisons",
+    "subtitle": "Gérez les livraisons de votre flotte",
+    "newDelivery": "Nouvelle livraison",
+    "searchPlaceholder": "Rechercher une livraison…",
+    "editDelivery": "Enregistrer",
+    "createDelivery": "Créer la livraison",
+    "drawerSubtitle": "Créez une livraison et affectez-la à un chauffeur",
+    "formSections": {
+      "general": "Informations générales",
+      "addresses": "Adresses",
+      "gps": "Coordonnées GPS"
+    },
+    "fields": {
+      "title": "Titre",
+      "status": "Statut",
+      "pickupAddress": "Adresse d'enlèvement",
+      "deliveryAddress": "Adresse de livraison",
+      "pickupLat": "Latitude (enlèvement)",
+      "pickupLng": "Longitude (enlèvement)",
+      "deliveryLat": "Latitude (livraison)",
+      "deliveryLng": "Longitude (livraison)",
+      "pickupLocation": "Position de l'enlèvement",
+      "deliveryLocation": "Position de livraison"
+    },
+    "status": {
+      "pending": "En attente",
+      "assigned": "Assigné",
+      "in_progress": "En cours",
+      "delivered": "Livré",
+      "failed": "Échoué",
+      "cancelled": "Annulé"
+    },
+    "table": {
+      "title": "Titre",
+      "status": "Statut",
+      "deliveryAddress": "Adresse de livraison",
+      "driver": "Chauffeur",
+      "unassigned": "Non assigné",
+      "date": "Date"
+    },
+    "empty": {
+      "noMatch": "Aucune livraison ne correspond",
+      "noData": "Aucune livraison enregistrée",
+      "tryDifferent": "Essayez un autre terme",
+      "createFirst": "Créez votre première livraison"
+    },
+    "toast": {
+      "updated": "Livraison modifiée",
+      "created": "Livraison créée",
+      "saveError": "Erreur lors de l'enregistrement",
+      "deleted": "Livraison supprimée",
+      "deleteError": "Erreur lors de la suppression"
+    },
+    "confirmDelete": {
+      "title": "Supprimer la livraison",
+      "message": "Supprimer \"{title}\" ? Cette action est irréversible."
+    },
+    "count": "{{count}} livraison",
+    "count_plural": "{{count}} livraisons",
+    "validation": {
+      "validNumber": "Doit être un nombre valide"
+    }
+  },
+  "fleet": {
+    "title": "Flotte",
+    "subtitle": "Gérez vos véhicules",
+    "newVehicle": "Nouveau véhicule",
+    "searchPlaceholder": "Rechercher un véhicule…",
+    "drawerSubtitle": "Ajoutez un véhicule à votre flotte",
+    "editVehicle": "Enregistrer",
+    "createVehicle": "Créer le véhicule",
+    "formSections": {
+      "identity": "Identité du véhicule",
+      "registration": "Immatriculation",
+      "features": "Caractéristiques"
+    },
+    "fields": {
+      "brand": "Marque",
+      "model": "Modèle",
+      "year": "Année",
+      "licensePlate": "Plaque d'immatriculation",
+      "vin": "Numéro VIN",
+      "fuelType": "Type de carburant",
+      "theoreticalConsumption": "Consommation théorique (L/100km)"
+    },
+    "fuelTypes": {
+      "gasoline": "Essence",
+      "diesel": "Diesel",
+      "electric": "Électrique",
+      "hybrid": "Hybride Essence",
+      "hybridDiesel": "Hybride Diesel",
+      "lpg": "GPL"
+    },
+    "table": {
+      "brand": "Marque",
+      "model": "Modèle",
+      "year": "Année",
+      "licensePlate": "Plaque",
+      "fuelType": "Carburant",
+      "status": "Statut"
+    },
+    "status": {
+      "active": "Actif",
+      "inactive": "Inactif",
+      "activate": "Activer",
+      "deactivate": "Désactiver"
+    },
+    "empty": {
+      "noMatch": "Aucun véhicule ne correspond",
+      "noData": "Aucun véhicule enregistré",
+      "tryDifferent": "Essayez un autre terme",
+      "createFirst": "Ajoutez le premier véhicule à votre flotte"
+    },
+    "toast": {
+      "updated": "Véhicule modifié",
+      "created": "Véhicule créé",
+      "deleted": "Véhicule supprimé",
+      "deleteError": "Erreur lors de la suppression"
+    },
+    "confirmDelete": {
+      "title": "Supprimer le véhicule",
+      "message": "Supprimer {brand} {model} ({licensePlate}, {year}) ? Cette action est irréversible et retirera le véhicule de l'historique actif."
+    },
+    "count": "{{count}} véhicule dans votre flotte",
+    "count_plural": "{{count}} véhicules dans votre flotte",
+    "validation": {
+      "invalidYear": "Année invalide (ex: 2024)"
+    }
+  },
+  "drivers": {
+    "title": "Chauffeurs",
+    "subtitle": "Gérez vos chauffeurs",
+    "newDriver": "Nouveau chauffeur",
+    "searchPlaceholder": "Rechercher un chauffeur…",
+    "drawerSubtitle": "Ajoutez un chauffeur à votre flotte",
+    "editDriver": "Modifier {firstName} {lastName}",
+    "editDriverSubtitle": "Permis : {licenseNumber}",
+    "createDriver": "Créer le chauffeur",
+    "formSections": {
+      "identity": "Identité",
+      "contact": "Contact",
+      "license": "Permis de conduire"
+    },
+    "fields": {
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "email": "Email professionnel",
+      "phone": "Téléphone",
+      "licenseNumber": "Numéro de permis"
+    },
+    "table": {
+      "name": "Nom",
+      "email": "Email",
+      "phone": "Téléphone",
+      "license": "Permis",
+      "status": "Statut"
+    },
+    "status": {
+      "active": "Actif",
+      "inactive": "Inactif",
+      "activate": "Activer",
+      "deactivate": "Désactiver"
+    },
+    "empty": {
+      "noMatch": "Aucun chauffeur ne correspond à cette recherche",
+      "noData": "Aucun chauffeur enregistré",
+      "tryDifferent": "Essayez un autre terme",
+      "createFirst": "Ajoutez le premier chauffeur à votre flotte",
+      "addDriver": "Ajouter un chauffeur"
+    },
+    "toast": {
+      "updated": "Chauffeur modifié",
+      "created": "Chauffeur créé",
+      "deleted": "Chauffeur supprimé",
+      "deleteError": "Erreur lors de la suppression"
+    },
+    "confirmDelete": {
+      "title": "Supprimer le chauffeur",
+      "message": "Supprimer {firstName} {lastName} (permis {licenseNumber}) ? Cette action est irréversible."
+    },
+    "resultCount": "{{count}} résultat",
+    "resultCount_plural": "{{count}} résultats",
+    "validation": {
+      "phoneFormat": "Le numéro doit commencer par 0 et faire 10 chiffres"
+    }
+  },
+  "map": {
+    "searchPlaceholder": "Rechercher un véhicule, un chauffeur, une livraison…",
+    "searchAria": "Rechercher sur la carte",
+    "filterAria": "Filtrer",
+    "layersAria": "Couches cartographiques",
+    "filters": {
+      "moving": "En mouvement",
+      "stopped": "À l'arrêt",
+      "activeDeliveries": "Livraisons actives",
+      "alerts": "Alertes"
+    },
+    "legend": {
+      "moving": "En mouvement",
+      "stopped": "À l'arrêt",
+      "doubleClick": "Double-cliquez pour zoomer"
+    }
+  },
+  "fuel": {
+    "title": "Carburant",
+    "error": "Erreur lors du chargement des données carburant",
+    "empty": "Aucun relevé carburant pour le moment.",
+    "table": {
+      "vehicle": "Véhicule",
+      "liters": "Litres",
+      "km": "Km",
+      "consumption": "L/100km",
+      "cost": "Coût",
+      "date": "Date",
+      "anomaly": "Anomalie"
+    },
+    "anomaly": "⚠️ Anomalie",
+    "normal": "✓ Normal"
+  },
+  "reports": {
+    "title": "Rapports"
+  },
+  "users": {
+    "title": "Utilisateurs",
+    "subtitle": "Gérez les accès à votre plateforme",
+    "newUser": "Nouvel utilisateur",
+    "searchPlaceholder": "Rechercher un utilisateur…",
+    "drawerSubtitle": "Créez un compte pour un membre de votre équipe",
+    "editUser": "Rôle : {role}",
+    "createUser": "Créer l'utilisateur",
+    "formSections": {
+      "identity": "Identité",
+      "contact": "Contact",
+      "account": "Compte"
+    },
+    "fields": {
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "email": "Adresse email",
+      "phone": "Téléphone",
+      "role": "Rôle",
+      "password": "Mot de passe"
+    },
+    "roles": {
+      "admin": "Administrateur",
+      "dispatcher": "Dispatcher",
+      "driver": "Chauffeur",
+      "client": "Client"
+    },
+    "rolesShort": {
+      "admin": "Admin",
+      "dispatcher": "Dispatcher",
+      "driver": "Chauffeur",
+      "client": "Client"
+    },
+    "table": {
+      "name": "Nom",
+      "email": "Email",
+      "role": "Rôle",
+      "status": "Statut",
+      "registeredDate": "Inscrit le"
+    },
+    "status": {
+      "active": "Actif",
+      "inactive": "Inactif",
+      "activate": "Activer",
+      "deactivate": "Désactiver"
+    },
+    "empty": {
+      "noMatch": "Aucun utilisateur ne correspond",
+      "noData": "Aucun utilisateur enregistré",
+      "tryDifferent": "Essayez un autre terme",
+      "inviteTeam": "Invitez les membres de votre équipe"
+    },
+    "inviteUser": "Inviter un utilisateur",
+    "toast": {
+      "updated": "Utilisateur modifié",
+      "created": "Utilisateur créé",
+      "deleted": "Utilisateur supprimé",
+      "deleteError": "Erreur lors de la suppression",
+      "saveError": "Erreur lors de l'enregistrement"
+    },
+    "confirmDelete": {
+      "title": "Supprimer l'utilisateur",
+      "message": "Supprimer {firstName} {lastName} ({email}) ? Cette action est irréversible."
+    },
+    "passwordPlaceholder": "Laisser vide pour conserver l'actuel",
+    "passwordHelp": "Laissez vide pour conserver le mot de passe actuel",
+    "count": "{{count}} utilisateur",
+    "count_plural": "{{count}} utilisateurs",
+    "validation": {
+      "phoneFormat": "Le numéro doit commencer par 0 et faire 10 chiffres",
+      "passwordFormat": "12 caractères min, une majuscule, une minuscule, un chiffre, un caractère spécial"
+    }
+  },
+  "settings": {
+    "title": "Paramètres",
+    "subtitle": "Gérez votre compte et vos préférences",
+    "profile": "Profil",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "email": "Email",
+    "role": "Rôle",
+    "language": "Langue",
+    "languageFr": "Français",
+    "languageEn": "English",
+    "security": "Sécurité",
+    "securityDesc": "Gérez votre mot de passe et l'authentification",
+    "notifications": "Notifications",
+    "notificationsDesc": "Configurez vos préférences de notification",
+    "appearance": "Apparence",
+    "appearanceDesc": "Choisissez le thème qui correspond à votre environnement de travail.",
+    "dark": "Sombre",
+    "darkDesc": "Mode salle de contrôle — idéal pour usage prolongé",
+    "light": "Clair",
+    "lightDesc": "Pour environnements très lumineux",
+    "currency": "Devise"
+  },
+  "myDeliveries": {
+    "title": "Mes livraisons",
+    "empty": "Aucune livraison assignée pour le moment.",
+    "status": {
+      "pending": "En attente",
+      "assigned": "Assigné",
+      "in_progress": "En cours",
+      "delivered": "Livré",
+      "failed": "Échoué",
+      "cancelled": "Annulé"
+    },
+    "actions": {
+      "takeCharge": "Prendre en charge",
+      "deliver": "Livrer",
+      "fail": "Échouer"
+    },
+    "toast": {
+      "statusUpdated": "Statut mis à jour",
+      "updateError": "Erreur lors de la mise à jour",
+      "gpsRequired": "Activez la localisation pour confirmer la livraison"
+    }
+  },
+  "myPosition": {
+    "title": "Ma position",
+    "noDriverProfile": "Aucun profil conducteur trouvé. Contactez votre administrateur.",
+    "geoNotSupported": "Géolocalisation non supportée par votre navigateur",
+    "selectDelivery": "Veuillez sélectionner une livraison",
+    "searchingPosition": "Recherche de la position...",
+    "positionAcquired": "Position acquise (précision: {accuracy}m)",
+    "gpsError": "Erreur GPS: {message}",
+    "sharingStopped": "Partage de position arrêté",
+    "awaitingData": "En attente de données...",
+    "sharingDisabled": "Partage de position désactivé",
+    "deliveryToTrack": "Livraison à suivre :",
+    "selectDefault": "-- Sélectionner --",
+    "startSharing": "Démarrer le partage",
+    "stopSharing": "Arrêter le partage",
+    "accuracy": "Précision: {accuracy}m",
+    "accuracyNA": "Précision: N/A",
+    "vehicleInfo": "🚛 {brand} {model} — {licensePlate}",
+    "poorAccuracy": "Précision insuffisante ({accuracy}m) - en attente d'un meilleur signal",
+    "poorAccuracyWarning": "Précision GPS insuffisante (>50m) - point non envoyé en attendant un meilleur signal",
+    "offlineQueue": "📡 {count} position(s) en attente (hors-ligne)"
+  },
+  "myVehicle": {
+    "title": "Mon véhicule",
+    "noDriverProfile": "Aucun profil conducteur trouvé.",
+    "noVehicle": "Aucun véhicule assigné.",
+    "contactAdmin": "Contactez votre administrateur pour obtenir une affectation.",
+    "fields": {
+      "brand": "Marque",
+      "model": "Modèle",
+      "year": "Année",
+      "licensePlate": "Immatriculation",
+      "fuelType": "Carburant"
+    }
+  },
+  "myOrders": {
+    "title": "Mes commandes",
+    "empty": "Aucune commande trouvée.",
+    "filterAll": "Tous les statuts",
+    "status": {
+      "pending": "En attente",
+      "assigned": "Assignée",
+      "in_progress": "En cours",
+      "delivered": "Livrée",
+      "failed": "Échouée",
+      "cancelled": "Annulée"
+    },
+    "deliveryAddress": "📦 {address}",
+    "driver": "👤 Livreur : {firstName} {lastName}",
+    "trackLink": "Cliquez pour suivre en temps réel →"
+  },
+  "clientTracking": {
+    "title": "Suivi livraison",
+    "noActiveOrders": "Aucune commande active.",
+    "noInProgress": "Aucune commande en cours de livraison.",
+    "loadError": "Impossible de charger les données de suivi",
+    "status": {
+      "in_progress": "En cours",
+      "assigned": "Assignée"
+    },
+    "deliveryAddress": "📦 {address}",
+    "driver": "👤 Livreur : {firstName} {lastName}",
+    "vehicle": "🚛 {brand} {model} ({licensePlate})",
+    "speed": "⚡ Vitesse : {speed} km/h",
+    "currentPosition": "Position actuelle",
+    "pickup": "Enlèvement : {address}",
+    "dropoff": "Livraison : {address}"
+  },
+  "billing": {
+    "plans": {
+      "title": "Plans & Abonnement",
+      "subtitle": "Choisissez le forfait adapté à votre activité",
+      "invoices": "Factures",
+      "currentPlan": "Abonnement actuel",
+      "free": "Gratuit",
+      "active": "Actif",
+      "pastDue": "En retard",
+      "canceled": "Résilié",
+      "unpaid": "Impayé",
+      "nextBilling": "Prochaine échéance : {date}",
+      "cancel": "Résilier",
+      "perYear": "/an",
+      "perMonth": "/mois",
+      "features": {
+        "maxVehicles": "Jusqu'à {maxVehicles} véhicules",
+        "maxDeliveries": "{maxDeliveriesPerMonth} livraisons/mois",
+        "maxUsers": "Jusqu'à {maxUsers} utilisateurs"
+      },
+      "current": "Actuel",
+      "chooseStarter": "Choisir Starter",
+      "upgradePro": "Passer à Pro",
+      "contact": "Contacter",
+      "subscribe": "Souscrire",
+      "paymentDialogTitle": "Choisir un moyen de paiement",
+      "paymentDialogSubtitle": "Abonnement {planName}",
+      "confirm": "Confirmer",
+      "creditCard": "Carte bancaire (Stripe)",
+      "creditCardDesc": "Visa, Mastercard, American Express",
+      "mvola": "Mobile Money (MVola)",
+      "mvolaDesc": "Paiement via MVola",
+      "orangeMoney": "Orange Money",
+      "orangeMoneyDesc": "Paiement via Orange Money",
+      "toast": {
+        "paymentSent": "Demande de paiement envoyée — {reference}",
+        "subscriptionUpdated": "Abonnement mis à jour",
+        "subscriptionError": "Erreur lors de la souscription",
+        "subscriptionCanceled": "Abonnement résilié"
+      }
+    },
+    "invoices": {
+      "title": "Facturation",
+      "subtitle": "Historique de vos factures",
+      "deliveries": "Livraisons",
+      "vehicles": "Véhicules",
+      "users": "Utilisateurs",
+      "table": {
+        "invoice": "Facture",
+        "date": "Date",
+        "amount": "Montant",
+        "status": "Statut"
+      },
+      "status": {
+        "draft": "Brouillon",
+        "open": "Envoyée",
+        "paid": "Payée",
+        "uncollectible": "Irrecouvrable",
+        "void": "Annulée"
+      },
+      "empty": "Aucune facture pour le moment",
+      "emptyDesc": "Les factures apparaîtront après votre premier paiement",
+      "download": "Télécharger la facture"
+    },
+    "success": {
+      "loading": "Confirmation en cours...",
+      "successTitle": "Paiement réussi !",
+      "successMessage": "Votre abonnement a été activé. Vous pouvez dès à présent utiliser toutes les fonctionnalités de votre forfait.",
+      "viewSubscription": "Voir mon abonnement",
+      "manageDeliveries": "Gérer mes livraisons",
+      "errorTitle": "Une erreur est survenue",
+      "errorMessage": "Si le paiement a été débité, contactez le support. Vous pouvez vérifier l'état de votre abonnement depuis la page facturation.",
+      "viewBilling": "Voir la facturation"
+    }
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "kpis": {
+      "deliveriesToday": "Livraisons ajd",
+      "totalDeliveries": "Total livraisons",
+      "activeVehicles": "Véhicules actifs",
+      "activeDrivers": "Chauffeurs actifs",
+      "anomalies": "Anomalies",
+      "avgConsumption": "Consom. moy."
+    },
+    "charts": {
+      "deliveryStatus": "Statut des livraisons",
+      "consumption": "Consommation (L/100km)"
+    },
+    "recentDeliveries": "Dernières livraisons",
+    "noDeliveriesToday": "Aucune livraison aujourd'hui",
+    "reliabilityScore": "Fiabilité opérationnelle",
+    "vsPreviousMonth": "vs mois préc.",
+    "perfectMonth": "100% de livraisons à l'heure en {month}",
+    "error": "Impossible de charger les données du tableau de bord",
+    "status": {
+      "pending": "En attente",
+      "assigned": "Assignée",
+      "in_progress": "En cours",
+      "delivered": "Livrée",
+      "failed": "Échouée",
+      "cancelled": "Annulée"
+    }
+  },
+  "admin": {
+    "login": {
+      "title": "Administration",
+      "subtitle": "Espace super-administrateur",
+      "email": "Email",
+      "password": "Mot de passe",
+      "emailPlaceholder": "admin@deliverytrack.app",
+      "passwordPlaceholder": "••••••••",
+      "submit": "Se connecter",
+      "error": "Erreur de connexion",
+      "twoFactor": {
+        "title": "Vérification deux facteurs",
+        "setupTitle": "Configuration 2FA obligatoire",
+        "setupDesc": "L'authentification à deux facteurs est obligatoire. Scannez le QR code avec Google Authenticator ou Authy.",
+        "codeLabel": "Code de vérification",
+        "codePlaceholder": "000000",
+        "enableAndContinue": "Activer et continuer",
+        "verifyTitle": "Code 2FA",
+        "verifyPlaceholder": "000000",
+        "verify": "Vérifier",
+        "invalidCode": "Code 2FA invalide",
+        "setupError": "Code 2FA invalide. Vérifiez votre application d'authentification."
+      }
+    },
+    "dashboard": {
+      "title": "Super Admin",
+      "subtitle": "Pilotage de la plateforme",
+      "tabs": {
+        "overview": "Vue d'ensemble",
+        "tenants": "Tenants",
+        "audit": "Audit",
+        "admins": "Admins",
+        "logout": "Quitter"
+      },
+      "stats": {
+        "mrr": "MRR",
+        "mrrSub": "Revenu mensuel récurrent",
+        "monthlyRevenue": "Revenu du mois",
+        "paidInvoicesSub": "Factures payées",
+        "activeTenants": "Tenants actifs",
+        "newTenantsSub": "{count} nouveaux ce mois",
+        "deliveries": "Livraisons",
+        "thisMonth": "Ce mois",
+        "activeSubscriptions": "Abonnements actifs",
+        "attritionRate": "Taux d'attrition"
+      },
+      "charts": {
+        "tenantGrowth": "Croissance des tenants",
+        "monthlyDeliveries": "Livraisons mensuelles"
+      },
+      "topCompanies": "Top entreprises",
+      "companyTable": {
+        "company": "Entreprise",
+        "plan": "Plan",
+        "users": "Utilisateurs",
+        "vehicles": "Véhicules",
+        "deliveries": "Livraisons",
+        "freeTier": "Gratuit"
+      },
+      "impersonation": "Mode impersonation — connecté en tant que {name} ({email})",
+      "impersonationLeave": "Quitter",
+      "tenantsTab": {
+        "title": "Tenants ({count})",
+        "search": "Rechercher...",
+        "contact": "Contact",
+        "plan": "Plan",
+        "users": "U",
+        "vehicles": "V",
+        "deliveries": "D",
+        "createdDate": "Créé le",
+        "actions": "Actions",
+        "freeTier": "Gratuit",
+        "impersonate": "Se connecter en tant qu'admin",
+        "toggle": "Activer/Désactiver"
+      },
+      "auditTab": {
+        "title": "Journal d'audit ({count})",
+        "admin": "Admin",
+        "action": "Action",
+        "target": "Cible",
+        "ip": "IP",
+        "date": "Date"
+      },
+      "auditActions": {
+        "login": "Connexion",
+        "login2faRequired": "2FA requis",
+        "loginSuccess": "2FA OK",
+        "impersonate": "Impersonation",
+        "tenantToggle": "Toggle tenant",
+        "logout": "Déconnexion"
+      },
+      "adminsTab": {
+        "title": "Super administrateurs ({count})",
+        "add": "Ajouter",
+        "name": "Nom",
+        "email": "Email",
+        "tfa": "2FA",
+        "active": "Actif",
+        "createdDate": "Créé le",
+        "tfaEnabled": "Activé",
+        "tfaDisabled": "Désactivé",
+        "isActiveYes": "Oui",
+        "isActiveNo": "Non"
+      },
+      "createAdmin": {
+        "title": "Nouvel administrateur",
+        "firstName": "Prénom",
+        "lastName": "Nom",
+        "email": "Email",
+        "password": "Mot de passe",
+        "cancel": "Annuler",
+        "create": "Créer"
+      }
+    }
+  },
+  "components": {
+    "dataTable": {
+      "loading": "Chargement...",
+      "emptyData": "Aucune donnée.",
+      "editAria": "Modifier",
+      "deleteAria": "Supprimer"
+    },
+    "entityDialog": {
+      "closeAria": "Fermer"
+    },
+    "confirmDialog": {
+      "defaultConfirm": "Confirmer",
+      "defaultCancel": "Annuler"
+    },
+    "comingSoon": {
+      "title": "{pageName} à venir",
+      "fallbackTitle": "Fonctionnalité à venir",
+      "description": "Cette page sera disponible prochainement."
+    },
+    "errorBoundary": {
+      "title": "Erreur"
+    },
+    "notificationBell": {
+      "title": "Notifications",
+      "markAllRead": "Tout marquer lu",
+      "empty": "Aucune notification",
+      "unreadCount": "{{unreadCount}} non lues"
+    },
+    "quotaBanner": {
+      "deliveryUsage": "{used}/{limit} livraisons",
+      "vehicleUsage": "{used}/{limit} véhicules",
+      "userUsage": "{used}/{limit} utilisateurs",
+      "upgrade": "Passer à un forfait supérieur"
+    },
+    "cookieConsent": {
+      "message": "Nous utilisons des cookies essentiels au fonctionnement du service et, sous réserve de votre consentement, des cookies d'analyse pour améliorer notre plateforme. Consultez notre {privacyLink} et notre {cookiesLink}.",
+      "privacyLink": "politique de confidentialité",
+      "cookiesLink": "politique de cookies",
+      "refuse": "Refuser les non-essentiels",
+      "accept": "Accepter tous les cookies",
+      "ariaLabel": "Consentement cookies"
+    },
+    "protectedRoute": {
+      "loading": "Chargement..."
+    }
+  },
+  "errors": {
+    "404": {
+      "title": "404",
+      "heading": "Page introuvable",
+      "message": "La page que vous cherchez n'existe pas.",
+      "backToDashboard": "Retour au Dashboard"
+    },
+    "403": {
+      "icon": "🚫",
+      "heading": "Accès refusé",
+      "message": "Vous n'avez pas les droits nécessaires pour accéder à cette page.",
+      "backToDashboard": "Retour au Dashboard"
+    }
+  },
+  "onboarding": {
+    "welcome": "Bienvenue sur LogiTrack",
+    "completed": "Configuration terminée",
+    "progress": "{done}/{total} étapes",
+    "steps": {
+      "addVehicle": "Ajouter un véhicule",
+      "inviteDriver": "Inviter un chauffeur",
+      "createDelivery": "Créer une première livraison",
+      "configureNotifications": "Configurer les notifications"
+    },
+    "expand": "Développer",
+    "collapse": "Réduire",
+    "close": "Fermer"
+  },
+  "cgu": {
+    "title": "Conditions Générales d'Utilisation",
+    "backToRegister": "Retour à l'inscription",
+    "lastUpdated": "Dernière mise à jour : {date}",
+    "privacyPolicy": "Politique de Confidentialité",
+    "section1": { "title": "1. Objet des CGU" },
+    "section2": { "title": "2. Définitions" },
+    "section3": { "title": "3. Création et gestion du compte" },
+    "section4": { "title": "4. Services fournis" },
+    "section5": { "title": "5. Obligations de l'utilisateur" },
+    "section6": { "title": "6. Protection des données personnelles" },
+    "section7": { "title": "7. Propriété intellectuelle" },
+    "section8": { "title": "8. Responsabilité" },
+    "section9": { "title": "9. Tarifs et facturation" },
+    "section10": { "title": "10. Résiliation" },
+    "section11": { "title": "11. Droit applicable" },
+    "section12": { "title": "12. Contact" }
+  },
+  "privacy": {
+    "title": "Politique de confidentialité",
+    "lastUpdated": "Dernière mise à jour : {date}",
+    "cookies": "Politique de cookies",
+    "cookiesDesc": "Consultez notre",
+    "cookiesLink": "pour plus d'informations sur les cookies utilisés et comment les gérer.",
+    "section1": { "title": "1. Responsable de traitement" },
+    "section2": {
+      "title": "2. Données collectées",
+      "sub1": "2.1 Données fournies directement",
+      "sub2": "2.2 Données collectées automatiquement"
+    },
+    "section3": { "title": "3. Base légale du traitement" },
+    "section4": { "title": "4. Destinataires des données" },
+    "section5": { "title": "5. Transferts hors UE" },
+    "section6": { "title": "6. Durée de conservation" },
+    "section7": { "title": "7. Vos droits RGPD" },
+    "section8": { "title": "8. Sécurité" },
+    "section9": { "title": "9. Cookies" },
+    "section10": { "title": "10. Réclamations" },
+    "section11": { "title": "11. Contact" }
+  },
+  "form": {
+    "validation": {
+      "required": "Ce champ est obligatoire",
+      "minLength": "Minimum {minLength} caractères",
+      "maxLength": "Maximum {maxLength} caractères",
+      "invalidFormat": "Format invalide",
+      "invalidEmail": "Email invalide",
+      "invalidPhone": "Le téléphone doit commencer par 0 et faire 10 chiffres"
+    }
+  },
+  "visualPanel": {
+    "tagline": "Suivi en temps réel",
+    "title": "La plateforme qui connecte vos livraisons",
+    "subtitle": "Pilotez votre flotte, suivez chaque colis et simplifiez la coordination entre livreurs et clients.",
+    "deliveriesToday": "Livraisons aujourd'hui",
+    "target": "Objectif: 100",
+    "percentReached": "78% atteint",
+    "socialProof": "Utilisé par des entreprises de logistique à Madagascar",
+    "kpiLabel": "Livraisons aujourd'hui",
+    "kpiGoal": "Objectif : 100",
+    "kpiAchieved": "78% atteint",
+    "uptime": "99.9% disponibilité"
+  },
+  "mapPage": {
+    "currentPosition": "Position actuelle",
+    "speed": "Vitesse : {speed} km/h",
+    "pickup": "Enlèvement : {address}",
+    "dropoff": "Livraison : {address}"
+  },
+  "myDeliveriesMap": {
+    "pickup": "📍",
+    "dropoff": "🏁",
+    "vehicle": "🚛"
+  },
+  "activeDelivery": {
+    "pickup": "📍",
+    "dropoff": "🏁"
+  },
+  "dateFormats": {
+    "short": "dd/MM/yyyy",
+    "medium": "d MMM yyyy",
+    "long": "d MMMM yyyy",
+    "shortDateTime": "dd/MM/yyyy HH:mm",
+    "relative": {
+      "today": "Aujourd'hui",
+      "yesterday": "Hier",
+      "thisWeek": "Cette semaine"
+    }
+  },
+  "alerts": {
+    "title": "Alertes",
+    "unresolvedCount": "{{count}} non résolue",
+    "unresolvedCount_plural": "{{count}} non résolues",
+    "liveNew": "🔴 {{count}} nouvelle en direct",
+    "liveNew_plural": "🔴 {{count}} nouvelles en direct",
+    "filters": {
+      "periodToday": "Aujourd'hui",
+      "period7d": "7 jours",
+      "period30d": "30 jours",
+      "periodAll": "Tout",
+      "typeLabel": "Type",
+      "priorityLabel": "Gravité",
+      "all": "Toutes",
+      "unresolved": "Non résolues",
+      "resolved": "Résolues"
+    },
+    "kpiUnresolved": "Non résolues",
+    "emptyTitle": "Aucune alerte trouvée",
+    "emptyDesc": "Ajustez les filtres ou changez la période",
+    "priority": {
+      "critical": "Critique",
+      "high": "Haute",
+      "medium": "Moyenne",
+      "low": "Basse"
+    },
+    "type": {
+      "speed_alert": "Excès de vitesse",
+      "prolonged_stop": "Arrêt prolongé",
+      "delay_alert": "Retard estimé",
+      "device_offline": "Appareil hors ligne",
+      "geofence_event": "Zone géographique",
+      "delivery_status": "Statut livraison",
+      "location_mismatch": "Écart de position",
+      "fuel_anomaly": "Anomalie carburant",
+      "maintenance_due": "Maintenance",
+      "system": "Système"
+    },
+    "detail": {
+      "resolved": "Résolue",
+      "active": "Active",
+      "message": "Message",
+      "delivery": "Livraison concernée",
+      "driver": "Chauffeur",
+      "date": "Date",
+      "link": "Lien direct",
+      "viewDetail": "🔗 Voir le détail →",
+      "resolution": "Résolution",
+      "resolvedBy": "Résolue par {firstName} {lastName} le {date}",
+      "markResolved": "Marquer comme résolue",
+      "commentPlaceholder": "Commentaire (optionnel)...",
+      "confirmResolve": "Confirmer la résolution",
+      "resolving": "En cours..."
+    },
+    "toast": {
+      "resolved": "Alerte marquée comme résolue",
+      "error": "Erreur"
+    },
+    "pagination": {
+      "previous": "← Précédent",
+      "next": "Suivant →",
+      "page": "Page {page}"
+    },
+    "resolveButton": "✓ Résoudre"
+  },
+  "settingsSecurity": {
+    "passwordTitle": "Mot de passe",
+    "passwordSubtitle": "Modifiez votre mot de passe de connexion",
+    "currentPassword": "Mot de passe actuel",
+    "currentPasswordPlaceholder": "Votre mot de passe actuel",
+    "newPassword": "Nouveau mot de passe",
+    "newPasswordPlaceholder": "8 caractères min, majuscule, minuscule, chiffre, spécial",
+    "confirmPassword": "Confirmer le nouveau mot de passe",
+    "confirmPasswordPlaceholder": "Ressaisissez le nouveau mot de passe",
+    "showPassword": "Afficher les mots de passe",
+    "changePassword": "Changer le mot de passe",
+    "passwordStrength": {
+      "veryWeak": "Très faible",
+      "weak": "Faible",
+      "medium": "Moyen",
+      "strong": "Fort"
+    },
+    "twoFactorTitle": "Authentification à deux facteurs (2FA)",
+    "twoFactorSubtitle": "Sécurisez votre compte avec une application d'authentification",
+    "twoFactorEnabled": "2FA activée",
+    "twoFactorDisabled": "2FA désactivée",
+    "twoFactorEnabledDesc": "Un code à 6 chiffres vous est demandé à chaque connexion",
+    "twoFactorDisabledDesc": "Ajoutez une couche de sécurité supplémentaire",
+    "twoFactorEnable": "Activer",
+    "twoFactorDisable": "Désactiver",
+    "twoFactorSetupStep1": "1. Scannez ce QR code avec Google Authenticator, Authy ou une application compatible",
+    "twoFactorSetupStep2": "2. Saisissez le code à 6 chiffres généré par l'application pour confirmer",
+    "twoFactorCodePlaceholder": "000000",
+    "twoFactorConfirm": "Confirmer",
+    "twoFactorCancel": "Annuler",
+    "twoFactorDisableConfirm": "Saisissez un code 2FA de votre application d'authentification pour confirmer la désactivation",
+    "toastTwoFactorEnabled": "Authentification à deux facteurs activée",
+    "toastTwoFactorDisabled": "Authentification à deux facteurs désactivée",
+    "toastTwoFactorCodeRequired": "Code à 6 chiffres requis",
+    "sessionTitle": "Sessions actives",
+    "sessionSubtitle": "Appareils connectés à votre compte",
+    "sessionEmpty": "Aucune session active",
+    "sessionUnknownDevice": "Appareil inconnu",
+    "sessionCurrent": "— Cette session",
+    "sessionLastActivity": "Dernière activité : {date}",
+    "sessionIpLabel": "IP: {ip}",
+    "sessionRevoke": "Révoquer",
+    "sessionRevokeAll": "Déconnecter les autres appareils",
+    "toastSessionRevoked": "Session révoquée",
+    "toastSessionRevokeAll": "Toutes les autres sessions ont été révoquées"
+  },
+  "settingsNotifications": {
+    "title": "Notifications",
+    "subtitle": "Choisissez les notifications que vous souhaitez recevoir",
+    "inAppSection": "Notifications In-App",
+    "emailSection": "Notifications Email",
+    "preferences": {
+      "deliveryStatus": "Changement de statut de livraison",
+      "fuelAnomaly": "Anomalie carburant",
+      "deliveryDelayed": "Livraison en retard",
+      "maintenanceDue": "Maintenance due",
+      "system": "Système"
+    },
+    "toastUpdated": "Préférence mise à jour",
+    "toastError": "Erreur lors de la mise à jour"
+  },
+  "settingsProfile": {
+    "saveButton": "Enregistrer",
+    "toastUpdated": "Profil mis à jour",
+    "toastError": "Erreur",
+    "toastNameRequired": "Prénom et nom requis"
+  },
+  "settingsPassword": {
+    "toastChanged": "Mot de passe modifié avec succès",
+    "toastError": "Erreur",
+    "toastCurrentRequired": "Mot de passe actuel requis",
+    "toastMinLength": "Le nouveau mot de passe doit faire au moins 8 caractères",
+    "toastMismatch": "Les mots de passe ne correspondent pas",
+    "toastCodeRequired": "Code à 6 chiffres requis",
+    "toastInvalidCode": "Code invalide"
+  },
+  "deliveryDetail": {
+    "loading": "Chargement...",
+    "notFound": "Livraison introuvable",
+    "backToList": "Retour à la liste",
+    "backToDeliveries": "Retour aux livraisons",
+    "infoPickup": "Point d'enlèvement",
+    "infoDelivery": "Point de livraison",
+    "infoDriver": "Chauffeur",
+    "infoVehicle": "Véhicule",
+    "infoScheduledDate": "Date planifiée",
+    "infoCreatedDate": "Créée le",
+    "statusPending": "En attente",
+    "statusAssigned": "Assigné",
+    "statusInProgress": "En cours",
+    "statusDelivered": "Livré",
+    "statusFailed": "Échoué",
+    "statusCancelled": "Annulé"
+  },
+  "myDeliveriesMap": {
+    "pickup": "📍",
+    "dropoff": "🏁",
+    "vehicle": "🚛"
+  },
+  "activeDelivery": {
+    "pickup": "📍",
+    "dropoff": "🏁"
+  },
+  "navigation": {
+    "calculating": "Calcul de l'itinéraire…",
+    "recalculating": "Recalcul de l'itinéraire…",
+    "via": "via {street}",
+    "arrived": "Vous êtes arrivé",
+    "arrivedAtDestination": "Vous êtes arrivé à destination",
+    "arrivedLabel": "📍",
+    "finishNavigation": "Terminer la navigation",
+    "exitNavigation": "✕ Quitter",
+    "muteTooltip": "Couper le guidage vocal",
+    "unmuteTooltip": "Activer le guidage vocal",
+    "networkOffline": "Réseau indisponible — l'itinéraire affiché peut ne plus être à jour",
+    "deviationDetected": "⚠️ Déviation — nouveau calcul en cours",
+    "deviationBanner": "Nouvel itinéraire calculé — déviation détectée",
+    "dataSaverOn": "📶 Éco",
+    "dataSaverOff": "📶 Std",
+    "dataSaverTooltipOn": "Économie de données activée",
+    "dataSaverTooltipOff": "Activer l'économie de données"
+  },
+  "myPosition": {
+    "destination": "Destination",
+    "searchPlaceholder": "Rechercher une destination…",
+    "historyToggleShow": "🕐 Voir l'historique ({count})",
+    "historyToggleHide": "🕐 Masquer l'historique ({count})",
+    "routeCalculated": "🛣️ Itinéraire calculé",
+    "routeTime": "Temps",
+    "routeDistance": "Distance",
+    "routeAverage": "Moyenne",
+    "routeAlternatives": "Itinéraires alternatifs",
+    "routeOption": "Option {number}",
+    "routeFaster": "✓ Plus rapide",
+    "routeCalcLoading": "Calcul de l'itinéraire…",
+    "noVehicleAssigned": "Aucun véhicule assigné",
+    "startNavigation": "🧭 Lancer la navigation",
+    "dataSaverActive": "📶 Éco activé",
+    "dataSaverInactive": "Mode éco",
+    "dataSaverTooltip": "Économise les données en réduisant la fréquence GPS et les recalculs",
+    "arrivedAtDestination": "📍 Arrivé à destination",
+    "moderateAccuracy": "Précision modérée ({accuracy}m)",
+    "veryPoorAccuracy": "Très faible précision ({accuracy}m)",
+    "distanceAsCrowFlies": "{label} — {distance} km (vol d'oiseau)",
+    "pickupPopup": "📦 Point d'enlèvement : {address}",
+    "speedValue": "{speed} km/h",
+    "confidenceValue": "conf: {confidence}%",
+    "etaLabel": "ETA: {eta}"
+  },
+  "notificationBell": {
+    "deleteAllTitle": "Tout effacer",
+    "deleteAll": "Effacer",
+    "markAllRead": "Tout lu",
+    "deleteTitle": "Supprimer"
+  }
+}

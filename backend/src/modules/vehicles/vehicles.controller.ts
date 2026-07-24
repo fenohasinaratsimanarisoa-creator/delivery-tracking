@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -6,6 +16,7 @@ import { VehicleFilterDto } from './dto/vehicle-filter.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { UsageGuard } from '../../common/guards/usage.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -14,18 +25,29 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class VehiclesController {
   constructor(private readonly vehiclesService: VehiclesService) {}
 
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, UsageGuard)
   @Roles('admin', 'dispatcher')
   @Post()
   create(@CurrentUser('companyId') companyId: string, @Body() dto: CreateVehicleDto) {
     return this.vehiclesService.create(companyId, dto);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
   @Get()
   findAll(@CurrentUser('companyId') companyId: string, @Query() filter: VehicleFilterDto) {
     return this.vehiclesService.findAll(companyId, filter);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
+  @Get('list')
+  findAllSimple(@CurrentUser('companyId') companyId: string) {
+    return this.vehiclesService.findAllSimple(companyId);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
   @Get(':id')
   findOne(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
     return this.vehiclesService.findOne(companyId, id);
@@ -34,7 +56,11 @@ export class VehiclesController {
   @UseGuards(RolesGuard)
   @Roles('admin', 'dispatcher')
   @Patch(':id')
-  update(@CurrentUser('companyId') companyId: string, @Param('id') id: string, @Body() dto: UpdateVehicleDto) {
+  update(
+    @CurrentUser('companyId') companyId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateVehicleDto,
+  ) {
     return this.vehiclesService.update(companyId, id, dto);
   }
 

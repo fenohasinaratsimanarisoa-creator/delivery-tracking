@@ -1,0 +1,1158 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "search": "Search",
+    "noData": "No data.",
+    "error": "Error",
+    "close": "Close",
+    "back": "Back",
+    "actions": "Actions",
+    "edit": "Edit",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "show": "Show",
+    "hide": "Hide",
+    "yes": "Yes",
+    "no": "No",
+    "or": "OR",
+    "comingSoon": "— coming soon",
+    "saving": "Saving...",
+    "processing": "Processing...",
+    "saveError": "Error saving data"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "deliveries": "Deliveries",
+    "fleet": "Fleet",
+    "drivers": "Drivers",
+    "map": "Live Map",
+    "fuel": "Fuel",
+    "reports": "Reports",
+    "users": "Users",
+    "settings": "Settings",
+    "billing": "Billing",
+    "myDeliveries": "My Deliveries",
+    "myPosition": "My Position",
+    "myVehicle": "My Vehicle",
+    "myOrders": "My Orders",
+    "tracking": "Tracking",
+    "alerts": "Alerts",
+    "logout": "Logout",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "closeMenu": "Close menu",
+    "openMenu": "Open menu"
+  },
+  "auth": {
+    "callback": {
+      "googleRefused": "You refused Google sign-in. Please try again or use another method.",
+      "emailNotVerified": "Your Google email is not verified. Please verify your email before signing in.",
+      "accountNotFound": "This email does not match any account. Please create an account first.",
+      "googleAuthFailed": "Google sign-in failed. Please try again or use another method.",
+      "invalidParams": "Invalid sign-in parameters.",
+      "finalizeError": "Unable to complete sign-in. Please try again.",
+      "connecting": "Connecting...",
+      "loginSuccess": "Sign-in successful — redirecting...",
+      "backToLogin": "Back to sign in"
+    },
+    "login": {
+      "title": "Sign in",
+      "email": "Email address",
+      "password": "Password",
+      "rememberMe": "Remember me",
+      "forgotPassword": "Forgot password?",
+      "submit": "Sign in",
+      "submitting": "Signing in...",
+      "noAccount": "Don't have an account?",
+      "createAccount": "Create an account",
+      "secureConnection": "Secure connection — end-to-end encryption",
+      "invalidEmail": "Invalid email format",
+      "passwordRequired": "Password is required",
+      "welcomeBack": "Welcome back",
+      "welcome": "Welcome",
+      "enterPassword": "Enter your password to sign in",
+      "loginPrompt": "Sign in to access your workspace",
+      "googleLogin": "Sign in with Google",
+      "error401": "These credentials don't match any account. Check your email and password.",
+      "error429": "Too many attempts. Please try again in a few moments.",
+      "errorGeneric": "Something went wrong. Please try again.",
+      "brand": "DeliveryTrack",
+      "secure": "Secure platform",
+      "uptime": "99.9% uptime"
+    },
+    "register": {
+      "title": "Create an account",
+      "subtitle": "Set up your company workspace in seconds.",
+      "companyName": "Company name",
+      "email": "Work email",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "password": "Password",
+      "confirmPassword": "Confirm password",
+      "passwordMismatch": "Passwords do not match.",
+      "acceptCgu": "I accept the Terms of Service",
+      "submit": "Create my account",
+      "submitting": "Creating account...",
+      "googleLogin": "Sign in with Google",
+      "haveAccount": "Already have an account?",
+      "login": "Sign in",
+      "error429": "Too many attempts. Please try again in a few moments.",
+      "error409": "An account with this email already exists.",
+      "errorGeneric": "An error occurred. Please try again.",
+      "passwordRules": {
+        "minLength": "At least 12 characters",
+        "uppercase": "One uppercase letter",
+        "lowercase": "One lowercase letter",
+        "digit": "One digit",
+        "special": "One special character"
+      }
+    },
+    "forgotPassword": {
+      "title": "Forgot password",
+      "description": "Enter your email address. If an account exists, we'll send you a link to reset your password.",
+      "email": "Email address",
+      "submit": "Send reset link",
+      "sending": "Sending...",
+      "success": "If an account exists with this email, you'll receive a reset link in a few minutes. Please check your spam folder.",
+      "backToLogin": "Back to login",
+      "errorGeneric": "An error occurred. Please try again."
+    },
+    "resetPassword": {
+      "title": "New password",
+      "subtitle": "Choose a strong password to secure your account.",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm password",
+      "passwordMismatch": "Passwords do not match.",
+      "submit": "Reset password",
+      "submitting": "Resetting...",
+      "successTitle": "Password reset",
+      "successMessage": "Your password has been changed successfully. You can now sign in.",
+      "login": "Sign in",
+      "errorInvalid": "The reset link is invalid or has expired.",
+      "errorNoToken": "Invalid link. Please request a new reset link.",
+      "requestNewLink": "Request a new link",
+      "passwordRules": {
+        "minLength": "At least 12 characters",
+        "uppercase": "One uppercase letter",
+        "lowercase": "One lowercase letter",
+        "digit": "One digit",
+        "special": "One special character"
+      }
+    }
+  },
+  "deliveries": {
+    "title": "Deliveries",
+    "subtitle": "Manage your fleet deliveries",
+    "newDelivery": "New delivery",
+    "searchPlaceholder": "Search deliveries…",
+    "editDelivery": "Save",
+    "createDelivery": "Create delivery",
+    "drawerSubtitle": "Create a delivery and assign it to a driver",
+    "formSections": {
+      "general": "General Information",
+      "addresses": "Addresses",
+      "gps": "GPS Coordinates"
+    },
+    "fields": {
+      "title": "Title",
+      "status": "Status",
+      "pickupAddress": "Pickup address",
+      "deliveryAddress": "Delivery address",
+      "pickupLat": "Latitude (pickup)",
+      "pickupLng": "Longitude (pickup)",
+      "deliveryLat": "Latitude (delivery)",
+      "deliveryLng": "Longitude (delivery)",
+      "pickupLocation": "Pickup position",
+      "deliveryLocation": "Delivery position"
+    },
+    "status": {
+      "pending": "Pending",
+      "assigned": "Assigned",
+      "in_progress": "In Progress",
+      "delivered": "Delivered",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "table": {
+      "title": "Title",
+      "status": "Status",
+      "deliveryAddress": "Delivery address",
+      "driver": "Driver",
+      "unassigned": "Unassigned",
+      "date": "Date"
+    },
+    "empty": {
+      "noMatch": "No deliveries match your search",
+      "noData": "No deliveries registered",
+      "tryDifferent": "Try a different search term",
+      "createFirst": "Create your first delivery"
+    },
+    "toast": {
+      "updated": "Delivery updated",
+      "created": "Delivery created",
+      "saveError": "Error saving delivery",
+      "deleted": "Delivery deleted",
+      "deleteError": "Error deleting delivery"
+    },
+    "confirmDelete": {
+      "title": "Delete delivery",
+      "message": "Delete \"{title}\"? This action cannot be undone."
+    },
+    "count": "{{count}} delivery",
+    "count_plural": "{{count}} deliveries",
+    "validation": {
+      "validNumber": "Must be a valid number"
+    }
+  },
+  "fleet": {
+    "title": "Fleet",
+    "subtitle": "Manage your vehicles",
+    "newVehicle": "New vehicle",
+    "searchPlaceholder": "Search vehicles…",
+    "drawerSubtitle": "Add a vehicle to your fleet",
+    "editVehicle": "Save",
+    "createVehicle": "Create vehicle",
+    "formSections": {
+      "identity": "Vehicle Identity",
+      "registration": "Registration",
+      "features": "Features"
+    },
+    "fields": {
+      "brand": "Brand",
+      "model": "Model",
+      "year": "Year",
+      "licensePlate": "License plate",
+      "vin": "VIN number",
+      "fuelType": "Fuel type",
+      "theoreticalConsumption": "Theoretical consumption (L/100km)"
+    },
+    "fuelTypes": {
+      "gasoline": "Gasoline",
+      "diesel": "Diesel",
+      "electric": "Electric",
+      "hybrid": "Hybrid Gasoline",
+      "hybridDiesel": "Hybrid Diesel",
+      "lpg": "LPG"
+    },
+    "table": {
+      "brand": "Brand",
+      "model": "Model",
+      "year": "Year",
+      "licensePlate": "Plate",
+      "fuelType": "Fuel",
+      "status": "Status"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "activate": "Activate",
+      "deactivate": "Deactivate"
+    },
+    "empty": {
+      "noMatch": "No vehicles match your search",
+      "noData": "No vehicles registered",
+      "tryDifferent": "Try a different search term",
+      "createFirst": "Add the first vehicle to your fleet"
+    },
+    "toast": {
+      "updated": "Vehicle updated",
+      "created": "Vehicle created",
+      "deleted": "Vehicle deleted",
+      "deleteError": "Error deleting vehicle"
+    },
+    "confirmDelete": {
+      "title": "Delete vehicle",
+      "message": "Delete {brand} {model} ({licensePlate}, {year})? This action is irreversible and will remove the vehicle from active history."
+    },
+    "count": "{{count}} vehicle in your fleet",
+    "count_plural": "{{count}} vehicles in your fleet",
+    "validation": {
+      "invalidYear": "Invalid year (e.g. 2024)"
+    }
+  },
+  "drivers": {
+    "title": "Drivers",
+    "subtitle": "Manage your drivers",
+    "newDriver": "New driver",
+    "searchPlaceholder": "Search drivers…",
+    "drawerSubtitle": "Add a driver to your fleet",
+    "editDriver": "Edit {firstName} {lastName}",
+    "editDriverSubtitle": "License: {licenseNumber}",
+    "createDriver": "Create driver",
+    "formSections": {
+      "identity": "Identity",
+      "contact": "Contact",
+      "license": "Driving License"
+    },
+    "fields": {
+      "firstName": "First name",
+      "lastName": "Last name",
+      "email": "Work email",
+      "phone": "Phone",
+      "licenseNumber": "License number"
+    },
+    "table": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "license": "License",
+      "status": "Status"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "activate": "Activate",
+      "deactivate": "Deactivate"
+    },
+    "empty": {
+      "noMatch": "No drivers match your search",
+      "noData": "No drivers registered",
+      "tryDifferent": "Try a different search term",
+      "createFirst": "Add the first driver to your fleet",
+      "addDriver": "Add a driver"
+    },
+    "toast": {
+      "updated": "Driver updated",
+      "created": "Driver created",
+      "deleted": "Driver deleted",
+      "deleteError": "Error deleting driver"
+    },
+    "confirmDelete": {
+      "title": "Delete driver",
+      "message": "Delete {firstName} {lastName} (license {licenseNumber})? This action cannot be undone."
+    },
+    "resultCount": "{{count}} result",
+    "resultCount_plural": "{{count}} results",
+    "validation": {
+      "phoneFormat": "Phone number must start with 0 and be 10 digits"
+    }
+  },
+  "map": {
+    "searchPlaceholder": "Search vehicles, drivers, deliveries…",
+    "searchAria": "Search on map",
+    "filterAria": "Filter",
+    "layersAria": "Map layers",
+    "filters": {
+      "moving": "Moving",
+      "stopped": "Stopped",
+      "activeDeliveries": "Active deliveries",
+      "alerts": "Alerts"
+    },
+    "legend": {
+      "moving": "Moving",
+      "stopped": "Stopped",
+      "doubleClick": "Double-click to zoom"
+    }
+  },
+  "fuel": {
+    "title": "Fuel",
+    "error": "Error loading fuel data",
+    "empty": "No fuel records yet.",
+    "table": {
+      "vehicle": "Vehicle",
+      "liters": "Liters",
+      "km": "Km",
+      "consumption": "L/100km",
+      "cost": "Cost",
+      "date": "Date",
+      "anomaly": "Anomaly"
+    },
+    "anomaly": "⚠️ Anomaly",
+    "normal": "✓ Normal"
+  },
+  "reports": {
+    "title": "Reports"
+  },
+  "users": {
+    "title": "Users",
+    "subtitle": "Manage platform access",
+    "newUser": "New user",
+    "searchPlaceholder": "Search users…",
+    "drawerSubtitle": "Create an account for a team member",
+    "editUser": "Role: {role}",
+    "createUser": "Create user",
+    "formSections": {
+      "identity": "Identity",
+      "contact": "Contact",
+      "account": "Account"
+    },
+    "fields": {
+      "firstName": "First name",
+      "lastName": "Last name",
+      "email": "Email address",
+      "phone": "Phone",
+      "role": "Role",
+      "password": "Password"
+    },
+    "roles": {
+      "admin": "Administrator",
+      "dispatcher": "Dispatcher",
+      "driver": "Driver",
+      "client": "Client"
+    },
+    "rolesShort": {
+      "admin": "Admin",
+      "dispatcher": "Dispatcher",
+      "driver": "Driver",
+      "client": "Client"
+    },
+    "table": {
+      "name": "Name",
+      "email": "Email",
+      "role": "Role",
+      "status": "Status",
+      "registeredDate": "Registered on"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "activate": "Activate",
+      "deactivate": "Deactivate"
+    },
+    "empty": {
+      "noMatch": "No users match your search",
+      "noData": "No users registered",
+      "tryDifferent": "Try a different search term",
+      "inviteTeam": "Invite your team members"
+    },
+    "inviteUser": "Invite a user",
+    "toast": {
+      "updated": "User updated",
+      "created": "User created",
+      "deleted": "User deleted",
+      "deleteError": "Error deleting user",
+      "saveError": "Error saving user"
+    },
+    "confirmDelete": {
+      "title": "Delete user",
+      "message": "Delete {firstName} {lastName} ({email})? This action cannot be undone."
+    },
+    "passwordPlaceholder": "Leave blank to keep current",
+    "passwordHelp": "Leave blank to keep the current password",
+    "count": "{{count}} user",
+    "count_plural": "{{count}} users",
+    "validation": {
+      "phoneFormat": "Phone number must start with 0 and be 10 digits",
+      "passwordFormat": "Min 12 chars, one uppercase, one lowercase, one digit, one special char"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Manage your account and preferences",
+    "profile": "Profile",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "email": "Email",
+    "role": "Role",
+    "language": "Language",
+    "languageFr": "Français",
+    "languageEn": "English",
+    "security": "Security",
+    "securityDesc": "Manage your password and authentication",
+    "notifications": "Notifications",
+    "notificationsDesc": "Configure your notification preferences",
+    "appearance": "Appearance",
+    "appearanceDesc": "Choose the theme that fits your work environment.",
+    "dark": "Dark",
+    "darkDesc": "Control room mode — ideal for extended use",
+    "light": "Light",
+    "lightDesc": "For brightly lit environments",
+    "currency": "Currency"
+  },
+  "myDeliveries": {
+    "title": "My Deliveries",
+    "empty": "No deliveries assigned yet.",
+    "status": {
+      "pending": "Pending",
+      "assigned": "Assigned",
+      "in_progress": "In Progress",
+      "delivered": "Delivered",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "actions": {
+      "takeCharge": "Take charge",
+      "deliver": "Deliver",
+      "fail": "Fail"
+    },
+    "toast": {
+      "statusUpdated": "Status updated",
+      "updateError": "Error updating status",
+      "gpsRequired": "Enable location to confirm delivery"
+    }
+  },
+  "myPosition": {
+    "title": "My Position",
+    "noDriverProfile": "No driver profile found. Contact your administrator.",
+    "geoNotSupported": "Geolocation is not supported by your browser",
+    "selectDelivery": "Please select a delivery",
+    "searchingPosition": "Searching for position...",
+    "positionAcquired": "Position acquired (accuracy: {accuracy}m)",
+    "gpsError": "GPS error: {message}",
+    "sharingStopped": "Position sharing stopped",
+    "awaitingData": "Awaiting data...",
+    "sharingDisabled": "Position sharing disabled",
+    "deliveryToTrack": "Delivery to track:",
+    "selectDefault": "-- Select --",
+    "startSharing": "Start sharing",
+    "stopSharing": "Stop sharing",
+    "accuracy": "Accuracy: {accuracy}m",
+    "accuracyNA": "Accuracy: N/A",
+    "vehicleInfo": "🚛 {brand} {model} — {licensePlate}",
+    "poorAccuracy": "Poor accuracy ({accuracy}m) - waiting for better signal",
+    "poorAccuracyWarning": "GPS accuracy too low (>50m) - point not sent, waiting for better signal",
+    "offlineQueue": "📡 {count} position(s) queued (offline)"
+  },
+  "myVehicle": {
+    "title": "My Vehicle",
+    "noDriverProfile": "No driver profile found.",
+    "noVehicle": "No vehicle assigned.",
+    "contactAdmin": "Contact your administrator to get an assignment.",
+    "fields": {
+      "brand": "Brand",
+      "model": "Model",
+      "year": "Year",
+      "licensePlate": "License plate",
+      "fuelType": "Fuel"
+    }
+  },
+  "myOrders": {
+    "title": "My Orders",
+    "empty": "No orders found.",
+    "filterAll": "All statuses",
+    "status": {
+      "pending": "Pending",
+      "assigned": "Assigned",
+      "in_progress": "In Progress",
+      "delivered": "Delivered",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "deliveryAddress": "📦 {address}",
+    "driver": "👤 Driver: {firstName} {lastName}",
+    "trackLink": "Click to track in real time →"
+  },
+  "clientTracking": {
+    "title": "Delivery Tracking",
+    "noActiveOrders": "No active orders.",
+    "noInProgress": "No deliveries in progress.",
+    "loadError": "Unable to load tracking data",
+    "status": {
+      "in_progress": "In Progress",
+      "assigned": "Assigned"
+    },
+    "deliveryAddress": "📦 {address}",
+    "driver": "👤 Driver: {firstName} {lastName}",
+    "vehicle": "🚛 {brand} {model} ({licensePlate})",
+    "speed": "⚡ Speed: {speed} km/h",
+    "currentPosition": "Current position",
+    "pickup": "Pickup: {address}",
+    "dropoff": "Delivery: {address}"
+  },
+  "billing": {
+    "plans": {
+      "title": "Plans & Subscription",
+      "subtitle": "Choose the plan that fits your business",
+      "invoices": "Invoices",
+      "currentPlan": "Current subscription",
+      "free": "Free",
+      "active": "Active",
+      "pastDue": "Past due",
+      "canceled": "Canceled",
+      "unpaid": "Unpaid",
+      "nextBilling": "Next billing: {date}",
+      "cancel": "Cancel",
+      "perYear": "/year",
+      "perMonth": "/month",
+      "features": {
+        "maxVehicles": "Up to {maxVehicles} vehicles",
+        "maxDeliveries": "{maxDeliveriesPerMonth} deliveries/month",
+        "maxUsers": "Up to {maxUsers} users"
+      },
+      "current": "Current",
+      "chooseStarter": "Choose Starter",
+      "upgradePro": "Upgrade to Pro",
+      "contact": "Contact",
+      "subscribe": "Subscribe",
+      "paymentDialogTitle": "Choose payment method",
+      "paymentDialogSubtitle": "{planName} subscription",
+      "confirm": "Confirm",
+      "creditCard": "Credit card (Stripe)",
+      "creditCardDesc": "Visa, Mastercard, American Express",
+      "mvola": "Mobile Money (MVola)",
+      "mvolaDesc": "Pay via MVola",
+      "orangeMoney": "Orange Money",
+      "orangeMoneyDesc": "Pay via Orange Money",
+      "toast": {
+        "paymentSent": "Payment request sent — {reference}",
+        "subscriptionUpdated": "Subscription updated",
+        "subscriptionError": "Error subscribing",
+        "subscriptionCanceled": "Subscription canceled"
+      }
+    },
+    "invoices": {
+      "title": "Billing",
+      "subtitle": "Invoice history",
+      "deliveries": "Deliveries",
+      "vehicles": "Vehicles",
+      "users": "Users",
+      "table": {
+        "invoice": "Invoice",
+        "date": "Date",
+        "amount": "Amount",
+        "status": "Status"
+      },
+      "status": {
+        "draft": "Draft",
+        "open": "Sent",
+        "paid": "Paid",
+        "uncollectible": "Uncollectible",
+        "void": "Void"
+      },
+      "empty": "No invoices yet",
+      "emptyDesc": "Invoices will appear after your first payment",
+      "download": "Download invoice"
+    },
+    "success": {
+      "loading": "Confirming...",
+      "successTitle": "Payment successful!",
+      "successMessage": "Your subscription has been activated. You can now use all features of your plan.",
+      "viewSubscription": "View my subscription",
+      "manageDeliveries": "Manage deliveries",
+      "errorTitle": "An error occurred",
+      "errorMessage": "If the payment was charged, please contact support. You can check your subscription status from the billing page.",
+      "viewBilling": "View billing"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "kpis": {
+      "deliveriesToday": "Deliveries today",
+      "totalDeliveries": "Total deliveries",
+      "activeVehicles": "Active vehicles",
+      "activeDrivers": "Active drivers",
+      "anomalies": "Anomalies",
+      "avgConsumption": "Avg. consumption"
+    },
+    "charts": {
+      "deliveryStatus": "Delivery status",
+      "consumption": "Consumption (L/100km)"
+    },
+    "recentDeliveries": "Recent deliveries",
+    "noDeliveriesToday": "No deliveries today",
+    "reliabilityScore": "Operational reliability",
+    "vsPreviousMonth": "vs prev. month",
+    "perfectMonth": "100% on-time deliveries in {month}",
+    "error": "Unable to load dashboard data",
+    "status": {
+      "pending": "Pending",
+      "assigned": "Assigned",
+      "in_progress": "In Progress",
+      "delivered": "Delivered",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    }
+  },
+  "admin": {
+    "login": {
+      "title": "Administration",
+      "subtitle": "Super-admin area",
+      "email": "Email",
+      "password": "Password",
+      "emailPlaceholder": "admin@deliverytrack.app",
+      "passwordPlaceholder": "••••••••",
+      "submit": "Sign in",
+      "error": "Login error",
+      "twoFactor": {
+        "title": "Two-factor verification",
+        "setupTitle": "2FA setup required",
+        "setupDesc": "Two-factor authentication is mandatory. Scan the QR code with Google Authenticator or Authy.",
+        "codeLabel": "Verification code",
+        "codePlaceholder": "000000",
+        "enableAndContinue": "Enable and continue",
+        "verifyTitle": "2FA code",
+        "verifyPlaceholder": "000000",
+        "verify": "Verify",
+        "invalidCode": "Invalid 2FA code",
+        "setupError": "Invalid 2FA code. Check your authenticator app."
+      }
+    },
+    "dashboard": {
+      "title": "Super Admin",
+      "subtitle": "Platform management",
+      "tabs": {
+        "overview": "Overview",
+        "tenants": "Tenants",
+        "audit": "Audit",
+        "admins": "Admins",
+        "logout": "Exit"
+      },
+      "stats": {
+        "mrr": "MRR",
+        "mrrSub": "Monthly Recurring Revenue",
+        "monthlyRevenue": "Monthly revenue",
+        "paidInvoicesSub": "Paid invoices",
+        "activeTenants": "Active tenants",
+        "newTenantsSub": "{count} new this month",
+        "deliveries": "Deliveries",
+        "thisMonth": "This month",
+        "activeSubscriptions": "Active subscriptions",
+        "attritionRate": "Attrition rate"
+      },
+      "charts": {
+        "tenantGrowth": "Tenant growth",
+        "monthlyDeliveries": "Monthly deliveries"
+      },
+      "topCompanies": "Top companies",
+      "companyTable": {
+        "company": "Company",
+        "plan": "Plan",
+        "users": "Users",
+        "vehicles": "Vehicles",
+        "deliveries": "Deliveries",
+        "freeTier": "Free"
+      },
+      "impersonation": "Impersonation mode — logged in as {name} ({email})",
+      "impersonationLeave": "Leave",
+      "tenantsTab": {
+        "title": "Tenants ({count})",
+        "search": "Search...",
+        "contact": "Contact",
+        "plan": "Plan",
+        "users": "U",
+        "vehicles": "V",
+        "deliveries": "D",
+        "createdDate": "Created on",
+        "actions": "Actions",
+        "freeTier": "Free",
+        "impersonate": "Login as admin",
+        "toggle": "Activate/Deactivate"
+      },
+      "auditTab": {
+        "title": "Audit log ({count})",
+        "admin": "Admin",
+        "action": "Action",
+        "target": "Target",
+        "ip": "IP",
+        "date": "Date"
+      },
+      "auditActions": {
+        "login": "Login",
+        "login2faRequired": "2FA required",
+        "loginSuccess": "2FA OK",
+        "impersonate": "Impersonation",
+        "tenantToggle": "Toggle tenant",
+        "logout": "Logout"
+      },
+      "adminsTab": {
+        "title": "Super admins ({count})",
+        "add": "Add",
+        "name": "Name",
+        "email": "Email",
+        "tfa": "2FA",
+        "active": "Active",
+        "createdDate": "Created on",
+        "tfaEnabled": "Enabled",
+        "tfaDisabled": "Disabled",
+        "isActiveYes": "Yes",
+        "isActiveNo": "No"
+      },
+      "createAdmin": {
+        "title": "New administrator",
+        "firstName": "First name",
+        "lastName": "Last name",
+        "email": "Email",
+        "password": "Password",
+        "cancel": "Cancel",
+        "create": "Create"
+      }
+    }
+  },
+  "components": {
+    "dataTable": {
+      "loading": "Loading...",
+      "emptyData": "No data.",
+      "editAria": "Edit",
+      "deleteAria": "Delete"
+    },
+    "entityDialog": {
+      "closeAria": "Close"
+    },
+    "confirmDialog": {
+      "defaultConfirm": "Confirm",
+      "defaultCancel": "Cancel"
+    },
+    "comingSoon": {
+      "title": "{pageName} coming soon",
+      "fallbackTitle": "Feature coming soon",
+      "description": "This page will be available soon."
+    },
+    "errorBoundary": {
+      "title": "Error"
+    },
+    "notificationBell": {
+      "title": "Notifications",
+      "markAllRead": "Mark all read",
+      "empty": "No notifications",
+      "unreadCount": "{{unreadCount}} unread"
+    },
+    "quotaBanner": {
+      "deliveryUsage": "{used}/{limit} deliveries",
+      "vehicleUsage": "{used}/{limit} vehicles",
+      "userUsage": "{used}/{limit} users",
+      "upgrade": "Upgrade plan"
+    },
+    "cookieConsent": {
+      "message": "We use essential cookies for the service to function and, subject to your consent, analytics cookies to improve our platform. See our {privacyLink} and {cookiesLink}.",
+      "privacyLink": "privacy policy",
+      "cookiesLink": "cookie policy",
+      "refuse": "Refuse non-essential",
+      "accept": "Accept all cookies",
+      "ariaLabel": "Cookie consent"
+    },
+    "protectedRoute": {
+      "loading": "Loading..."
+    }
+  },
+  "errors": {
+    "404": {
+      "title": "404",
+      "heading": "Page not found",
+      "message": "The page you are looking for does not exist.",
+      "backToDashboard": "Back to Dashboard"
+    },
+    "403": {
+      "icon": "🚫",
+      "heading": "Access denied",
+      "message": "You don't have the required permissions to access this page.",
+      "backToDashboard": "Back to Dashboard"
+    }
+  },
+  "onboarding": {
+    "welcome": "Welcome to LogiTrack",
+    "completed": "Setup complete",
+    "progress": "{done}/{total} steps",
+    "steps": {
+      "addVehicle": "Add a vehicle",
+      "inviteDriver": "Invite a driver",
+      "createDelivery": "Create a first delivery",
+      "configureNotifications": "Configure notifications"
+    },
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "close": "Close"
+  },
+  "cgu": {
+    "title": "Terms of Service",
+    "backToRegister": "Back to registration",
+    "lastUpdated": "Last updated: {date}",
+    "privacyPolicy": "Privacy Policy",
+    "section1": { "title": "1. Purpose of the Terms" },
+    "section2": { "title": "2. Definitions" },
+    "section3": { "title": "3. Account Creation & Management" },
+    "section4": { "title": "4. Services Provided" },
+    "section5": { "title": "5. User Obligations" },
+    "section6": { "title": "6. Personal Data Protection" },
+    "section7": { "title": "7. Intellectual Property" },
+    "section8": { "title": "8. Liability" },
+    "section9": { "title": "9. Pricing & Billing" },
+    "section10": { "title": "10. Termination" },
+    "section11": { "title": "11. Governing Law" },
+    "section12": { "title": "12. Contact" }
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "lastUpdated": "Last updated: {date}",
+    "cookies": "Cookie Policy",
+    "cookiesDesc": "See our",
+    "cookiesLink": "for more information on the cookies we use and how to manage them.",
+    "section1": { "title": "1. Data Controller" },
+    "section2": {
+      "title": "2. Data Collected",
+      "sub1": "2.1 Directly Provided Data",
+      "sub2": "2.2 Automatically Collected Data"
+    },
+    "section3": { "title": "3. Legal Basis for Processing" },
+    "section4": { "title": "4. Data Recipients" },
+    "section5": { "title": "5. Transfers Outside the EU" },
+    "section6": { "title": "6. Retention Period" },
+    "section7": { "title": "7. Your GDPR Rights" },
+    "section8": { "title": "8. Security" },
+    "section9": { "title": "9. Cookies" },
+    "section10": { "title": "10. Complaints" },
+    "section11": { "title": "11. Contact" }
+  },
+  "form": {
+    "validation": {
+      "required": "This field is required",
+      "minLength": "Minimum {minLength} characters",
+      "maxLength": "Maximum {maxLength} characters",
+      "invalidFormat": "Invalid format",
+      "invalidEmail": "Invalid email",
+      "invalidPhone": "Phone must start with 0 and be 10 digits"
+    }
+  },
+  "visualPanel": {
+    "tagline": "Real-time tracking",
+    "title": "The platform that connects your deliveries",
+    "subtitle": "Manage your fleet, track every package, and simplify coordination between drivers and customers.",
+    "deliveriesToday": "Deliveries today",
+    "target": "Target: 100",
+    "percentReached": "78% reached",
+    "socialProof": "Used by logistics companies in Madagascar",
+    "kpiLabel": "Deliveries today",
+    "kpiGoal": "Target: 100",
+    "kpiAchieved": "78% reached",
+    "uptime": "99.9% uptime"
+  },
+  "mapPage": {
+    "currentPosition": "Current position",
+    "speed": "Speed: {speed} km/h",
+    "pickup": "Pickup: {address}",
+    "dropoff": "Delivery: {address}"
+  },
+  "myDeliveriesMap": {
+    "pickup": "📍",
+    "dropoff": "🏁",
+    "vehicle": "🚛"
+  },
+  "activeDelivery": {
+    "pickup": "📍",
+    "dropoff": "🏁"
+  },
+  "dateFormats": {
+    "short": "MM/dd/yyyy",
+    "medium": "MMM d, yyyy",
+    "long": "MMMM d, yyyy",
+    "shortDateTime": "MM/dd/yyyy HH:mm",
+    "relative": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "thisWeek": "This week"
+    }
+  },
+  "alerts": {
+    "title": "Alerts",
+    "unresolvedCount": "{{count}} unresolved",
+    "unresolvedCount_plural": "{{count}} unresolved",
+    "liveNew": "🔴 {{count}} new live",
+    "liveNew_plural": "🔴 {{count}} new live",
+    "filters": {
+      "periodToday": "Today",
+      "period7d": "7 days",
+      "period30d": "30 days",
+      "periodAll": "All",
+      "typeLabel": "Type",
+      "priorityLabel": "Priority",
+      "all": "All",
+      "unresolved": "Unresolved",
+      "resolved": "Resolved"
+    },
+    "kpiUnresolved": "Unresolved",
+    "emptyTitle": "No alerts found",
+    "emptyDesc": "Adjust your filters or change the period",
+    "priority": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "type": {
+      "speed_alert": "Speed limit exceeded",
+      "prolonged_stop": "Prolonged stop",
+      "delay_alert": "Estimated delay",
+      "device_offline": "Device offline",
+      "geofence_event": "Geographic zone",
+      "delivery_status": "Delivery status",
+      "location_mismatch": "Position mismatch",
+      "fuel_anomaly": "Fuel anomaly",
+      "maintenance_due": "Maintenance",
+      "system": "System"
+    },
+    "detail": {
+      "resolved": "Resolved",
+      "active": "Active",
+      "message": "Message",
+      "delivery": "Related delivery",
+      "driver": "Driver",
+      "date": "Date",
+      "link": "Direct link",
+      "viewDetail": "🔗 View details →",
+      "resolution": "Resolution",
+      "resolvedBy": "Resolved by {firstName} {lastName} on {date}",
+      "markResolved": "Mark as resolved",
+      "commentPlaceholder": "Comment (optional)...",
+      "confirmResolve": "Confirm resolution",
+      "resolving": "Resolving..."
+    },
+    "toast": {
+      "resolved": "Alert marked as resolved",
+      "error": "Error"
+    },
+    "pagination": {
+      "previous": "← Previous",
+      "next": "Next →",
+      "page": "Page {page}"
+    },
+    "resolveButton": "✓ Resolve"
+  },
+  "settingsSecurity": {
+    "passwordTitle": "Password",
+    "passwordSubtitle": "Change your login password",
+    "currentPassword": "Current password",
+    "currentPasswordPlaceholder": "Your current password",
+    "newPassword": "New password",
+    "newPasswordPlaceholder": "8 chars min, uppercase, lowercase, digit, special",
+    "confirmPassword": "Confirm new password",
+    "confirmPasswordPlaceholder": "Re-enter new password",
+    "showPassword": "Show passwords",
+    "changePassword": "Change password",
+    "passwordStrength": {
+      "veryWeak": "Very weak",
+      "weak": "Weak",
+      "medium": "Medium",
+      "strong": "Strong"
+    },
+    "twoFactorTitle": "Two-factor authentication (2FA)",
+    "twoFactorSubtitle": "Secure your account with an authenticator app",
+    "twoFactorEnabled": "2FA enabled",
+    "twoFactorDisabled": "2FA disabled",
+    "twoFactorEnabledDesc": "A 6-digit code is required at each login",
+    "twoFactorDisabledDesc": "Add an extra layer of security",
+    "twoFactorEnable": "Enable",
+    "twoFactorDisable": "Disable",
+    "twoFactorSetupStep1": "1. Scan this QR code with Google Authenticator, Authy, or a compatible app",
+    "twoFactorSetupStep2": "2. Enter the 6-digit code generated by the app to confirm",
+    "twoFactorCodePlaceholder": "000000",
+    "twoFactorConfirm": "Confirm",
+    "twoFactorCancel": "Cancel",
+    "twoFactorDisableConfirm": "Enter a 2FA code from your authenticator app to confirm disabling",
+    "toastTwoFactorEnabled": "Two-factor authentication enabled",
+    "toastTwoFactorDisabled": "Two-factor authentication disabled",
+    "toastTwoFactorCodeRequired": "6-digit code required",
+    "sessionTitle": "Active sessions",
+    "sessionSubtitle": "Devices connected to your account",
+    "sessionEmpty": "No active sessions",
+    "sessionUnknownDevice": "Unknown device",
+    "sessionCurrent": "— Current session",
+    "sessionLastActivity": "Last activity: {date}",
+    "sessionIpLabel": "IP: {ip}",
+    "sessionRevoke": "Revoke",
+    "sessionRevokeAll": "Disconnect other devices",
+    "toastSessionRevoked": "Session revoked",
+    "toastSessionRevokeAll": "All other sessions have been revoked"
+  },
+  "settingsNotifications": {
+    "title": "Notifications",
+    "subtitle": "Choose which notifications you want to receive",
+    "inAppSection": "In-App Notifications",
+    "emailSection": "Email Notifications",
+    "preferences": {
+      "deliveryStatus": "Delivery status change",
+      "fuelAnomaly": "Fuel anomaly",
+      "deliveryDelayed": "Delivery delayed",
+      "maintenanceDue": "Maintenance due",
+      "system": "System"
+    },
+    "toastUpdated": "Preference updated",
+    "toastError": "Error updating preference"
+  },
+  "settingsProfile": {
+    "saveButton": "Save",
+    "toastUpdated": "Profile updated",
+    "toastError": "Error",
+    "toastNameRequired": "First and last name required"
+  },
+  "settingsPassword": {
+    "toastChanged": "Password changed successfully",
+    "toastError": "Error",
+    "toastCurrentRequired": "Current password required",
+    "toastMinLength": "New password must be at least 8 characters",
+    "toastMismatch": "Passwords do not match",
+    "toastCodeRequired": "6-digit code required",
+    "toastInvalidCode": "Invalid code"
+  },
+  "deliveryDetail": {
+    "loading": "Loading...",
+    "notFound": "Delivery not found",
+    "backToList": "Back to list",
+    "backToDeliveries": "Back to deliveries",
+    "infoPickup": "Pickup point",
+    "infoDelivery": "Delivery point",
+    "infoDriver": "Driver",
+    "infoVehicle": "Vehicle",
+    "infoScheduledDate": "Scheduled date",
+    "infoCreatedDate": "Created on",
+    "statusPending": "Pending",
+    "statusAssigned": "Assigned",
+    "statusInProgress": "In Progress",
+    "statusDelivered": "Delivered",
+    "statusFailed": "Failed",
+    "statusCancelled": "Cancelled"
+  },
+  "myDeliveriesMap": {
+    "pickup": "📍",
+    "dropoff": "🏁",
+    "vehicle": "🚛"
+  },
+  "activeDelivery": {
+    "pickup": "📍",
+    "dropoff": "🏁"
+  },
+  "navigation": {
+    "calculating": "Calculating route…",
+    "recalculating": "Recalculating route…",
+    "via": "via {street}",
+    "arrived": "You have arrived",
+    "arrivedAtDestination": "You have arrived at your destination",
+    "arrivedLabel": "📍",
+    "finishNavigation": "Finish navigation",
+    "exitNavigation": "✕ Exit",
+    "muteTooltip": "Mute voice guidance",
+    "unmuteTooltip": "Enable voice guidance",
+    "networkOffline": "Network unavailable — displayed route may be outdated",
+    "deviationDetected": "⚠️ Deviation — recalculating route",
+    "deviationBanner": "New route calculated — deviation detected",
+    "dataSaverOn": "📶 Eco",
+    "dataSaverOff": "📶 Std",
+    "dataSaverTooltipOn": "Data saver enabled",
+    "dataSaverTooltipOff": "Enable data saver"
+  },
+  "myPosition": {
+    "destination": "Destination",
+    "searchPlaceholder": "Search for a destination…",
+    "historyToggleShow": "🕐 Show history ({count})",
+    "historyToggleHide": "🕐 Hide history ({count})",
+    "routeCalculated": "🛣️ Route calculated",
+    "routeTime": "Time",
+    "routeDistance": "Distance",
+    "routeAverage": "Average",
+    "routeAlternatives": "Alternative routes",
+    "routeOption": "Option {number}",
+    "routeFaster": "✓ Faster",
+    "routeCalcLoading": "Calculating route…",
+    "noVehicleAssigned": "No vehicle assigned",
+    "startNavigation": "🧭 Start navigation",
+    "dataSaverActive": "📶 Eco on",
+    "dataSaverInactive": "Eco mode",
+    "dataSaverTooltip": "Saves data by reducing GPS frequency and recalculations",
+    "arrivedAtDestination": "📍 Arrived at destination",
+    "moderateAccuracy": "Moderate accuracy ({accuracy}m)",
+    "veryPoorAccuracy": "Very poor accuracy ({accuracy}m)",
+    "distanceAsCrowFlies": "{label} — {distance} km (as the crow flies)",
+    "pickupPopup": "📦 Pickup point: {address}",
+    "speedValue": "{speed} km/h",
+    "confidenceValue": "conf: {confidence}%",
+    "etaLabel": "ETA: {eta}"
+  },
+  "notificationBell": {
+    "deleteAllTitle": "Clear all",
+    "deleteAll": "Clear",
+    "markAllRead": "Mark all read",
+    "deleteTitle": "Delete"
+  }
+}

@@ -1,12 +1,10 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["postgresqlExtensions"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider   = "postgresql"
-  url        = env("DATABASE_URL")
-  // extensions: uuid-ossp is optional - Prisma generates UUIDs natively
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
@@ -30,14 +28,69 @@ enum FuelUnit {
   gallons
 }
 
+enum NotificationType {
+  delivery_status
+  fuel_anomaly
+  maintenance_due
+  system
+  speed_alert
+  prolonged_stop
+  delay_alert
+  device_offline
+  geofence_event
+  location_mismatch
+}
+
+enum NotificationPriority {
+  low
+  medium
+  high
+  critical
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  expired
+  revoked
+}
+
+enum AuditAction {
+  profile_update
+  password_change
+  email_change
+  avatar_change
+  company_update
+  user_invite
+  user_revoke_invite
+  user_resend_invite
+  session_revoke
+  company_delete
+  google_unlink
+}
+
+enum PlatformAdminAction {
+  login
+  login_2fa_required
+  login_success
+  logout
+  tenant_toggle
+  impersonate
+  impersonate_stop
+  password_change
+  settings_update
+}
+
 model Company {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
   name      String
   email     String?
   phone     String?
   address   String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  logoUrl   String?   @map("logo_url")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
   users             User[]
   vehicles          Vehicle[]
@@ -45,9 +98,88 @@ model Company {
   deliveries        Delivery[]
   fuelLogs          FuelLog[]
   maintenanceRecords MaintenanceRecord[]
-  notifications       Notification[]
+  notifications     Notification[]
+  settings          CompanySettings?
+  fuelSettings      CompanyFuelSettings?
+  invitations       Invitation[]
+  auditLogs         AuditLog[]
+  platformAuditLogs PlatformAuditLog[]
+  subscription      Subscription?
+  invoices          Invoice[]
+  usageRecords      UsageRecord[]
+  apiKeys           ApiKey[]
+  webhooks          Webhook[]
+  geofences         Geofence[]
 
   @@map("companies")
+}
+
+model CompanySettings {
+  id                  String   @id @default(uuid()) @db.Uuid
+  companyId           String   @unique @map("company_id") @db.Uuid
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  billingEmail        String?  @map("billing_email")
+  billingAddress      String?  @map("billing_address")
+  billingTaxId        String?  @map("billing_tax_id")
+  fuelAnomalyThreshold Float?  @default(15) @map("fuel_anomaly_threshold")
+  speedAlertThreshold  Float?  @default(80) @map("speed_alert_threshold")
+  prolongedStopMinutes Int?    @default(15) @map("prolonged_stop_minutes")
+  offlineTimeoutMinutes Int?   @default(10) @map("offline_timeout_minutes")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("company_settings")
+}
+
+model Geofence {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @map("company_id") @db.Uuid
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  deliveryId  String?  @map("delivery_id") @db.Uuid
+  delivery    Delivery? @relation(fields: [deliveryId], references: [id])
+  name        String
+  lat         Float
+  lng         Float
+  radiusMeters Float   @map("radius_meters")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  geofenceEvents GeofenceEvent[]
+
+  @@index([companyId])
+  @@index([deliveryId])
+  @@map("geofences")
+}
+
+model GeofenceEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  geofenceId  String   @map("geofence_id") @db.Uuid
+  geofence    Geofence @relation(fields: [geofenceId], references: [id])
+  vehicleId   String   @map("vehicle_id") @db.Uuid
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
+  deliveryId  String   @map("delivery_id") @db.Uuid
+  delivery    Delivery @relation(fields: [deliveryId], references: [id])
+  event       String   // "entry" | "exit"
+  latitude    Float
+  longitude   Float
+  timestamp   DateTime @default(now())
+
+  @@index([geofenceId])
+  @@index([vehicleId])
+  @@index([timestamp])
+  @@map("geofence_events")
+}
+
+model CompanyFuelSettings {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @unique @map("company_id") @db.Uuid
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  unit           FuelUnit @default(liters)
+  anomalyThreshold Float? @default(15) @map("anomaly_threshold")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("company_fuel_settings")
 }
 
 model User {
@@ -60,7 +192,13 @@ model User {
   role           UserRole
   isActive       Boolean  @default(true) @map("is_active")
   refreshTokenHash String? @map("refresh_token_hash")
-  deletedAt      DateTime? @map("deleted_at")
+  resetTokenHash   String? @map("reset_token_hash")
+  resetTokenExpiry DateTime? @map("reset_token_expiry")
+  googleId         String? @unique @map("google_id")
+  avatarUrl        String? @map("avatar_url")
+  totpSecret       String? @map("totp_secret")
+  totpEnabled      Boolean  @default(false) @map("totp_enabled")
+  deletedAt        DateTime? @map("deleted_at")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -68,10 +206,89 @@ model User {
   company   Company @relation(fields: [companyId], references: [id])
 
   assignedDeliveries Delivery[] @relation("AssignedDriverDeliveries")
-  driver            Driver?
-  notifications     Notification[]
+  clientDeliveries   Delivery[] @relation("ClientDeliveries")
+  driver             Driver?
+  notifications      Notification[]
+  resolvedNotifications Notification[] @relation("ResolvedNotifications")
+  preferences        UserPreferences?
+  sessions           UserSession[]
+  auditLogs          AuditLog[]
+  sentInvitations    Invitation[] @relation("SentInvitations")
 
+  @@index([companyId])
   @@map("users")
+}
+
+model UserPreferences {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @unique @map("user_id") @db.Uuid
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailDeliveryStatus  Boolean @default(true) @map("email_delivery_status")
+  emailFuelAnomaly     Boolean @default(true) @map("email_fuel_anomaly")
+  emailDeliveryDelayed Boolean @default(true) @map("email_delivery_delayed")
+  emailMaintenanceDue  Boolean @default(false) @map("email_maintenance_due")
+  emailSystem          Boolean @default(true) @map("email_system")
+  inAppDeliveryStatus  Boolean @default(true) @map("in_app_delivery_status")
+  inAppFuelAnomaly     Boolean @default(true) @map("in_app_fuel_anomaly")
+  inAppDeliveryDelayed Boolean @default(true) @map("in_app_delivery_delayed")
+  inAppMaintenanceDue  Boolean @default(true) @map("in_app_maintenance_due")
+  inAppSystem          Boolean @default(true) @map("in_app_system")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("user_preferences")
+}
+
+model UserSession {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device       String?  // user agent / device info
+  ip           String?  // IP address
+  location     String?  // approximate location from IP
+  lastActivity DateTime @default(now()) @map("last_activity")
+  createdAt    DateTime @default(now()) @map("created_at")
+  expiresAt    DateTime @map("expires_at")
+
+  @@index([userId])
+  @@map("user_sessions")
+}
+
+model Invitation {
+  id           String           @id @default(uuid()) @db.Uuid
+  email        String
+  role         UserRole
+  token        String           @unique
+  status       InvitationStatus @default(pending)
+  companyId    String           @map("company_id") @db.Uuid
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedById  String           @map("invited_by_id") @db.Uuid
+  invitedBy    User             @relation("SentInvitations", fields: [invitedById], references: [id])
+  expiresAt    DateTime         @map("expires_at")
+  acceptedAt   DateTime?        @map("accepted_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  @@index([companyId])
+  @@index([email])
+  @@map("invitations")
+}
+
+model AuditLog {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String      @map("user_id") @db.Uuid
+  user      User        @relation(fields: [userId], references: [id])
+  companyId String      @map("company_id") @db.Uuid
+  company   Company     @relation(fields: [companyId], references: [id])
+  action    AuditAction
+  metadata  Json?       // additional context (old/new values, etc.)
+  ip        String?
+  userAgent String?     @map("user_agent")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
 
 model Vehicle {
@@ -96,7 +313,9 @@ model Vehicle {
   fuelLogs  FuelLog[]
   maintenanceRecords MaintenanceRecord[]
   gpsPositions      GpsPosition[]
+  geofenceEvents    GeofenceEvent[]
 
+  @@index([companyId])
   @@map("vehicles")
 }
 
@@ -124,6 +343,7 @@ model Driver {
   deliveries   Delivery[]
   gpsPositions GpsPosition[]
 
+  @@index([companyId])
   @@map("drivers")
 }
 
@@ -134,16 +354,25 @@ model Delivery {
   pickupAddress   String         @map("pickup_address")
   pickupLat       Float?         @map("pickup_lat")
   pickupLng       Float?         @map("pickup_lng")
+  pickupLocationLabel String?    @map("pickup_location_label")
   deliveryAddress String         @map("delivery_address")
   deliveryLat     Float?         @map("delivery_lat")
   deliveryLng     Float?         @map("delivery_lng")
+  deliveryLocationLabel String?  @map("delivery_location_label")
   status          DeliveryStatus @default(pending)
   scheduledDate   DateTime?      @map("scheduled_date")
   completedAt     DateTime?      @map("completed_at")
+  deliveryProofLat Float?        @map("delivery_proof_lat")
+  deliveryProofLng Float?        @map("delivery_proof_lng")
+  deliveryProofDistance Float?   @map("delivery_proof_distance")
+  deliveryProofAccuracy Float?   @map("delivery_proof_accuracy")
+  locationMismatch Boolean       @default(false) @map("location_mismatch")
+  mismatchResolved Boolean       @default(false) @map("mismatch_resolved")
   notes           String?
   deletedAt       DateTime?      @map("deleted_at")
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
+  publicTrackingRevokedAt DateTime? @map("public_tracking_revoked_at")
 
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
@@ -157,11 +386,18 @@ model Delivery {
   assignedDriverId String? @map("assigned_driver_id") @db.Uuid
   assignedDriver   User?   @relation("AssignedDriverDeliveries", fields: [assignedDriverId], references: [id])
 
-  gpsPositions GpsPosition[]
-  notifications Notification[]
+  clientId String? @map("client_id") @db.Uuid
+  client   User?   @relation("ClientDeliveries", fields: [clientId], references: [id])
+
+  gpsPositions   GpsPosition[]
+  notifications  Notification[]
+  geofences      Geofence[]
+  geofenceEvents GeofenceEvent[]
 
   @@index([companyId])
   @@index([status])
+  @@index([assignedDriverId])
+  @@index([clientId])
   @@map("deliveries")
 }
 
@@ -170,6 +406,10 @@ model GpsPosition {
   latitude  Float
   longitude Float
   speed     Float?
+  heading   Float?
+  altitude  Float?
+  accuracy  Float?
+  suspect   Boolean  @default(false)
   location  String   @map("location")
   timestamp DateTime
   createdAt DateTime @default(now()) @map("created_at")
@@ -186,7 +426,32 @@ model GpsPosition {
   @@index([deliveryId])
   @@index([vehicleId])
   @@index([timestamp])
+  @@index([vehicleId, timestamp])
+  @@index([deliveryId, timestamp])
   @@map("gps_positions")
+}
+
+model GpsPositionArchive {
+  id        String   @id @default(uuid()) @db.Uuid
+  latitude  Float
+  longitude Float
+  speed     Float?
+  heading   Float?
+  altitude  Float?
+  accuracy  Float?
+  suspect   Boolean  @default(false)
+  location  String   @map("location")
+  timestamp DateTime
+  createdAt DateTime @map("created_at")
+  deliveryId String @map("delivery_id") @db.Uuid
+  vehicleId String @map("vehicle_id") @db.Uuid
+  driverId  String @map("driver_id") @db.Uuid
+  archivedAt DateTime @default(now()) @map("archived_at")
+
+  @@index([timestamp])
+  @@index([vehicleId])
+  @@index([deliveryId])
+  @@map("gps_positions_archive")
 }
 
 model FuelLog {
@@ -233,20 +498,6 @@ model MaintenanceRecord {
   @@map("maintenance_records")
 }
 
-enum NotificationType {
-  delivery_status
-  fuel_anomaly
-  maintenance_due
-  system
-}
-
-enum NotificationPriority {
-  low
-  medium
-  high
-  critical
-}
-
 model Notification {
   id        String             @id @default(uuid()) @db.Uuid
   type      NotificationType
@@ -254,8 +505,12 @@ model Notification {
   title     String
   message   String
   link      String?            // optional deep-link URL
+  digestOnly Boolean          @default(false) @map("digest_only")
   readAt    DateTime?          @map("read_at")
   createdAt DateTime           @default(now()) @map("created_at")
+  resolved  Boolean           @default(false) @map("resolved")
+  resolvedAt DateTime?         @map("resolved_at")
+  resolutionComment String?   @map("resolution_comment")
 
   companyId String @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
@@ -266,8 +521,241 @@ model Notification {
   deliveryId String?  @map("delivery_id") @db.Uuid
   delivery   Delivery? @relation(fields: [deliveryId], references: [id])
 
+  resolvedById String? @map("resolved_by_id") @db.Uuid
+  resolvedBy   User?   @relation("ResolvedNotifications", fields: [resolvedById], references: [id])
+
   @@index([companyId])
   @@index([userId])
   @@index([createdAt])
+  @@index([companyId, resolved, createdAt])
   @@map("notifications")
+}
+
+enum PlanTier {
+  free
+  starter
+  pro
+  enterprise
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+  past_due
+  incomplete
+  unpaid
+  trialing
+}
+
+enum BillingProvider {
+  stripe
+  mvola
+  orange_money
+}
+
+enum InvoiceStatus {
+  draft
+  open
+  paid
+  uncollectible
+  void
+}
+
+enum UsageResource {
+  delivery
+  vehicle
+  user
+}
+
+model BillingPlan {
+  id        String    @id @default(uuid()) @db.Uuid
+  tier      PlanTier  @unique
+  name      String
+  description String?
+  price     Int       @map("price") // cents per interval
+  currency  String    @default("EUR")
+  interval  String    @default("month") // month | year
+  maxVehicles      Int @default(5) @map("max_vehicles")
+  maxDeliveriesPerMonth Int @default(50) @map("max_deliveries_per_month")
+  maxUsers         Int @default(3) @map("max_users")
+  features         Json @default("[]")
+  isActive    Boolean @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  subscriptions Subscription[]
+
+  @@map("billing_plans")
+}
+
+model Subscription {
+  id              String             @id @default(uuid()) @db.Uuid
+  companyId       String             @unique @map("company_id") @db.Uuid
+  company         Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planId          String             @map("plan_id") @db.Uuid
+  plan            BillingPlan        @relation(fields: [planId], references: [id])
+  status          SubscriptionStatus @default(active)
+  provider        BillingProvider    @default(stripe)
+  stripeSubscriptionId String?        @unique @map("stripe_subscription_id")
+  stripeCustomerId    String?        @map("stripe_customer_id")
+  mobileMoneyRef     String?         @map("mobile_money_ref")
+  currentPeriodStart DateTime         @default(now()) @map("current_period_start")
+  currentPeriodEnd   DateTime         @map("current_period_end")
+  canceledAt         DateTime?        @map("canceled_at")
+  trialEndsAt        DateTime?        @map("trial_ends_at")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  invoices Invoice[]
+
+  @@index([companyId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id                String        @id @default(uuid()) @db.Uuid
+  companyId         String        @map("company_id") @db.Uuid
+  company           Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  subscriptionId    String        @map("subscription_id") @db.Uuid
+  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  invoiceNumber     String        @unique @map("invoice_number")
+  amount            Int           @map("amount") // cents
+  currency          String        @default("EUR")
+  status            InvoiceStatus @default(draft)
+  provider          BillingProvider @default(stripe)
+  providerInvoiceId String?       @unique @map("provider_invoice_id")
+  paidAt            DateTime?     @map("paid_at")
+  pdfUrl            String?       @map("pdf_url")
+  pdfData           Bytes?        @map("pdf_data")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@index([subscriptionId])
+  @@index([status])
+  @@map("invoices")
+}
+
+model UsageRecord {
+  id          String        @id @default(uuid()) @db.Uuid
+  companyId   String        @map("company_id") @db.Uuid
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  periodStart DateTime      @map("period_start")
+  periodEnd   DateTime      @map("period_end")
+  resource    UsageResource
+  count       Int           @default(0)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@unique([companyId, periodStart, resource])
+  @@index([companyId, periodStart])
+  @@map("usage_records")
+}
+
+enum WebhookEvent {
+  delivery_status_changed
+  delivery_delivered
+}
+
+enum WebhookDeliveryStatus {
+  pending
+  success
+  failed
+}
+
+model ApiKey {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  keyHash   String   @map("key_hash")
+  prefix    String   @map("prefix") // first 8 chars for display
+  name      String   @map("name")
+  scopes    Json     @default("[\"deliveries:read\"]") // ["deliveries:read", "tracking:read"]
+  expiresAt DateTime? @map("expires_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+model Webhook {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  url       String   @map("url")
+  secret    String   @map("secret") // HMAC signing secret
+  events    Json     @default("[]") // ["delivery.status_changed", "delivery.delivered"]
+  isActive  Boolean  @default(true) @map("is_active")
+  version   Int      @default(1) @map("version")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  deliveries WebhookDelivery[]
+
+  @@index([companyId])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id                 String               @id @default(uuid()) @db.Uuid
+  webhookId          String               @map("webhook_id") @db.Uuid
+  webhook            Webhook              @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  event              String               @map("event")
+  payload            Json                 @map("payload")
+  status             WebhookDeliveryStatus @default(pending)
+  responseStatusCode Int?                 @map("response_status_code")
+  responseBody       String?              @map("response_body")
+  attempts           Int                  @default(0)
+  maxAttempts        Int                  @default(5)
+  nextRetryAt        DateTime?            @map("next_retry_at")
+  createdAt          DateTime             @default(now()) @map("created_at")
+  completedAt        DateTime?            @map("completed_at")
+
+  @@index([webhookId])
+  @@index([status])
+  @@index([nextRetryAt])
+  @@map("webhook_deliveries")
+}
+
+model PlatformAdmin {
+  id             String   @id @default(uuid()) @db.Uuid
+  email          String   @unique
+  passwordHash   String   @map("password_hash")
+  firstName      String   @map("first_name")
+  lastName       String   @map("last_name")
+  totpSecret     String?  @map("totp_secret")
+  totpEnabled    Boolean  @default(false) @map("totp_enabled")
+  isActive       Boolean  @default(true) @map("is_active")
+  refreshTokenHash String? @map("refresh_token_hash")
+  resetTokenHash   String? @map("reset_token_hash")
+  resetTokenExpiry DateTime? @map("reset_token_expiry")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  auditLogs PlatformAuditLog[]
+
+  @@map("platform_admins")
+}
+
+model PlatformAuditLog {
+  id              String            @id @default(uuid()) @db.Uuid
+  adminId         String            @map("admin_id") @db.Uuid
+  admin           PlatformAdmin     @relation(fields: [adminId], references: [id])
+  action          PlatformAdminAction
+  targetCompanyId String?           @map("target_company_id") @db.Uuid
+  targetCompany   Company?          @relation(fields: [targetCompanyId], references: [id])
+  targetUserId    String?           @map("target_user_id")
+  ip              String?
+  userAgent       String?           @map("user_agent")
+  metadata        Json?
+  createdAt       DateTime          @default(now()) @map("created_at")
+
+  @@index([adminId])
+  @@index([createdAt])
+  @@map("platform_audit_logs")
 }

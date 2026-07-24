@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../../services/api/client';
+import type { DeliveryInfo } from '../../types';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -15,18 +16,6 @@ const deliveryIcon = L.icon({
   shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41],
 });
 
-interface DeliveryInfo {
-  id: string;
-  title: string;
-  status: string;
-  pickupAddress: string;
-  deliveryAddress: string;
-  pickupLat?: number;
-  pickupLng?: number;
-  deliveryLat?: number;
-  deliveryLng?: number;
-}
-
 interface Position {
   latitude: number;
   longitude: number;
@@ -34,20 +23,33 @@ interface Position {
   speed?: number;
 }
 
+const POLL_INTERVAL_MS = 15000;
+
 export default function PublicTrackingPage() {
   const { token } = useParams<{ token: string }>();
   const [delivery, setDelivery] = useState<DeliveryInfo | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<string>('');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
+  const fetchTracking = () => {
     if (!token) return;
     api.get(`/tracking/public/${token}`)
       .then((res) => {
         setDelivery(res.data.delivery);
         setPositions(res.data.positions);
+        setLastUpdate(new Date().toLocaleTimeString('fr-FR'));
       })
       .catch(() => setError('Invalid or expired tracking link'));
+  };
+
+  useEffect(() => {
+    fetchTracking();
+    intervalRef.current = setInterval(fetchTracking, POLL_INTERVAL_MS);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, [token]);
 
   if (error) {
@@ -69,12 +71,20 @@ export default function PublicTrackingPage() {
   const currentPos = positions[positions.length - 1];
   const center: [number, number] = currentPos
     ? [currentPos.latitude, currentPos.longitude]
-    : [delivery.pickupLat || 48.8566, delivery.pickupLng || 2.3522];
+    : [delivery.pickupLat || -18.8792, delivery.pickupLng || 47.5079];
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '20px', background: '#fff', borderBottom: '1px solid #ddd' }}>
-        <h2>{delivery.title}</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+          <h2 style={{ margin: 0 }}>{delivery.title}</h2>
+          <span style={{
+            display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+            background: '#28a745', animation: 'dt-pulse-moving 2s ease-out infinite',
+          }} />
+          <span style={{ fontSize: '0.8rem', color: '#28a745', fontWeight: 600 }}>LIVE</span>
+          {lastUpdate && <span style={{ fontSize: '0.75rem', color: '#999' }}>Updated: {lastUpdate}</span>}
+        </div>
         <p>Status: <strong>{delivery.status}</strong></p>
         <p>Pickup: {delivery.pickupAddress}</p>
         <p>Delivery: {delivery.deliveryAddress}</p>

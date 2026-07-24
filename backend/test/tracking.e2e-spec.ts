@@ -23,7 +23,9 @@ describe('Tracking GPS (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
 
     const server = app.getHttpServer();
@@ -41,7 +43,14 @@ describe('Tracking GPS (e2e)', () => {
     const passwordHash = await bcrypt.hash('StrongPass123', 1);
 
     const vehicle = await prisma.vehicle.create({
-      data: { brand: 'Test', model: 'V', year: 2023, licensePlate: `TRACK-${Date.now()}`, fuelType: 'gasoline', companyId },
+      data: {
+        brand: 'Test',
+        model: 'V',
+        year: 2023,
+        licensePlate: `TRACK-${Date.now()}`,
+        fuelType: 'gasoline',
+        companyId,
+      },
     });
     vehicleId = vehicle.id;
 
@@ -82,8 +91,11 @@ describe('Tracking GPS (e2e)', () => {
     const delivery = await prisma.delivery.create({
       data: {
         title: 'Tracking Test Delivery',
-        pickupAddress: 'A', deliveryAddress: 'B',
-        companyId, vehicleId, driverId,
+        pickupAddress: 'A',
+        deliveryAddress: 'B',
+        companyId,
+        vehicleId,
+        driverId,
       },
     });
     deliveryId = delivery.id;
@@ -136,7 +148,11 @@ describe('Tracking GPS (e2e)', () => {
   });
 
   describe('WebSocket - Position updates', () => {
-    const waitForEvent = <T>(socket: ReturnType<typeof Client>, event: string, timeout = 5000): Promise<T> => {
+    const waitForEvent = <T>(
+      socket: ReturnType<typeof Client>,
+      event: string,
+      timeout = 5000,
+    ): Promise<T> => {
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error(`Timeout waiting for ${event}`)), timeout);
         socket.once(event, (data: T) => {
@@ -151,15 +167,23 @@ describe('Tracking GPS (e2e)', () => {
 
     beforeAll(async () => {
       driverSocket = Client(`http://localhost:${serverPort}`, {
-        auth: { token: driverToken }, transports: ['websocket'], forceNew: true,
+        auth: { token: driverToken },
+        transports: ['websocket'],
+        forceNew: true,
       });
       dispatcherSocket = Client(`http://localhost:${serverPort}`, {
-        auth: { token: dispatcherToken }, transports: ['websocket'], forceNew: true,
+        auth: { token: dispatcherToken },
+        transports: ['websocket'],
+        forceNew: true,
       });
 
       await Promise.all([
-        new Promise<void>((resolve, reject) => driverSocket.on('connect', resolve).on('connect_error', reject)),
-        new Promise<void>((resolve, reject) => dispatcherSocket.on('connect', resolve).on('connect_error', reject)),
+        new Promise<void>((resolve, reject) =>
+          driverSocket.on('connect', resolve).on('connect_error', reject),
+        ),
+        new Promise<void>((resolve, reject) =>
+          dispatcherSocket.on('connect', resolve).on('connect_error', reject),
+        ),
       ]);
     }, 10000);
 
@@ -169,13 +193,19 @@ describe('Tracking GPS (e2e)', () => {
     });
 
     it('should receive position update on dispatcher when driver sends one', async () => {
-      const eventPromise = waitForEvent<{ latitude: number; longitude: number; deliveryId: string }>(
-        dispatcherSocket, 'positionUpdate',
-      );
+      const eventPromise = waitForEvent<{
+        latitude: number;
+        longitude: number;
+        deliveryId: string;
+      }>(dispatcherSocket, 'positionUpdate');
 
       driverSocket.emit('updatePosition', {
-        latitude: 48.8566, longitude: 2.3522, speed: 50,
-        timestamp: new Date().toISOString(), deliveryId, vehicleId,
+        latitude: 48.8566,
+        longitude: 2.3522,
+        speed: 50,
+        timestamp: new Date().toISOString(),
+        deliveryId,
+        vehicleId,
       });
 
       const data = await eventPromise;
@@ -201,8 +231,12 @@ describe('Tracking GPS (e2e)', () => {
       const eventPromise = waitForEvent(dispatcherSocket, 'positionUpdate');
 
       driverSocket.emit('updatePosition', {
-        latitude: 48.8584, longitude: 2.2945, speed: 60,
-        timestamp: new Date().toISOString(), deliveryId, vehicleId,
+        latitude: 48.8584,
+        longitude: 2.2945,
+        speed: 60,
+        timestamp: new Date().toISOString(),
+        deliveryId,
+        vehicleId,
       });
 
       await eventPromise;
@@ -220,9 +254,11 @@ describe('Tracking GPS (e2e)', () => {
 
     it('should deduplicate identical positions', async () => {
       const pos = {
-        latitude: 48.862, longitude: 2.352,
+        latitude: 48.862,
+        longitude: 2.352,
         timestamp: new Date(Date.now() - 7200000).toISOString(),
-        deliveryId, vehicleId,
+        deliveryId,
+        vehicleId,
       };
 
       // Send twice and wait for broadcast
@@ -254,8 +290,22 @@ describe('Tracking GPS (e2e)', () => {
       // Just verify that batch does not throw and positions are saved
       driverSocket.emit('batchPosition', {
         positions: [
-          { latitude: 48.863, longitude: 2.353, speed: 40, timestamp: new Date(Date.now() - 2000).toISOString(), deliveryId, vehicleId },
-          { latitude: 48.873, longitude: 2.363, speed: 45, timestamp: new Date(Date.now() - 1000).toISOString(), deliveryId, vehicleId },
+          {
+            latitude: 48.863,
+            longitude: 2.353,
+            speed: 40,
+            timestamp: new Date(Date.now() - 2000).toISOString(),
+            deliveryId,
+            vehicleId,
+          },
+          {
+            latitude: 48.873,
+            longitude: 2.363,
+            speed: 45,
+            timestamp: new Date(Date.now() - 1000).toISOString(),
+            deliveryId,
+            vehicleId,
+          },
         ],
       });
 
@@ -277,24 +327,27 @@ describe('Tracking GPS (e2e)', () => {
 
   describe('WebSocket - Auth rejection', () => {
     it('should reject socket without token', async () => {
-      await expect(new Promise<void>((resolve, reject) => {
-        const badSocket = Client(`http://localhost:${serverPort}`, {
-          transports: ['websocket'], forceNew: true,
-        });
+      await expect(
+        new Promise<void>((resolve, reject) => {
+          const badSocket = Client(`http://localhost:${serverPort}`, {
+            transports: ['websocket'],
+            forceNew: true,
+          });
 
-        badSocket.on('disconnect', () => {
-          badSocket.close();
-          resolve();
-        });
-        badSocket.on('connect_error', () => {
-          badSocket.close();
-          resolve();
-        });
-        setTimeout(() => {
-          badSocket.close();
-          reject(new Error('Socket should not connect without token'));
-        }, 2000);
-      })).resolves.toBeUndefined();
+          badSocket.on('disconnect', () => {
+            badSocket.close();
+            resolve();
+          });
+          badSocket.on('connect_error', () => {
+            badSocket.close();
+            resolve();
+          });
+          setTimeout(() => {
+            badSocket.close();
+            reject(new Error('Socket should not connect without token'));
+          }, 2000);
+        }),
+      ).resolves.toBeUndefined();
     }, 5000);
   });
 });

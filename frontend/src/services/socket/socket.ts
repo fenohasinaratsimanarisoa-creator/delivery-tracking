@@ -1,12 +1,12 @@
 import { io, Socket } from 'socket.io-client';
+import { getAccessToken } from '../auth/tokenStore';
 
 let socket: Socket | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
-    const token = localStorage.getItem('accessToken');
     socket = io('/', {
-      auth: { token },
+      auth: (cb: (data: { token: string | null }) => void) => cb({ token: getAccessToken() }),
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -15,7 +15,7 @@ export function getSocket(): Socket {
     });
 
     socket.on('disconnect', (reason) => {
-      if (reason === 'io server disconnect') {
+      if (reason === 'io server disconnect' && getAccessToken()) {
         socket?.connect();
       }
     });
@@ -36,6 +36,10 @@ export interface PositionUpdate {
   latitude: number;
   longitude: number;
   speed?: number;
+  heading?: number;
+  altitude?: number;
+  accuracy?: number;
+  confidence?: number;
   timestamp: string;
   deliveryId: string;
   vehicleId: string;

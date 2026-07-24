@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
@@ -15,8 +20,30 @@ export class DriversService {
       throw new ConflictException('License number already exists');
     }
 
+    if (dto.vehicleId) {
+      const vehicle = await this.prisma.vehicle.findFirst({
+        where: { id: dto.vehicleId, companyId, deletedAt: null },
+      });
+      if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+      const alreadyAssigned = await this.prisma.driver.findFirst({
+        where: { vehicleId: dto.vehicleId, deletedAt: null },
+      });
+      if (alreadyAssigned) {
+        throw new ConflictException('Vehicle is already assigned to another driver');
+      }
+    }
+
     return this.prisma.driver.create({
       data: { ...dto, companyId },
+      include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
+    });
+  }
+
+  async findByUserId(userId: string) {
+    return this.prisma.driver.findFirst({
+      where: { userId, deletedAt: null },
+      include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
     });
   }
 
@@ -30,7 +57,9 @@ export class DriversService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
+        include: {
+          vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } },
+        },
       }),
       this.prisma.driver.count({ where }),
     ]);
@@ -62,7 +91,25 @@ export class DriversService {
       }
     }
 
-    return this.prisma.driver.update({ where: { id }, data: dto });
+    if (dto.vehicleId) {
+      const vehicle = await this.prisma.vehicle.findFirst({
+        where: { id: dto.vehicleId, companyId, deletedAt: null },
+      });
+      if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+      const alreadyAssigned = await this.prisma.driver.findFirst({
+        where: { vehicleId: dto.vehicleId, deletedAt: null, id: { not: id } },
+      });
+      if (alreadyAssigned) {
+        throw new ConflictException('Vehicle is already assigned to another driver');
+      }
+    }
+
+    return this.prisma.driver.update({
+      where: { id },
+      data: dto,
+      include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
+    });
   }
 
   async remove(companyId: string, id: string) {
@@ -72,9 +119,7 @@ export class DriversService {
       where: { driverId: id, status: 'in_progress', deletedAt: null },
     });
     if (inProgress) {
-      throw new BadRequestException(
-        'Cannot delete driver assigned to an in-progress delivery',
-      );
+      throw new BadRequestException('Cannot delete driver assigned to an in-progress delivery');
     }
 
     return this.prisma.driver.update({

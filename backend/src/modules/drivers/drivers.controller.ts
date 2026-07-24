@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { DriversService } from './drivers.service';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
@@ -20,6 +30,13 @@ export class DriversController {
     return this.driversService.create(companyId, dto);
   }
 
+  @Get('profile')
+  getProfile(@CurrentUser('id') userId: string) {
+    return this.driversService.findByUserId(userId);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
   @Get()
   findAll(
     @CurrentUser('companyId') companyId: string,
@@ -29,6 +46,8 @@ export class DriversController {
     return this.driversService.findAll(companyId, +page, +limit);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
   @Get(':id')
   findOne(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
     return this.driversService.findOne(companyId, id);
@@ -37,7 +56,11 @@ export class DriversController {
   @UseGuards(RolesGuard)
   @Roles('admin', 'dispatcher')
   @Patch(':id')
-  update(@CurrentUser('companyId') companyId: string, @Param('id') id: string, @Body() dto: UpdateDriverDto) {
+  update(
+    @CurrentUser('companyId') companyId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateDriverDto,
+  ) {
     return this.driversService.update(companyId, id, dto);
   }
 

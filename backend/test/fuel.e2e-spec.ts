@@ -18,7 +18,9 @@ describe('Fuel Consumption (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     prisma = app.get(PrismaService);
 
@@ -40,7 +42,9 @@ describe('Fuel Consumption (e2e)', () => {
 
     const vehicle = await prisma.vehicle.create({
       data: {
-        brand: 'Test', model: 'Car', year: 2023,
+        brand: 'Test',
+        model: 'Car',
+        year: 2023,
         licensePlate: `FUEL-${Date.now()}`,
         fuelType: 'diesel',
         theoreticalConsumption: 8.0,

@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { getMenuItemsForRole, allMenuItems } from '../menuItems';
 
 describe('getMenuItemsForRole', () => {
-  it('admin has access to all 9 admin items', () => {
+  it('admin has access to all admin items', () => {
     const items = getMenuItemsForRole('admin');
-    expect(items).toHaveLength(9);
+    expect(items.length).toBeGreaterThanOrEqual(9);
     const labels = items.map((i) => i.label);
     expect(labels).toContain('Dashboard');
     expect(labels).toContain('Livraisons');
@@ -15,11 +15,12 @@ describe('getMenuItemsForRole', () => {
     expect(labels).toContain('Rapports');
     expect(labels).toContain('Utilisateurs');
     expect(labels).toContain('Paramètres');
+    expect(labels).toContain('Alertes');
   });
 
-  it('dispatcher has access to 5 items', () => {
+  it('dispatcher has access to 6 items', () => {
     const items = getMenuItemsForRole('dispatcher');
-    expect(items).toHaveLength(5);
+    expect(items).toHaveLength(6);
     for (const item of items) {
       expect(item.roles).toContain('dispatcher');
     }

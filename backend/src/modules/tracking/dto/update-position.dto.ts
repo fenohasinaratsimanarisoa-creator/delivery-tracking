@@ -16,6 +16,20 @@ export class UpdatePositionDto {
   @Min(0)
   speed?: number;
 
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  heading?: number;
+
+  @IsOptional()
+  @IsNumber()
+  altitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  accuracy?: number;
+
   @IsDateString()
   timestamp: string;
 

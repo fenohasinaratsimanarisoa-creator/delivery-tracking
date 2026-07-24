@@ -25,11 +25,13 @@ export class DashboardController {
     return this.dashboardService.getFuelStatsForChart(companyId);
   }
 
+  @Get('reliability-score')
+  getReliabilityScore(@CurrentUser('companyId') companyId: string) {
+    return this.dashboardService.getReliabilityScore(companyId);
+  }
+
   @Get('export/pdf')
-  async exportPdf(
-    @CurrentUser('companyId') companyId: string,
-    @Res() res: Response,
-  ) {
+  async exportPdf(@CurrentUser('companyId') companyId: string, @Res() res: Response) {
     const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
     const kpis = await this.dashboardService.getKpis(companyId);
 
@@ -39,7 +41,11 @@ export class DashboardController {
     const { width, height } = page.getSize();
 
     page.drawText('Delivery Tracking - Report', {
-      x: 50, y: height - 50, size: 24, font, color: rgb(0, 0, 0),
+      x: 50,
+      y: height - 50,
+      size: 24,
+      font,
+      color: rgb(0, 0, 0),
     });
 
     let y = height - 100;
@@ -66,15 +72,13 @@ export class DashboardController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="dashboard-report-${Date.now()}.pdf"`,
+      'Cache-Control': 'no-cache',
     });
     res.send(Buffer.from(pdfBytes));
   }
 
   @Get('export/excel')
-  async exportExcel(
-    @CurrentUser('companyId') companyId: string,
-    @Res() res: Response,
-  ) {
+  async exportExcel(@CurrentUser('companyId') companyId: string, @Res() res: Response) {
     const ExcelJS = await import('exceljs');
     const kpis = await this.dashboardService.getKpis(companyId);
     const deliveryStats = await this.dashboardService.getDeliveryStats(companyId);
@@ -111,6 +115,7 @@ export class DashboardController {
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="dashboard-report-${Date.now()}.xlsx"`,
+      'Cache-Control': 'no-cache',
     });
     res.send(buffer);
   }

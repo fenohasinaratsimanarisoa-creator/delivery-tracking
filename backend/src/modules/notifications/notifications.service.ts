@@ -14,7 +14,7 @@ export class NotificationsService {
     return this.prisma.notification.findMany({
       where: {
         companyId,
-        ...(userId ? { userId } : {}),
+        ...(userId ? { OR: [{ userId }, { userId: null }] } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -33,20 +33,36 @@ export class NotificationsService {
       where: {
         companyId,
         readAt: null,
-        ...(userId ? { userId } : {}),
+        ...(userId ? { OR: [{ userId }, { userId: null }] } : {}),
       },
       data: { readAt: new Date() },
     });
   }
 
+  async remove(id: string, companyId: string) {
+    return this.prisma.notification.deleteMany({
+      where: { id, companyId },
+    });
+  }
+
+  async removeAll(companyId: string, userId?: string) {
+    return this.prisma.notification.deleteMany({
+      where: {
+        companyId,
+        ...(userId ? { OR: [{ userId }, { userId: null }] } : {}),
+      },
+    });
+  }
+
   async countUnread(companyId: string, userId?: string) {
-    return this.prisma.notification.count({
+    const count = await this.prisma.notification.count({
       where: {
         companyId,
         readAt: null,
-        ...(userId ? { userId } : {}),
+        ...(userId ? { OR: [{ userId }, { userId: null }] } : {}),
       },
     });
+    return { count };
   }
 
   async create(
@@ -59,21 +75,57 @@ export class NotificationsService {
       link?: string;
       userId?: string;
       deliveryId?: string;
+      digestOnly?: boolean;
     },
   ) {
     const notification = await this.prisma.notification.create({
-      data: { ...data, companyId },
+      data: {
+        companyId,
+        type: data.type,
+        priority: data.priority,
+        title: data.title,
+        message: data.message,
+        link: data.link,
+        userId: data.userId,
+        deliveryId: data.deliveryId,
+        digestOnly: data.digestOnly ?? false,
+      },
     });
 
-    // Emit to company room and optionally to specific user
-    const room = `company:${companyId}`;
-    this.gateway.server.to(room).emit('notification', notification);
-    if (data.userId) {
-      this.gateway.server
-        .to(`user:${data.userId}`)
-        .emit('notification', notification);
+    // Critical/high priority notifications are sent immediately unless digestOnly is set
+    const shouldSendImmediately =
+      !data.digestOnly && (data.priority === 'critical' || data.priority === 'high');
+
+    if (shouldSendImmediately) {
+      const room = `company:${companyId}`;
+      this.gateway.server.to(room).emit('notification', notification);
+      if (data.userId) {
+        this.gateway.server.to(`user:${data.userId}`).emit('notification', notification);
+      }
     }
 
     return notification;
+  }
+
+  async getDigestNotifications(companyId: string, since: Date, userId?: string) {
+    const where: any = {
+      companyId,
+      createdAt: { gte: since },
+    };
+    if (userId) where.userId = userId;
+
+    const notifications = await this.prisma.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Group by priority
+    return {
+      critical: notifications.filter((n) => n.priority === 'critical'),
+      high: notifications.filter((n) => n.priority === 'high'),
+      medium: notifications.filter((n) => n.priority === 'medium'),
+      low: notifications.filter((n) => n.priority === 'low'),
+      total: notifications.length,
+    };
   }
 }

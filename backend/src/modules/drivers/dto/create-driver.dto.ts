@@ -20,4 +20,8 @@ export class CreateDriverDto {
   @IsString()
   @MinLength(1)
   licenseNumber: string;
+
+  @IsOptional()
+  @IsString()
+  vehicleId?: string;
 }

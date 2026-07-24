@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -43,7 +48,15 @@ export class VehiclesService {
     const skip = (page - 1) * limit;
 
     const [data, total] = await Promise.all([
-      this.prisma.vehicle.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      this.prisma.vehicle.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          driver: { select: { id: true, firstName: true, lastName: true } },
+        },
+      }),
       this.prisma.vehicle.count({ where }),
     ]);
 
@@ -51,6 +64,21 @@ export class VehiclesService {
       data,
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
+  }
+
+  async findAllSimple(companyId: string) {
+    return this.prisma.vehicle.findMany({
+      where: { companyId, deletedAt: null, isActive: true },
+      orderBy: { brand: 'asc' },
+      select: {
+        id: true,
+        brand: true,
+        model: true,
+        licensePlate: true,
+        fuelType: true,
+        driver: { select: { id: true } },
+      },
+    });
   }
 
   async findOne(companyId: string, id: string) {
@@ -86,9 +114,7 @@ export class VehiclesService {
       where: { vehicleId: id, status: 'in_progress', deletedAt: null },
     });
     if (inProgress) {
-      throw new BadRequestException(
-        'Cannot delete vehicle assigned to an in-progress delivery',
-      );
+      throw new BadRequestException('Cannot delete vehicle assigned to an in-progress delivery');
     }
 
     return this.prisma.vehicle.update({

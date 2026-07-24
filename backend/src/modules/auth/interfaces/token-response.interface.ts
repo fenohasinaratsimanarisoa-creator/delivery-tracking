@@ -9,4 +9,6 @@ export interface TokenResponse {
     role: string;
     companyId: string;
   };
+  requiresTwoFactor?: boolean;
+  tempToken?: string;
 }

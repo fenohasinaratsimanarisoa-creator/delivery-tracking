@@ -2,19 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '../../hooks/AuthContext';
+import { setAccessToken } from '../../services/auth/tokenStore';
 import ProtectedRoute from '../ProtectedRoute';
-
-// Mock localStorage
-const storage: Record<string, string> = {};
-const localStorageMock = {
-  getItem: (key: string) => storage[key] ?? null,
-  setItem: (key: string, value: string) => { storage[key] = value; },
-  removeItem: (key: string) => { delete storage[key]; },
-  clear: () => { Object.keys(storage).forEach((k) => delete storage[k]); },
-  length: 0,
-  key: (_i: number) => null,
-};
-Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
 function TestPage() {
   return <div>Protected content</div>;
@@ -24,16 +13,16 @@ function LoginPage() {
   return <div>Login page</div>;
 }
 
-function DashboardPage() {
-  return <div>Dashboard</div>;
+function ForbiddenPage() {
+  return <div>Forbidden</div>;
 }
 
 describe('ProtectedRoute', () => {
   beforeEach(() => {
-    localStorageMock.clear();
+    setAccessToken(null);
   });
 
-  it('redirects unauthenticated user to /login', () => {
+  it('redirects unauthenticated user to /login', async () => {
     render(
       <AuthProvider>
         <MemoryRouter initialEntries={['/protected']}>
@@ -47,24 +36,23 @@ describe('ProtectedRoute', () => {
       </AuthProvider>,
     );
 
+    expect(await screen.findByText('Login page')).toBeTruthy();
     expect(screen.queryByText('Protected content')).toBeNull();
-    expect(screen.getByText('Login page')).toBeTruthy();
   });
 
-  it('redirects user with wrong role to /dashboard', () => {
-    // Setup a token with driver role
+  it('redirects user with wrong role to /dashboard', async () => {
     const driverPayload = {
       sub: '123', email: 'driver@test.com', role: 'driver', companyId: 'c1',
     };
     const token = 'header.' + btoa(JSON.stringify(driverPayload)) + '.sig';
-    localStorageMock.setItem('accessToken', token);
+    setAccessToken(token);
 
     render(
       <AuthProvider>
         <MemoryRouter initialEntries={['/admin-only']}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/403" element={<ForbiddenPage />} />
             <Route path="/admin-only" element={
               <ProtectedRoute roles={['admin']}><TestPage /></ProtectedRoute>
             } />
@@ -73,16 +61,16 @@ describe('ProtectedRoute', () => {
       </AuthProvider>,
     );
 
+    expect(await screen.findByText('Forbidden')).toBeTruthy();
     expect(screen.queryByText('Protected content')).toBeNull();
-    expect(screen.getByText('Dashboard')).toBeTruthy();
   });
 
-  it('allows authenticated user with correct role', () => {
+  it('allows authenticated user with correct role', async () => {
     const adminPayload = {
       sub: '123', email: 'admin@test.com', role: 'admin', companyId: 'c1',
     };
     const token = 'header.' + btoa(JSON.stringify(adminPayload)) + '.sig';
-    localStorageMock.setItem('accessToken', token);
+    setAccessToken(token);
 
     render(
       <AuthProvider>
@@ -97,15 +85,15 @@ describe('ProtectedRoute', () => {
       </AuthProvider>,
     );
 
-    expect(screen.getByText('Protected content')).toBeTruthy();
+    expect(await screen.findByText('Protected content')).toBeTruthy();
   });
 
-  it('allows authenticated user when no roles specified', () => {
+  it('allows authenticated user when no roles specified', async () => {
     const userPayload = {
       sub: '123', email: 'user@test.com', role: 'client', companyId: 'c1',
     };
     const token = 'header.' + btoa(JSON.stringify(userPayload)) + '.sig';
-    localStorageMock.setItem('accessToken', token);
+    setAccessToken(token);
 
     render(
       <AuthProvider>
@@ -120,6 +108,6 @@ describe('ProtectedRoute', () => {
       </AuthProvider>,
     );
 
-    expect(screen.getByText('Protected content')).toBeTruthy();
+    expect(await screen.findByText('Protected content')).toBeTruthy();
   });
 });

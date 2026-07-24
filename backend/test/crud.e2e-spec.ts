@@ -16,7 +16,9 @@ describe('CRUD Operations (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     prisma = app.get(PrismaService);
 
@@ -44,16 +46,14 @@ describe('CRUD Operations (e2e)', () => {
       accessToken = loginRes.body.accessToken;
     } else {
       // Register a new user for testing
-      const regRes = await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          email: 'crud2@test.com',
-          password: 'StrongPass123',
-          firstName: 'CRUD',
-          lastName: 'Tester',
-          role: 'admin',
-          companyId,
-        });
+      const regRes = await request(app.getHttpServer()).post('/auth/register').send({
+        email: 'crud2@test.com',
+        password: 'StrongPass123',
+        firstName: 'CRUD',
+        lastName: 'Tester',
+        role: 'admin',
+        companyId,
+      });
       accessToken = regRes.body.accessToken;
     }
   }, 15000);
@@ -77,7 +77,13 @@ describe('CRUD Operations (e2e)', () => {
       const res = await request(app.getHttpServer())
         .post('/vehicles')
         .set('Authorization', `Bearer ${accessToken}`)
-        .send({ brand: 'Toyota', model: 'Hilux', year: 2023, licensePlate: 'CRUD-001', fuelType: 'diesel' })
+        .send({
+          brand: 'Toyota',
+          model: 'Hilux',
+          year: 2023,
+          licensePlate: 'CRUD-001',
+          fuelType: 'diesel',
+        })
         .expect(201);
 
       expect(res.body.brand).toBe('Toyota');
@@ -147,7 +153,14 @@ describe('CRUD Operations (e2e)', () => {
     beforeAll(async () => {
       // Re-create vehicle and driver for delivery tests
       const v = await prisma.vehicle.create({
-        data: { brand: 'Test', model: 'V', year: 2023, licensePlate: 'DLV-001', fuelType: 'gasoline', companyId },
+        data: {
+          brand: 'Test',
+          model: 'V',
+          year: 2023,
+          licensePlate: 'DLV-001',
+          fuelType: 'gasoline',
+          companyId,
+        },
       });
       vehicleId = v.id;
       const d = await prisma.driver.create({
@@ -188,8 +201,11 @@ describe('CRUD Operations (e2e)', () => {
       const d = await prisma.delivery.create({
         data: {
           title: 'Invalid Transition Test',
-          pickupAddress: 'A', deliveryAddress: 'B',
-          companyId, vehicleId, driverId,
+          pickupAddress: 'A',
+          deliveryAddress: 'B',
+          companyId,
+          vehicleId,
+          driverId,
         },
       });
 

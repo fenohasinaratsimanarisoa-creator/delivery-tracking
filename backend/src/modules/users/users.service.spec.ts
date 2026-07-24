@@ -1,0 +1,570 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import { UsersService } from './users.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import {
+  UpdateProfileDto,
+  ChangePasswordDto,
+  UpdateEmailDto,
+  UpdateAvatarDto,
+} from './dto/update-profile.dto';
+
+jest.mock('bcrypt');
+
+const mockPrisma = {
+  user: {
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    count: jest.fn(),
+  },
+  driver: {
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+  },
+  userSession: {
+    deleteMany: jest.fn(),
+  },
+  $transaction: jest.fn().mockImplementation((arg: any) => {
+    if (typeof arg === 'function') return arg(mockPrisma);
+    if (Array.isArray(arg)) return Promise.all(arg);
+    return Promise.resolve(arg);
+  }),
+};
+
+describe('UsersService', () => {
+  let service: UsersService;
+  let prisma: PrismaService;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    (bcrypt.hash as jest.Mock).mockResolvedValue('hashed_password');
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [UsersService, { provide: PrismaService, useValue: mockPrisma }],
+    }).compile();
+
+    service = module.get<UsersService>(UsersService);
+    prisma = module.get<PrismaService>(PrismaService);
+  });
+
+  describe('create', () => {
+    const dto: CreateUserDto = {
+      email: 'new@test.com',
+      password: 'StrongPass123!',
+      firstName: 'John',
+      lastName: 'Doe',
+      role: 'dispatcher',
+      phone: '+1234567890',
+    };
+
+    it('should create a user and return without password', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.user.create.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'new@test.com',
+        firstName: 'John',
+        lastName: 'Doe',
+        phone: '+1234567890',
+        role: 'dispatcher',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+      });
+
+      const result = await service.create('comp-1', dto);
+
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+        where: { email: 'new@test.com' },
+      });
+      expect(bcrypt.hash).toHaveBeenCalledWith('StrongPass123!', 10);
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(result).not.toHaveProperty('passwordHash');
+    });
+
+    it('should throw ConflictException if email already exists', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce({ id: 'existing-user' });
+
+      await expect(service.create('comp-1', dto)).rejects.toThrow(ConflictException);
+      expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException for invalid role', async () => {
+      const invalidDto = { ...dto, role: 'invalid_role' as any };
+
+      await expect(service.create('comp-1', invalidDto)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('findAll', () => {
+    it('should return paginated users', async () => {
+      const users = [
+        {
+          id: 'u1',
+          email: 'a@test.com',
+          firstName: 'A',
+          lastName: 'B',
+          role: 'dispatcher',
+          isActive: true,
+          companyId: 'comp-1',
+          createdAt: new Date(),
+        },
+        {
+          id: 'u2',
+          email: 'b@test.com',
+          firstName: 'C',
+          lastName: 'D',
+          role: 'driver',
+          isActive: true,
+          companyId: 'comp-1',
+          createdAt: new Date(),
+        },
+      ];
+      mockPrisma.user.findMany.mockResolvedValueOnce(users);
+      mockPrisma.user.count.mockResolvedValueOnce(2);
+
+      const result = await service.findAll('comp-1', 1, 20);
+
+      expect(mockPrisma.user.findMany).toHaveBeenCalledWith({
+        where: { companyId: 'comp-1', deletedAt: null },
+        skip: 0,
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+        select: expect.any(Object),
+      });
+      expect(result.data).toEqual(users);
+      expect(result.meta).toEqual({ total: 2, page: 1, limit: 20, totalPages: 1 });
+    });
+
+    it('should calculate correct totalPages', async () => {
+      mockPrisma.user.findMany.mockResolvedValueOnce([]);
+      mockPrisma.user.count.mockResolvedValueOnce(45);
+
+      const result = await service.findAll('comp-1', 1, 20);
+
+      expect(result.meta.totalPages).toBe(3);
+    });
+  });
+
+  describe('findById', () => {
+    it('should return user when found', async () => {
+      const user = {
+        id: 'user-1',
+        email: 'test@test.com',
+        firstName: 'Test',
+        lastName: 'User',
+        role: 'admin',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+        avatarUrl: null,
+        googleId: null,
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(user);
+
+      const result = await service.findById('user-1', 'comp-1');
+
+      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+        where: { id: 'user-1', companyId: 'comp-1', deletedAt: null },
+        select: expect.any(Object),
+      });
+      expect(result).toEqual(user);
+    });
+
+    it('should throw NotFoundException when user not found', async () => {
+      mockPrisma.user.findFirst.mockResolvedValueOnce(null);
+
+      await expect(service.findById('user-1', 'comp-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('should not filter by companyId when not provided', async () => {
+      const user = {
+        id: 'user-1',
+        email: 'test@test.com',
+        firstName: 'Test',
+        lastName: 'User',
+        role: 'admin',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+        avatarUrl: null,
+        googleId: null,
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(user);
+
+      await service.findById('user-1');
+
+      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+        where: { id: 'user-1', deletedAt: null },
+        select: expect.any(Object),
+      });
+    });
+  });
+
+  describe('findByEmail', () => {
+    it('should return user by email', async () => {
+      const user = { id: 'user-1', email: 'test@test.com', passwordHash: 'hash' };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+
+      const result = await service.findByEmail('test@test.com');
+
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+        where: { email: 'test@test.com' },
+      });
+      expect(result).toEqual(user);
+    });
+  });
+
+  describe('findByCompany', () => {
+    it('should return users for company', async () => {
+      const users = [
+        {
+          id: 'u1',
+          email: 'a@test.com',
+          firstName: 'A',
+          lastName: 'B',
+          role: 'dispatcher',
+          isActive: true,
+          companyId: 'comp-1',
+        },
+      ];
+      mockPrisma.user.findMany.mockResolvedValueOnce(users);
+
+      const result = await service.findByCompany('comp-1');
+
+      expect(mockPrisma.user.findMany).toHaveBeenCalledWith({
+        where: { companyId: 'comp-1', deletedAt: null },
+        select: expect.any(Object),
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(result).toEqual(users);
+    });
+  });
+
+  describe('update', () => {
+    const updateDto: UpdateUserDto = {
+      firstName: 'Updated',
+      lastName: 'Name',
+      email: 'updated@test.com',
+    };
+
+    it('should update user', async () => {
+      const existingUser = {
+        id: 'user-1',
+        email: 'old@test.com',
+        companyId: 'comp-1',
+        deletedAt: null,
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.user.update.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'updated@test.com',
+        firstName: 'Updated',
+        lastName: 'Name',
+        phone: null,
+        role: 'dispatcher',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+      });
+
+      const result = await service.update('comp-1', 'user-1', updateDto);
+
+      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+        where: { id: 'user-1', companyId: 'comp-1', deletedAt: null },
+      });
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { firstName: 'Updated', lastName: 'Name', email: 'updated@test.com' },
+        select: expect.any(Object),
+      });
+      expect(result.email).toBe('updated@test.com');
+    });
+
+    it('should throw NotFoundException when user not found', async () => {
+      mockPrisma.user.findFirst.mockResolvedValueOnce(null);
+
+      await expect(service.update('comp-1', 'user-1', updateDto)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw ConflictException when email already in use by another user', async () => {
+      const existingUser = {
+        id: 'user-1',
+        email: 'old@test.com',
+        companyId: 'comp-1',
+        deletedAt: null,
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
+      mockPrisma.user.findUnique.mockResolvedValueOnce({ id: 'other-user' });
+
+      await expect(service.update('comp-1', 'user-1', updateDto)).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('should hash password when provided', async () => {
+      const existingUser = {
+        id: 'user-1',
+        email: 'old@test.com',
+        companyId: 'comp-1',
+        deletedAt: null,
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.user.update.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'old@test.com',
+        firstName: 'Updated',
+        lastName: 'Name',
+        phone: null,
+        role: 'dispatcher',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+      });
+
+      await service.update('comp-1', 'user-1', { ...updateDto, password: 'NewPass123!' });
+
+      expect(bcrypt.hash).toHaveBeenCalledWith('NewPass123!', 10);
+      expect(mockPrisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ passwordHash: 'hashed_password' }),
+        }),
+      );
+    });
+  });
+
+  describe('updateProfile', () => {
+    it('should update user profile', async () => {
+      const dto: UpdateProfileDto = { firstName: 'New', lastName: 'Name', phone: '+1234567890' };
+      const user = { id: 'user-1', firstName: 'Old', lastName: 'Name', phone: null };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+      mockPrisma.user.update.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'test@test.com',
+        firstName: 'New',
+        lastName: 'Name',
+        phone: '+1234567890',
+        role: 'dispatcher',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+        avatarUrl: null,
+      });
+
+      const result = await service.updateProfile('user-1', dto);
+
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: 'user-1', deletedAt: null },
+      });
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { firstName: 'New', lastName: 'Name', phone: '+1234567890' },
+        select: expect.any(Object),
+      });
+      expect(result.firstName).toBe('New');
+    });
+
+    it('should throw NotFoundException when user not found', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.updateProfile('user-1', { firstName: 'Test' })).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('updateEmail', () => {
+    it('should update email when valid', async () => {
+      const user = { id: 'user-1', email: 'old@test.com', companyId: 'comp-1' };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.user.update.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'new@test.com',
+        firstName: 'Test',
+        lastName: 'User',
+        phone: null,
+        role: 'dispatcher',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+        avatarUrl: null,
+      });
+
+      const result = await service.updateEmail('user-1', 'new@test.com');
+
+      expect(mockPrisma.user.findUnique).toHaveBeenNthCalledWith(1, {
+        where: { id: 'user-1', deletedAt: null },
+      });
+      expect(mockPrisma.user.findUnique).toHaveBeenNthCalledWith(2, {
+        where: { email: 'new@test.com' },
+      });
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { email: 'new@test.com' },
+        select: expect.any(Object),
+      });
+      expect(result.email).toBe('new@test.com');
+    });
+
+    it('should throw NotFoundException when user not found', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.updateEmail('user-1', 'new@test.com')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw BadRequestException when new email equals current', async () => {
+      const user = { id: 'user-1', email: 'same@test.com' };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+
+      await expect(service.updateEmail('user-1', 'same@test.com')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should throw ConflictException when email already in use', async () => {
+      const user = { id: 'user-1', email: 'old@test.com' };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+      mockPrisma.user.findUnique.mockResolvedValueOnce({ id: 'other-user' });
+
+      await expect(service.updateEmail('user-1', 'taken@test.com')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+  });
+
+  describe('changePassword', () => {
+    const dto: ChangePasswordDto = {
+      currentPassword: 'OldPass123!',
+      newPassword: 'NewPass123!',
+      confirmPassword: 'NewPass123!',
+    };
+
+    it('should change password and revoke sessions', async () => {
+      const user = { id: 'user-1', passwordHash: 'hashed_old' };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_new');
+
+      const result = await service.changePassword('user-1', dto);
+
+      expect(bcrypt.compare).toHaveBeenCalledWith('OldPass123!', 'hashed_old');
+      expect(bcrypt.hash).toHaveBeenCalledWith('NewPass123!', 12);
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { passwordHash: 'hashed_new', refreshTokenHash: null },
+      });
+      expect(mockPrisma.userSession.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+      });
+      expect(result.message).toContain('logged out from all devices');
+    });
+
+    it('should throw BadRequestException when passwords do not match', async () => {
+      const mismatchedDto = { ...dto, confirmPassword: 'DifferentPass123!' };
+
+      await expect(service.changePassword('user-1', mismatchedDto)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should throw NotFoundException when user not found', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.changePassword('user-1', dto)).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException when current password is incorrect', async () => {
+      const user = { id: 'user-1', passwordHash: 'hashed_old' };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
+
+      await expect(service.changePassword('user-1', dto)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('updateAvatar', () => {
+    it('should update user avatar', async () => {
+      const user = { id: 'user-1' };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+      mockPrisma.user.update.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'test@test.com',
+        firstName: 'Test',
+        lastName: 'User',
+        phone: null,
+        role: 'dispatcher',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+        avatarUrl: 'https://example.com/avatar.png',
+      });
+
+      const result = await service.updateAvatar('user-1', {
+        avatarUrl: 'https://example.com/avatar.png',
+      });
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { avatarUrl: 'https://example.com/avatar.png' },
+        select: expect.any(Object),
+      });
+      expect(result.avatarUrl).toBe('https://example.com/avatar.png');
+    });
+
+    it('should throw NotFoundException when user not found', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.updateAvatar('user-1', { avatarUrl: 'url' })).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('remove', () => {
+    it('should soft delete user', async () => {
+      const user = { id: 'user-1', companyId: 'comp-1', deletedAt: null };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(user);
+      mockPrisma.user.update.mockResolvedValueOnce({
+        id: 'user-1',
+        deletedAt: new Date(),
+        isActive: false,
+        refreshTokenHash: null,
+      });
+
+      const result = await service.remove('comp-1', 'user-1', 'current-user-id');
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { deletedAt: expect.any(Date), isActive: false, refreshTokenHash: null },
+      });
+      expect(result).toHaveProperty('deletedAt');
+    });
+
+    it('should throw ConflictException when trying to delete own account', async () => {
+      await expect(service.remove('comp-1', 'user-1', 'user-1')).rejects.toThrow(ConflictException);
+    });
+
+    it('should throw NotFoundException when user not found', async () => {
+      mockPrisma.user.findFirst.mockResolvedValueOnce(null);
+
+      await expect(service.remove('comp-1', 'user-1', 'other-user')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+});

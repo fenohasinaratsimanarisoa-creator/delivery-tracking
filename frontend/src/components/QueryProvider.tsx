@@ -5,8 +5,15 @@ export default function QueryProvider({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
     () => new QueryClient({
       defaultOptions: {
-        queries: { retry: 1, refetchOnWindowFocus: false },
-        mutations: { retry: 0 },
+        queries: {
+          retry: 3,
+          retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+          staleTime: 1000 * 60 * 2,
+          gcTime: 1000 * 60 * 10,
+          refetchOnWindowFocus: false,
+          refetchOnReconnect: true,
+        },
+        mutations: { retry: 2, retryDelay: 1000 },
       },
     }),
   );

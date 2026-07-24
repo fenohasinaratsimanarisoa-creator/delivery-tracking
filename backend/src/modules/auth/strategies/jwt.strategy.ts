@@ -19,6 +19,29 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
+    if (payload.type === 'platform_admin') {
+      const admin = await this.prisma.platformAdmin.findUnique({
+        where: { id: payload.sub },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          isActive: true,
+        },
+      });
+
+      if (!admin || !admin.isActive) {
+        throw new UnauthorizedException('Platform admin not found or inactive');
+      }
+
+      return {
+        ...admin,
+        role: 'super_admin' as const,
+        type: 'platform_admin' as const,
+      };
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       select: {
@@ -27,6 +50,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         role: true,
         companyId: true,
         isActive: true,
+        firstName: true,
+        lastName: true,
       },
     });
 
@@ -34,6 +59,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found or inactive');
     }
 
-    return user;
+    return { ...user, type: 'user' as const };
   }
 }
