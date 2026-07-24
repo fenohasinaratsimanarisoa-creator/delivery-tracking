@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Power, PowerOff } from 'lucide-react';
 import Button from '../components/Button';
@@ -381,23 +381,25 @@ export default function UsersPage() {
                 if (fieldName === 'password' && isEdit && !userForm.touched.has('password')) {
                   const val = userForm.values.password as string;
                   return (
-                    <DialogField key={fieldName} label={def.label} error={null}>
-                      <input
-                        className="dialog-input"
-                        type="password"
-                        value={val}
-                        onChange={(e) => userForm.setValue(fieldName, e.target.value)}
-                        onBlur={() => userForm.handleBlur(fieldName)}
-                        placeholder="Laisser vide pour conserver l'actuel"
-                        autoFocus={def.autoFocus}
-                      />
+                    <React.Fragment key={fieldName}>
+                      <DialogField label={def.label} error={null}>
+                        <input
+                          className="dialog-input"
+                          type="password"
+                          value={val}
+                          onChange={(e) => userForm.setValue(fieldName, e.target.value)}
+                          onBlur={() => userForm.handleBlur(fieldName)}
+                          placeholder="Laisser vide pour conserver l'actuel"
+                          autoFocus={def.autoFocus}
+                        />
+                      </DialogField>
                       <p style={{
-                        margin: 'var(--space-xs) 0 0',
+                        margin: '-0.75rem 0 var(--space-lg)',
                         fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)',
                       }}>
                         Laissez vide pour conserver le mot de passe actuel
                       </p>
-                    </DialogField>
+                    </React.Fragment>
                   );
                 }
                 const val = userForm.values[fieldName as keyof UserFormValues] as string;
