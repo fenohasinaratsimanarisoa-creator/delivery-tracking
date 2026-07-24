@@ -271,9 +271,14 @@ export function DialogField({ label, error, children, required }: {
       >
         {label}{required && <span style={{ color: 'var(--color-red)', marginLeft: 2 }}>*</span>}
       </label>
-      {React.cloneElement(React.Children.only(children) as React.ReactElement, {
-        id,
-        className: `${(children as any).props?.className || ''} ${error ? '--error' : ''}`.trim(),
+      {React.Children.map(children, (child, index) => {
+        if (index === 0) {
+          return React.cloneElement(child as React.ReactElement, {
+            id,
+            className: `${(child as any).props?.className || ''} ${error ? '--error' : ''}`.trim(),
+          });
+        }
+        return child;
       })}
       {error && (
         <p style={{
