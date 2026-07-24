@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Bell, X, Check, Clock, MapPin, Gauge, Fuel, Wifi, Package } from 'lucide-react';
+import { Bell, X, Check, Clock, MapPin, Gauge, Fuel, Wifi } from 'lucide-react';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import { formatDateTime } from '../services/i18n/formatDate';
@@ -44,6 +44,10 @@ export default function AlertsPage() {
   const PRIORITY_LABELS: Record<string, string> = {
     critical: t('alerts.priority.critical'), high: t('alerts.priority.high'),
     medium: t('alerts.priority.medium'), low: t('alerts.priority.low'),
+  };
+  const PERIOD_LABELS: Record<string, string> = {
+    today: t('alerts.filters.today'), '7d': t('alerts.filters.7days'),
+    '30d': t('alerts.filters.30days'), all: t('alerts.filters.allTime'),
   };
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -89,7 +93,7 @@ export default function AlertsPage() {
       toast(t('alerts.toast.resolved'));
     },
     onError: (err: any) => {
-      toast(err?.response?.data?.message || t('alerts.toast.error'), 'error');
+      toast(err?.response?.data?.message || 'Erreur', 'error');
     },
   });
 
@@ -126,11 +130,8 @@ export default function AlertsPage() {
     delay_alert: { icon: <Clock size={16} />, borderColor: '#f97316' },
     device_offline: { icon: <Wifi size={16} />, borderColor: '#eab308' },
     geofence_event: { icon: <MapPin size={16} />, borderColor: '#f97316' },
-    delivery_status: { icon: <Package size={16} />, borderColor: '#22c55e' },
     location_mismatch: { icon: <MapPin size={16} />, borderColor: '#f97316' },
     fuel_anomaly: { icon: <Fuel size={16} />, borderColor: '#f97316' },
-    maintenance_due: { icon: <Bell size={16} />, borderColor: '#eab308' },
-    system: { icon: <Bell size={16} />, borderColor: '#6b7280' },
   }), []);
 
   const trendPercent = useMemo(() => {
@@ -138,7 +139,7 @@ export default function AlertsPage() {
     return Math.round(((alertStats.total - alertStats.prevTotal) / alertStats.prevTotal) * 100);
   }, [alertStats]);
 
-  const allTypes = ['speed_alert', 'prolonged_stop', 'delay_alert', 'device_offline', 'geofence_event', 'delivery_status', 'location_mismatch', 'fuel_anomaly'];
+  const allTypes = ['speed_alert', 'prolonged_stop', 'delay_alert', 'device_offline', 'geofence_event', 'location_mismatch', 'fuel_anomaly'];
   const allPriorities = ['critical', 'high', 'medium', 'low'];
 
   return (
@@ -155,7 +156,7 @@ export default function AlertsPage() {
         </h1>
         {liveCount > 0 && (
           <span style={{ fontSize: '0.75rem', color: '#22c55e', fontWeight: 500 }}>
-            🔴 {t('alerts.liveCount', { count: liveCount })}
+            {t('alerts.liveNew', { count: liveCount })}
           </span>
         )}
       </div>
@@ -171,30 +172,53 @@ export default function AlertsPage() {
         </div>
       )}
 
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-          {PERIOD_VALUES.map((val) => (
-            <FilterChip key={val} active={period === val} onClick={() => { setPeriod(val); setPage(1); }}>{t(`alerts.filters.period${val}`)}</FilterChip>
-          ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>
+            {t('alerts.filters.periodLabel')}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {PERIOD_VALUES.map((val) => (
+              <FilterChip key={val} active={period === val} onClick={() => { setPeriod(val); setPage(1); }}>{PERIOD_LABELS[val]}</FilterChip>
+            ))}
+          </div>
         </div>
-        <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>{t('alerts.filters.type')}</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-          {allTypes.map((tp) => (
-            <FilterChip key={tp} active={selectedTypes.includes(tp)} onClick={() => toggleType(tp)}>
-              {t(`alerts.type.${tp}`, tp)}
-            </FilterChip>
-          ))}
+
+        <div>
+          <div style={{ fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>
+            {t('alerts.filters.typeLabel')}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {allTypes.map((tp) => (
+              <FilterChip key={tp} active={selectedTypes.includes(tp)} onClick={() => toggleType(tp)}>
+                {t(`alerts.type.${tp}`, tp)}
+              </FilterChip>
+            ))}
+          </div>
         </div>
-        <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>{t('alerts.filters.gravity')}</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-          {allPriorities.map((prio) => (
-            <FilterChip key={prio} active={selectedPriorities.includes(prio)} onClick={() => togglePriority(prio)} color={PRIORITY_COLORS[prio]}>{PRIORITY_LABELS[prio]}</FilterChip>
-          ))}
+
+        <div>
+          <div style={{ fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>
+            {t('alerts.filters.priorityLabel')}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {allPriorities.map((prio) => (
+              <FilterChip key={prio} active={selectedPriorities.includes(prio)} onClick={() => togglePriority(prio)} color={PRIORITY_COLORS[prio]}>
+                {PRIORITY_LABELS[prio]}
+              </FilterChip>
+            ))}
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <FilterChip active={resolvedFilter === ''} onClick={() => { setResolvedFilter(''); setPage(1); }}>{t('alerts.filters.all')}</FilterChip>
-          <FilterChip active={resolvedFilter === 'false'} onClick={() => { setResolvedFilter('false'); setPage(1); }} color="#ef4444">{t('alerts.filters.unresolved')}</FilterChip>
-          <FilterChip active={resolvedFilter === 'true'} onClick={() => { setResolvedFilter('true'); setPage(1); }} color="#22c55e">{t('alerts.filters.resolved')}</FilterChip>
+
+        <div>
+          <div style={{ fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>
+            {t('alerts.filters.statusLabel')}
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <FilterChip active={resolvedFilter === ''} onClick={() => { setResolvedFilter(''); setPage(1); }}>{t('alerts.filters.all')}</FilterChip>
+            <FilterChip active={resolvedFilter === 'false'} onClick={() => { setResolvedFilter('false'); setPage(1); }} color="#ef4444">{t('alerts.filters.unresolved')}</FilterChip>
+            <FilterChip active={resolvedFilter === 'true'} onClick={() => { setResolvedFilter('true'); setPage(1); }} color="#22c55e">{t('alerts.filters.resolved')}</FilterChip>
+          </div>
         </div>
       </div>
 
@@ -207,8 +231,8 @@ export default function AlertsPage() {
       ) : alerts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--color-text-tertiary)' }}>
           <Bell size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-          <p style={{ fontSize: '1rem', fontWeight: 500 }}>{t('alerts.empty.title')}</p>
-          <p style={{ fontSize: '0.8rem' }}>{t('alerts.empty.description')}</p>
+          <p style={{ fontSize: '1rem', fontWeight: 500 }}>{t('alerts.emptyTitle')}</p>
+          <p style={{ fontSize: '0.8rem' }}>{t('alerts.emptyDesc')}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -221,7 +245,7 @@ export default function AlertsPage() {
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px',
                   background: r.resolved ? 'var(--color-surface)' : 'var(--color-glass, rgba(18,27,46,0.92))',
-                  border: `1px solid var(--color-border-subtle)`,
+                  border: '1px solid var(--color-border-subtle)',
                   borderLeft: `3px solid ${r.resolved ? '#22c55e' : PRIORITY_COLORS[r.priority] || '#6b7280'}`,
                   borderRadius: 10, cursor: 'pointer',
                   opacity: r.resolved ? 0.7 : 1,
@@ -251,7 +275,7 @@ export default function AlertsPage() {
                         📦 {r.delivery.title}
                       </Link>
                     )}
-                    {r.resolved && <span style={{ color: '#22c55e' }}>{t('alerts.resolvedLabel')}</span>}
+                    {r.resolved && <span style={{ color: '#22c55e' }}>✓ {t('alerts.detail.resolved')}</span>}
                   </div>
                 </div>
                 <div style={{ flexShrink: 0, alignSelf: 'center' }}>
@@ -276,7 +300,7 @@ export default function AlertsPage() {
             style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--color-border-subtle)', background: 'var(--color-surface)', color: 'var(--color-text)', cursor: page === 1 ? 'default' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}>
             {t('alerts.pagination.previous')}
           </button>
-          <span style={{ padding: '6px 14px', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{t('alerts.pagination.page')} {page}</span>
+          <span style={{ padding: '6px 14px', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{t('alerts.pagination.page')}</span>
           <button onClick={() => setPage(p => p + 1)} disabled={alerts.length < 50}
             style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--color-border-subtle)', background: 'var(--color-surface)', color: 'var(--color-text)', cursor: alerts.length < 50 ? 'default' : 'pointer', opacity: alerts.length < 50 ? 0.5 : 1 }}>
             {t('alerts.pagination.next')}
@@ -300,13 +324,13 @@ export default function AlertsPage() {
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
               <Badge color={PRIORITY_COLORS[selectedAlert.priority]}>{PRIORITY_LABELS[selectedAlert.priority]}</Badge>
-              <Badge color={selectedAlert.resolved ? '#22c55e' : '#ef4444'}>{selectedAlert.resolved ? t('alerts.resolved') : t('alerts.active')}</Badge>
+              <Badge color={selectedAlert.resolved ? '#22c55e' : '#ef4444'}>{selectedAlert.resolved ? t('alerts.detail.resolved') : t('alerts.detail.active')}</Badge>
             </div>
 
-            <Section label={t('alerts.drawer.message')}>{selectedAlert.message}</Section>
+            <Section label={t('alerts.detail.message')}>{selectedAlert.message}</Section>
 
             {selectedAlert.delivery && (
-              <Section label={t('alerts.drawer.delivery')}>
+              <Section label={t('alerts.detail.delivery')}>
                 <Link to={`/deliveries/${selectedAlert.delivery.id}`} style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>
                   {selectedAlert.delivery.title}
                 </Link>
@@ -314,19 +338,19 @@ export default function AlertsPage() {
               </Section>
             )}
 
-            {selectedAlert.user && <Section label={t('alerts.drawer.driver')}>{selectedAlert.user.firstName} {selectedAlert.user.lastName}</Section>}
+            {selectedAlert.user && <Section label={t('alerts.detail.driver')}>{selectedAlert.user.firstName} {selectedAlert.user.lastName}</Section>}
 
-            <Section label={t('alerts.drawer.date')}>{formatDateTime(selectedAlert.createdAt)}</Section>
+            <Section label={t('alerts.detail.date')}>{formatDateTime(selectedAlert.createdAt)}</Section>
 
             {selectedAlert.link && (
-              <Section label={t('alerts.drawer.directLink')}>
-                <Link to={selectedAlert.link} style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>{t('alerts.drawer.viewDetail')}</Link>
+              <Section label={t('alerts.detail.link')}>
+                <Link to={selectedAlert.link} style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>{t('alerts.detail.viewDetail')}</Link>
               </Section>
             )}
 
             {selectedAlert.resolved && selectedAlert.resolvedBy && (
-              <Section label={t('alerts.drawer.resolution')}>
-                <div>{t('alerts.drawer.resolvedBy', { firstName: selectedAlert.resolvedBy.firstName, lastName: selectedAlert.resolvedBy.lastName, date: formatDateTime(selectedAlert.resolvedAt!) })}</div>
+              <Section label={t('alerts.detail.resolution')}>
+                <div>{t('alerts.detail.resolvedBy', { firstName: selectedAlert.resolvedBy.firstName, lastName: selectedAlert.resolvedBy.lastName, date: formatDateTime(selectedAlert.resolvedAt!) })}</div>
                 {selectedAlert.resolutionComment && (
                   <div style={{ marginTop: 8, padding: 10, background: 'var(--color-surface-alt)', borderRadius: 6, fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>{selectedAlert.resolutionComment}</div>
                 )}
@@ -335,12 +359,12 @@ export default function AlertsPage() {
 
             {!selectedAlert.resolved && (
               <div style={{ marginTop: 20, padding: 16, background: 'var(--color-surface-alt)', borderRadius: 10 }}>
-                <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--color-text)' }}>{t('alerts.drawer.markResolved')}</div>
-                <textarea placeholder={t('alerts.drawer.commentPlaceholder')} value={resolveComment} onChange={(e) => setResolveComment(e.target.value)} rows={3}
+                <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--color-text)' }}>{t('alerts.detail.markResolved')}</div>
+                <textarea placeholder={t('alerts.detail.commentPlaceholder')} value={resolveComment} onChange={(e) => setResolveComment(e.target.value)} rows={3}
                   style={{ width: '100%', padding: 8, background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', borderRadius: 6, color: 'var(--color-text)', fontSize: '0.85rem', fontFamily: 'inherit', resize: 'vertical', marginBottom: 10 }} />
                 <button onClick={() => resolveMutation.mutate({ id: selectedAlert.id, comment: resolveComment })} disabled={resolveMutation.isPending}
                   style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#22c55e', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                  {resolveMutation.isPending ? t('alerts.drawer.resolving') : t('alerts.drawer.confirmResolve')}
+                  {resolveMutation.isPending ? t('alerts.detail.resolving') : t('alerts.detail.confirmResolve')}
                 </button>
               </div>
             )}
