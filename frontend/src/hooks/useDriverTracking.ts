@@ -17,6 +17,19 @@ const INTERVAL_FAST = 3000;
 const INTERVAL_SLOW = 20000;
 const INTERVAL_DEFAULT = 5000;
 const DRAIN_INTERVAL_MS = 10000;
+const PROXIMITY_THRESHOLD_M = 300;
+const PROXIMITY_REMINDER_MS = 5 * 60 * 1000;
+
+function haversineDistanceM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 export interface DriverPosition {
   lat: number;
@@ -37,6 +50,9 @@ export interface TrackingStatus {
   statusMsg: string;
   geolocationDenied: boolean;
   activeDeliveryId: string;
+  proximityAlert: boolean;
+  proximityDeliveryTitle: string;
+  dismissProximityAlert: () => void;
 }
 
 export function useDriverTracking() {
@@ -48,6 +64,12 @@ export function useDriverTracking() {
   const [statusMsg, setStatusMsg] = useState('');
   const [geolocationDenied, setGeolocationDenied] = useState(false);
   const [activeDeliveryId, setActiveDeliveryId] = useState('');
+  const [proximityAlert, setProximityAlert] = useState(false);
+  const [proximityDeliveryTitle, setProximityDeliveryTitle] = useState('');
+  const proximityDismissedRef = useRef(false);
+  const lastProximityAlertRef = useRef(0);
+  const soundEnabledRef = useRef(true);
+  const inProgressDeliveryRef = useRef<any>(null);
 
   const kalmanRef = useRef<KalmanFilter | null>(null);
   const filteredPosRef = useRef<{ lat: number; lng: number; confidence: number } | null>(null);
@@ -83,9 +105,45 @@ export function useDriverTracking() {
   const autoDeliveryId = inProgressDelivery?.id || '';
 
   deliveryIdRef.current = autoDeliveryId;
+  inProgressDeliveryRef.current = inProgressDelivery;
   if (autoDeliveryId !== activeDeliveryId) {
     setActiveDeliveryId(autoDeliveryId);
+    setProximityAlert(false);
+    proximityDismissedRef.current = false;
+    lastProximityAlertRef.current = 0;
   }
+
+  const checkProximity = useCallback((lat: number, lng: number) => {
+    const delivery = inProgressDeliveryRef.current;
+    if (!delivery || !delivery.deliveryLat || !delivery.deliveryLng) {
+      setProximityAlert(false);
+      return;
+    }
+    if (delivery.status !== 'in_progress') {
+      setProximityAlert(false);
+      return;
+    }
+    if (proximityDismissedRef.current) return;
+
+    const dist = haversineDistanceM(lat, lng, delivery.deliveryLat, delivery.deliveryLng);
+    const now = Date.now();
+
+    if (dist <= PROXIMITY_THRESHOLD_M) {
+      if (now - lastProximityAlertRef.current > PROXIMITY_REMINDER_MS) {
+        lastProximityAlertRef.current = now;
+        setProximityAlert(true);
+        setProximityDeliveryTitle(delivery.title || '');
+      }
+    } else {
+      setProximityAlert(false);
+    }
+  }, []);
+
+  const dismissProximityAlert = useCallback(() => {
+    setProximityAlert(false);
+    proximityDismissedRef.current = true;
+    soundEnabledRef.current = true;
+  }, []);
 
   const refreshQueueCount = useCallback(async () => {
     const count = await queueSize();
@@ -199,6 +257,7 @@ export function useDriverTracking() {
         setConfidenceLevel(conf);
         setIsStationary(isActuallyStationary);
         recalcInterval(speed ?? undefined, acc, isActuallyStationary);
+        checkProximity(filtered.lat, filtered.lng);
 
         if (acc <= ACCURACY_GOOD) {
           setStatusMsg('');
@@ -309,6 +368,9 @@ export function useDriverTracking() {
     statusMsg,
     geolocationDenied,
     activeDeliveryId,
+    proximityAlert,
+    proximityDeliveryTitle,
+    dismissProximityAlert,
   };
 
   return trackingStatus;
