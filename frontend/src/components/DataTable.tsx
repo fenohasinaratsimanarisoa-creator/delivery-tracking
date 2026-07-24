@@ -96,7 +96,7 @@ export default function DataTable<T>({
   }
 
   return (
-    <div style={{
+    <div className="dt-responsive" data-mode="table" style={{
       background: 'var(--color-surface)',
       borderRadius: 'var(--radius-lg)',
       border: '1px solid var(--color-border-subtle)',
@@ -165,7 +165,7 @@ export default function DataTable<T>({
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >
                   {columns.map((col) => (
-                    <td key={col.key} style={{
+                    <td key={col.key} data-label={col.label} style={{
                       padding: 'var(--space-md) var(--space-lg)',
                       fontSize: 'var(--text-sm)',
                       color: 'var(--color-text)',
@@ -208,7 +208,7 @@ export default function DataTable<T>({
       </div>
 
       {totalPages > 1 && (
-        <div style={{
+        <div className="dt-pagination" style={{
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           gap: 'var(--space-xs)',
           padding: 'var(--space-md) var(--space-lg)',

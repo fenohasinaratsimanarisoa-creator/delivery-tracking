@@ -281,7 +281,7 @@ export default function DeliveriesPage() {
     `${d.firstName} ${d.lastName}${d.phone ? ` — ${d.phone}` : ''}`;
 
   return (
-    <div style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="page-padding" style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <style>{`
         @keyframes dt-row-highlight {
           0% { background: var(--color-accent-muted); }
@@ -294,7 +294,7 @@ export default function DeliveriesPage() {
         marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-sm)',
       }}>
         <div>
-          <h1 style={{
+          <h1 className="page-title" style={{
             fontFamily: 'var(--font-display)', fontSize: 'var(--text-xl)', fontWeight: 700,
             color: 'var(--color-text)', letterSpacing: '-0.02em', margin: 0,
           }}>

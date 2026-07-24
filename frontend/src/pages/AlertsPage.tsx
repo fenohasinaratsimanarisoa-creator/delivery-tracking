@@ -139,7 +139,7 @@ export default function AlertsPage() {
   const allPriorities = ['critical', 'high', 'medium', 'low'];
 
   return (
-    <div style={{ padding: 24, height: '100%', overflow: 'auto', maxWidth: 1000, margin: '0 auto' }}>
+    <div className="page-padding" style={{ padding: 24, height: '100%', overflow: 'auto', maxWidth: 1000, margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h1 style={{ margin: 0, fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: 10, color: 'var(--color-text)' }}>
           <Bell size={22} style={{ color: 'var(--color-accent, #F2A93C)' }} />

@@ -187,7 +187,7 @@ export default function ReportsPage() {
         @keyframes dt-spin { to { transform: rotate(360deg); } }
       `}</style>
 
-      <div style={{
+      <div className="reports-header" style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
         marginBottom: 'var(--space-lg, 16px)', flexWrap: 'wrap', gap: 'var(--space-md, 12px)',
       }}>
@@ -209,7 +209,7 @@ export default function ReportsPage() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="reports-period-bar" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div style={{
             display: 'flex', gap: 0,
             border: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
@@ -249,7 +249,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div style={{
+      <div className="reports-tabs-wrap" style={{
         display: 'flex', gap: 'var(--space-sm, 8px)',
         marginBottom: 'var(--space-lg, 16px)',
         borderBottom: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
@@ -319,7 +319,7 @@ function renderDeliveryReport(data: any, loading: boolean) {
         <StatBox label="À l'heure" value={formatNumber(data.onTimeCount)} color={COLORS.blue} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="reports-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <Card title="Répartition par statut">
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
@@ -379,7 +379,7 @@ function renderFleetReport(data: any, loading: boolean) {
         </ResponsiveContainer>
       </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="reports-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <Card title="Consommation (L/100km)">
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={data.vehicles} layout="vertical" margin={{ left: 80 }}>
@@ -408,7 +408,7 @@ function renderFleetReport(data: any, loading: boolean) {
       </div>
 
       <Card title="Détail des véhicules">
-        <div style={{ overflowX: 'auto' }}>
+        <div className="reports-table-wrap" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm, 0.875rem)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))' }}>
@@ -478,7 +478,7 @@ function renderDriverReport(data: any, loading: boolean) {
       </Card>
 
       <Card title="Détail des chauffeurs">
-        <div style={{ overflowX: 'auto' }}>
+        <div className="reports-table-wrap" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm, 0.875rem)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))' }}>

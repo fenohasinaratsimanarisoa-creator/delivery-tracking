@@ -175,7 +175,7 @@ export default function FleetPage() {
   const onCancel = () => { setDrawerOpen(false); setEditing(null); };
 
   return (
-    <div style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="page-padding" style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <style>{`
         @keyframes dt-row-highlight {
           0% { background: var(--color-accent-muted); }

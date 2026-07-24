@@ -167,7 +167,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div style={{
+        <div className="notif-panel" style={{
           position: 'fixed',
           top: 'var(--space-lg, 16px)',
           right: isMobile ? 8 : 'var(--space-lg, 16px)',

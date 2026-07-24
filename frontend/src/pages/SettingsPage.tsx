@@ -263,7 +263,7 @@ export default function SettingsPage() {
         {/* Profile */}
         <SectionCard title={t('settings.profile')}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md, 12px)' }}>
-            <div style={{ display: 'flex', gap: 'var(--space-lg, 16px)' }}>
+            <div className="settings-two-col" style={{ display: 'flex', gap: 'var(--space-lg, 16px)' }}>
               <div style={{ flex: 1 }}>
                 <label style={labelStyle}>{t('settings.firstName')}</label>
                 <input value={firstName} onChange={(e) => setFirstName(e.target.value)} style={inputStyle} />
@@ -324,7 +324,7 @@ export default function SettingsPage() {
                   placeholder={t('settingsSecurity.confirmPasswordPlaceholder')} />
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="settings-pw-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <label style={{
                 display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
                 fontSize: '0.75rem', color: 'var(--color-text-secondary, #9BA6B9)',
@@ -391,22 +391,24 @@ export default function SettingsPage() {
               <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary, #9BA6B9)' }}>
                 {t('settingsSecurity.twoFactorSetupStep2')}
               </p>
-              <form onSubmit={handleVerify2fa} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <form onSubmit={handleVerify2fa} className="settings-2fa-form" style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <input type="text" inputMode="numeric" maxLength={6} placeholder={t('settingsSecurity.twoFactorCodePlaceholder')}
                   value={twoFactorCode} onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
                   style={{
                     ...inputStyle, width: 140, textAlign: 'center', letterSpacing: 6,
                     fontFamily: 'var(--font-mono, monospace)', fontSize: '1rem',
                   }} />
-                <Button type="submit" variant="primary" size="sm"
-                  loading={verify2faMutation.isPending}
-                  disabled={twoFactorCode.length !== 6}>
-                  {t('settingsSecurity.twoFactorConfirm')}
-                </Button>
-                <Button variant="ghost" size="sm"
-                  onClick={() => { setTwoFactorStep('idle'); setTwoFactorCode(''); }}>
-                  {t('settingsSecurity.twoFactorCancel')}
-                </Button>
+                <div className="settings-2fa-actions" style={{ display: 'flex', gap: 8 }}>
+                  <Button type="submit" variant="primary" size="sm"
+                    loading={verify2faMutation.isPending}
+                    disabled={twoFactorCode.length !== 6}>
+                    {t('settingsSecurity.twoFactorConfirm')}
+                  </Button>
+                  <Button variant="ghost" size="sm"
+                    onClick={() => { setTwoFactorStep('idle'); setTwoFactorCode(''); }}>
+                    {t('settingsSecurity.twoFactorCancel')}
+                  </Button>
+                </div>
               </form>
             </div>
           )}
@@ -419,22 +421,24 @@ export default function SettingsPage() {
               <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary, #9BA6B9)', margin: '0 0 8px' }}>
                 {t('settingsSecurity.twoFactorDisableConfirmText')}
               </p>
-              <form onSubmit={handleDisable2fa} style={{ display: 'flex', gap: 8 }}>
+              <form onSubmit={handleDisable2fa} className="settings-2fa-form" style={{ display: 'flex', gap: 8 }}>
                 <input type="text" inputMode="numeric" maxLength={6} placeholder={t('settingsSecurity.twoFactorCodePlaceholder')}
                   value={twoFactorCode} onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
                   style={{
                     ...inputStyle, width: 140, textAlign: 'center', letterSpacing: 6,
                     fontFamily: 'var(--font-mono, monospace)', fontSize: '1rem',
                   }} />
-                <Button type="submit" variant="danger" size="sm"
-                  loading={disable2faMutation.isPending}
-                  disabled={twoFactorCode.length !== 6}>
-                  {t('settingsSecurity.twoFactorDisable')}
-                </Button>
-                <Button variant="ghost" size="sm"
-                  onClick={() => { setTwoFactorStep('idle'); setTwoFactorCode(''); }}>
-                  {t('settingsSecurity.twoFactorCancel')}
-                </Button>
+                <div className="settings-2fa-actions" style={{ display: 'flex', gap: 8 }}>
+                  <Button type="submit" variant="danger" size="sm"
+                    loading={disable2faMutation.isPending}
+                    disabled={twoFactorCode.length !== 6}>
+                    {t('settingsSecurity.twoFactorDisable')}
+                  </Button>
+                  <Button variant="ghost" size="sm"
+                    onClick={() => { setTwoFactorStep('idle'); setTwoFactorCode(''); }}>
+                    {t('settingsSecurity.twoFactorCancel')}
+                  </Button>
+                </div>
               </form>
             </div>
           )}
