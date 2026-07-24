@@ -546,7 +546,7 @@ export default function MyPositionPage() {
                           >
                             <span style={{ fontWeight: 500 }}>📍 {h.label}</span>
                             <span style={{ fontSize: 'var(--text-xs, 0.625rem)', color: 'var(--color-text-tertiary, #7A8BA3)', marginLeft: 8 }}>
-                              {formatDate(h.lastUsed)}
+                              {formatDate(new Date(h.lastUsed))}
                             </span>
                           </Button>
                         ))}

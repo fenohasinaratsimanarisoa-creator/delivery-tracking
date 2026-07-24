@@ -210,7 +210,7 @@ export default function AlertsPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {alerts.map((r) => {
-            const cfg = typeConfig[r.type] || { icon: <Bell size={16} />, borderColor: '#6b7280' };
+            const cfg = typeConfig[r.type as keyof typeof typeConfig] || { icon: <Bell size={16} />, borderColor: '#6b7280' };
             return (
               <div
                 key={r.id}
