@@ -137,11 +137,19 @@ export class AlertsService {
 
     const prevWhere = { ...where, createdAt: undefined };
     if (period === '7d') {
-      prevWhere.createdAt = { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) };
+      prevWhere.createdAt = {
+        lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+        gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+      };
     } else if (period === '30d') {
-      prevWhere.createdAt = { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), gte: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000) };
+      prevWhere.createdAt = {
+        lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+        gte: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+      };
     }
-    const prevTotal = prevWhere.createdAt ? await this.prisma.notification.count({ where: prevWhere }) : null;
+    const prevTotal = prevWhere.createdAt
+      ? await this.prisma.notification.count({ where: prevWhere })
+      : null;
 
     return { total, byPriority, byType, prevTotal };
   }

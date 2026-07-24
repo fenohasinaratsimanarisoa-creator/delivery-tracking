@@ -1,6 +1,12 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DirectionsRequestDto, DirectionsResponse, RouteStep, MatchRequestDto, MatchResponse } from './dto/routing.dto';
+import {
+  DirectionsRequestDto,
+  DirectionsResponse,
+  RouteStep,
+  MatchRequestDto,
+  MatchResponse,
+} from './dto/routing.dto';
 
 @Injectable()
 export class RoutingService {
@@ -10,8 +16,7 @@ export class RoutingService {
   private readonly googleApiKey: string | undefined;
 
   constructor(private configService: ConfigService) {
-    this.osrmBaseUrl =
-      this.configService.get<string>('OSRM_BASE_URL') || 'http://localhost:5000';
+    this.osrmBaseUrl = this.configService.get<string>('OSRM_BASE_URL') || 'http://localhost:5000';
     this.googleApiKey = this.configService.get<string>('GOOGLE_MAPS_API_KEY');
   }
 
@@ -38,17 +43,11 @@ export class RoutingService {
         return await this.getGoogleDirections(dto);
       } catch (googleErr) {
         this.logger.error(`Google Directions also failed: ${(googleErr as Error).message}`);
-        throw new HttpException(
-          'Routing unavailable',
-          HttpStatus.SERVICE_UNAVAILABLE,
-        );
+        throw new HttpException('Routing unavailable', HttpStatus.SERVICE_UNAVAILABLE);
       }
     }
 
-    throw new HttpException(
-      'All routing providers failed',
-      HttpStatus.SERVICE_UNAVAILABLE,
-    );
+    throw new HttpException('All routing providers failed', HttpStatus.SERVICE_UNAVAILABLE);
   }
 
   private extractRouteData(route: {
@@ -141,7 +140,12 @@ export class RoutingService {
     }
 
     const main = this.extractRouteData(data.routes[0]);
-    const alternatives: { polyline: [number, number][]; distance: number; duration: number; steps: RouteStep[] }[] = [];
+    const alternatives: {
+      polyline: [number, number][];
+      distance: number;
+      duration: number;
+      steps: RouteStep[];
+    }[] = [];
     if (dto.alternatives && data.routes.length > 1) {
       for (let i = 1; i < data.routes.length; i++) {
         alternatives.push(this.extractRouteData(data.routes[i]));
@@ -158,9 +162,7 @@ export class RoutingService {
     };
   }
 
-  private async getGoogleDirections(
-    dto: DirectionsRequestDto,
-  ): Promise<DirectionsResponse> {
+  private async getGoogleDirections(dto: DirectionsRequestDto): Promise<DirectionsResponse> {
     const origin = `${dto.originLat},${dto.originLng}`;
     const destination = `${dto.destinationLat},${dto.destinationLng}`;
     const mode = dto.profile === 'walking' ? 'walking' : 'driving';
@@ -274,9 +276,7 @@ export class RoutingService {
       return {
         matchedPolyline,
         confidence: best.confidence,
-        originalPolyline: dto.coordinates.map(
-          (c) => [c[0], c[1]] as [number, number],
-        ),
+        originalPolyline: dto.coordinates.map((c) => [c[0], c[1]] as [number, number]),
       };
     };
 

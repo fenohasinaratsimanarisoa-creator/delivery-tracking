@@ -82,7 +82,7 @@ export default function DriversPage() {
   });
 
   const { data: vehiclesData } = useQuery({
-    queryKey: ['vehicles-list'],
+    queryKey: ['vehicles', 'list'],
     queryFn: () => api.get('/vehicles/list').then((r) => r.data),
   });
   const allVehicles: VehicleListItem[] = vehiclesData ?? [];
@@ -115,7 +115,7 @@ export default function DriversPage() {
     mutationFn: (id: string) => api.delete(`/drivers/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['drivers'] });
-      queryClient.invalidateQueries({ queryKey: ['vehicles-list'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles', 'list'] });
       toast('Chauffeur supprimé');
       setDeleting(null);
     },
@@ -150,7 +150,7 @@ export default function DriversPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['drivers'] });
-      queryClient.invalidateQueries({ queryKey: ['vehicles-list'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles', 'list'] });
       const id = editing?.id || '';
       setHighlightedId(id);
       setTimeout(() => setHighlightedId(null), 1500);

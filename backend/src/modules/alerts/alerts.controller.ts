@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Param,
-  Query,
-  Body,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Patch, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { NotificationType, NotificationPriority } from '@prisma/client';
 import { AlertsService } from './alerts.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -47,10 +39,7 @@ export class AlertsController {
   @UseGuards(RolesGuard)
   @Roles('admin', 'dispatcher')
   @Get('stats')
-  stats(
-    @CurrentUser('companyId') companyId: string,
-    @Query('period') period?: string,
-  ) {
+  stats(@CurrentUser('companyId') companyId: string, @Query('period') period?: string) {
     return this.alertsService.stats(companyId, period);
   }
 

@@ -126,7 +126,10 @@ export class BillingWebhookController {
   }
 
   @Post('mobile-money')
-  async handleMobileMoneyWebhook(@Req() req: Request, @Headers('x-mm-signature') signature: string) {
+  async handleMobileMoneyWebhook(
+    @Req() req: Request,
+    @Headers('x-mm-signature') signature: string,
+  ) {
     if (this.configService.get<string>('BILLING_ENABLED') !== 'true') {
       return { received: true, billingDisabled: true };
     }

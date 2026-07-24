@@ -145,7 +145,10 @@ export class DeliveriesService {
           ? NotificationPriority.low
           : NotificationPriority.high,
       title: t('delivery.notification.title', lang, { status: statusLabel }),
-      message: t('delivery.notification.message', lang, { title: updated.title, status: statusLabel }),
+      message: t('delivery.notification.message', lang, {
+        title: updated.title,
+        status: statusLabel,
+      }),
       link: `/deliveries/${id}`,
       deliveryId: id,
     });
@@ -209,15 +212,14 @@ export class DeliveriesService {
     if (
       dto.status &&
       dto.status !== delivery.status &&
-      (dto.status === 'delivered' as DeliveryStatus || dto.status === 'failed' as DeliveryStatus)
+      (dto.status === ('delivered' as DeliveryStatus) ||
+        dto.status === ('failed' as DeliveryStatus))
     ) {
       const allowed = TRANSITION_MATRIX[delivery.status];
       if (!allowed.includes(dto.status)) {
-        throw new BadRequestException(
-          `Cannot transition from ${delivery.status} to ${dto.status}`,
-        );
+        throw new BadRequestException(`Cannot transition from ${delivery.status} to ${dto.status}`);
       }
-      if (dto.status === 'delivered' as DeliveryStatus) {
+      if (dto.status === ('delivered' as DeliveryStatus)) {
         updateData.completedAt = new Date();
       }
     }
@@ -266,7 +268,10 @@ export class DeliveriesService {
             ? NotificationPriority.high
             : NotificationPriority.medium,
       title: t('delivery.notification.title', lang, { status: statusLabel }),
-      message: t('delivery.notification.message', lang, { title: updated.title, status: statusLabel }),
+      message: t('delivery.notification.message', lang, {
+        title: updated.title,
+        status: statusLabel,
+      }),
       link: `/deliveries/${id}`,
       userId: updated.assignedDriverId ?? undefined,
       deliveryId: id,
@@ -328,12 +333,7 @@ export class DeliveriesService {
 
     if (delivery.deliveryLat !== null && delivery.deliveryLng !== null) {
       const distance = Math.round(
-        haversineDistance(
-          dto.latitude,
-          dto.longitude,
-          delivery.deliveryLat,
-          delivery.deliveryLng,
-        ),
+        haversineDistance(dto.latitude, dto.longitude, delivery.deliveryLat, delivery.deliveryLng),
       );
       proofData.deliveryProofDistance = distance;
 

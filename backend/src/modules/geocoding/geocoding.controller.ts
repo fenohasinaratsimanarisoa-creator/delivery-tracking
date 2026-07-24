@@ -12,7 +12,10 @@ export class GeocodingController {
   }
 
   @Get('reverse')
-  async reverse(@Query('lat') lat: string, @Query('lng') lng: string): Promise<{ label: string | null }> {
+  async reverse(
+    @Query('lat') lat: string,
+    @Query('lng') lng: string,
+  ): Promise<{ label: string | null }> {
     const result = await this.geocodingService.reverse(parseFloat(lat), parseFloat(lng));
     return { label: result };
   }

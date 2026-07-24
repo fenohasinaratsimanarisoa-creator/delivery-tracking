@@ -81,8 +81,10 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
         const timeDiffSec = (new Date(dto.timestamp).getTime() - last.timestamp.getTime()) / 1000;
         if (timeDiffSec > 0) {
           const distance = this.trackingService.haversineDistance(
-            last.latitude, last.longitude,
-            dto.latitude, dto.longitude,
+            last.latitude,
+            last.longitude,
+            dto.latitude,
+            dto.longitude,
           );
           speed = distance / timeDiffSec;
         }
@@ -92,7 +94,9 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     const position = await this.trackingService.savePosition(driver.id, dto, user.companyId);
     if (!position) return;
 
-    this.logger.log(`[POSITION] driver=${driver.id} lat=${dto.latitude.toFixed(6)} lng=${dto.longitude.toFixed(6)} speed=${speed?.toFixed(2)} heading=${dto.heading} delivery=${dto.deliveryId} company=${user.companyId}`);
+    this.logger.log(
+      `[POSITION] driver=${driver.id} lat=${dto.latitude.toFixed(6)} lng=${dto.longitude.toFixed(6)} speed=${speed?.toFixed(2)} heading=${dto.heading} delivery=${dto.deliveryId} company=${user.companyId}`,
+    );
 
     const broadcast = {
       driverId: driver.id,
@@ -205,5 +209,4 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     client.leave(`company:${user.companyId}`);
     return { event: 'unsubscribed', data: { companyId: user.companyId } };
   }
-
-  }
+}

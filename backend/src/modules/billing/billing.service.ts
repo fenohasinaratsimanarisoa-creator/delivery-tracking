@@ -86,7 +86,11 @@ export class BillingService {
     });
   }
 
-  async createOrUpdateSubscription(companyId: string, dto: CreateCheckoutDto, lang: Language = 'fr') {
+  async createOrUpdateSubscription(
+    companyId: string,
+    dto: CreateCheckoutDto,
+    lang: Language = 'fr',
+  ) {
     const plan = await this.prisma.billingPlan.findUnique({ where: { id: dto.planId } });
     if (!plan) throw new NotFoundException('Plan not found');
 
@@ -144,16 +148,18 @@ export class BillingService {
         throw new BadRequestException('Phone number required for mobile money');
       }
 
-      const intervalLabel = plan.interval === 'year'
-        ? t('invoice.planYearly', lang)
-        : t('invoice.planMonthly', lang);
+      const intervalLabel =
+        plan.interval === 'year' ? t('invoice.planYearly', lang) : t('invoice.planMonthly', lang);
       const payment = await this.mobileMoneyService.requestPayment(
         {
           amount: plan.price,
           currency: plan.currency,
           phone: dto.mobileMoneyPhone,
           companyId,
-          description: t('billing.paymentDescription', lang, { planName: plan.name, interval: intervalLabel }),
+          description: t('billing.paymentDescription', lang, {
+            planName: plan.name,
+            interval: intervalLabel,
+          }),
         },
         dto.provider,
       );
@@ -213,7 +219,11 @@ export class BillingService {
     return invoice;
   }
 
-  async downloadInvoicePdf(invoiceId: string, companyId: string, lang: Language = 'fr'): Promise<Buffer> {
+  async downloadInvoicePdf(
+    invoiceId: string,
+    companyId: string,
+    lang: Language = 'fr',
+  ): Promise<Buffer> {
     const invoice = await this.getInvoice(invoiceId, companyId);
     return this.invoicePdfService.generateInvoice(invoice.id, lang);
   }
@@ -262,11 +272,17 @@ export class BillingService {
       vehiclesLimit: plan?.maxVehicles ?? 0,
       usersUsed: users,
       usersLimit: plan?.maxUsers ?? 0,
-      plan: plan ? { name: plan.name, tier: plan.tier } : { name: t('billing.planNameNone', lang), tier: 'free' },
+      plan: plan
+        ? { name: plan.name, tier: plan.tier }
+        : { name: t('billing.planNameNone', lang), tier: 'free' },
     };
   }
 
-  async verifyMobileMoneySignature(rawBody: Buffer, signature: string | undefined, _provider: string): Promise<void> {
+  async verifyMobileMoneySignature(
+    rawBody: Buffer,
+    signature: string | undefined,
+    _provider: string,
+  ): Promise<void> {
     const isSandbox = this.configService.get<string>('MOBILE_MONEY_SANDBOX', 'true') === 'true';
     const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
 
@@ -482,11 +498,7 @@ export class BillingService {
 
           for (const admin of sub.company.users) {
             const lang = (admin as any).lang || 'fr';
-            await this.emailService.sendBillingPaymentFailed(
-              admin.email,
-              admin.firstName,
-              lang,
-            );
+            await this.emailService.sendBillingPaymentFailed(admin.email, admin.firstName, lang);
           }
         }
 
@@ -515,11 +527,7 @@ export class BillingService {
 
           for (const admin of sub.company.users) {
             const lang = (admin as any).lang || 'fr';
-            await this.emailService.sendBillingCanceled(
-              admin.email,
-              admin.firstName,
-              lang,
-            );
+            await this.emailService.sendBillingCanceled(admin.email, admin.firstName, lang);
           }
         }
 
@@ -572,7 +580,10 @@ export class BillingService {
 
   @Cron('0 3 * * *')
   async handleExpiredSubscriptions() {
-    if (this.configService.get<string>('BILLING_ENABLED') !== 'true') { this.logger.log('BILLING_ENABLED=false — skipping expired subscription check'); return; }
+    if (this.configService.get<string>('BILLING_ENABLED') !== 'true') {
+      this.logger.log('BILLING_ENABLED=false — skipping expired subscription check');
+      return;
+    }
     this.logger.log('Running subscription expiry check...');
 
     const expired = await this.prisma.subscription.findMany({
@@ -592,12 +603,7 @@ export class BillingService {
       for (const admin of sub.company.users) {
         const lang = (admin as any).lang || 'fr';
         const dateStr = formatLongDate(sub.currentPeriodEnd, lang);
-        await this.emailService.sendBillingExpired(
-          admin.email,
-          admin.firstName,
-          dateStr,
-          lang,
-        );
+        await this.emailService.sendBillingExpired(admin.email, admin.firstName, dateStr, lang);
       }
 
       this.logger.log(`Subscription ${sub.id} marked as past_due, notifications sent`);
@@ -606,7 +612,10 @@ export class BillingService {
 
   @Cron('0 4 * * *')
   async handleUnpaidSubscriptions() {
-    if (this.configService.get<string>('BILLING_ENABLED') !== 'true') { this.logger.log('BILLING_ENABLED=false — skipping unpaid subscription follow-up'); return; }
+    if (this.configService.get<string>('BILLING_ENABLED') !== 'true') {
+      this.logger.log('BILLING_ENABLED=false — skipping unpaid subscription follow-up');
+      return;
+    }
     this.logger.log('Running unpaid subscription follow-up...');
 
     const unpaid = await this.prisma.subscription.findMany({
@@ -625,11 +634,7 @@ export class BillingService {
 
       for (const admin of sub.company.users) {
         const lang = (admin as any).lang || 'fr';
-        await this.emailService.sendBillingSuspended(
-          admin.email,
-          admin.firstName,
-          lang,
-        );
+        await this.emailService.sendBillingSuspended(admin.email, admin.firstName, lang);
       }
 
       this.logger.log(`Subscription ${sub.id} marked as unpaid`);

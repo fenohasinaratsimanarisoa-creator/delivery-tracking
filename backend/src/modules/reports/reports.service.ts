@@ -24,7 +24,9 @@ export class ReportsService {
       Promise.all(
         (['pending', 'assigned', 'in_progress', 'delivered', 'failed', 'cancelled'] as const).map(
           (status) =>
-            this.prisma.delivery.count({ where: { ...where, status } }).then((count) => ({ status, count })),
+            this.prisma.delivery
+              .count({ where: { ...where, status } })
+              .then((count) => ({ status, count })),
         ),
       ),
       this.prisma.delivery.findMany({
@@ -76,7 +78,11 @@ export class ReportsService {
     const vehicles = await this.prisma.vehicle.findMany({
       where: { companyId, deletedAt: null },
       select: {
-        id: true, brand: true, model: true, licensePlate: true, isActive: true,
+        id: true,
+        brand: true,
+        model: true,
+        licensePlate: true,
+        isActive: true,
         deliveries: {
           where: { createdAt: { gte: periodStart, lte: periodEnd } },
           select: { id: true },
@@ -100,7 +106,8 @@ export class ReportsService {
       const totalLiters = vFuel.reduce((s, f) => s + f.liters, 0);
       const totalKm = vFuel.reduce((s, f) => s + f.kilometers, 0);
       const positionCount = v.gpsPositions.length;
-      const hasRecentPosition = positionCount > 0 && v.gpsPositions[0].timestamp > new Date(Date.now() - 3600000);
+      const hasRecentPosition =
+        positionCount > 0 && v.gpsPositions[0].timestamp > new Date(Date.now() - 3600000);
 
       return {
         vehicleId: v.id,
@@ -142,7 +149,11 @@ export class ReportsService {
     const drivers = await this.prisma.driver.findMany({
       where: { companyId, deletedAt: null },
       select: {
-        id: true, firstName: true, lastName: true, phone: true, isActive: true,
+        id: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        isActive: true,
         deliveries: {
           where: { createdAt: { gte: periodStart, lte: periodEnd } },
           select: { id: true, status: true, completedAt: true, scheduledDate: true },
@@ -221,7 +232,12 @@ export class ReportsService {
       .map(([label, count]) => ({ label, count }));
   }
 
-  async exportPdf(reportType: string, companyId: string, from?: string, to?: string): Promise<Buffer> {
+  async exportPdf(
+    reportType: string,
+    companyId: string,
+    from?: string,
+    to?: string,
+  ): Promise<Buffer> {
     const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
     const doc = await PDFDocument.create();
     const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -231,14 +247,26 @@ export class ReportsService {
     let y = height - 50;
 
     const draw = (text: string, size = 10, bold = false) => {
-      page.drawText(text, { x: 50, y, size, font: bold ? fontBold : font, color: rgb(0.1, 0.1, 0.1) });
+      page.drawText(text, {
+        x: 50,
+        y,
+        size,
+        font: bold ? fontBold : font,
+        color: rgb(0.1, 0.1, 0.1),
+      });
       y -= size + 4;
     };
 
-    page.drawText('DeliveryTrack - Rapport', { x: 50, y, size: 18, font: fontBold, color: rgb(0.1, 0.1, 0.1) });
+    page.drawText('DeliveryTrack - Rapport', {
+      x: 50,
+      y,
+      size: 18,
+      font: fontBold,
+      color: rgb(0.1, 0.1, 0.1),
+    });
     y -= 30;
     draw(`Type: ${reportType}`, 11);
-    draw(`Période: ${from || 'Début'} → ${to || 'Aujourd\'hui'}`, 10);
+    draw(`Période: ${from || 'Début'} → ${to || "Aujourd'hui"}`, 10);
     y -= 10;
 
     if (reportType === 'delivery' || reportType === 'all') {
@@ -263,7 +291,9 @@ export class ReportsService {
       draw(`Carburant total : ${fleet.totalFuel} L`);
       draw(`Véhicules actifs : ${fleet.activeCount}`);
       for (const v of fleet.vehicles) {
-        draw(`${v.vehicleName} (${v.licensePlate}) : ${v.deliveriesCount} livraisons, ${v.distanceKm} km, ${v.avgConsumption} L/100km`);
+        draw(
+          `${v.vehicleName} (${v.licensePlate}) : ${v.deliveriesCount} livraisons, ${v.distanceKm} km, ${v.avgConsumption} L/100km`,
+        );
       }
       y -= 10;
     }
@@ -283,7 +313,12 @@ export class ReportsService {
     return Buffer.from(buf);
   }
 
-  async exportExcel(reportType: string, companyId: string, from?: string, to?: string): Promise<Buffer> {
+  async exportExcel(
+    reportType: string,
+    companyId: string,
+    from?: string,
+    to?: string,
+  ): Promise<Buffer> {
     const ExcelJS = await import('exceljs');
     const workbook = new ExcelJS.Workbook();
 
@@ -297,7 +332,7 @@ export class ReportsService {
       ws.addRows(delivery.statusBreakdown);
       ws.addRow({});
       ws.addRow({ statut: 'Total', count: delivery.total });
-      ws.addRow({ statut: 'Taux à l\'heure', count: `${delivery.onTimeRate}%` });
+      ws.addRow({ statut: "Taux à l'heure", count: `${delivery.onTimeRate}%` });
     }
 
     if (reportType === 'fleet' || reportType === 'all') {
@@ -333,7 +368,7 @@ export class ReportsService {
         { header: 'Téléphone', key: 'phone', width: 15 },
         { header: 'Livraisons', key: 'total', width: 12 },
         { header: 'Complétées', key: 'completed', width: 12 },
-        { header: 'À l\'heure', key: 'onTime', width: 12 },
+        { header: "À l'heure", key: 'onTime', width: 12 },
         { header: 'Ponctualité', key: 'rate', width: 12 },
         { header: 'Échouées', key: 'failed', width: 10 },
       ];

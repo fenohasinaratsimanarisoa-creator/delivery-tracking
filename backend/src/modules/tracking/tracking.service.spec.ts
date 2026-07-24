@@ -131,7 +131,9 @@ describe('TrackingService', () => {
         const ts = new Date(base.getTime() + i * 3000);
         mockPrisma.gpsPosition.findFirst
           // isDuplicateByTimestamp: return last saved at (i-1)*3s (or null for i=0)
-          .mockResolvedValueOnce(i === 0 ? null : { timestamp: new Date(base.getTime() + (i - 1) * 3000) })
+          .mockResolvedValueOnce(
+            i === 0 ? null : { timestamp: new Date(base.getTime() + (i - 1) * 3000) },
+          )
           // detectTeleportation: no last position → not teleportation
           .mockResolvedValueOnce(null);
         mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: `gps-3s-${i}`, suspect: false });
@@ -159,13 +161,21 @@ describe('TrackingService', () => {
 
       // Second position at T+0.5s (clock skew, within 1s window) → rejected
       mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce({ timestamp: base });
-      const r1 = await service.savePosition('driver-1', { ...dto, timestamp: new Date(base.getTime() + 500).toISOString() });
+      const r1 = await service.savePosition('driver-1', {
+        ...dto,
+        timestamp: new Date(base.getTime() + 500).toISOString(),
+      });
       expect(r1).toBeNull();
 
       // Third position at T+3s (legitimate movement update) → accepted
-      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce({ timestamp: base }).mockResolvedValueOnce(null);
+      mockPrisma.gpsPosition.findFirst
+        .mockResolvedValueOnce({ timestamp: base })
+        .mockResolvedValueOnce(null);
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-skew-3', suspect: false });
-      const r2 = await service.savePosition('driver-1', { ...dto, timestamp: new Date(base.getTime() + 3000).toISOString() });
+      const r2 = await service.savePosition('driver-1', {
+        ...dto,
+        timestamp: new Date(base.getTime() + 3000).toISOString(),
+      });
       expect(r2).not.toBeNull();
     });
 
@@ -222,7 +232,11 @@ describe('TrackingService', () => {
         // isDuplicateByTimestamp: no prev for (vehicle-1, delivery-2) → passes
         .mockResolvedValueOnce(null)
         // detectTeleportation: finds last by vehicleId → timestamp 5s AHEAD of new point
-        .mockResolvedValueOnce({ latitude: -18.8792, longitude: 47.5079, timestamp: new Date('2026-07-21T10:00:05.000Z') });
+        .mockResolvedValueOnce({
+          latitude: -18.8792,
+          longitude: 47.5079,
+          timestamp: new Date('2026-07-21T10:00:05.000Z'),
+        });
 
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-desync', suspect: true });
 
@@ -233,7 +247,7 @@ describe('TrackingService', () => {
         // Timestamp 2s in the past relative to last position on delivery-1
         timestamp: '2026-07-21T10:00:03.000Z',
         latitude: -18.8795,
-        longitude: 47.5080,
+        longitude: 47.508,
       });
 
       expect(result).toEqual({ id: 'gps-desync', suspect: true });
@@ -252,9 +266,10 @@ describe('TrackingService', () => {
 
     it('triggers prolonged stop alert for near-zero speeds (GPS noise)', async () => {
       mockPrisma.gpsPosition.findFirst
-        .mockResolvedValueOnce(null)  // dedup
-        .mockResolvedValueOnce(null)  // detectTeleportation lastPos
-        .mockResolvedValue({          // remaining findFirst calls (prolonged stop, offline)
+        .mockResolvedValueOnce(null) // dedup
+        .mockResolvedValueOnce(null) // detectTeleportation lastPos
+        .mockResolvedValue({
+          // remaining findFirst calls (prolonged stop, offline)
           speed: 0.2,
           timestamp: new Date('2026-07-21T09:54:30.000Z'),
         });
@@ -298,7 +313,7 @@ describe('TrackingService', () => {
       ];
 
       mockPrisma.gpsPosition.findFirst
-        .mockResolvedValueOnce(null)  // dedup
+        .mockResolvedValueOnce(null) // dedup
         .mockResolvedValueOnce(null); // detectTeleportation
 
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-avg', suspect: false });
@@ -319,11 +334,15 @@ describe('TrackingService', () => {
       // offline timeout
       mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null);
 
-      const result = await service.savePosition('driver-1', {
-        ...dto,
-        speed: 0.5, // momentary slowdown, normal speed was 10
-        timestamp: '2026-07-21T10:30:00.000Z',
-      }, 'company-1');
+      const result = await service.savePosition(
+        'driver-1',
+        {
+          ...dto,
+          speed: 0.5, // momentary slowdown, normal speed was 10
+          timestamp: '2026-07-21T10:30:00.000Z',
+        },
+        'company-1',
+      );
       // Wait for fire-and-forget generateAlerts to complete
       await new Promise((r) => setTimeout(r, 50));
 
@@ -376,7 +395,20 @@ describe('TrackingService', () => {
   });
 
   it('lists positions for a delivery in company scope', async () => {
-    mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([{ id: 'gps-1', latitude: 0, longitude: 0, speed: null, heading: null, altitude: null, accuracy: null, suspect: false, timestamp: new Date(), driverId: null }]);
+    mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([
+      {
+        id: 'gps-1',
+        latitude: 0,
+        longitude: 0,
+        speed: null,
+        heading: null,
+        altitude: null,
+        accuracy: null,
+        suspect: false,
+        timestamp: new Date(),
+        driverId: null,
+      },
+    ]);
     mockPrisma.gpsPosition.count.mockResolvedValueOnce(1);
 
     const result = await service.getPositionsByDelivery('delivery-1', 'company-1');
@@ -437,8 +469,8 @@ describe('TrackingService', () => {
       const positions: any[] = [];
       for (let i = 0; i < 20; i++) {
         positions.push({
-          latitude: 48.8566 + (i * 0.0005),
-          longitude: 2.3522 + (i * 0.0005),
+          latitude: 48.8566 + i * 0.0005,
+          longitude: 2.3522 + i * 0.0005,
           speed: 10,
           heading: 45,
           altitude: null,

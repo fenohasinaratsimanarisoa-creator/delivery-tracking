@@ -45,7 +45,14 @@ export class TrackingService {
     this.logger.log(
       `[METRICS] received=${this.metrics.received} saved=${this.metrics.saved} deduped=${this.metrics.deduped} teleported=${this.metrics.teleported} batch=${this.metrics.batchSaved} (last ${elapsedMin.toFixed(1)}min)`,
     );
-    this.metrics = { received: 0, saved: 0, deduped: 0, teleported: 0, batchSaved: 0, lastReportTime: now };
+    this.metrics = {
+      received: 0,
+      saved: 0,
+      deduped: 0,
+      teleported: 0,
+      batchSaved: 0,
+      lastReportTime: now,
+    };
   }
 
   async findDriverByUserId(userId: string) {
@@ -187,7 +194,11 @@ export class TrackingService {
       }
     }
 
-    if (settings.prolongedStopMinutes && dto.speed !== undefined && dto.speed < STOP_SPEED_THRESHOLD_MS) {
+    if (
+      settings.prolongedStopMinutes &&
+      dto.speed !== undefined &&
+      dto.speed < STOP_SPEED_THRESHOLD_MS
+    ) {
       const lastPos = await this.getLastPosition(dto.vehicleId);
       if (lastPos && lastPos.speed !== null && lastPos.speed < STOP_SPEED_THRESHOLD_MS) {
         const stoppedMs = new Date(dto.timestamp).getTime() - new Date(lastPos.timestamp).getTime();
@@ -298,7 +309,13 @@ export class TrackingService {
       return null;
     }
 
-    const suspect = await this.detectTeleportation(dto.latitude, dto.longitude, ts, dto.vehicleId, dto.accuracy);
+    const suspect = await this.detectTeleportation(
+      dto.latitude,
+      dto.longitude,
+      ts,
+      dto.vehicleId,
+      dto.accuracy,
+    );
     if (suspect) this.metrics.teleported++;
 
     const locationStr = `POINT(${dto.longitude} ${dto.latitude})`;

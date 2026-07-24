@@ -42,7 +42,12 @@ export class EmailService {
     await this.send(email, t('email.passwordReset.subject', lang), html);
   }
 
-  async sendInvitation(email: string, inviteUrl: string, role: string, lang: Language = 'fr'): Promise<void> {
+  async sendInvitation(
+    email: string,
+    inviteUrl: string,
+    role: string,
+    lang: Language = 'fr',
+  ): Promise<void> {
     const html = `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
         <h2 style="color:#111827">${t('email.invitation.heading', lang)}</h2>

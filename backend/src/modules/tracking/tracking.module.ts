@@ -24,7 +24,14 @@ import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
     NotificationsModule,
   ],
   controllers: [TrackingController, GeofenceController],
-  providers: [TrackingGateway, TrackingService, GeofenceService, WsJwtGuard, WsAuthService, ApiKeyOrJwtGuard],
+  providers: [
+    TrackingGateway,
+    TrackingService,
+    GeofenceService,
+    WsJwtGuard,
+    WsAuthService,
+    ApiKeyOrJwtGuard,
+  ],
   exports: [TrackingService, GeofenceService],
 })
 export class TrackingModule {}

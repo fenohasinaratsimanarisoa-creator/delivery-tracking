@@ -45,5 +45,4 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
       client.join(`user:${payload.userId}`);
     }
   }
-
-  }
+}

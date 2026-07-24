@@ -47,7 +47,10 @@ export class ReportsController {
     @Query('type') type = 'all',
   ) {
     const pdf = await this.reportsService.exportPdf(type, companyId, from, to);
-    res.setHeader('Content-Disposition', `attachment; filename="rapport-${type}-${Date.now()}.pdf"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="rapport-${type}-${Date.now()}.pdf"`,
+    );
     res.end(pdf);
   }
 
@@ -61,7 +64,10 @@ export class ReportsController {
     @Query('type') type = 'all',
   ) {
     const buffer = await this.reportsService.exportExcel(type, companyId, from, to);
-    res.setHeader('Content-Disposition', `attachment; filename="rapport-${type}-${Date.now()}.xlsx"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="rapport-${type}-${Date.now()}.xlsx"`,
+    );
     res.end(buffer);
   }
 }

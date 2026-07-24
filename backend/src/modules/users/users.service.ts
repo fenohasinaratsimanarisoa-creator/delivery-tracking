@@ -161,10 +161,16 @@ export class UsersService {
 
   async updatePreferences(userId: string, data: Record<string, boolean>) {
     const allowed = [
-      'emailDeliveryStatus', 'emailFuelAnomaly', 'emailDeliveryDelayed',
-      'emailMaintenanceDue', 'emailSystem',
-      'inAppDeliveryStatus', 'inAppFuelAnomaly', 'inAppDeliveryDelayed',
-      'inAppMaintenanceDue', 'inAppSystem',
+      'emailDeliveryStatus',
+      'emailFuelAnomaly',
+      'emailDeliveryDelayed',
+      'emailMaintenanceDue',
+      'emailSystem',
+      'inAppDeliveryStatus',
+      'inAppFuelAnomaly',
+      'inAppDeliveryDelayed',
+      'inAppMaintenanceDue',
+      'inAppSystem',
     ];
     const update: Record<string, boolean> = {};
     for (const key of allowed) {

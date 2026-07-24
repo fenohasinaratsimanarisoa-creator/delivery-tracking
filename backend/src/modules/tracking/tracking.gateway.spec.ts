@@ -72,10 +72,7 @@ describe('TrackingGateway — cross-tenant security', () => {
 
       const result = await gateway.handleSubscribeToDelivery(client, 'delivery-a-1');
 
-      expect(trackingService.getDeliveryInfo).toHaveBeenCalledWith(
-        'delivery-a-1',
-        'company-a',
-      );
+      expect(trackingService.getDeliveryInfo).toHaveBeenCalledWith('delivery-a-1', 'company-a');
       expect(client.join).toHaveBeenCalledWith('delivery:delivery-a-1');
       expect(result).toEqual({ event: 'subscribed', data: { deliveryId: 'delivery-a-1' } });
     });

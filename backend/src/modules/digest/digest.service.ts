@@ -61,20 +61,25 @@ export class DigestService {
 
         for (const user of company.users) {
           const lang: Language = (user as any).lang || 'fr';
-          await this.emailService.sendDigest(user.email, user.firstName, {
-            companyName: company.name,
-            weekRange: this.formatWeekRange(weekAgo, lang),
-            totalDeliveries,
-            delivered,
-            failed,
-            punctuality,
-            pendingAnomalies: pendingAnomalies.length,
-            anomalyDetails: pendingAnomalies.map((a) => ({
-              vehicle: a.vehicle.licensePlate,
-              liters: a.liters,
-              date: formatDate(a.fillDate, lang),
-            })),
-          }, lang);
+          await this.emailService.sendDigest(
+            user.email,
+            user.firstName,
+            {
+              companyName: company.name,
+              weekRange: this.formatWeekRange(weekAgo, lang),
+              totalDeliveries,
+              delivered,
+              failed,
+              punctuality,
+              pendingAnomalies: pendingAnomalies.length,
+              anomalyDetails: pendingAnomalies.map((a) => ({
+                vehicle: a.vehicle.licensePlate,
+                liters: a.liters,
+                date: formatDate(a.fillDate, lang),
+              })),
+            },
+            lang,
+          );
         }
 
         this.logger.log(`Digest sent for company ${company.id} (${company.name})`);

@@ -1,7 +1,12 @@
 import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RoutingService } from './routing.service';
-import { DirectionsRequestDto, DirectionsResponse, MatchRequestDto, MatchResponse } from './dto/routing.dto';
+import {
+  DirectionsRequestDto,
+  DirectionsResponse,
+  MatchRequestDto,
+  MatchResponse,
+} from './dto/routing.dto';
 
 @Controller('routing')
 @UseGuards(JwtAuthGuard)
@@ -9,9 +14,7 @@ export class RoutingController {
   constructor(private routingService: RoutingService) {}
 
   @Post('directions')
-  async getDirections(
-    @Body() dto: DirectionsRequestDto,
-  ): Promise<DirectionsResponse> {
+  async getDirections(@Body() dto: DirectionsRequestDto): Promise<DirectionsResponse> {
     return this.routingService.getDirections(dto);
   }
 

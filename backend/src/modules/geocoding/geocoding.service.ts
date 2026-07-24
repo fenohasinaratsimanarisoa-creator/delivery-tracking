@@ -51,7 +51,9 @@ export class GeocodingService {
     this.googleApiKey = this.configService.get<string>('GOOGLE_MAPS_API_KEY');
   }
 
-  async placesAutocomplete(input: string): Promise<{ placeId: string; description: string; mainText: string; secondaryText: string }[]> {
+  async placesAutocomplete(
+    input: string,
+  ): Promise<{ placeId: string; description: string; mainText: string; secondaryText: string }[]> {
     if (!input.trim() || !this.googleApiKey) return [];
 
     const cacheKey = `places:autocomplete:${input.toLowerCase().trim()}`;
@@ -94,7 +96,9 @@ export class GeocodingService {
       }));
 
       if (this.redis && results.length > 0) {
-        try { await this.redis.set(cacheKey, JSON.stringify(results), 'EX', CACHE_TTL_SEC); } catch {}
+        try {
+          await this.redis.set(cacheKey, JSON.stringify(results), 'EX', CACHE_TTL_SEC);
+        } catch {}
       }
 
       return results;
@@ -103,7 +107,9 @@ export class GeocodingService {
     }
   }
 
-  async placeDetails(placeId: string): Promise<{ lat: number; lng: number; address: string; name: string } | null> {
+  async placeDetails(
+    placeId: string,
+  ): Promise<{ lat: number; lng: number; address: string; name: string } | null> {
     if (!this.googleApiKey) return null;
 
     const cacheKey = `places:details:${placeId}`;
@@ -138,7 +144,9 @@ export class GeocodingService {
       };
 
       if (this.redis) {
-        try { await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 2592000); } catch {}
+        try {
+          await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 2592000);
+        } catch {}
       }
 
       return result;
@@ -185,7 +193,10 @@ export class GeocodingService {
       const timeout = setTimeout(() => controller.abort(), 6000);
 
       try {
-        const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: controller.signal });
+        const res = await fetch(url, {
+          headers: { 'User-Agent': USER_AGENT },
+          signal: controller.signal,
+        });
         clearTimeout(timeout);
 
         if (res.ok) {
@@ -203,14 +214,18 @@ export class GeocodingService {
             }
           }
         }
-      } catch { clearTimeout(timeout); }
+      } catch {
+        clearTimeout(timeout);
+      }
 
       if (results.length >= 5) break;
     }
 
     const final = results.slice(0, 15);
     if (this.redis && final.length > 0) {
-      try { await this.redis.set(cacheKey, JSON.stringify(final), 'EX', CACHE_TTL_SEC); } catch {}
+      try {
+        await this.redis.set(cacheKey, JSON.stringify(final), 'EX', CACHE_TTL_SEC);
+      } catch {}
     }
 
     return final;
@@ -297,7 +312,10 @@ export class GeocodingService {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 3000);
-        const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: controller.signal });
+        const res = await fetch(url, {
+          headers: { 'User-Agent': USER_AGENT },
+          signal: controller.signal,
+        });
         clearTimeout(timeout);
 
         if (res.ok) {
@@ -315,14 +333,18 @@ export class GeocodingService {
             }
           }
         }
-      } catch { /* continue */ }
+      } catch {
+        /* continue */
+      }
 
       if (results.length >= 20) break;
     }
 
     const final = results.slice(0, 25);
     if (this.redis && final.length > 0) {
-      try { await this.redis.set(cacheKey, JSON.stringify(final), 'EX', 3600); } catch {}
+      try {
+        await this.redis.set(cacheKey, JSON.stringify(final), 'EX', 3600);
+      } catch {}
     }
 
     return final;

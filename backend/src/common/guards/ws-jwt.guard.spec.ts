@@ -18,7 +18,11 @@ describe('WsJwtGuard', () => {
   });
 
   it('should return true when verify succeeds', async () => {
-    mockWsAuthService.verify.mockResolvedValueOnce({ id: 'u1', role: 'admin', companyId: 'c1' } as any);
+    mockWsAuthService.verify.mockResolvedValueOnce({
+      id: 'u1',
+      role: 'admin',
+      companyId: 'c1',
+    } as any);
     const client = { data: {} };
     const ctx = { switchToWs: () => ({ getClient: () => client }) } as any;
     const result = await guard.canActivate(ctx);

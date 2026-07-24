@@ -14,7 +14,7 @@ const translations: Record<string, Record<Language, string>> = {
     en: 'Reset my password',
   },
   'email.passwordReset.footer': {
-    fr: 'Si vous n\'avez pas demandé cette réinitialisation, ignorez cet email.',
+    fr: "Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.",
     en: 'If you did not request this reset, please ignore this email.',
   },
   'email.passwordReset.subject': {
@@ -30,7 +30,7 @@ const translations: Record<string, Record<Language, string>> = {
     en: 'You have been invited to join DeliveryTrack as <strong>{role}</strong>. Click the link below to create your account.',
   },
   'email.invitation.button': {
-    fr: 'Accepter l\'invitation',
+    fr: "Accepter l'invitation",
     en: 'Accept invitation',
   },
   'email.invitation.footer': {
@@ -162,7 +162,7 @@ const translations: Record<string, Record<Language, string>> = {
     en: 'Invoice n° {number}',
   },
   'pdf.invoice.issueDate': {
-    fr: 'Date d\'émission : {date}',
+    fr: "Date d'émission : {date}",
     en: 'Issue date: {date}',
   },
   'pdf.invoice.period': {
@@ -271,7 +271,11 @@ const translations: Record<string, Record<Language, string>> = {
   },
 };
 
-export function t(key: string, lang: Language = 'fr', params?: Record<string, string | number>): string {
+export function t(
+  key: string,
+  lang: Language = 'fr',
+  params?: Record<string, string | number>,
+): string {
   const entry = translations[key];
   if (!entry) return key;
   let text = entry[lang] || entry.fr || key;
@@ -283,7 +287,11 @@ export function t(key: string, lang: Language = 'fr', params?: Record<string, st
   return text;
 }
 
-export function formatDate(date: Date | string, lang: Language, options?: Intl.DateTimeFormatOptions): string {
+export function formatDate(
+  date: Date | string,
+  lang: Language,
+  options?: Intl.DateTimeFormatOptions,
+): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   const locale = lang === 'en' ? 'en-US' : 'fr-FR';
   return d.toLocaleDateString(locale, options);

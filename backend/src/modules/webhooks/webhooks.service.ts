@@ -143,7 +143,11 @@ export class WebhooksService {
     }
   }
 
-  private async deliver(webhookId: string, event: string, payload: Record<string, unknown> | Prisma.JsonObject) {
+  private async deliver(
+    webhookId: string,
+    event: string,
+    payload: Record<string, unknown> | Prisma.JsonObject,
+  ) {
     const webhook = await this.prisma.webhook.findUnique({
       where: { id: webhookId },
     });

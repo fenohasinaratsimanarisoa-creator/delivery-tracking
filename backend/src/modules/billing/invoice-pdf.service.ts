@@ -62,10 +62,15 @@ export class InvoicePdfService {
     if (invoice.company.email) drawText(invoice.company.email, margin, y, { size: 9 });
     y -= 24;
 
-    drawText(t('pdf.invoice.invoiceNumber', lang, { number: invoice.invoiceNumber }), width - margin - 150, y + 10, {
-      size: 10,
-      bold: true,
-    });
+    drawText(
+      t('pdf.invoice.invoiceNumber', lang, { number: invoice.invoiceNumber }),
+      width - margin - 150,
+      y + 10,
+      {
+        size: 10,
+        bold: true,
+      },
+    );
     y -= 20;
 
     page.drawLine({
@@ -86,17 +91,28 @@ export class InvoicePdfService {
 
     drawText(t('pdf.invoice.issueDate', lang, { date: createdAt }), margin, y, { size: 9 });
     y -= 14;
-    drawText(t('pdf.invoice.period', lang, { start: periodStart, end: periodEnd }), margin, y, { size: 9 });
-    y -= 14;
-    drawText(t('pdf.invoice.subscription', lang, { name: invoice.subscription.plan.name }), margin, y, { size: 9 });
-    y -= 14;
-    drawText(t('pdf.invoice.status', lang, {
-      status: invoice.status === 'paid'
-        ? t('pdf.invoice.paid', lang)
-        : t('pdf.invoice.pending', lang),
-    }), margin, y, {
+    drawText(t('pdf.invoice.period', lang, { start: periodStart, end: periodEnd }), margin, y, {
       size: 9,
     });
+    y -= 14;
+    drawText(
+      t('pdf.invoice.subscription', lang, { name: invoice.subscription.plan.name }),
+      margin,
+      y,
+      { size: 9 },
+    );
+    y -= 14;
+    drawText(
+      t('pdf.invoice.status', lang, {
+        status:
+          invoice.status === 'paid' ? t('pdf.invoice.paid', lang) : t('pdf.invoice.pending', lang),
+      }),
+      margin,
+      y,
+      {
+        size: 9,
+      },
+    );
     y -= 30;
 
     page.drawLine({
@@ -124,15 +140,11 @@ export class InvoicePdfService {
     const tvaAmount = ((invoice.amount * tvaRate) / 100).toFixed(2);
     const ttc = ((invoice.amount * (1 + tvaRate)) / 100).toFixed(2);
 
-    const intervalLabel = invoice.subscription.plan.interval === 'year'
-      ? t('invoice.planYearly', lang)
-      : t('invoice.planMonthly', lang);
-    drawText(
-      `${invoice.subscription.plan.name} — ${intervalLabel}`,
-      margin,
-      y,
-      { size: 9 },
-    );
+    const intervalLabel =
+      invoice.subscription.plan.interval === 'year'
+        ? t('invoice.planYearly', lang)
+        : t('invoice.planMonthly', lang);
+    drawText(`${invoice.subscription.plan.name} — ${intervalLabel}`, margin, y, { size: 9 });
     drawText(`${ht} ${invoice.currency}`, width - margin - 90, y, { size: 9 });
     y -= 18;
 
@@ -169,12 +181,7 @@ export class InvoicePdfService {
       color: [0.6, 0.6, 0.6],
     });
     y -= 12;
-    drawText(
-      t('pdf.invoice.legalAddress', lang),
-      margin,
-      y,
-      { size: 8, color: [0.6, 0.6, 0.6] },
-    );
+    drawText(t('pdf.invoice.legalAddress', lang), margin, y, { size: 8, color: [0.6, 0.6, 0.6] });
     y -= 12;
 
     y = margin + 40;
