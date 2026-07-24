@@ -1,7 +1,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --ignore-scripts
+RUN npm ci --ignore-scripts && npm rebuild bcrypt
 COPY prisma ./prisma
 RUN npx prisma generate
 COPY tsconfig*.json ./
