@@ -24,6 +24,7 @@ const allMenuItems: MenuItem[] = [
   { label: i18n.t('nav.users'), icon: UserCog, path: '/users', roles: ['admin'] },
   { label: i18n.t('nav.settings'), icon: Settings, path: '/settings', roles: ['admin'] },
   { label: i18n.t('nav.alerts'), icon: Bell, path: '/alerts', roles: ['admin', 'dispatcher'] },
+  { label: 'Preuves', icon: Package, path: '/delivery-proofs', roles: ['admin', 'dispatcher'] },
   { label: i18n.t('nav.myDeliveries'), icon: ClipboardList, path: '/my-deliveries', roles: ['driver'] },
   { label: i18n.t('nav.myVehicle'), icon: Truck, path: '/my-vehicle', roles: ['driver'] },
   { label: i18n.t('nav.myOrders'), icon: Package, path: '/my-orders', roles: ['client'] },

@@ -40,6 +40,7 @@ const TripReplayPage = lazy(() => import('./pages/TripReplayPage'));
 const TripReportPage = lazy(() => import('./pages/TripReportPage'));
 const AlertsPage = lazy(() => import('./pages/AlertsPage'));
 const DeliveryDetailPage = lazy(() => import('./pages/DeliveryDetailPage'));
+const DeliveryProofsPage = lazy(() => import('./pages/DeliveryProofsPage'));
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -266,6 +267,11 @@ export default function App() {
               <Route path="/alerts" element={
                 <ProtectedRoute roles={['admin', 'dispatcher']}>
                   <AppLayout><SuspenseWrapper><AlertsPage /></SuspenseWrapper></AppLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/delivery-proofs" element={
+                <ProtectedRoute roles={['admin', 'dispatcher']}>
+                  <AppLayout><SuspenseWrapper><DeliveryProofsPage /></SuspenseWrapper></AppLayout>
                 </ProtectedRoute>
               } />
               <Route path="/users" element={

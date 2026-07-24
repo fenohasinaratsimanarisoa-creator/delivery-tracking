@@ -388,4 +388,48 @@ export class DeliveriesService {
       });
     }
   }
+
+  async findProofs(companyId: string, page = 1, limit = 20, status?: string) {
+    const skip = (page - 1) * limit;
+    const where: any = {
+      companyId,
+      deletedAt: null,
+      status: { in: ['delivered', 'failed'] },
+    };
+    if (status && ['delivered', 'failed'].includes(status)) {
+      where.status = status;
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.delivery.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { completedAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          deliveryAddress: true,
+          deliveryLat: true,
+          deliveryLng: true,
+          deliveryProofLat: true,
+          deliveryProofLng: true,
+          deliveryProofDistance: true,
+          deliveryProofAccuracy: true,
+          locationMismatch: true,
+          mismatchResolved: true,
+          completedAt: true,
+          scheduledDate: true,
+          pickupAddress: true,
+          driver: { select: { id: true, firstName: true, lastName: true } },
+          assignedDriver: { select: { id: true, firstName: true, lastName: true } },
+          vehicle: { select: { id: true, licensePlate: true, brand: true, model: true } },
+        },
+      }),
+      this.prisma.delivery.count({ where }),
+    ]);
+
+    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+  }
 }

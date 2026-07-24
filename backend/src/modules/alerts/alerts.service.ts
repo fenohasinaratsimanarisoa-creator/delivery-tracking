@@ -25,6 +25,8 @@ export class AlertsService {
 
     if (query.types && query.types.length > 0) {
       where.type = { in: query.types };
+    } else {
+      where.type = { not: NotificationType.delivery_status };
     }
 
     if (query.priorities && query.priorities.length > 0) {
@@ -100,7 +102,7 @@ export class AlertsService {
   }
 
   async stats(companyId: string, period?: string) {
-    const where: any = { companyId, resolved: false };
+    const where: any = { companyId, resolved: false, type: { not: NotificationType.delivery_status } };
 
     if (period && period !== 'all') {
       const now = new Date();

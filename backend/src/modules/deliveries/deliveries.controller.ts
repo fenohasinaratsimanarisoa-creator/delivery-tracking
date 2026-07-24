@@ -121,4 +121,16 @@ export class DeliveriesController {
   remove(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
     return this.deliveriesService.remove(companyId, id);
   }
+
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
+  @Get('proofs')
+  getProofs(
+    @CurrentUser('companyId') companyId: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('status') status?: string,
+  ) {
+    return this.deliveriesService.findProofs(companyId, +page, +limit, status);
+  }
 }
