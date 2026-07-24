@@ -1,7 +1,7 @@
 import i18n from '../services/i18n/i18n';
 import {
   LayoutDashboard, Truck, Users, MapPin, Fuel, FileText, Settings, UserCog,
-  Package, Navigation, ClipboardList, Eye, Bell,
+  Package, ClipboardList, Eye, Bell,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Role } from '../types';
@@ -25,7 +25,6 @@ const allMenuItems: MenuItem[] = [
   { label: i18n.t('nav.settings'), icon: Settings, path: '/settings', roles: ['admin'] },
   { label: i18n.t('nav.alerts'), icon: Bell, path: '/alerts', roles: ['admin', 'dispatcher'] },
   { label: i18n.t('nav.myDeliveries'), icon: ClipboardList, path: '/my-deliveries', roles: ['driver'] },
-  { label: i18n.t('nav.myPosition'), icon: Navigation, path: '/my-position', roles: ['driver'] },
   { label: i18n.t('nav.myVehicle'), icon: Truck, path: '/my-vehicle', roles: ['driver'] },
   { label: i18n.t('nav.myOrders'), icon: Package, path: '/my-orders', roles: ['client'] },
   { label: i18n.t('nav.tracking'), icon: Eye, path: '/tracking', roles: ['client'] },

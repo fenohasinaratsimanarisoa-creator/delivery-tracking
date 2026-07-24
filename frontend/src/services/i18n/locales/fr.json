@@ -1160,5 +1160,8 @@
     "deleteAll": "Effacer",
     "markAllRead": "Tout lu",
     "deleteTitle": "Supprimer"
+  },
+  "tracking": {
+    "geolocationDeniedHint": "Autorisez la géolocalisation dans les paramètres de votre navigateur pour activer le suivi GPS."
   }
 }

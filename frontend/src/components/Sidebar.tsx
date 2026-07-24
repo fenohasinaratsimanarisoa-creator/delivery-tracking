@@ -5,6 +5,8 @@ import { ChevronLeft, ChevronRight, LogOut, Menu, X } from 'lucide-react';
 import { getMenuItemsForRole } from './menuItems';
 import { useAuth } from '../hooks/AuthContext';
 import NotificationBell from './NotificationBell';
+import TrackingStatusIndicator from './TrackingStatusIndicator';
+import { useTrackingStatus } from '../services/tracking/TrackingContext';
 
 const SIDEBAR_EXPANDED = 240;
 const SIDEBAR_COLLAPSED = 60;
@@ -35,6 +37,7 @@ export default function Sidebar() {
   }, [location.pathname]);
 
   const role = user?.role ?? 'admin';
+  const trackingStatus = useTrackingStatus();
   const items = getMenuItemsForRole(role);
 
   const isActive = (path: string) => {
@@ -214,6 +217,11 @@ export default function Sidebar() {
               {user.firstName} {user.lastName}
             </div>
             <div style={{ textTransform: 'capitalize' }}>{user.role}</div>
+            {role === 'driver' && (
+              <div style={{ marginTop: 4 }}>
+                <TrackingStatusIndicator status={trackingStatus} />
+              </div>
+            )}
           </div>
         )}
         <button

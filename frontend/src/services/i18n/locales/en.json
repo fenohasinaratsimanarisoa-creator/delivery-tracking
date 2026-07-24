@@ -1160,5 +1160,8 @@
     "deleteAll": "Clear",
     "markAllRead": "Mark all read",
     "deleteTitle": "Delete"
+  },
+  "tracking": {
+    "geolocationDeniedHint": "Enable geolocation in your browser settings to activate GPS tracking."
   }
 }

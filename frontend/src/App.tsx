@@ -32,8 +32,8 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const AdminLoginPage = lazy(() => import('./features/platform-admin/AdminLoginPage'));
 const AdminDashboard = lazy(() => import('./features/platform-admin/AdminDashboard'));
 const MyDeliveriesPage = lazy(() => import('./pages/MyDeliveriesPage'));
-const MyPositionPage = lazy(() => import('./pages/MyPositionPage'));
 const MyVehiclePage = lazy(() => import('./pages/MyVehiclePage'));
+const DriverTrackingWrapper = lazy(() => import('./features/tracking/DriverTrackingWrapper'));
 const MyOrdersPage = lazy(() => import('./pages/MyOrdersPage'));
 const ClientTrackingPage = lazy(() => import('./pages/ClientTrackingPage'));
 const TripReplayPage = lazy(() => import('./pages/TripReplayPage'));
@@ -285,17 +285,12 @@ export default function App() {
               {/* Driver routes */}
               <Route path="/my-deliveries" element={
                 <ProtectedRoute roles={['driver']}>
-                  <AppLayout><SuspenseWrapper><MyDeliveriesPage /></SuspenseWrapper></AppLayout>
-                </ProtectedRoute>
-              } />
-              <Route path="/my-position" element={
-                <ProtectedRoute roles={['driver']}>
-                  <AppLayout><SuspenseWrapper><MyPositionPage /></SuspenseWrapper></AppLayout>
+                  <SuspenseWrapper><DriverTrackingWrapper><AppLayout><SuspenseWrapper><MyDeliveriesPage /></SuspenseWrapper></AppLayout></DriverTrackingWrapper></SuspenseWrapper>
                 </ProtectedRoute>
               } />
               <Route path="/my-vehicle" element={
                 <ProtectedRoute roles={['driver']}>
-                  <AppLayout><SuspenseWrapper><MyVehiclePage /></SuspenseWrapper></AppLayout>
+                  <SuspenseWrapper><DriverTrackingWrapper><AppLayout><SuspenseWrapper><MyVehiclePage /></SuspenseWrapper></AppLayout></DriverTrackingWrapper></SuspenseWrapper>
                 </ProtectedRoute>
               } />
 
