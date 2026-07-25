@@ -93,6 +93,11 @@ describe('EmailService', () => {
           { vehicle: 'ABC-123', liters: 50, date: '2026-07-15' },
           { vehicle: 'DEF-456', liters: 45, date: '2026-07-18' },
         ],
+        notificationCount: 3,
+        notificationCritical: 0,
+        notificationHigh: 1,
+        notificationMedium: 2,
+        notificationLow: 0,
       };
 
       await service.sendDigest('admin@test.com', 'Admin', data);
@@ -116,6 +121,11 @@ describe('EmailService', () => {
         punctuality: 80,
         pendingAnomalies: 1,
         anomalyDetails: [{ vehicle: 'ABC-123', liters: 50, date: '2026-07-15' }],
+        notificationCount: 0,
+        notificationCritical: 0,
+        notificationHigh: 0,
+        notificationMedium: 0,
+        notificationLow: 0,
       };
 
       await service.sendDigest('admin@test.com', 'Admin', data);
@@ -137,6 +147,11 @@ describe('EmailService', () => {
         punctuality: 80,
         pendingAnomalies: 0,
         anomalyDetails: [],
+        notificationCount: 0,
+        notificationCritical: 0,
+        notificationHigh: 0,
+        notificationMedium: 0,
+        notificationLow: 0,
       };
 
       await service.sendDigest('admin@test.com', 'Admin', data);

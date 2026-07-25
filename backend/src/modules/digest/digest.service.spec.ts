@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DigestService } from './digest.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const mockPrisma = {
   company: {
@@ -19,6 +20,16 @@ const mockEmailService = {
   sendDigest: jest.fn(),
 };
 
+const mockNotificationsService = {
+  getDigestNotifications: jest.fn().mockResolvedValue({
+    critical: [],
+    high: [],
+    medium: [],
+    low: [],
+    total: 0,
+  }),
+};
+
 describe('DigestService', () => {
   let service: DigestService;
   let prisma: PrismaService;
@@ -34,6 +45,7 @@ describe('DigestService', () => {
         DigestService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: EmailService, useValue: mockEmailService },
+        { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
 

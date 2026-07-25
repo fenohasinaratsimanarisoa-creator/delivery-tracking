@@ -78,6 +78,11 @@ export class EmailService {
       punctuality: number;
       pendingAnomalies: number;
       anomalyDetails: Array<{ vehicle: string; liters: number; date: string }>;
+      notificationCount: number;
+      notificationCritical: number;
+      notificationHigh: number;
+      notificationMedium: number;
+      notificationLow: number;
     },
     lang: Language = 'fr',
   ): Promise<void> {
@@ -131,6 +136,19 @@ export class EmailService {
           <tbody>${anomalyRows}</tbody>
         </table>
         `
+            : ''
+        }
+
+        ${
+          data.notificationCount > 0
+            ? `
+        <h3 style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:#E8ECF3;margin:20px 0 8px">Notifications ${data.weekRange}</h3>
+        <table style="width:100%;border-collapse:collapse;background:#121B2E;border-radius:8px;overflow:hidden;margin-bottom:16px">
+          <tr><td style="padding:10px 14px;font-size:13px;color:#E8544C">🔴 ${data.notificationCritical} critiques</td></tr>
+          <tr><td style="padding:10px 14px;font-size:13px;color:#F2A93C">🟡 ${data.notificationHigh} importantes</td></tr>
+          <tr><td style="padding:10px 14px;font-size:13px;color:#9BA6B9">🔵 ${data.notificationMedium} moyennes</td></tr>
+          <tr><td style="padding:10px 14px;font-size:13px;color:#5D6B83">⚪ ${data.notificationLow} faibles</td></tr>
+        </table>`
             : ''
         }
 

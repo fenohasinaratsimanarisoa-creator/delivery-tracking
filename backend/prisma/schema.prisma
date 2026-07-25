@@ -546,6 +546,7 @@ model Notification {
   message           String
   link              String? // optional deep-link URL
   digestOnly        Boolean              @default(false) @map("digest_only")
+  digestSentAt      DateTime?            @map("digest_sent_at")
   readAt            DateTime?            @map("read_at")
   createdAt         DateTime             @default(now()) @map("created_at")
   resolved          Boolean              @default(false) @map("resolved")

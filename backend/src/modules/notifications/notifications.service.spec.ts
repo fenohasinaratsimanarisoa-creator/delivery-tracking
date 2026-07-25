@@ -9,13 +9,21 @@ const mockPrisma = {
     updateMany: jest.fn(),
     count: jest.fn(),
     create: jest.fn(),
+    deleteMany: jest.fn(),
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
   },
+  user: { findUnique: jest.fn(), findMany: jest.fn() },
 };
 
 const emit = jest.fn();
 const to = jest.fn(() => ({ emit }));
 const mockGateway = {
   server: { to },
+};
+
+const mockEmailService = {
+  send: jest.fn(),
 };
 
 describe('NotificationsService', () => {
@@ -26,6 +34,7 @@ describe('NotificationsService', () => {
     service = new NotificationsService(
       mockPrisma as unknown as PrismaService,
       mockGateway as unknown as NotificationsGateway,
+      mockEmailService as any,
     );
   });
 

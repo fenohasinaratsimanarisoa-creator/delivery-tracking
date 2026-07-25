@@ -24,8 +24,8 @@ export class NotificationsController {
   }
 
   @Patch(':id/read')
-  markRead(@Param('id') id: string, @CurrentUser('companyId') companyId: string) {
-    return this.notificationsService.markRead(id, companyId);
+  markRead(@Param('id') id: string, @CurrentUser('companyId') companyId: string, @CurrentUser('id') userId: string) {
+    return this.notificationsService.markRead(id, companyId, userId);
   }
 
   @Patch('read-all')
@@ -34,8 +34,8 @@ export class NotificationsController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser('companyId') companyId: string) {
-    return this.notificationsService.remove(id, companyId);
+  remove(@Param('id') id: string, @CurrentUser('companyId') companyId: string, @CurrentUser('id') userId: string) {
+    return this.notificationsService.remove(id, companyId, userId);
   }
 
   @Delete()

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { formatDate, type Language } from '../../common/i18n';
 
 @Injectable()
@@ -11,15 +12,25 @@ export class DigestService {
   constructor(
     private prisma: PrismaService,
     private emailService: EmailService,
+    private notificationsService: NotificationsService,
   ) {}
 
   @Cron('0 8 * * 1')
   async sendWeeklyDigest() {
-    this.logger.log('Generating weekly digest...');
+    await this.sendDigest(7);
+  }
+
+  @Cron('0 20 * * *')
+  async sendDailyDigest() {
+    await this.sendDigest(1);
+  }
+
+  private async sendDigest(daysBack: number) {
+    this.logger.log(`Generating ${daysBack === 1 ? 'daily' : 'weekly'} digest...`);
 
     const now = new Date();
-    const weekAgo = new Date(now);
-    weekAgo.setDate(weekAgo.getDate() - 7);
+    const since = new Date(now);
+    since.setDate(since.getDate() - daysBack);
 
     const companies = await this.prisma.company.findMany({
       include: {
@@ -34,28 +45,21 @@ export class DigestService {
 
     for (const company of companies) {
       try {
-        const [deliveries, fuelAnomalies] = await Promise.all([
+        const [deliveries, fuelAnomalies, groupedNotifications] = await Promise.all([
           this.prisma.delivery.findMany({
-            where: {
-              companyId: company.id,
-              createdAt: { gte: weekAgo },
-            },
+            where: { companyId: company.id, createdAt: { gte: since } },
           }),
           this.prisma.fuelLog.findMany({
-            where: {
-              companyId: company.id,
-              anomalyFlag: true,
-              createdAt: { gte: weekAgo },
-            },
+            where: { companyId: company.id, anomalyFlag: true, createdAt: { gte: since } },
             include: { vehicle: { select: { licensePlate: true } } },
           }),
+          this.notificationsService.getDigestNotifications(company.id, since),
         ]);
 
         const totalDeliveries = deliveries.length;
         const delivered = deliveries.filter((d) => d.status === 'delivered').length;
         const failed = deliveries.filter((d) => d.status === 'failed').length;
-        const punctuality =
-          totalDeliveries > 0 ? Math.round((delivered / totalDeliveries) * 100) : 100;
+        const punctuality = totalDeliveries > 0 ? Math.round((delivered / totalDeliveries) * 100) : 100;
 
         const pendingAnomalies = fuelAnomalies.filter((a) => a.anomalyFlag);
 
@@ -66,7 +70,7 @@ export class DigestService {
             user.firstName,
             {
               companyName: company.name,
-              weekRange: this.formatWeekRange(weekAgo, lang),
+              weekRange: this.formatWeekRange(since, lang),
               totalDeliveries,
               delivered,
               failed,
@@ -77,9 +81,28 @@ export class DigestService {
                 liters: a.liters,
                 date: formatDate(a.fillDate, lang),
               })),
+              notificationCount: groupedNotifications.total,
+              notificationCritical: groupedNotifications.critical.length,
+              notificationHigh: groupedNotifications.high.length,
+              notificationMedium: groupedNotifications.medium.length,
+              notificationLow: groupedNotifications.low.length,
             },
             lang,
           );
+        }
+
+        // Mark all digested notifications as sent
+        const allNotifIds = [
+          ...groupedNotifications.critical,
+          ...groupedNotifications.high,
+          ...groupedNotifications.medium,
+          ...groupedNotifications.low,
+        ].map((n) => n.id);
+        if (allNotifIds.length > 0) {
+          await this.prisma.notification.updateMany({
+            where: { id: { in: allNotifIds } },
+            data: { digestSentAt: new Date() },
+          });
         }
 
         this.logger.log(`Digest sent for company ${company.id} (${company.name})`);
@@ -89,9 +112,9 @@ export class DigestService {
     }
   }
 
-  private formatWeekRange(weekAgo: Date, lang: Language): string {
+  private formatWeekRange(since: Date, lang: Language): string {
     const now = new Date();
     const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long' };
-    return `${formatDate(weekAgo, lang, options)} — ${formatDate(now, lang, options)}`;
+    return `${formatDate(since, lang, options)} — ${formatDate(now, lang, options)}`;
   }
 }
