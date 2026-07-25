@@ -494,15 +494,15 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
               <span style={{ fontWeight: 700, fontSize: 15, color: '#4285f4' }}>G</span>
               {t('auth.login.googleLogin')}
             </button>
-
-            <div style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--color-text-secondary)' } as React.CSSProperties}>
-              {t('auth.login.noAccount')}{' '}
-              <Link to="/register" style={{ color: 'var(--color-accent)', fontWeight: 600, textDecoration: 'none' }}>
-                {t('auth.login.createAccount')}
-              </Link>
-            </div>
           </div>
         )}
+
+        <div style={{ ...animate(0.30), textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--color-text-secondary)' } as React.CSSProperties}>
+          {t('auth.login.noAccount')}{' '}
+          <Link to="/register" style={{ color: 'var(--color-accent)', fontWeight: 600, textDecoration: 'none' }}>
+            {t('auth.login.createAccount')}
+          </Link>
+        </div>
       </div>
     </>
   );
