@@ -88,7 +88,7 @@ export default function PublicTrackingPage() {
         <p>Status: <strong>{delivery.status}</strong></p>
         <p>Pickup: {delivery.pickupAddress}</p>
         <p>Delivery: {delivery.deliveryAddress}</p>
-        {currentPos?.speed !== undefined && <p>Current speed: {currentPos.speed} km/h</p>}
+        {currentPos?.speed !== undefined && currentPos?.speed !== null && <p>Current speed: {(currentPos.speed * 3.6).toFixed(1)} km/h</p>}
       </div>
       <div style={{ flex: 1 }}>
         <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
@@ -101,7 +101,7 @@ export default function PublicTrackingPage() {
             <Marker position={[currentPos.latitude, currentPos.longitude]}>
               <Popup>
                 Current position<br />
-                Speed: {currentPos.speed || 0} km/h<br />
+                Speed: {((currentPos.speed ?? 0) * 3.6).toFixed(1)} km/h<br />
                 {new Date(currentPos.timestamp).toLocaleString()}
               </Popup>
             </Marker>

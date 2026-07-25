@@ -7,6 +7,7 @@ import {
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
+import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { UseGuards, Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
@@ -19,12 +20,13 @@ import { DataUpdateBus } from '../../common/events/data-update.bus';
   cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:5173' },
 })
 @UseGuards(WsJwtGuard)
-export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy {
   @WebSocketServer()
   server!: Server;
 
   private readonly logger = new Logger(TrackingGateway.name);
   private disconnectedDrivers = new Map<string, Date>();
+  private driverCleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private trackingService: TrackingService,
@@ -40,6 +42,19 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
         });
       }
     });
+  }
+
+  onModuleInit() {
+    this.driverCleanupTimer = setInterval(() => {
+      const cutoff = Date.now() - 86_400_000;
+      for (const [id, ts] of this.disconnectedDrivers) {
+        if (ts.getTime() < cutoff) this.disconnectedDrivers.delete(id);
+      }
+    }, 3_600_000);
+  }
+
+  onModuleDestroy() {
+    if (this.driverCleanupTimer) clearInterval(this.driverCleanupTimer);
   }
 
   async handleConnection(client: Socket) {
@@ -157,15 +172,27 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
       user.companyId,
     );
 
-    const broadcasts = dto.positions.map((pos) => ({
+    // Only broadcast positions that were actually saved
+    const broadcasts = saved.map((pos: any) => ({
       driverId: driver.id,
       driverName: `${user.firstName} ${user.lastName}`,
-      ...pos,
+      latitude: pos.latitude,
+      longitude: pos.longitude,
+      speed: pos.speed,
+      heading: pos.heading,
+      altitude: pos.altitude,
+      accuracy: pos.accuracy,
+      suspect: pos.suspect,
+      timestamp: pos.timestamp instanceof Date ? pos.timestamp.toISOString() : pos.timestamp,
+      deliveryId: pos.deliveryId ?? undefined,
+      vehicleId: pos.vehicleId,
     }));
 
     const rooms = new Set<string>();
-    for (const pos of dto.positions) {
-      rooms.add(`delivery:${pos.deliveryId}`);
+    for (const pos of saved) {
+      if (pos.deliveryId) {
+        rooms.add(`delivery:${pos.deliveryId}`);
+      }
     }
     rooms.add(`company:${user.companyId}`);
 

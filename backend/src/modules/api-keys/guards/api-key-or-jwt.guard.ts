@@ -1,5 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { API_KEY_SCOPE_KEY } from '../decorators/api-key-scope.decorator';
 import * as crypto from 'crypto';
@@ -9,6 +11,8 @@ export class ApiKeyOrJwtGuard implements CanActivate {
   constructor(
     private prisma: PrismaService,
     private reflector: Reflector,
+    private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -21,6 +25,28 @@ export class ApiKeyOrJwtGuard implements CanActivate {
 
     if (request.user) {
       return true;
+    }
+
+    // Try JWT Bearer token if no API key and no pre-set user
+    const authHeader = request.headers.authorization as string;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.slice(7);
+        const payload = this.jwtService.verify(token, {
+          secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+        });
+        request.user = {
+          id: payload.sub,
+          email: payload.email,
+          role: payload.role,
+          companyId: payload.companyId,
+          firstName: payload.firstName || '',
+          lastName: payload.lastName || '',
+        };
+        return true;
+      } catch {
+        throw new UnauthorizedException('Invalid or expired JWT token');
+      }
     }
 
     throw new UnauthorizedException(

@@ -150,8 +150,8 @@ export default function ClientTrackingPage() {
             <div>📦 {delivery.deliveryAddress}</div>
             {delivery.driver && <div>👤 {t('clientTracking.driver')} : {delivery.driver.firstName} {delivery.driver.lastName}</div>}
             {delivery.vehicle && <div>🚛 {t('clientTracking.vehicle')} : {delivery.vehicle.brand} {delivery.vehicle.model} ({delivery.vehicle.licensePlate})</div>}
-            {currentPos?.speed !== null && currentPos?.speed !== undefined && (
-              <div>⚡ {t('clientTracking.speed')} : {currentPos.speed} km/h</div>
+            {currentPos?.speed != null && (
+              <div>⚡ {t('clientTracking.speed')} : {(currentPos.speed * 3.6).toFixed(1)} km/h</div>
             )}
           </div>
         </div>
@@ -167,7 +167,7 @@ export default function ClientTrackingPage() {
             <Marker position={[currentPos.latitude, currentPos.longitude]}>
               <Popup>
                 {t('clientTracking.currentPosition')}<br />
-                {t('clientTracking.speed')} : {currentPos.speed || 0} km/h<br />
+                {t('clientTracking.speed')} : {((currentPos.speed ?? 0) * 3.6).toFixed(1)} km/h<br />
                 {new Date(currentPos.timestamp).toLocaleString()}
               </Popup>
             </Marker>

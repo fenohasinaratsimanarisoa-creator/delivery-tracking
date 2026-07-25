@@ -1,6 +1,11 @@
 import { WsAuthService, WsAuthError } from './ws-auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
+
+const mockPrisma = {
+  user: { findUnique: jest.fn() },
+};
 
 describe('WsAuthService', () => {
   let service: WsAuthService;
@@ -8,9 +13,10 @@ describe('WsAuthService', () => {
   let configService: ConfigService;
 
   beforeEach(() => {
+    jest.clearAllMocks();
     jwtService = new JwtService({ secret: 'test-secret' });
     configService = { get: jest.fn().mockReturnValue('test-secret') } as any;
-    service = new WsAuthService(jwtService, configService);
+    service = new WsAuthService(jwtService, configService, mockPrisma as unknown as PrismaService);
   });
 
   const makeClient = (auth?: string) =>
@@ -49,6 +55,16 @@ describe('WsAuthService', () => {
   });
 
   it('should accept valid token and set user data', async () => {
+    mockPrisma.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      email: 'a@b.com',
+      role: 'admin',
+      companyId: 'c1',
+      firstName: 'John',
+      lastName: 'Doe',
+      isActive: true,
+    });
+
     const token = jwtService.sign({
       sub: 'u1',
       email: 'a@b.com',
@@ -71,6 +87,16 @@ describe('WsAuthService', () => {
   });
 
   it('should extract token from auth header with Bearer prefix', async () => {
+    mockPrisma.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      email: 'a@b.com',
+      role: 'admin',
+      companyId: 'c1',
+      firstName: 'John',
+      lastName: 'Doe',
+      isActive: true,
+    });
+
     const token = jwtService.sign({ sub: 'u1', email: 'a@b.com', role: 'admin', companyId: 'c1' });
     const client = {
       handshake: {
@@ -84,7 +110,54 @@ describe('WsAuthService', () => {
     expect(user.id).toBe('u1');
   });
 
+  it('should reject inactive users', async () => {
+    mockPrisma.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      email: 'a@b.com',
+      role: 'admin',
+      companyId: 'c1',
+      firstName: 'John',
+      lastName: 'Doe',
+      isActive: false,
+    });
+
+    const token = jwtService.sign({
+      sub: 'u1',
+      email: 'a@b.com',
+      role: 'admin',
+      companyId: 'c1',
+      firstName: 'John',
+      lastName: 'Doe',
+    });
+    const client = makeClient(token);
+    await expect(service.verify(client)).rejects.toThrow(WsAuthError);
+    await expect(service.verify(client)).rejects.toMatchObject({ code: 'TOKEN_INVALID' });
+  });
+
+  it('should reject when user not found in DB', async () => {
+    mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+
+    const token = jwtService.sign({
+      sub: 'missing-user',
+      role: 'admin',
+      companyId: 'c1',
+    });
+    const client = makeClient(token);
+    await expect(service.verify(client)).rejects.toThrow(WsAuthError);
+    await expect(service.verify(client)).rejects.toMatchObject({ code: 'TOKEN_INVALID' });
+  });
+
   it('should set default firstName and lastName when missing', async () => {
+    mockPrisma.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      email: 'a@b.com',
+      role: 'admin',
+      companyId: 'c1',
+      firstName: '',
+      lastName: '',
+      isActive: true,
+    });
+
     const token = jwtService.sign({
       sub: 'u1',
       email: 'a@b.com',

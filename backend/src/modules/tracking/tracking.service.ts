@@ -161,6 +161,14 @@ export class TrackingService {
     return diffMs <= DEDUP_CLOCK_SKEW_S * 1000;
   }
 
+  private cleanupCooldowns() {
+    const now = Date.now();
+    const maxAge = 600_000;
+    for (const [key, ts] of this.speedAlertCooldowns) {
+      if (now - ts > maxAge) this.speedAlertCooldowns.delete(key);
+    }
+  }
+
   private async generateAlerts(
     dto: UpdatePositionDto,
     companyId: string,
@@ -173,6 +181,7 @@ export class TrackingService {
     const tasks: Promise<unknown>[] = [];
 
     if (dto.speed !== undefined && settings.speedAlertThreshold) {
+      this.cleanupCooldowns();
       const speedKmh = dto.speed * 3.6;
       if (speedKmh > settings.speedAlertThreshold) {
         const cooldownKey = `${dto.vehicleId}:speed`;
@@ -529,16 +538,18 @@ export class TrackingService {
     const raw = await this.prisma.$queryRaw<Array<{ total_meters: number }>>`
       SELECT COALESCE(SUM(
         ST_DistanceSphere(
-          ST_MakePoint(longitude, latitude),
+          ST_MakePoint(gp.longitude, gp.latitude),
           ST_MakePoint(
-            LAG(longitude) OVER (ORDER BY timestamp),
-            LAG(latitude) OVER (ORDER BY timestamp)
+            LAG(gp.longitude) OVER (ORDER BY gp.timestamp),
+            LAG(gp.latitude) OVER (ORDER BY gp.timestamp)
           )
         )
       ), 0) AS total_meters
-      FROM gps_positions
-      WHERE delivery_id = CAST(${deliveryId} AS uuid)
-      ORDER BY timestamp
+      FROM gps_positions gp
+      JOIN deliveries d ON d.id = gp.delivery_id
+      WHERE gp.delivery_id = CAST(${deliveryId} AS uuid)
+        AND d.company_id = CAST(${companyId} AS uuid)
+      ORDER BY gp.timestamp
     `;
     const meters = Math.round(raw[0]?.total_meters ?? 0);
     return {

@@ -73,6 +73,7 @@ export function useDriverTracking() {
 
   const kalmanRef = useRef<KalmanFilter | null>(null);
   const filteredPosRef = useRef<{ lat: number; lng: number; confidence: number } | null>(null);
+  const rawPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const watchRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const drainIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -158,10 +159,9 @@ export function useDriverTracking() {
     const positions = await dequeueAllPositions();
     if (positions.length === 0) return;
     try {
-      socket.emit('batchPosition', { positions }, (ack: any) => {
-        if (ack?.event === 'positionsSaved') {
-          clearQueue().then(() => refreshQueueCount());
-        }
+      socket.emit('batchPosition', { positions });
+      socket.once('positionsSaved', () => {
+        clearQueue().then(() => refreshQueueCount());
       });
     } catch {}
   }, [refreshQueueCount]);
@@ -170,7 +170,6 @@ export function useDriverTracking() {
     if (isSendingRef.current) return;
     isSendingRef.current = true;
     const p = posRef.current;
-    const filtered = filteredPosRef.current;
     const dId = deliveryIdRef.current;
     const vId = vehicleId;
     if (!p) { isSendingRef.current = false; return; }
@@ -183,9 +182,9 @@ export function useDriverTracking() {
     }
     setPoorAccuracy(acc > ACCURACY_MODERATE);
 
-    const sendLat = filtered ? filtered.lat : p.lat;
-    const sendLng = filtered ? filtered.lng : p.lng;
-    const confidence = filtered ? filtered.confidence : 1;
+    const raw = rawPosRef.current;
+    const sendLat = raw ? raw.lat : p.lat;
+    const sendLng = raw ? raw.lng : p.lng;
 
     const now = new Date().toISOString();
     const payload: Record<string, unknown> = {
@@ -193,15 +192,18 @@ export function useDriverTracking() {
       latitude: sendLat, longitude: sendLng,
       speed: p.speed ?? undefined, heading: p.heading,
       altitude: p.altitude, accuracy: acc,
-      confidence,
       timestamp: now,
     };
     if (vId) payload.vehicleId = vId;
     if (dId) payload.deliveryId = dId;
     const socket = getSocket();
     if (socket.connected) {
-      socket.emit('updatePosition', payload, () => { isSendingRef.current = false; });
-      setTimeout(() => { isSendingRef.current = false; }, 2000);
+      socket.emit('updatePosition', payload);
+      const posTimeout = setTimeout(() => { isSendingRef.current = false; }, 3000);
+      socket.once('positionSaved', () => {
+        clearTimeout(posTimeout);
+        isSendingRef.current = false;
+      });
     } else {
       enqueuePosition(payload).then(() => { refreshQueueCount(); isSendingRef.current = false; });
     }
@@ -247,6 +249,7 @@ export function useDriverTracking() {
         const isActuallyStationary = stationaryFromSensor === null ? stationaryFromSpeed : stationaryFromSensor;
 
         filteredPosRef.current = { lat: filtered.lat, lng: filtered.lng, confidence: conf };
+        rawPosRef.current = { lat: latitude, lng: longitude };
 
         const p: DriverPosition = {
           lat: filtered.lat,

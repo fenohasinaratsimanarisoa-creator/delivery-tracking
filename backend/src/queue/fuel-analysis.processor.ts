@@ -27,8 +27,8 @@ export class FuelAnalysisProcessor extends WorkerHost {
     const threshold = parseInt(process.env.FUEL_ANOMALY_THRESHOLD_PERCENT || '20', 10);
 
     try {
-      const fuelLog = await this.prisma.fuelLog.findUnique({
-        where: { id: fuelLogId },
+      const fuelLog = await this.prisma.fuelLog.findFirst({
+        where: { id: fuelLogId, companyId },
         include: { vehicle: true },
       });
 

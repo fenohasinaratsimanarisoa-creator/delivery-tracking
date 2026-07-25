@@ -14,20 +14,28 @@ const mockSocket = () => {
 
 describe('TrackingGateway — cross-tenant security', () => {
   let gateway: TrackingGateway;
-  let trackingService: { getDeliveryInfo: jest.Mock };
+  let trackingService: { getDeliveryInfo: jest.Mock; saveBatch: jest.Mock; findDriverByUserId: jest.Mock };
+  let mockServer: { to: jest.Mock; emit: jest.Mock };
 
   beforeEach(async () => {
     trackingService = {
       getDeliveryInfo: jest.fn(),
+      saveBatch: jest.fn(),
+      findDriverByUserId: jest.fn(),
     };
 
     const mockEventEmitter = { on: jest.fn(), emit: jest.fn() };
+    mockServer = {
+      to: jest.fn().mockReturnThis(),
+      emit: jest.fn(),
+    };
 
     gateway = new TrackingGateway(
       trackingService as any,
       {} as any, // wsAuthService mock
       mockEventEmitter as any, // dataUpdateBus
     );
+    (gateway as any).server = mockServer;
   });
 
   describe('handleSubscribeToDelivery', () => {
@@ -141,6 +149,66 @@ describe('TrackingGateway — cross-tenant security', () => {
 
       expect(client.join).toHaveBeenCalledWith('driver:driver-1');
       expect(client.join).toHaveBeenCalledWith('company:company-a');
+    });
+  });
+
+  describe('handleBatchPosition — broadcast integrity', () => {
+    it('only broadcasts positions that were actually saved', async () => {
+      const client = mockSocket();
+      client.data.user = { id: 'user-1', role: 'driver', companyId: 'company-a', firstName: 'Test', lastName: 'Driver' };
+
+      trackingService.findDriverByUserId.mockResolvedValueOnce({ id: 'driver-1' });
+      trackingService.saveBatch.mockResolvedValueOnce([
+        { id: 'pos-1', latitude: 1, longitude: 2, speed: 10, heading: 90, altitude: 0, accuracy: 5, suspect: false, timestamp: new Date('2026-07-21T10:00:00.000Z'), deliveryId: 'delivery-1', vehicleId: 'vehicle-1' },
+      ]);
+
+      const dto = {
+        positions: [
+          {
+            latitude: 1,
+            longitude: 2,
+            speed: 10,
+            heading: 90,
+            altitude: 0,
+            accuracy: 5,
+            timestamp: '2026-07-21T10:00:00.000Z',
+            deliveryId: 'delivery-1',
+            vehicleId: 'vehicle-1',
+          },
+        ],
+      };
+
+      await gateway.handleBatchPosition(client, dto as any);
+
+      expect(mockServer.to).toHaveBeenCalledWith('delivery:delivery-1');
+      expect(mockServer.to).toHaveBeenCalledWith('company:company-a');
+    });
+
+    it('handles positions without deliveryId (no delivery room)', async () => {
+      const client = mockSocket();
+      client.data.user = { id: 'user-1', role: 'driver', companyId: 'company-a', firstName: 'Test', lastName: 'Driver' };
+
+      trackingService.findDriverByUserId.mockResolvedValueOnce({ id: 'driver-1' });
+      trackingService.saveBatch.mockResolvedValueOnce([
+        { id: 'pos-2', latitude: 3, longitude: 4, speed: null, heading: null, altitude: null, accuracy: null, suspect: false, timestamp: new Date(), deliveryId: null, vehicleId: 'vehicle-1' },
+      ]);
+
+      const dto = {
+        positions: [
+          {
+            latitude: 3,
+            longitude: 4,
+            timestamp: '2026-07-21T10:00:00.000Z',
+            vehicleId: 'vehicle-1',
+          },
+        ],
+      };
+
+      await gateway.handleBatchPosition(client, dto as any);
+
+      // Should broadcast to company room, NOT to delivery:undefined
+      expect(mockServer.to).not.toHaveBeenCalledWith('delivery:undefined');
+      expect(mockServer.to).toHaveBeenCalledWith('company:company-a');
     });
   });
 });
