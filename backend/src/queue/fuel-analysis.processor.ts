@@ -24,13 +24,18 @@ export class FuelAnalysisProcessor extends WorkerHost {
 
   async process(job: Job<FuelAnalysisJobData>): Promise<void> {
     const { fuelLogId, companyId } = job.data;
-    const threshold = parseInt(process.env.FUEL_ANOMALY_THRESHOLD_PERCENT || '20', 10);
 
     try {
-      const fuelLog = await this.prisma.fuelLog.findFirst({
-        where: { id: fuelLogId, companyId },
-        include: { vehicle: true },
-      });
+      const [fuelLog, fuelSettings] = await Promise.all([
+        this.prisma.fuelLog.findFirst({
+          where: { id: fuelLogId, companyId },
+          include: { vehicle: true },
+        }),
+        this.prisma.companyFuelSettings.findUnique({
+          where: { companyId },
+          select: { anomalyThreshold: true },
+        }),
+      ]);
 
       if (!fuelLog) {
         this.logger.warn(`FuelLog ${fuelLogId} not found`);
@@ -43,6 +48,9 @@ export class FuelAnalysisProcessor extends WorkerHost {
       let anomalyFlag = false;
       let anomalyReason: string | null = null;
       const theoretical = fuelLog.vehicle.theoreticalConsumption;
+
+      const defaultThreshold = parseInt(process.env.FUEL_ANOMALY_THRESHOLD_PERCENT || '20', 10);
+      const threshold = fuelSettings?.anomalyThreshold ?? defaultThreshold;
 
       if (calculatedConsumption !== null) {
         if (theoretical && theoretical > 0) {

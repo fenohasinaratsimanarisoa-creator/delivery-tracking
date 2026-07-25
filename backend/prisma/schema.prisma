@@ -111,6 +111,7 @@ model Company {
   apiKeys            ApiKey[]
   webhooks           Webhook[]
   geofences          Geofence[]
+  fuelPriceHistory   FuelPriceHistory[]
 
   @@map("companies")
 }
@@ -511,6 +512,7 @@ model DailyFuelReport {
   distanceKm           Float    @map("distance_km")
   consumptionLPer100Km Float?   @map("consumption_l_per_100km")
   estimatedCost        Float    @map("estimated_cost")
+  pricePerLiterUsed    Float?   @map("price_per_liter_used")
   createdAt            DateTime @default(now()) @map("created_at")
 
   companyId String @map("company_id") @db.Uuid
@@ -519,6 +521,21 @@ model DailyFuelReport {
   @@index([companyId, reportDate])
   @@index([driverId, reportDate])
   @@map("daily_fuel_reports")
+}
+
+model FuelPriceHistory {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @map("company_id") @db.Uuid
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fuelType       String   @map("fuel_type")
+  pricePerLiter  Float    @map("price_per_liter")
+  effectiveFrom  DateTime @map("effective_from")
+  effectiveUntil DateTime? @map("effective_until")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([companyId, fuelType, effectiveFrom])
+  @@index([companyId, fuelType, effectiveUntil])
+  @@map("fuel_price_history")
 }
 
 model Notification {

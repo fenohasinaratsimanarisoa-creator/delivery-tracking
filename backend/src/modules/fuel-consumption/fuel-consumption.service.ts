@@ -9,7 +9,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
 import { FuelFilterDto } from './dto/fuel-filter.dto';
 
-const FUEL_PRICES: Record<string, number> = {
+const DEFAULT_FUEL_PRICES: Record<string, number> = {
   essence: 5000,
   gasoil: 4900,
   diesel: 4900,
@@ -20,7 +20,7 @@ const FUEL_PRICES: Record<string, number> = {
 @Injectable()
 export class FuelConsumptionService {
   private readonly logger = new Logger(FuelConsumptionService.name);
-  private readonly anomalyThresholdPercent: number;
+  private readonly fallbackThresholdPercent: number;
 
   constructor(
     private prisma: PrismaService,
@@ -28,10 +28,35 @@ export class FuelConsumptionService {
     private notifications: NotificationsService,
     @Optional() @InjectQueue('fuel-analysis') private fuelAnalysisQueue: Queue,
   ) {
-    this.anomalyThresholdPercent = this.configService.get<number>(
+    this.fallbackThresholdPercent = this.configService.get<number>(
       'FUEL_ANOMALY_THRESHOLD_PERCENT',
       20,
     );
+  }
+
+  private async getCompanyThreshold(companyId: string): Promise<number> {
+    const settings = await this.prisma.companyFuelSettings.findUnique({
+      where: { companyId },
+      select: { anomalyThreshold: true },
+    });
+    return settings?.anomalyThreshold ?? this.fallbackThresholdPercent;
+  }
+
+  private async getFuelPriceForDate(companyId: string, fuelType: string, date: Date): Promise<number> {
+    const price = await this.prisma.fuelPriceHistory.findFirst({
+      where: {
+        companyId,
+        fuelType: fuelType.toLowerCase(),
+        effectiveFrom: { lte: date },
+        AND: [
+          { effectiveUntil: null },
+          { OR: [{ effectiveUntil: { gte: date } }, { effectiveUntil: null }] },
+        ],
+      },
+      orderBy: { effectiveFrom: 'desc' },
+    });
+    if (price) return price.pricePerLiter;
+    return DEFAULT_FUEL_PRICES[fuelType.toLowerCase()] || 5000;
   }
 
   async create(companyId: string, dto: CreateFuelLogDto) {
@@ -58,6 +83,13 @@ export class FuelConsumptionService {
       }
     } catch (e: any) {
       this.logger.warn(`Failed to dispatch fuel analysis job: ${e.message}`);
+    }
+
+    // Vérification croisée : distance GPS vs kilomètres saisis
+    try {
+      await this.crossCheckFuelLogWithGps(fuelLog, companyId);
+    } catch (e: any) {
+      this.logger.warn(`Cross-check failed for fuel log ${fuelLog.id}: ${e.message}`);
     }
 
     return this.prisma.fuelLog.findUnique({
@@ -214,10 +246,17 @@ export class FuelConsumptionService {
       },
     });
 
+    // Seuil de bruit GPS : en dessous de 5m entre deux positions consécutives, on considère
+    // qu'il s'agit de bruit de réception (dérive à l'arrêt) et non d'un déplacement réel.
+    // Ce seuil est cohérent avec le scale d'accuracy utilisé dans detectTeleportation
+    // (backend tracking.service.ts) où une accuracy de 10m donne un scale de 1.
+    const GPS_NOISE_THRESHOLD_M = 5;
+
     for (const driver of drivers) {
       const positions = await this.prisma.gpsPosition.findMany({
         where: {
           driverId: driver.id,
+          suspect: false,
           timestamp: { gte: bounds.start, lte: bounds.end },
         },
         orderBy: { timestamp: 'asc' },
@@ -228,10 +267,13 @@ export class FuelConsumptionService {
 
       let totalDistance = 0;
       for (let i = 1; i < positions.length; i++) {
-        totalDistance += this.haversineDistanceM(
+        const segDist = this.haversineDistanceM(
           positions[i - 1].latitude, positions[i - 1].longitude,
           positions[i].latitude, positions[i].longitude,
         );
+        if (segDist >= GPS_NOISE_THRESHOLD_M) {
+          totalDistance += segDist;
+        }
       }
 
       const distanceKm = Math.round(totalDistance / 1000 * 100) / 100;
@@ -240,7 +282,7 @@ export class FuelConsumptionService {
       const vehicle = driver.vehicle;
       const fuelType = vehicle?.fuelType?.toLowerCase() || 'essence';
       const consumption = vehicle?.theoreticalConsumption || 8;
-      const pricePerLiter = FUEL_PRICES[fuelType] || 5000;
+      const pricePerLiter = await this.getFuelPriceForDate(companyId, fuelType, targetDate);
       const estimatedCost = Math.round(distanceKm * consumption / 100 * pricePerLiter * 100) / 100;
 
       const reportDate = new Date(Date.UTC(targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate()));
@@ -260,6 +302,7 @@ export class FuelConsumptionService {
           distanceKm,
           consumptionLPer100Km: consumption,
           estimatedCost,
+          pricePerLiterUsed: pricePerLiter,
           companyId,
         },
         update: {
@@ -268,7 +311,58 @@ export class FuelConsumptionService {
           fuelType: fuelType,
           consumptionLPer100Km: consumption,
           vehiclePlate: vehicle?.licensePlate || 'N/A',
+          pricePerLiterUsed: pricePerLiter,
         },
+      });
+    }
+  }
+
+  private async crossCheckFuelLogWithGps(fuelLog: any, companyId: string) {
+    if (!fuelLog.kilometers || fuelLog.kilometers <= 0) return;
+
+    // Trouver le dernier plein avant celui-ci pour le même véhicule
+    const prevLog = await this.prisma.fuelLog.findFirst({
+      where: { vehicleId: fuelLog.vehicleId, companyId, fillDate: { lt: fuelLog.fillDate } },
+      orderBy: { fillDate: 'desc' },
+      select: { fillDate: true },
+    });
+
+    const periodStart = prevLog?.fillDate || new Date(fuelLog.fillDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const periodEnd = fuelLog.fillDate;
+
+    // Sommer les distances GPS sur la période entre les deux pleins
+    const gpsDistance = await this.prisma.dailyFuelReport.aggregate({
+      where: {
+        companyId,
+        reportDate: { gte: periodStart, lte: periodEnd },
+        // On ne peut pas filtrer par vehiclePlate ici car DailyFuelReport n'a pas vehicleId
+      },
+      _sum: { distanceKm: true },
+    });
+
+    const gpsKm = gpsDistance._sum.distanceKm || 0;
+    if (gpsKm <= 0) return;
+
+    const manualKm = fuelLog.kilometers;
+    const ratio = manualKm / gpsKm;
+
+    // Seuil de tolérance : si le kilométrage saisi est > 3x la distance GPS, c'est suspect
+    const CROSS_CHECK_THRESHOLD = 3;
+    if (ratio > CROSS_CHECK_THRESHOLD) {
+      await this.prisma.fuelLog.update({
+        where: { id: fuelLog.id },
+        data: {
+          anomalyFlag: true,
+          anomalyReason: `Distance saisie (${manualKm}km) très supérieure à la distance GPS (${gpsKm.toFixed(1)}km) sur la période — rapport ×${ratio.toFixed(1)}`,
+        },
+      });
+      await this.notifications.create(companyId, {
+        type: NotificationType.fuel_anomaly,
+        priority: NotificationPriority.high,
+        title: 'Fuel Consumption Anomaly',
+        message: `Vehicle ${fuelLog.vehicle?.licensePlate || fuelLog.vehicleId}: manual km (${manualKm}) vs GPS km (${gpsKm.toFixed(1)}) — ratio ${ratio.toFixed(1)}x`,
+        link: `/fuel-consumption`,
+        deliveryId: undefined,
       });
     }
   }

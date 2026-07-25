@@ -656,6 +656,14 @@ export class TrackingService {
   }
 
   async archivePositionsBefore(date: Date, companyId: string): Promise<number> {
+    // Sécurité : n'autorise pas l'archivage de positions de moins de 48h,
+    // pour laisser le temps au cron carburant (22h) + génération à la demande
+    // de produire les rapports quotidiens avant que les données GPS soient purgées.
+    const minAge = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    if (date > minAge) {
+      this.logger.warn(`archivePositionsBefore refused: date ${date.toISOString()} is less than 48h old`);
+      return 0;
+    }
     const cutoff = date.toISOString();
     const result = await this.prisma.$executeRawUnsafe(
       `
