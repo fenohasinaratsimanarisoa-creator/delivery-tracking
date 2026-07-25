@@ -8,6 +8,7 @@ import { Check, Smartphone, Shield, Key, LogOut } from 'lucide-react';
 import Button from '../components/Button';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
+import AppearanceSection from '../features/settings/sections/AppearanceSection';
 
 function PasswordStrength({ password }: { password: string }) {
   const { t } = useTranslation();
@@ -78,7 +79,12 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {activeTab === 'profile' && <ProfileSection user={user} updateUser={updateUser} t={t} toast={toast} key="profile" />}
+      {activeTab === 'profile' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <ProfileSection user={user} updateUser={updateUser} t={t} toast={toast} key="profile" />
+          <AppearanceSection />
+        </div>
+      )}
       {activeTab === 'security' && <SecuritySection t={t} toast={toast} key="security" />}
       {activeTab === 'notifications' && <NotificationsSection t={t} toast={toast} key="notifications" />}
       {activeTab === 'language' && <LanguageSection t={t} key="language" />}
@@ -241,11 +247,13 @@ function NotificationsSection({ t, toast }: any) {
   const { data: prefs, refetch: refetchPrefs } = useQuery({ queryKey: ['notification-prefs'], queryFn: () => api.get('/users/me/preferences').then(r => r.data) });
   const prefMutation = useMutation({
     mutationFn: (body: Record<string, boolean>) => api.patch('/users/me/preferences', body),
-    onSuccess: () => { refetchPrefs(); toast(t('settingsNotifications.preferenceUpdated'), 'success'); },
-    onError: () => toast(t('settingsNotifications.updateError'), 'error'),
+    onSuccess: () => { refetchPrefs(); toast(t('settingsNotifications.toastUpdated'), 'success'); },
+    onError: () => toast(t('settingsNotifications.toastError'), 'error'),
   });
 
   const toggle = (key: string) => prefMutation.mutate({ [key]: !(prefs?.[key] ?? true) });
+
+  const notifKeys = ['deliveryStatus', 'fuelAnomaly', 'deliveryDelayed', 'maintenanceDue', 'system'] as const;
 
   if (!prefs) return <div style={{ padding: 20, color: 'var(--color-text-tertiary)' }}>{t('common.loading')}</div>;
 
@@ -253,8 +261,23 @@ function NotificationsSection({ t, toast }: any) {
     <section style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-xl)', padding: 20 }}>
       <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: '0 0 4px', color: 'var(--color-text)' }}>{t('settingsNotifications.title')}</h2>
       <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', margin: '0 0 16px' }}>{t('settingsNotifications.subtitle')}</p>
-      {['emailDeliveryStatus', 'emailFuelAnomaly', 'emailDeliveryDelayed', 'emailMaintenanceDue', 'emailSystem', 'inAppDeliveryStatus', 'inAppFuelAnomaly', 'inAppDeliveryDelayed', 'inAppMaintenanceDue', 'inAppSystem'].map(key => (
-        <Toggle key={key} checked={prefs?.[key] ?? true} onChange={() => toggle(key)} label={t(`settingsNotifications.${key}`)} />
+
+      <h3 style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {t('settingsNotifications.emailSection')}
+      </h3>
+      {notifKeys.map(key => (
+        <Toggle key={`email${key}`} checked={prefs?.[`email${key.charAt(0).toUpperCase() + key.slice(1)}`] ?? true}
+          onChange={() => toggle(`email${key.charAt(0).toUpperCase() + key.slice(1)}`)}
+          label={t(`settingsNotifications.preferences.${key}`)} />
+      ))}
+
+      <h3 style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', margin: '16px 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {t('settingsNotifications.inAppSection')}
+      </h3>
+      {notifKeys.map(key => (
+        <Toggle key={`inApp${key}`} checked={prefs?.[`inApp${key.charAt(0).toUpperCase() + key.slice(1)}`] ?? true}
+          onChange={() => toggle(`inApp${key.charAt(0).toUpperCase() + key.slice(1)}`)}
+          label={t(`settingsNotifications.preferences.${key}`)} />
       ))}
     </section>
   );
