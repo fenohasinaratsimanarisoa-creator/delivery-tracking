@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { PlatformAdminService } from './platform-admin.service';
+import { TrackingService } from '../tracking/tracking.service';
 import { PlatformAdminLoginDto } from './dto/login.dto';
 import { PlatformAdminVerify2faDto } from './dto/verify-2fa.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
@@ -23,7 +24,10 @@ import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('platform-admin')
 export class PlatformAdminController {
-  constructor(private readonly service: PlatformAdminService) {}
+  constructor(
+    private readonly service: PlatformAdminService,
+    private readonly trackingService: TrackingService,
+  ) {}
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Public()
@@ -145,5 +149,13 @@ export class PlatformAdminController {
   ) {
     await this.service.changePassword(adminId, currentPassword, newPassword);
     return { message: 'Mot de passe modifié avec succès' };
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Post('tracking/archive')
+  @HttpCode(HttpStatus.OK)
+  async archiveAllPositions(@Body('before') before: string) {
+    const count = await this.trackingService.archiveAllCompaniesPositionsBefore(new Date(before));
+    return { archived: count };
   }
 }

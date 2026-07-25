@@ -38,6 +38,12 @@ const mockGeofenceService = {
   checkGeofences: jest.fn(),
 };
 
+const mockCacheService = {
+  get: jest.fn(),
+  set: jest.fn(),
+  invalidate: jest.fn(),
+};
+
 describe('TrackingService', () => {
   let service: TrackingService;
 
@@ -47,6 +53,7 @@ describe('TrackingService', () => {
       mockPrisma as unknown as PrismaService,
       mockNotifications as any,
       mockGeofenceService as any,
+      mockCacheService as any,
     );
   });
 
@@ -354,6 +361,107 @@ describe('TrackingService', () => {
         (call: any[]) => call[1]?.type === 'delay_alert',
       );
       expect(delayCalls).toHaveLength(0);
+    });
+  });
+
+  describe('speed alert cooldown (CacheService/Redis)', () => {
+    it('respects cooldown: only one alert created for rapid same-vehicle speed events', async () => {
+      const dto = {
+        latitude: -18.8792,
+        longitude: 47.5079,
+        speed: 30,
+        timestamp: '2026-07-21T10:00:00.000Z',
+        deliveryId: 'delivery-1',
+        vehicleId: 'vehicle-1',
+      };
+
+      mockPrisma.gpsPosition.findFirst
+        .mockResolvedValueOnce(null) // dedup
+        .mockResolvedValueOnce(null) // detectTeleportation
+        .mockResolvedValueOnce(null) // dedup
+        .mockResolvedValueOnce(null); // detectTeleportation
+
+      mockPrisma.gpsPosition.create.mockResolvedValue({ id: 'gps-cooldown', suspect: false });
+
+      mockPrisma.companySettings.findUnique.mockResolvedValue({
+        speedAlertThreshold: 50,
+        prolongedStopMinutes: null,
+        offlineTimeoutMinutes: null,
+      });
+
+      mockPrisma.delivery.findUnique.mockResolvedValue({
+        deliveryLat: -18.88,
+        deliveryLng: 47.51,
+        scheduledDate: new Date('2026-07-22T00:00:00.000Z'),
+      });
+
+      mockPrisma.gpsPosition.findMany.mockResolvedValue([{ speed: 30 }]);
+
+      // First save: no cooldown → cache.get returns null → alert created
+      mockCacheService.get.mockResolvedValueOnce(null);
+      await service.savePosition('driver-1', dto, 'company-1');
+      await new Promise((r) => setTimeout(r, 50)); // wait for fire-and-forget generateAlerts
+
+      expect(mockCacheService.set).toHaveBeenCalledWith('speed_alert:vehicle-1', true, 300);
+      expect(mockCacheService.get).toHaveBeenCalledWith('speed_alert:vehicle-1');
+
+      // Second save: cooldown active → cache.get returns true → no alert
+      mockCacheService.get.mockResolvedValueOnce(true);
+      await service.savePosition('driver-1', dto, 'company-1');
+      await new Promise((r) => setTimeout(r, 50));
+
+      const speedAlertCalls = mockNotifications.create.mock.calls.filter(
+        (call: any[]) => call[1]?.type === 'speed_alert',
+      );
+      expect(speedAlertCalls).toHaveLength(1);
+    });
+
+    it('creates new alert after cooldown expires', async () => {
+      const dto = {
+        latitude: -18.8792,
+        longitude: 47.5079,
+        speed: 30,
+        timestamp: '2026-07-21T10:00:00.000Z',
+        deliveryId: 'delivery-1',
+        vehicleId: 'vehicle-2',
+      };
+
+      mockPrisma.gpsPosition.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+
+      mockPrisma.gpsPosition.create.mockResolvedValue({ id: 'gps-cooldown-2', suspect: false });
+
+      mockPrisma.companySettings.findUnique.mockResolvedValue({
+        speedAlertThreshold: 50,
+        prolongedStopMinutes: null,
+        offlineTimeoutMinutes: null,
+      });
+
+      mockPrisma.delivery.findUnique.mockResolvedValue({
+        deliveryLat: -18.88,
+        deliveryLng: 47.51,
+        scheduledDate: new Date('2026-07-22T00:00:00.000Z'),
+      });
+
+      mockPrisma.gpsPosition.findMany.mockResolvedValue([{ speed: 30 }]);
+
+      // First save: no cooldown → alert
+      mockCacheService.get.mockResolvedValueOnce(null);
+      await service.savePosition('driver-1', dto, 'company-1');
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Second save: cooldown expired → cache.get returns null → new alert
+      mockCacheService.get.mockResolvedValueOnce(null);
+      await service.savePosition('driver-1', dto, 'company-1');
+      await new Promise((r) => setTimeout(r, 50));
+
+      const speedAlertCalls = mockNotifications.create.mock.calls.filter(
+        (call: any[]) => call[1]?.type === 'speed_alert',
+      );
+      expect(speedAlertCalls).toHaveLength(2);
     });
   });
 

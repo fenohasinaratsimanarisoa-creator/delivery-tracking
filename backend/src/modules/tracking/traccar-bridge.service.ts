@@ -51,6 +51,13 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn('Traccar bridge: TRACCAR_URL not configured — bridge inactive');
       return;
     }
+
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    if (nodeEnv === 'production' && (this.traccarUser === 'admin' || this.traccarPassword === 'admin')) {
+      throw new Error(
+        'TRACCAR_USER/TRACCAR_PASSWORD doivent être configurés en production quand TRACCAR_URL est actif',
+      );
+    }
     await this.connect();
   }
 

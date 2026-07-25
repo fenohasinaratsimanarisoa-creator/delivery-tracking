@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PlatformAdminController } from './platform-admin.controller';
 import { PlatformAdminService } from './platform-admin.service';
 import { TotpService } from '../auth/totp.service';
+import { TrackingModule } from '../tracking/tracking.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { TotpService } from '../auth/totp.service';
         signOptions: { expiresIn: configService.get<string>('JWT_ACCESS_EXPIRATION', '15m') },
       }),
     }),
+    TrackingModule,
   ],
   controllers: [PlatformAdminController],
   providers: [PlatformAdminService, TotpService],

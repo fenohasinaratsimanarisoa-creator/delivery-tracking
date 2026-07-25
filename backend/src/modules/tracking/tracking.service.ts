@@ -3,6 +3,7 @@ import { NotificationType, NotificationPriority } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GeofenceService } from './geofence.service';
+import { CacheService } from '../../common/cache/cache.service';
 import { UpdatePositionDto } from './dto/update-position.dto';
 
 const TELEPORT_SPEED_THRESHOLD_MS = 55.56;
@@ -27,12 +28,11 @@ export class TrackingService {
     lastReportTime: Date.now(),
   };
 
-  private speedAlertCooldowns = new Map<string, number>();
-
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
     private geofenceService: GeofenceService,
+    private cacheService: CacheService,
   ) {}
 
   getMetrics() {
@@ -161,14 +161,6 @@ export class TrackingService {
     return diffMs <= DEDUP_CLOCK_SKEW_S * 1000;
   }
 
-  private cleanupCooldowns() {
-    const now = Date.now();
-    const maxAge = 600_000;
-    for (const [key, ts] of this.speedAlertCooldowns) {
-      if (now - ts > maxAge) this.speedAlertCooldowns.delete(key);
-    }
-  }
-
   private async generateAlerts(
     dto: UpdatePositionDto,
     companyId: string,
@@ -181,14 +173,12 @@ export class TrackingService {
     const tasks: Promise<unknown>[] = [];
 
     if (dto.speed !== undefined && settings.speedAlertThreshold) {
-      this.cleanupCooldowns();
       const speedKmh = dto.speed * 3.6;
       if (speedKmh > settings.speedAlertThreshold) {
-        const cooldownKey = `${dto.vehicleId}:speed`;
-        const lastAlert = this.speedAlertCooldowns.get(cooldownKey) ?? 0;
-        const now = Date.now();
-        if (now - lastAlert > 300000) {
-          this.speedAlertCooldowns.set(cooldownKey, now);
+        const cooldownKey = `speed_alert:${dto.vehicleId}`;
+        const existing = await this.cacheService.get<boolean>(cooldownKey);
+        if (!existing) {
+          await this.cacheService.set(cooldownKey, true, 300);
           tasks.push(
             this.notifications.create(companyId, {
               type: NotificationType.speed_alert,
@@ -307,6 +297,14 @@ export class TrackingService {
     await Promise.allSettled(tasks);
   }
 
+  /**
+   * Sauvegarde une position GPS brute.
+   *
+   * ATTENTION : Cette méthode reçoit des coordonnées GPS brutes non filtrées.
+   * Le filtre de Kalman côté frontend (KalmanFilter.ts) lisse uniquement l'affichage client.
+   * Toute logique métier (téléportation, alertes, géofences) doit s'appuyer sur les données
+   * brutes reçues ici, pas sur des coordonnées filtrées.
+   */
   async savePosition(driverId: string, dto: UpdatePositionDto, companyId?: string) {
     this.metrics.received++;
     const ts = new Date(dto.timestamp);
@@ -571,6 +569,24 @@ export class TrackingService {
       LIMIT 1
     `;
     return raw[0] ?? null;
+  }
+
+  async archiveAllCompaniesPositionsBefore(date: Date): Promise<number> {
+    const cutoff = date.toISOString();
+    const result = await this.prisma.$executeRawUnsafe(
+      `
+      WITH archived AS (
+        DELETE FROM gps_positions
+        WHERE gps_positions.timestamp < $1::timestamp
+        RETURNING gps_positions.id, gps_positions.latitude, gps_positions.longitude, gps_positions.speed, gps_positions.heading, gps_positions.altitude, gps_positions.accuracy, gps_positions.suspect, gps_positions.location, gps_positions.timestamp, gps_positions.created_at, gps_positions.delivery_id, gps_positions.vehicle_id, gps_positions.driver_id
+      )
+      INSERT INTO gps_positions_archive (id, latitude, longitude, speed, heading, altitude, accuracy, suspect, location, timestamp, created_at, delivery_id, vehicle_id, driver_id)
+      SELECT id, latitude, longitude, speed, heading, altitude, accuracy, suspect, location, timestamp, created_at, delivery_id, vehicle_id, driver_id
+      FROM archived
+    `,
+      cutoff,
+    );
+    return result;
   }
 
   async archivePositionsBefore(date: Date, companyId: string): Promise<number> {

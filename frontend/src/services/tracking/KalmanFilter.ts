@@ -1,3 +1,10 @@
+/**
+ * Filtre de Kalman pour lisser l'affichage GPS côté client.
+ *
+ * ATTENTION : Ce filtre lisse uniquement l'affichage côté client. Le backend doit toujours recevoir
+ * les coordonnées GPS brutes non filtrées pour que la détection de téléportation et les alertes
+ * fonctionnent sur les données réelles.
+ */
 export class KalmanFilter {
   private static readonly METERS_PER_DEGREE_LAT = 111320;
 

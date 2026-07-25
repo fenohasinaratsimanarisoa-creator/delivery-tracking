@@ -89,6 +89,14 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     } catch {}
   }
 
+  /**
+   * Reçoit une position GPS brute du chauffeur et la persiste.
+   *
+   * ATTENTION : Le backend doit toujours recevoir les coordonnées GPS brutes non filtrées.
+   * Le filtre de Kalman côté frontend (KalmanFilter.ts) lisse uniquement l'affichage client.
+   * C'est sur ces données brutes que la détection de téléportation, les alertes de vitesse,
+   * et les géofences sont évalués.
+   */
   @SubscribeMessage('updatePosition')
   async handlePosition(@ConnectedSocket() client: Socket, @MessageBody() dto: UpdatePositionDto) {
     const user = client.data.user;

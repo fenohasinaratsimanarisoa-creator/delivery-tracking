@@ -11,6 +11,7 @@ import { TrackingController } from './tracking.controller';
 import { GeofenceController } from './geofence.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
+import { CacheModule } from '../../common/cache/cache.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
       }),
     }),
     NotificationsModule,
+    CacheModule,
   ],
   controllers: [TrackingController, GeofenceController],
   providers: [
