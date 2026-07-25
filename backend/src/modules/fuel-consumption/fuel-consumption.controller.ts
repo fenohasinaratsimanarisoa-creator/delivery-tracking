@@ -41,6 +41,17 @@ export class FuelConsumptionController {
   }
 
   @Roles('admin', 'dispatcher')
+  @Post('daily-reports/generate')
+  async generateDailyReport(
+    @CurrentUser('companyId') companyId: string,
+    @Body('date') date?: string,
+  ) {
+    await this.fuelService.generateDailyReportForCompanyOnDemand(companyId, date);
+    const reports = await this.fuelService.getDailyReports(companyId, date);
+    return { generated: true, reports };
+  }
+
+  @Roles('admin', 'dispatcher')
   @Get(':id')
   findOne(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
     return this.fuelService.findOne(companyId, id);

@@ -151,7 +151,7 @@ export class FuelConsumptionService {
 
     for (const company of companies) {
       try {
-        await this.generateDailyReportForCompany(company.id);
+        await this.generateDailyReportForCompany(company.id, new Date());
       } catch (err: any) {
         this.logger.error(`Failed daily fuel report for company ${company.id}: ${err.message}`);
       }
@@ -169,11 +169,42 @@ export class FuelConsumptionService {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  private async generateDailyReportForCompany(companyId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  async generateDailyReportForCompanyOnDemand(companyId: string, dateStr?: string) {
+    const date = dateStr ? new Date(dateStr) : new Date();
+    await this.generateDailyReportForCompany(companyId, date);
+  }
+
+  /**
+   * Calcule la fenêtre journalière en fuseau Afrique/Madagascar (UTC+3).
+   * Le serveur tourne en UTC : le jour malgache commence à 21h UTC (J-1) et finit à 20h59 UTC (J).
+   */
+  private getMadagascarDayBounds(date: Date): { start: Date; end: Date } {
+    const start = new Date(date);
+    start.setUTCHours(21, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - 1);
+
+    const end = new Date(date);
+    end.setUTCHours(20, 59, 59, 999);
+    end.setUTCDate(end.getUTCDate());
+
+    return { start, end };
+  }
+
+  /**
+   * Pour le cron global (22h UTC), utilise la date UTC directement — cohérent avec
+   * l'heure de déclenchement (22h UTC = 01h EAT le lendemain).
+   */
+  private getUTCDayBounds(date: Date): { start: Date; end: Date } {
+    const start = new Date(date);
+    start.setUTCHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setUTCHours(23, 59, 59, 999);
+    return { start, end };
+  }
+
+  private async generateDailyReportForCompany(companyId: string, forDate?: Date) {
+    const targetDate = forDate || new Date();
+    const bounds = this.getMadagascarDayBounds(targetDate);
 
     const drivers = await this.prisma.driver.findMany({
       where: { companyId, deletedAt: null, isActive: true },
@@ -187,7 +218,7 @@ export class FuelConsumptionService {
       const positions = await this.prisma.gpsPosition.findMany({
         where: {
           driverId: driver.id,
-          timestamp: { gte: today, lt: tomorrow },
+          timestamp: { gte: bounds.start, lte: bounds.end },
         },
         orderBy: { timestamp: 'asc' },
         select: { latitude: true, longitude: true },
@@ -212,15 +243,16 @@ export class FuelConsumptionService {
       const pricePerLiter = FUEL_PRICES[fuelType] || 5000;
       const estimatedCost = Math.round(distanceKm * consumption / 100 * pricePerLiter * 100) / 100;
 
+      const reportDate = new Date(Date.UTC(targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate()));
       await this.prisma.dailyFuelReport.upsert({
         where: {
           driverId_reportDate: {
             driverId: driver.id,
-            reportDate: today,
+            reportDate,
           },
         },
         create: {
-          reportDate: today,
+          reportDate,
           driverId: driver.id,
           driverName: `${driver.firstName} ${driver.lastName}`,
           vehiclePlate: vehicle?.licensePlate || 'N/A',

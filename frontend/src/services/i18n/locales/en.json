@@ -355,8 +355,20 @@
     "title": "Fuel",
     "error": "Error loading fuel data",
     "empty": "No fuel records yet.",
+    "tabManual": "Manual Entry",
+    "tabGps": "GPS Report",
+    "gpsHelp": "The GPS report estimates consumption from distances calculated using vehicle GPS positions. Click \"Generate\" to compute the report for a given date.",
+    "gpsEmpty": "No GPS report for this date. Generate one using the button above.",
+    "generateReport": "Generate Report",
+    "generating": "Generating…",
+    "generateSuccess": "Report generated successfully!",
+    "generateError": "Error generating report.",
+    "gpsDistance": "GPS Distance",
+    "estimatedCost": "Estimated Cost",
+    "date": "Date",
     "table": {
       "vehicle": "Vehicle",
+      "driver": "Driver",
       "liters": "Liters",
       "km": "Km",
       "consumption": "L/100km",
@@ -365,7 +377,10 @@
       "anomaly": "Anomaly"
     },
     "anomaly": "⚠️ Anomaly",
-    "normal": "✓ Normal"
+    "normal": "✓ Normal",
+    "helpTitle": "Understanding both records",
+    "helpManual": "• Manual entry: real fuel fill-ups recorded by the team (liters, cost, mileage). Used to track actual fuel expenses.",
+    "helpGps": "• GPS Report: automatic estimation based on vehicle GPS positions. Uses the vehicle's theoretical consumption to estimate costs. Complements manual entries."
   },
   "reports": {
     "title": "Reports"

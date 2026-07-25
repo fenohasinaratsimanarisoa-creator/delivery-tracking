@@ -355,8 +355,20 @@
     "title": "Carburant",
     "error": "Erreur lors du chargement des données carburant",
     "empty": "Aucun relevé carburant pour le moment.",
+    "tabManual": "Saisie manuelle",
+    "tabGps": "Rapport GPS",
+    "gpsHelp": "Le rapport GPS estime la consommation à partir des distances parcourues calculées sur les positions GPS des véhicules. Cliquez sur « Générer » pour calculer le rapport pour une date donnée.",
+    "gpsEmpty": "Aucun rapport GPS pour cette date. Lancez la génération avec le bouton ci-dessus.",
+    "generateReport": "Générer le rapport",
+    "generating": "Génération en cours…",
+    "generateSuccess": "Rapport généré avec succès !",
+    "generateError": "Erreur lors de la génération du rapport.",
+    "gpsDistance": "Distance GPS",
+    "estimatedCost": "Coût estimé",
+    "date": "Date",
     "table": {
       "vehicle": "Véhicule",
+      "driver": "Chauffeur",
       "liters": "Litres",
       "km": "Km",
       "consumption": "L/100km",
@@ -365,7 +377,10 @@
       "anomaly": "Anomalie"
     },
     "anomaly": "⚠️ Anomalie",
-    "normal": "✓ Normal"
+    "normal": "✓ Normal",
+    "helpTitle": "Comprendre les deux relevés",
+    "helpManual": "• Saisie manuelle : enregistrements de pleins réels saisis par l'équipe (litres, coût, kilométrage). Permet de suivre les dépenses réelles en carburant.",
+    "helpGps": "• Rapport GPS : estimation automatique basée sur les positions GPS des véhicules. La consommation théorique du véhicule est utilisée pour estimer le coût. Complémentaire à la saisie manuelle."
   },
   "reports": {
     "title": "Rapports"
