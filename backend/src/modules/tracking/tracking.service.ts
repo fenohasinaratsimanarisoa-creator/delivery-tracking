@@ -4,6 +4,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GeofenceService } from './geofence.service';
 import { CacheService } from '../../common/cache/cache.service';
+import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { UpdatePositionDto } from './dto/update-position.dto';
 
 const TELEPORT_SPEED_THRESHOLD_MS = 55.56;
@@ -33,6 +34,7 @@ export class TrackingService {
     private notifications: NotificationsService,
     private geofenceService: GeofenceService,
     private cacheService: CacheService,
+    private dataUpdateBus: DataUpdateBus,
   ) {}
 
   getMetrics() {
@@ -292,6 +294,19 @@ export class TrackingService {
           deliveryId: dto.deliveryId,
         }),
       );
+      this.dataUpdateBus.emit('dataUpdate', {
+        companyId,
+        entity: 'geofence_event',
+        action: geofenceEvent.event,
+        payload: {
+          event: geofenceEvent.event,
+          geofenceId: geofenceEvent.geofenceId,
+          geofenceName: geofenceEvent.geofenceName,
+          deliveryId: dto.deliveryId,
+          vehicleId: dto.vehicleId,
+          driverId,
+        },
+      });
     }
 
     await Promise.allSettled(tasks);

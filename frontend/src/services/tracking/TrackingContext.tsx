@@ -11,9 +11,8 @@ export const TrackingContext = createContext<TrackingStatus>({
   statusMsg: '',
   geolocationDenied: false,
   activeDeliveryId: '',
-  proximityAlert: false,
-  proximityDeliveryTitle: '',
-  dismissProximityAlert: () => {},
+  alerts: [],
+  dismissAlert: () => {},
 });
 
 export function useTrackingStatus() {

@@ -19,6 +19,10 @@ const INTERVAL_DEFAULT = 5000;
 const DRAIN_INTERVAL_MS = 10000;
 const PROXIMITY_THRESHOLD_M = 300;
 const PROXIMITY_REMINDER_MS = 5 * 60 * 1000;
+const SNOOZE_MS = 5 * 60 * 1000;
+const ESCALATION_AFTER_MS = 15 * 60 * 1000;
+const ESCALATION_SNOOZE_MS = 2 * 60 * 1000;
+const QUEUE_WARN_THRESHOLD = 50;
 
 function haversineDistanceM(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -40,6 +44,15 @@ export interface DriverPosition {
   accuracy?: number;
 }
 
+export interface DriverAlert {
+  type: 'proximity' | 'cascade' | 'geofence' | 'poor_accuracy' | 'queue_full' | 'geo_denied';
+  title: string;
+  message: string;
+  deliveryId?: string;
+  urgency?: 'normal' | 'high' | 'critical';
+  snoozedUntil?: number;
+}
+
 export interface TrackingStatus {
   active: boolean;
   position: DriverPosition | null;
@@ -50,9 +63,8 @@ export interface TrackingStatus {
   statusMsg: string;
   geolocationDenied: boolean;
   activeDeliveryId: string;
-  proximityAlert: boolean;
-  proximityDeliveryTitle: string;
-  dismissProximityAlert: () => void;
+  alerts: DriverAlert[];
+  dismissAlert: (type: string, deliveryId?: string) => void;
 }
 
 export function useDriverTracking() {
@@ -64,12 +76,15 @@ export function useDriverTracking() {
   const [statusMsg, setStatusMsg] = useState('');
   const [geolocationDenied, setGeolocationDenied] = useState(false);
   const [activeDeliveryId, setActiveDeliveryId] = useState('');
-  const [proximityAlert, setProximityAlert] = useState(false);
-  const [proximityDeliveryTitle, setProximityDeliveryTitle] = useState('');
-  const proximityDismissedRef = useRef(false);
+  const [alerts, setAlerts] = useState<DriverAlert[]>([]);
   const lastProximityAlertRef = useRef(0);
   const soundEnabledRef = useRef(true);
   const inProgressDeliveryRef = useRef<any>(null);
+  const allDeliveriesRef = useRef<any[]>([]);
+  const proximitySnoozedUntilRef = useRef(0);
+  const escalationLevelRef = useRef(0);
+  const enterProximityTimeRef = useRef(0);
+  const cascadeSnoozedRef = useRef<Record<string, number>>({});
 
   const kalmanRef = useRef<KalmanFilter | null>(null);
   const filteredPosRef = useRef<{ lat: number; lng: number; confidence: number } | null>(null);
@@ -109,43 +124,120 @@ export function useDriverTracking() {
 
   deliveryIdRef.current = autoDeliveryId;
   inProgressDeliveryRef.current = inProgressDelivery;
+  allDeliveriesRef.current = deliveries;
   if (autoDeliveryId !== activeDeliveryId) {
     setActiveDeliveryId(autoDeliveryId);
-    setProximityAlert(false);
-    proximityDismissedRef.current = false;
+    setAlerts([]);
     lastProximityAlertRef.current = 0;
+    proximitySnoozedUntilRef.current = 0;
+    escalationLevelRef.current = 0;
+    enterProximityTimeRef.current = 0;
+    cascadeSnoozedRef.current = {};
   }
 
-  const checkProximity = useCallback((lat: number, lng: number) => {
-    const delivery = inProgressDeliveryRef.current;
-    if (!delivery || !delivery.deliveryLat || !delivery.deliveryLng) {
-      setProximityAlert(false);
-      return;
-    }
-    if (delivery.status !== 'in_progress') {
-      setProximityAlert(false);
-      return;
-    }
-    if (proximityDismissedRef.current) return;
-
-    const dist = haversineDistanceM(lat, lng, delivery.deliveryLat, delivery.deliveryLng);
-    const now = Date.now();
-
-    if (dist <= PROXIMITY_THRESHOLD_M) {
-      if (now - lastProximityAlertRef.current > PROXIMITY_REMINDER_MS) {
-        lastProximityAlertRef.current = now;
-        setProximityAlert(true);
-        setProximityDeliveryTitle(delivery.title || '');
-      }
-    } else {
-      setProximityAlert(false);
+  const addAlert = useCallback((alert: DriverAlert) => {
+    setAlerts((prev) => {
+      const existing = prev.find((a) => a.type === alert.type && a.deliveryId === alert.deliveryId);
+      if (existing && existing.snoozedUntil && Date.now() < existing.snoozedUntil) return prev;
+      if (existing && existing.urgency === alert.urgency && existing.title === alert.title) return prev;
+      return [...prev.filter((a) => !(a.type === alert.type && a.deliveryId === alert.deliveryId)), alert];
+    });
+    // Native notification if permission granted and alert is urgent
+    if ((alert.urgency === 'high' || alert.urgency === 'critical') && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(alert.title, { body: alert.message, icon: '/favicon.ico', tag: `${alert.type}:${alert.deliveryId || ''}` });
+      } catch {}
     }
   }, []);
 
-  const dismissProximityAlert = useCallback(() => {
-    setProximityAlert(false);
-    proximityDismissedRef.current = true;
-    soundEnabledRef.current = true;
+  const removeAlert = useCallback((type: string, deliveryId?: string) => {
+    setAlerts((prev) => prev.filter((a) => !(a.type === type && a.deliveryId === deliveryId)));
+  }, []);
+
+  const checkProximity = useCallback((lat: number, lng: number) => {
+    const now = Date.now();
+    const deliveries = allDeliveriesRef.current;
+    const inProgress = deliveries.filter((d: any) => d.status === 'in_progress');
+
+    if (inProgress.length === 0) {
+      removeAlert('proximity', '');
+      removeAlert('cascade', '');
+      return;
+    }
+
+    // Cascade check: if a previous delivery is still in_progress while we're near the current one
+    for (let i = 1; i < inProgress.length; i++) {
+      const prev = inProgress[i - 1];
+      const curr = inProgress[i];
+      if (prev.status === 'in_progress' && curr.deliveryLat && curr.deliveryLng) {
+        const distToCurr = haversineDistanceM(lat, lng, curr.deliveryLat, curr.deliveryLng);
+        if (distToCurr <= PROXIMITY_THRESHOLD_M) {
+          const cascadeKey = `cascade:${prev.id}`;
+          if (!cascadeSnoozedRef.current[cascadeKey] || now - cascadeSnoozedRef.current[cascadeKey] > PROXIMITY_REMINDER_MS) {
+            addAlert({
+              type: 'cascade',
+              title: 'Livraison précédente non validée',
+              message: `"${prev.title || 'Livraison ' + prev.id.slice(0, 8)}" n'a pas encore été marquée comme livrée. Validez-la d'abord.`,
+              deliveryId: prev.id,
+              urgency: 'high',
+            });
+          }
+        }
+      }
+    }
+
+    // Proximity check on the first active delivery
+    const delivery = inProgress[0];
+    if (!delivery || !delivery.deliveryLat || !delivery.deliveryLng) {
+      removeAlert('proximity', delivery?.id);
+      return;
+    }
+
+    const dist = haversineDistanceM(lat, lng, delivery.deliveryLat, delivery.deliveryLng);
+
+    if (dist <= PROXIMITY_THRESHOLD_M) {
+      if (enterProximityTimeRef.current === 0) {
+        enterProximityTimeRef.current = now;
+      }
+      const timeInZone = now - enterProximityTimeRef.current;
+      const escalationLevel = timeInZone > ESCALATION_AFTER_MS ? 2 : timeInZone > ESCALATION_AFTER_MS / 2 ? 1 : 0;
+      escalationLevelRef.current = escalationLevel;
+
+      if (now < proximitySnoozedUntilRef.current) return;
+
+      if (now - lastProximityAlertRef.current > PROXIMITY_REMINDER_MS) {
+        lastProximityAlertRef.current = now;
+        addAlert({
+          type: 'proximity',
+          title: delivery.title || 'Livraison',
+          message: escalationLevel >= 2
+            ? `⚠️ Vous êtes sur place depuis plus de ${Math.round(timeInZone / 60000)} min. Veuillez valider la livraison.`
+            : 'Vous êtes à proximité du point de livraison. N\'oubliez pas de valider.',
+          deliveryId: delivery.id,
+          urgency: escalationLevel >= 2 ? 'critical' : escalationLevel >= 1 ? 'high' : 'normal',
+        });
+      }
+    } else {
+      enterProximityTimeRef.current = 0;
+      escalationLevelRef.current = 0;
+      removeAlert('proximity', delivery?.id);
+    }
+  }, [addAlert, removeAlert]);
+
+  const dismissAlert = useCallback((type: string, deliveryId?: string) => {
+    if (type === 'proximity') {
+      setAlerts((prev) => prev.filter((a) => !(a.type === 'proximity' && a.deliveryId === deliveryId)));
+      const escalation = escalationLevelRef.current;
+      const snoozeTime = escalation >= 2 ? ESCALATION_SNOOZE_MS : SNOOZE_MS;
+      proximitySnoozedUntilRef.current = Date.now() + snoozeTime;
+      soundEnabledRef.current = true;
+      if (escalation >= 1 && navigator.vibrate) navigator.vibrate(200);
+    } else if (type === 'cascade' && deliveryId) {
+      cascadeSnoozedRef.current[`cascade:${deliveryId}`] = Date.now();
+      setAlerts((prev) => prev.filter((a) => !(a.type === 'cascade' && a.deliveryId === deliveryId)));
+    } else {
+      setAlerts((prev) => prev.filter((a) => !(a.type === type && a.deliveryId === deliveryId)));
+    }
   }, []);
 
   const refreshQueueCount = useCallback(async () => {
@@ -165,6 +257,14 @@ export function useDriverTracking() {
       });
     } catch {}
   }, [refreshQueueCount]);
+
+  useEffect(() => {
+    if (queueCount >= QUEUE_WARN_THRESHOLD) {
+      addAlert({ type: 'queue_full', title: 'Connexion instable', message: `${queueCount} positions en attente. Les données GPS peuvent ne pas être transmises en temps réel au dispatcher.`, urgency: 'high' });
+    } else {
+      removeAlert('queue_full', '');
+    }
+  }, [queueCount, addAlert, removeAlert]);
 
   const sendPosition = useCallback(() => {
     if (isSendingRef.current) return;
@@ -268,13 +368,17 @@ export function useDriverTracking() {
         if (acc <= ACCURACY_GOOD) {
           setStatusMsg('');
           setPoorAccuracy(false);
+          removeAlert('poor_accuracy', '');
         } else if (acc <= ACCURACY_MODERATE) {
           setStatusMsg('');
           setPoorAccuracy(false);
+          removeAlert('poor_accuracy', '');
         } else if (acc <= ACCURACY_POOR) {
           setPoorAccuracy(true);
+          addAlert({ type: 'poor_accuracy', title: 'GPS faible', message: `La précision GPS est faible (±${Math.round(acc)}m). Déplacez-vous dans une zone dégagée.`, urgency: 'normal' });
         } else {
           setPoorAccuracy(true);
+          addAlert({ type: 'poor_accuracy', title: 'GPS très faible', message: `La précision GPS est très faible (±${Math.round(acc)}m). Les positions envoyées peuvent être imprécises.`, urgency: 'high' });
         }
       },
       (err) => {
@@ -286,6 +390,7 @@ export function useDriverTracking() {
         if (err.code === 1) {
           setGeolocationDenied(true);
           setStatusMsg('geolocation_denied');
+          addAlert({ type: 'geo_denied', title: 'Géolocalisation refusée', message: 'Activez la géolocalisation dans les paramètres du navigateur pour envoyer votre position au dispatcher.', urgency: 'critical' });
         } else {
           setStatusMsg('gps_error');
         }
@@ -303,6 +408,11 @@ export function useDriverTracking() {
     filteredPosRef.current = null;
 
     sensorFusion.init().then(() => {}).catch(() => {});
+
+    // Request notification permission when driver starts tracking (non-intrusive)
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
 
     const triedLowAccuracyRef = { current: false };
     tryWatch(true, triedLowAccuracyRef);
@@ -334,6 +444,17 @@ export function useDriverTracking() {
   useEffect(() => {
     const socket = getSocket();
     socket.on('connect', drainQueue);
+    socket.on('dataUpdate', (event: any) => {
+      if (event.entity === 'geofence_event') {
+        addAlert({
+          type: 'geofence',
+          title: `Zone ${event.action === 'entry' ? 'entrée' : 'sortie'}`,
+          message: `Vous avez ${event.action === 'entry' ? 'atteint' : 'quitté'} la zone "${event.geofenceName}"`,
+          deliveryId: event.deliveryId,
+          urgency: 'high',
+        });
+      }
+    });
     const onOnline = () => { drainQueue(); };
     window.addEventListener('online', onOnline);
 
@@ -342,9 +463,10 @@ export function useDriverTracking() {
       if (intervalRef.current !== null) clearInterval(intervalRef.current);
       if (drainIntervalRef.current !== null) clearInterval(drainIntervalRef.current);
       socket.off('connect', drainQueue);
+      socket.off('dataUpdate');
       window.removeEventListener('online', onOnline);
     };
-  }, [drainQueue]);
+  }, [drainQueue, addAlert]);
 
   useEffect(() => {
     if (!driver || usesPhysicalTracker) {
@@ -374,9 +496,8 @@ export function useDriverTracking() {
     statusMsg,
     geolocationDenied,
     activeDeliveryId,
-    proximityAlert,
-    proximityDeliveryTitle,
-    dismissProximityAlert,
+    alerts,
+    dismissAlert,
   };
 
   return trackingStatus;

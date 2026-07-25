@@ -45,6 +45,11 @@ const mockCacheService = {
   invalidate: jest.fn(),
 };
 
+const mockDataUpdateBus = {
+  emit: jest.fn(),
+  on: jest.fn(),
+};
+
 describe('TrackingService', () => {
   let service: TrackingService;
 
@@ -55,6 +60,7 @@ describe('TrackingService', () => {
       mockNotifications as any,
       mockGeofenceService as any,
       mockCacheService as any,
+      mockDataUpdateBus as any,
     );
   });
 
