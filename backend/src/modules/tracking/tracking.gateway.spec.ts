@@ -21,9 +21,12 @@ describe('TrackingGateway — cross-tenant security', () => {
       getDeliveryInfo: jest.fn(),
     };
 
+    const mockEventEmitter = { on: jest.fn(), emit: jest.fn() };
+
     gateway = new TrackingGateway(
       trackingService as any,
-      {} as any, // wsAuthService mock (not needed in these tests)
+      {} as any, // wsAuthService mock
+      mockEventEmitter as any, // dataUpdateBus
     );
   });
 
@@ -95,6 +98,49 @@ describe('TrackingGateway — cross-tenant security', () => {
 
       expect(client.emit).toHaveBeenCalledWith('error', 'Invalid delivery ID');
       expect(client.join).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Company room — multi-tenant scope', () => {
+    it('admins and dispatchers can subscribe to company room', async () => {
+      const client = mockSocket();
+      client.data.user = { id: 'admin-1', role: 'admin', companyId: 'company-a' };
+
+      const result = await gateway.handleSubscribeToCompany(client);
+
+      expect(result).toEqual({ event: 'subscribed', data: { companyId: 'company-a' } });
+      expect(client.join).toHaveBeenCalledWith('company:company-a');
+    });
+
+    it('drivers cannot subscribe to company room', async () => {
+      const client = mockSocket();
+      client.data.user = { id: 'driver-1', role: 'driver', companyId: 'company-a' };
+
+      const result = await gateway.handleSubscribeToCompany(client);
+
+      expect(result).toBeUndefined();
+      expect(client.join).not.toHaveBeenCalled();
+    });
+
+    it('handleConnection joins company room for all authenticated users', async () => {
+      const client = mockSocket();
+      const wsAuthService = { verify: jest.fn().mockResolvedValue({ id: 'user-1', role: 'admin', companyId: 'company-a', firstName: 'A', lastName: 'B' }) };
+      gateway['wsAuthService'] = wsAuthService as any;
+
+      await gateway.handleConnection(client);
+
+      expect(client.join).toHaveBeenCalledWith('company:company-a');
+    });
+
+    it('handleConnection joins driver room for drivers', async () => {
+      const client = mockSocket();
+      const wsAuthService = { verify: jest.fn().mockResolvedValue({ id: 'driver-1', role: 'driver', companyId: 'company-a', firstName: 'A', lastName: 'B' }) };
+      gateway['wsAuthService'] = wsAuthService as any;
+
+      await gateway.handleConnection(client);
+
+      expect(client.join).toHaveBeenCalledWith('driver:driver-1');
+      expect(client.join).toHaveBeenCalledWith('company:company-a');
     });
   });
 });

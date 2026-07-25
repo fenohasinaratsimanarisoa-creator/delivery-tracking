@@ -48,9 +48,11 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
       if (user.role === 'driver') {
         client.join(`driver:${user.id}`);
         this.disconnectedDrivers.delete(user.id);
+        this.logger.log(`Driver connected: ${user.id} (${user.firstName} ${user.lastName})`);
       }
       if (user.companyId) {
         client.join(`company:${user.companyId}`);
+        this.logger.log(`${user.role} joined company room: ${user.companyId}`);
       }
     } catch {
       client.emit('error', 'Invalid token');
@@ -135,8 +137,7 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
     this.server.to(`company:${user.companyId}`).emit('positionUpdate', broadcast);
 
-    return { event: 'positionSaved', data: { id: position.id, suspect: position.suspect } };
-  }
+    return { event: 'positionSaved', data: { id: position.id, suspect: position.suspect } };}
 
   @SubscribeMessage('batchPosition')
   async handleBatchPosition(
