@@ -468,6 +468,13 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
     staleTime: 60_000,
   });
 
+  const { data: livePositions } = useQuery({
+    queryKey: ['tracking', 'live'],
+    queryFn: () => api.get('/tracking/live').then((r: any) => r.data ?? r ?? []),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+
   const allDrivers: Array<{ id: string; firstName: string; lastName: string; licenseNumber: string; vehicle?: { licensePlate: string } }> = driversData ?? [];
 
   const lastRouteCalcPos = useRef<{ lat: number; lng: number } | null>(null);
@@ -582,6 +589,38 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
     if (hours > 0) return `${hours}h ${minutes}min`;
     return `${minutes}min`;
   }, []);
+
+  // Bootstrap vehicles from REST live positions (before any WebSocket update)
+  useEffect(() => {
+    if (!livePositions || !Array.isArray(livePositions) || livePositions.length === 0) return;
+    const OFFLINE_TIMEOUT_MIN = 15;
+    setVehicles((prev) => {
+      const next = new Map(prev);
+      for (const pos of livePositions) {
+        if (!next.has(pos.driverId)) {
+          const minutesOld = pos.minutesAgo ?? 0;
+          const isOffline = minutesOld > OFFLINE_TIMEOUT_MIN;
+          const eta = computeETAForVehicle(pos);
+          next.set(pos.driverId, {
+            id: pos.driverId,
+            lat: pos.latitude,
+            lng: pos.longitude,
+            name: pos.driverName,
+            speed: pos.speed ?? undefined,
+            heading: pos.heading ?? undefined,
+            accuracy: pos.accuracy ?? undefined,
+            vehicleId: pos.vehicleId,
+            deliveryId: pos.deliveryId ?? undefined,
+            confidence: pos.accuracy ? Math.max(0.1, 1 - pos.accuracy / 50) : 1,
+            timestamp: pos.timestamp,
+            status: isOffline ? 'offline' as const : pos.speed && pos.speed > 0.5 ? 'moving' as const : 'static' as const,
+            eta,
+          });
+        }
+      }
+      return next;
+    });
+  }, [livePositions, computeETAForVehicle]);
 
   const addPosition = useCallback((update: PositionUpdate) => {
     const eta = computeETAForVehicle(update);
@@ -786,7 +825,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                   <div>
                     <div style={{ fontWeight: 500 }}>{v.name}</div>
                     <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>
-                      {v.isOffline
+                      {v.isOffline || v.status === 'offline'
                         ? 'Hors ligne — aucune position récente'
                         : `${v.status === 'moving' ? 'En route' : 'À l\'arrêt'} · ${v.accuracy !== undefined ? `±${Math.round(v.accuracy)}m · ` : ''}${formatTime(v.timestamp)}`
                       }

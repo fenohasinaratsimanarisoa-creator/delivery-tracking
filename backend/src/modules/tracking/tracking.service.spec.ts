@@ -7,6 +7,7 @@ const mockPrisma = {
     findUnique: jest.fn(),
   },
   $executeRawUnsafe: jest.fn(),
+  $queryRaw: jest.fn(),
   gpsPosition: {
     findFirst: jest.fn(),
     create: jest.fn(),
@@ -643,6 +644,43 @@ describe('TrackingService', () => {
       await expect(service.revokePublicToken('delivery-1', 'company-1')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('getLivePositions', () => {
+    it('returns live positions scoped by companyId', async () => {
+      mockPrisma.$queryRaw = jest.fn().mockResolvedValue([
+        {
+          driver_id: 'driver-1',
+          driver_first_name: 'Driver',
+          driver_last_name: 'One',
+          latitude: -18.8792,
+          longitude: 47.5079,
+          speed: 8.33,
+          heading: 135,
+          accuracy: 10,
+          timestamp: new Date(),
+          vehicle_id: 'vehicle-1',
+          delivery_id: 'delivery-1',
+          minutes_ago: 0.5,
+        },
+      ]);
+
+      const result = await service.getLivePositions('company-a');
+
+      expect(mockPrisma.$queryRaw).toHaveBeenCalled();
+      expect(result).toHaveLength(1);
+      expect(result[0].driverId).toBe('driver-1');
+      expect(result[0].driverName).toBe('Driver One');
+      expect(result[0].minutesAgo).toBe(0.5);
+    });
+
+    it('excludes soft-deleted and inactive vehicles', async () => {
+      mockPrisma.$queryRaw = jest.fn().mockResolvedValue([]);
+
+      const result = await service.getLivePositions('company-empty');
+
+      expect(result).toHaveLength(0);
     });
   });
 

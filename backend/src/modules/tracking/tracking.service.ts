@@ -556,6 +556,57 @@ export class TrackingService {
     };
   }
 
+  async getLivePositions(companyId: string) {
+    const positions = await this.prisma.$queryRaw<Array<{
+      driver_id: string;
+      driver_first_name: string;
+      driver_last_name: string;
+      latitude: number;
+      longitude: number;
+      speed: number | null;
+      heading: number | null;
+      accuracy: number | null;
+      timestamp: Date;
+      vehicle_id: string;
+      delivery_id: string | null;
+      minutes_ago: number;
+    }>>`
+      SELECT DISTINCT ON (gp.vehicle_id)
+        gp.driver_id,
+        d.first_name AS driver_first_name,
+        d.last_name AS driver_last_name,
+        gp.latitude,
+        gp.longitude,
+        gp.speed,
+        gp.heading,
+        gp.accuracy,
+        gp.timestamp,
+        gp.vehicle_id,
+        gp.delivery_id,
+        EXTRACT(EPOCH FROM (NOW() - gp.timestamp)) / 60 AS minutes_ago
+      FROM gps_positions gp
+      JOIN drivers d ON d.id = gp.driver_id
+      JOIN vehicles v ON v.id = gp.vehicle_id AND v.deleted_at IS NULL AND v.is_active = true
+      WHERE d.company_id = CAST(${companyId} AS uuid)
+        AND d.deleted_at IS NULL
+        AND d.is_active = true
+      ORDER BY gp.vehicle_id, gp.timestamp DESC
+    `;
+    return positions.map((p) => ({
+      driverId: p.driver_id,
+      driverName: `${p.driver_first_name} ${p.driver_last_name}`,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      speed: p.speed,
+      heading: p.heading,
+      accuracy: p.accuracy,
+      timestamp: p.timestamp,
+      vehicleId: p.vehicle_id,
+      deliveryId: p.delivery_id,
+      minutesAgo: Number(p.minutes_ago),
+    }));
+  }
+
   async findNearestVehicle(lat: number, lng: number, companyId: string) {
     const raw = await this.prisma.$queryRaw<Array<{ vehicle_id: string; distance_meters: number }>>`
       SELECT

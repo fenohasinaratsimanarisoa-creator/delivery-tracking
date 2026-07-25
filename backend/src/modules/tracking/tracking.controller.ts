@@ -133,6 +133,14 @@ export class TrackingController {
 
   @UseGuards(JwtAuthGuard, CompanyScopeGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get live positions of all active vehicles in company' })
+  @Get('live')
+  getLivePositions(@CurrentUser('companyId') companyId: string) {
+    return this.trackingService.getLivePositions(companyId);
+  }
+
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Archiver les positions GPS avant une date' })
   @Post('archive')
   async archivePositions(@Body('before') before: string, @CurrentUser('companyId') companyId: string) {
