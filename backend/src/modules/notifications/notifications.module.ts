@@ -6,6 +6,7 @@ import { WsAuthService } from '../../common/auth/ws-auth.service';
 import { NotificationsService } from './notifications.service';
 import { NotificationsGateway } from './notifications.gateway';
 import { NotificationsController } from './notifications.controller';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { NotificationsController } from './notifications.controller';
         signOptions: { expiresIn: configService.get<string>('JWT_ACCESS_EXPIRATION', '15m') },
       }),
     }),
+    EmailModule,
   ],
   controllers: [NotificationsController],
   providers: [NotificationsService, NotificationsGateway, WsJwtGuard, WsAuthService],
