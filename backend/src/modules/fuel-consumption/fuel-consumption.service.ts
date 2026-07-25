@@ -3,10 +3,19 @@ import { ConfigService } from '@nestjs/config';
 import { NotificationType, NotificationPriority } from '@prisma/client';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
 import { FuelFilterDto } from './dto/fuel-filter.dto';
+
+const FUEL_PRICES: Record<string, number> = {
+  essence: 5000,
+  gasoil: 4900,
+  diesel: 4900,
+  electric: 0,
+  hybrid: 3000,
+};
 
 @Injectable()
 export class FuelConsumptionService {
@@ -117,6 +126,119 @@ export class FuelConsumptionService {
       anomalies,
       logCount: logs.length,
     };
+  }
+
+  async getDailyReports(companyId: string, reportDate?: string) {
+    const where: any = { companyId };
+    if (reportDate) {
+      const d = new Date(reportDate);
+      const next = new Date(d);
+      next.setDate(next.getDate() + 1);
+      where.reportDate = { gte: d, lt: next };
+    }
+    return this.prisma.dailyFuelReport.findMany({
+      where,
+      orderBy: { reportDate: 'desc' },
+      take: 100,
+    });
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_10PM)
+  async generateDailyReports() {
+    this.logger.log('Starting daily fuel report generation...');
+
+    const companies = await this.prisma.company.findMany({ select: { id: true } });
+
+    for (const company of companies) {
+      try {
+        await this.generateDailyReportForCompany(company.id);
+      } catch (err: any) {
+        this.logger.error(`Failed daily fuel report for company ${company.id}: ${err.message}`);
+      }
+    }
+
+    this.logger.log('Daily fuel report generation complete.');
+  }
+
+  private haversineDistanceM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371000;
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  private async generateDailyReportForCompany(companyId: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const drivers = await this.prisma.driver.findMany({
+      where: { companyId, deletedAt: null, isActive: true },
+      select: {
+        id: true, firstName: true, lastName: true,
+        vehicle: { select: { id: true, licensePlate: true, fuelType: true, theoreticalConsumption: true } },
+      },
+    });
+
+    for (const driver of drivers) {
+      const positions = await this.prisma.gpsPosition.findMany({
+        where: {
+          driverId: driver.id,
+          timestamp: { gte: today, lt: tomorrow },
+        },
+        orderBy: { timestamp: 'asc' },
+        select: { latitude: true, longitude: true },
+      });
+
+      if (positions.length < 2) continue;
+
+      let totalDistance = 0;
+      for (let i = 1; i < positions.length; i++) {
+        totalDistance += this.haversineDistanceM(
+          positions[i - 1].latitude, positions[i - 1].longitude,
+          positions[i].latitude, positions[i].longitude,
+        );
+      }
+
+      const distanceKm = Math.round(totalDistance / 1000 * 100) / 100;
+      if (distanceKm < 0.1) continue;
+
+      const vehicle = driver.vehicle;
+      const fuelType = vehicle?.fuelType?.toLowerCase() || 'essence';
+      const consumption = vehicle?.theoreticalConsumption || 8;
+      const pricePerLiter = FUEL_PRICES[fuelType] || 5000;
+      const estimatedCost = Math.round(distanceKm * consumption / 100 * pricePerLiter * 100) / 100;
+
+      await this.prisma.dailyFuelReport.upsert({
+        where: {
+          driverId_reportDate: {
+            driverId: driver.id,
+            reportDate: today,
+          },
+        },
+        create: {
+          reportDate: today,
+          driverId: driver.id,
+          driverName: `${driver.firstName} ${driver.lastName}`,
+          vehiclePlate: vehicle?.licensePlate || 'N/A',
+          fuelType: fuelType,
+          distanceKm,
+          consumptionLPer100Km: consumption,
+          estimatedCost,
+          companyId,
+        },
+        update: {
+          distanceKm,
+          estimatedCost,
+          fuelType: fuelType,
+          consumptionLPer100Km: consumption,
+          vehiclePlate: vehicle?.licensePlate || 'N/A',
+        },
+      });
+    }
   }
 
   private async analyzeFuelLog(

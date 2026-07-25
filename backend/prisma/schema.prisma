@@ -93,57 +93,57 @@ model Company {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  users             User[]
-  vehicles          Vehicle[]
-  drivers           Driver[]
-  deliveries        Delivery[]
-  fuelLogs          FuelLog[]
+  users              User[]
+  vehicles           Vehicle[]
+  drivers            Driver[]
+  deliveries         Delivery[]
+  fuelLogs           FuelLog[]
   maintenanceRecords MaintenanceRecord[]
-  notifications     Notification[]
-  settings          CompanySettings?
-  fuelSettings      CompanyFuelSettings?
-  invitations       Invitation[]
-  auditLogs         AuditLog[]
-  platformAuditLogs PlatformAuditLog[]
-  subscription      Subscription?
-  invoices          Invoice[]
-  usageRecords      UsageRecord[]
-  apiKeys           ApiKey[]
-  webhooks          Webhook[]
-  geofences         Geofence[]
+  notifications      Notification[]
+  settings           CompanySettings?
+  fuelSettings       CompanyFuelSettings?
+  invitations        Invitation[]
+  auditLogs          AuditLog[]
+  platformAuditLogs  PlatformAuditLog[]
+  subscription       Subscription?
+  invoices           Invoice[]
+  usageRecords       UsageRecord[]
+  apiKeys            ApiKey[]
+  webhooks           Webhook[]
+  geofences          Geofence[]
 
   @@map("companies")
 }
 
 model CompanySettings {
-  id                  String   @id @default(uuid()) @db.Uuid
-  companyId           String   @unique @map("company_id") @db.Uuid
-  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  billingEmail        String?  @map("billing_email")
-  billingAddress      String?  @map("billing_address")
-  billingTaxId        String?  @map("billing_tax_id")
-  fuelAnomalyThreshold Float?  @default(15) @map("fuel_anomaly_threshold")
-  speedAlertThreshold  Float?  @default(80) @map("speed_alert_threshold")
-  prolongedStopMinutes Int?    @default(15) @map("prolonged_stop_minutes")
-  offlineTimeoutMinutes Int?   @default(10) @map("offline_timeout_minutes")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id                    String   @id @default(uuid()) @db.Uuid
+  companyId             String   @unique @map("company_id") @db.Uuid
+  company               Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  billingEmail          String?  @map("billing_email")
+  billingAddress        String?  @map("billing_address")
+  billingTaxId          String?  @map("billing_tax_id")
+  fuelAnomalyThreshold  Float?   @default(15) @map("fuel_anomaly_threshold")
+  speedAlertThreshold   Float?   @default(80) @map("speed_alert_threshold")
+  prolongedStopMinutes  Int?     @default(15) @map("prolonged_stop_minutes")
+  offlineTimeoutMinutes Int?     @default(10) @map("offline_timeout_minutes")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   @@map("company_settings")
 }
 
 model Geofence {
-  id          String   @id @default(uuid()) @db.Uuid
-  companyId   String   @map("company_id") @db.Uuid
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  deliveryId  String?  @map("delivery_id") @db.Uuid
-  delivery    Delivery? @relation(fields: [deliveryId], references: [id])
-  name        String
-  lat         Float
-  lng         Float
-  radiusMeters Float   @map("radius_meters")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id           String    @id @default(uuid()) @db.Uuid
+  companyId    String    @map("company_id") @db.Uuid
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  deliveryId   String?   @map("delivery_id") @db.Uuid
+  delivery     Delivery? @relation(fields: [deliveryId], references: [id])
+  name         String
+  lat          Float
+  lng          Float
+  radiusMeters Float     @map("radius_meters")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   geofenceEvents GeofenceEvent[]
 
@@ -153,17 +153,17 @@ model Geofence {
 }
 
 model GeofenceEvent {
-  id          String   @id @default(uuid()) @db.Uuid
-  geofenceId  String   @map("geofence_id") @db.Uuid
-  geofence    Geofence @relation(fields: [geofenceId], references: [id])
-  vehicleId   String   @map("vehicle_id") @db.Uuid
-  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
-  deliveryId  String   @map("delivery_id") @db.Uuid
-  delivery    Delivery @relation(fields: [deliveryId], references: [id])
-  event       String   // "entry" | "exit"
-  latitude    Float
-  longitude   Float
-  timestamp   DateTime @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  geofenceId String   @map("geofence_id") @db.Uuid
+  geofence   Geofence @relation(fields: [geofenceId], references: [id])
+  vehicleId  String   @map("vehicle_id") @db.Uuid
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
+  deliveryId String   @map("delivery_id") @db.Uuid
+  delivery   Delivery @relation(fields: [deliveryId], references: [id])
+  event      String // "entry" | "exit"
+  latitude   Float
+  longitude  Float
+  timestamp  DateTime @default(now())
 
   @@index([geofenceId])
   @@index([vehicleId])
@@ -172,70 +172,70 @@ model GeofenceEvent {
 }
 
 model CompanyFuelSettings {
-  id             String   @id @default(uuid()) @db.Uuid
-  companyId      String   @unique @map("company_id") @db.Uuid
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  unit           FuelUnit @default(liters)
-  anomalyThreshold Float? @default(15) @map("anomaly_threshold")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id               String   @id @default(uuid()) @db.Uuid
+  companyId        String   @unique @map("company_id") @db.Uuid
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  unit             FuelUnit @default(liters)
+  anomalyThreshold Float?   @default(15) @map("anomaly_threshold")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("company_fuel_settings")
 }
 
 model User {
-  id             String   @id @default(uuid()) @db.Uuid
-  email          String   @unique
-  passwordHash   String   @map("password_hash")
-  firstName      String   @map("first_name")
-  lastName       String   @map("last_name")
-  phone          String?
-  role           UserRole
-  isActive       Boolean  @default(true) @map("is_active")
-  refreshTokenHash String? @map("refresh_token_hash")
-  resetTokenHash   String? @map("reset_token_hash")
+  id               String    @id @default(uuid()) @db.Uuid
+  email            String    @unique
+  passwordHash     String    @map("password_hash")
+  firstName        String    @map("first_name")
+  lastName         String    @map("last_name")
+  phone            String?
+  role             UserRole
+  isActive         Boolean   @default(true) @map("is_active")
+  refreshTokenHash String?   @map("refresh_token_hash")
+  resetTokenHash   String?   @map("reset_token_hash")
   resetTokenExpiry DateTime? @map("reset_token_expiry")
-  googleId         String? @unique @map("google_id")
-  avatarUrl        String? @map("avatar_url")
-  totpSecret       String? @map("totp_secret")
-  totpEnabled      Boolean  @default(false) @map("totp_enabled")
+  googleId         String?   @unique @map("google_id")
+  avatarUrl        String?   @map("avatar_url")
+  totpSecret       String?   @map("totp_secret")
+  totpEnabled      Boolean   @default(false) @map("totp_enabled")
   deletedAt        DateTime? @map("deleted_at")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
 
-  assignedDeliveries Delivery[] @relation("AssignedDriverDeliveries")
-  clientDeliveries   Delivery[] @relation("ClientDeliveries")
-  driver             Driver?
-  notifications      Notification[]
-  resolvedNotifications Notification[] @relation("ResolvedNotifications")
-  preferences        UserPreferences?
-  sessions           UserSession[]
-  auditLogs          AuditLog[]
-  sentInvitations    Invitation[] @relation("SentInvitations")
+  assignedDeliveries    Delivery[]       @relation("AssignedDriverDeliveries")
+  clientDeliveries      Delivery[]       @relation("ClientDeliveries")
+  driver                Driver?
+  notifications         Notification[]
+  resolvedNotifications Notification[]   @relation("ResolvedNotifications")
+  preferences           UserPreferences?
+  sessions              UserSession[]
+  auditLogs             AuditLog[]
+  sentInvitations       Invitation[]     @relation("SentInvitations")
 
   @@index([companyId])
   @@map("users")
 }
 
 model UserPreferences {
-  id              String   @id @default(uuid()) @db.Uuid
-  userId          String   @unique @map("user_id") @db.Uuid
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  emailDeliveryStatus  Boolean @default(true) @map("email_delivery_status")
-  emailFuelAnomaly     Boolean @default(true) @map("email_fuel_anomaly")
-  emailDeliveryDelayed Boolean @default(true) @map("email_delivery_delayed")
-  emailMaintenanceDue  Boolean @default(false) @map("email_maintenance_due")
-  emailSystem          Boolean @default(true) @map("email_system")
-  inAppDeliveryStatus  Boolean @default(true) @map("in_app_delivery_status")
-  inAppFuelAnomaly     Boolean @default(true) @map("in_app_fuel_anomaly")
-  inAppDeliveryDelayed Boolean @default(true) @map("in_app_delivery_delayed")
-  inAppMaintenanceDue  Boolean @default(true) @map("in_app_maintenance_due")
-  inAppSystem          Boolean @default(true) @map("in_app_system")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @unique @map("user_id") @db.Uuid
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailDeliveryStatus  Boolean  @default(true) @map("email_delivery_status")
+  emailFuelAnomaly     Boolean  @default(true) @map("email_fuel_anomaly")
+  emailDeliveryDelayed Boolean  @default(true) @map("email_delivery_delayed")
+  emailMaintenanceDue  Boolean  @default(false) @map("email_maintenance_due")
+  emailSystem          Boolean  @default(true) @map("email_system")
+  inAppDeliveryStatus  Boolean  @default(true) @map("in_app_delivery_status")
+  inAppFuelAnomaly     Boolean  @default(true) @map("in_app_fuel_anomaly")
+  inAppDeliveryDelayed Boolean  @default(true) @map("in_app_delivery_delayed")
+  inAppMaintenanceDue  Boolean  @default(true) @map("in_app_maintenance_due")
+  inAppSystem          Boolean  @default(true) @map("in_app_system")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@map("user_preferences")
 }
@@ -244,9 +244,9 @@ model UserSession {
   id           String   @id @default(uuid()) @db.Uuid
   userId       String   @map("user_id") @db.Uuid
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  device       String?  // user agent / device info
-  ip           String?  // IP address
-  location     String?  // approximate location from IP
+  device       String? // user agent / device info
+  ip           String? // IP address
+  location     String? // approximate location from IP
   lastActivity DateTime @default(now()) @map("last_activity")
   createdAt    DateTime @default(now()) @map("created_at")
   expiresAt    DateTime @map("expires_at")
@@ -256,18 +256,18 @@ model UserSession {
 }
 
 model Invitation {
-  id           String           @id @default(uuid()) @db.Uuid
-  email        String
-  role         UserRole
-  token        String           @unique
-  status       InvitationStatus @default(pending)
-  companyId    String           @map("company_id") @db.Uuid
-  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  invitedById  String           @map("invited_by_id") @db.Uuid
-  invitedBy    User             @relation("SentInvitations", fields: [invitedById], references: [id])
-  expiresAt    DateTime         @map("expires_at")
-  acceptedAt   DateTime?        @map("accepted_at")
-  createdAt    DateTime         @default(now()) @map("created_at")
+  id          String           @id @default(uuid()) @db.Uuid
+  email       String
+  role        UserRole
+  token       String           @unique
+  status      InvitationStatus @default(pending)
+  companyId   String           @map("company_id") @db.Uuid
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedById String           @map("invited_by_id") @db.Uuid
+  invitedBy   User             @relation("SentInvitations", fields: [invitedById], references: [id])
+  expiresAt   DateTime         @map("expires_at")
+  acceptedAt  DateTime?        @map("accepted_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
 
   @@index([companyId])
   @@index([email])
@@ -279,12 +279,12 @@ model AuditLog {
   userId    String      @map("user_id") @db.Uuid
   user      User        @relation(fields: [userId], references: [id])
   companyId String      @map("company_id") @db.Uuid
-  company   Company     @relation(fields: [companyId], references: [id])
   action    AuditAction
-  metadata  Json?       // additional context (old/new values, etc.)
+  metadata  Json? // additional context (old/new values, etc.)
   ip        String?
   userAgent String?     @map("user_agent")
   createdAt DateTime    @default(now()) @map("created_at")
+  Company   Company     @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
   @@index([userId])
@@ -293,50 +293,50 @@ model AuditLog {
 }
 
 model Vehicle {
-  id               String  @id @default(uuid()) @db.Uuid
-  brand            String
-  model            String
-  year             Int
-  licensePlate     String  @unique @map("license_plate")
-  vin              String? @unique
-  fuelType         String  @map("fuel_type")
-  theoreticalConsumption Float? @map("theoretical_consumption") // L/100km
-  isActive         Boolean @default(true) @map("is_active")
-  deletedAt        DateTime? @map("deleted_at")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id                     String    @id @default(uuid()) @db.Uuid
+  brand                  String
+  model                  String
+  year                   Int
+  licensePlate           String    @unique @map("license_plate")
+  vin                    String?   @unique
+  fuelType               String    @map("fuel_type")
+  theoreticalConsumption Float?    @map("theoretical_consumption") // L/100km
+  isActive               Boolean   @default(true) @map("is_active")
+  deletedAt              DateTime? @map("deleted_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
 
-  driver    Driver?
-  deliveries Delivery[]
-  fuelLogs  FuelLog[]
+  driver             Driver?
+  deliveries         Delivery[]
+  fuelLogs           FuelLog[]
   maintenanceRecords MaintenanceRecord[]
-  gpsPositions      GpsPosition[]
-  geofenceEvents    GeofenceEvent[]
+  gpsPositions       GpsPosition[]
+  geofenceEvents     GeofenceEvent[]
 
   @@index([companyId])
   @@map("vehicles")
 }
 
 model Driver {
-  id             String   @id @default(uuid()) @db.Uuid
-  firstName      String   @map("first_name")
-  lastName       String   @map("last_name")
-  email          String?
-  phone          String?
-  licenseNumber  String   @unique @map("license_number")
-  isActive       Boolean  @default(true) @map("is_active")
-  deletedAt      DateTime? @map("deleted_at")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id            String    @id @default(uuid()) @db.Uuid
+  firstName     String    @map("first_name")
+  lastName      String    @map("last_name")
+  email         String?
+  phone         String?
+  licenseNumber String    @unique @map("license_number")
+  isActive      Boolean   @default(true) @map("is_active")
+  deletedAt     DateTime? @map("deleted_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
 
-  userId    String?  @unique @map("user_id") @db.Uuid
-  user      User?    @relation(fields: [userId], references: [id])
+  userId String? @unique @map("user_id") @db.Uuid
+  user   User?   @relation(fields: [userId], references: [id])
 
   vehicleId String?  @unique @map("vehicle_id") @db.Uuid
   vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
@@ -349,31 +349,31 @@ model Driver {
 }
 
 model Delivery {
-  id              String         @id @default(uuid()) @db.Uuid
-  title           String
-  description     String?
-  pickupAddress   String         @map("pickup_address")
-  pickupLat       Float?         @map("pickup_lat")
-  pickupLng       Float?         @map("pickup_lng")
-  pickupLocationLabel String?    @map("pickup_location_label")
-  deliveryAddress String         @map("delivery_address")
-  deliveryLat     Float?         @map("delivery_lat")
-  deliveryLng     Float?         @map("delivery_lng")
-  deliveryLocationLabel String?  @map("delivery_location_label")
-  status          DeliveryStatus @default(pending)
-  scheduledDate   DateTime?      @map("scheduled_date")
-  completedAt     DateTime?      @map("completed_at")
-  deliveryProofLat Float?        @map("delivery_proof_lat")
-  deliveryProofLng Float?        @map("delivery_proof_lng")
-  deliveryProofDistance Float?   @map("delivery_proof_distance")
-  deliveryProofAccuracy Float?   @map("delivery_proof_accuracy")
-  locationMismatch Boolean       @default(false) @map("location_mismatch")
-  mismatchResolved Boolean       @default(false) @map("mismatch_resolved")
-  notes           String?
-  deletedAt       DateTime?      @map("deleted_at")
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
-  publicTrackingRevokedAt DateTime? @map("public_tracking_revoked_at")
+  id                      String         @id @default(uuid()) @db.Uuid
+  title                   String
+  description             String?
+  pickupAddress           String         @map("pickup_address")
+  pickupLat               Float?         @map("pickup_lat")
+  pickupLng               Float?         @map("pickup_lng")
+  pickupLocationLabel     String?        @map("pickup_location_label")
+  deliveryAddress         String         @map("delivery_address")
+  deliveryLat             Float?         @map("delivery_lat")
+  deliveryLng             Float?         @map("delivery_lng")
+  deliveryLocationLabel   String?        @map("delivery_location_label")
+  status                  DeliveryStatus @default(pending)
+  scheduledDate           DateTime?      @map("scheduled_date")
+  completedAt             DateTime?      @map("completed_at")
+  deliveryProofLat        Float?         @map("delivery_proof_lat")
+  deliveryProofLng        Float?         @map("delivery_proof_lng")
+  deliveryProofDistance   Float?         @map("delivery_proof_distance")
+  deliveryProofAccuracy   Float?         @map("delivery_proof_accuracy")
+  locationMismatch        Boolean        @default(false) @map("location_mismatch")
+  mismatchResolved        Boolean        @default(false) @map("mismatch_resolved")
+  notes                   String?
+  deletedAt               DateTime?      @map("deleted_at")
+  createdAt               DateTime       @default(now()) @map("created_at")
+  updatedAt               DateTime       @updatedAt @map("updated_at")
+  publicTrackingRevokedAt DateTime?      @map("public_tracking_revoked_at")
 
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
@@ -415,14 +415,14 @@ model GpsPosition {
   timestamp DateTime
   createdAt DateTime @default(now()) @map("created_at")
 
-  deliveryId String? @map("delivery_id") @db.Uuid
+  deliveryId String?   @map("delivery_id") @db.Uuid
   delivery   Delivery? @relation(fields: [deliveryId], references: [id])
 
-  vehicleId String @map("vehicle_id") @db.Uuid
+  vehicleId String  @map("vehicle_id") @db.Uuid
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
 
-  driverId  String @map("driver_id") @db.Uuid
-  driver    Driver @relation(fields: [driverId], references: [id])
+  driverId String @map("driver_id") @db.Uuid
+  driver   Driver @relation(fields: [driverId], references: [id])
 
   @@index([deliveryId])
   @@index([vehicleId])
@@ -433,20 +433,20 @@ model GpsPosition {
 }
 
 model GpsPositionArchive {
-  id        String   @id @default(uuid()) @db.Uuid
-  latitude  Float
-  longitude Float
-  speed     Float?
-  heading   Float?
-  altitude  Float?
-  accuracy  Float?
-  suspect   Boolean  @default(false)
-  location  String   @map("location")
-  timestamp DateTime
-  createdAt DateTime @map("created_at")
-  deliveryId String @map("delivery_id") @db.Uuid
-  vehicleId String @map("vehicle_id") @db.Uuid
-  driverId  String @map("driver_id") @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
+  latitude   Float
+  longitude  Float
+  speed      Float?
+  heading    Float?
+  altitude   Float?
+  accuracy   Float?
+  suspect    Boolean  @default(false)
+  location   String   @map("location")
+  timestamp  DateTime
+  createdAt  DateTime @map("created_at")
+  deliveryId String   @map("delivery_id") @db.Uuid
+  vehicleId  String   @map("vehicle_id") @db.Uuid
+  driverId   String   @map("driver_id") @db.Uuid
   archivedAt DateTime @default(now()) @map("archived_at")
 
   @@index([timestamp])
@@ -456,22 +456,22 @@ model GpsPositionArchive {
 }
 
 model FuelLog {
-  id              String   @id @default(uuid()) @db.Uuid
-  liters          Float
-  kilometers      Float
-  cost            Float
-  fuelUnit        FuelUnit @default(liters) @map("fuel_unit")
-  fillDate        DateTime @map("fill_date")
-  notes           String?
-  anomalyFlag     Boolean  @default(false) @map("anomaly_flag")
-  anomalyReason   String?  @map("anomaly_reason")
-  calculatedConsumption Float? @map("calculated_consumption") // L/100km auto-calculated
-  createdAt       DateTime @default(now()) @map("created_at")
+  id                    String   @id @default(uuid()) @db.Uuid
+  liters                Float
+  kilometers            Float
+  cost                  Float
+  fuelUnit              FuelUnit @default(liters) @map("fuel_unit")
+  fillDate              DateTime @map("fill_date")
+  notes                 String?
+  anomalyFlag           Boolean  @default(false) @map("anomaly_flag")
+  anomalyReason         String?  @map("anomaly_reason")
+  calculatedConsumption Float?   @map("calculated_consumption") // L/100km auto-calculated
+  createdAt             DateTime @default(now()) @map("created_at")
 
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
 
-  vehicleId String @map("vehicle_id") @db.Uuid
+  vehicleId String  @map("vehicle_id") @db.Uuid
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
 
   @@index([vehicleId])
@@ -492,34 +492,54 @@ model MaintenanceRecord {
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
 
-  vehicleId String @map("vehicle_id") @db.Uuid
+  vehicleId String  @map("vehicle_id") @db.Uuid
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
 
   @@index([vehicleId])
   @@map("maintenance_records")
 }
 
-model Notification {
-  id        String             @id @default(uuid()) @db.Uuid
-  type      NotificationType
-  priority  NotificationPriority @default(medium)
-  title     String
-  message   String
-  link      String?            // optional deep-link URL
-  digestOnly Boolean          @default(false) @map("digest_only")
-  readAt    DateTime?          @map("read_at")
-  createdAt DateTime           @default(now()) @map("created_at")
-  resolved  Boolean           @default(false) @map("resolved")
-  resolvedAt DateTime?         @map("resolved_at")
-  resolutionComment String?   @map("resolution_comment")
+model DailyFuelReport {
+  id                   String   @id @default(uuid()) @db.Uuid
+  reportDate           DateTime @map("report_date")
+  driverId             String   @map("driver_id") @db.Uuid
+  driverName           String   @map("driver_name")
+  vehiclePlate         String   @map("vehicle_plate")
+  fuelType             String   @map("fuel_type")
+  distanceKm           Float    @map("distance_km")
+  consumptionLPer100Km Float?   @map("consumption_l_per_100km")
+  estimatedCost        Float    @map("estimated_cost")
+  createdAt            DateTime @default(now()) @map("created_at")
 
   companyId String @map("company_id") @db.Uuid
+
+  @@unique([driverId, reportDate])
+  @@index([companyId, reportDate])
+  @@index([driverId, reportDate])
+  @@map("daily_fuel_reports")
+}
+
+model Notification {
+  id                String               @id @default(uuid()) @db.Uuid
+  type              NotificationType
+  priority          NotificationPriority @default(medium)
+  title             String
+  message           String
+  link              String? // optional deep-link URL
+  digestOnly        Boolean              @default(false) @map("digest_only")
+  readAt            DateTime?            @map("read_at")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  resolved          Boolean              @default(false) @map("resolved")
+  resolvedAt        DateTime?            @map("resolved_at")
+  resolutionComment String?              @map("resolution_comment")
+
+  companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
 
-  userId    String? @map("user_id") @db.Uuid
-  user      User?   @relation(fields: [userId], references: [id])
+  userId String? @map("user_id") @db.Uuid
+  user   User?   @relation(fields: [userId], references: [id])
 
-  deliveryId String?  @map("delivery_id") @db.Uuid
+  deliveryId String?   @map("delivery_id") @db.Uuid
   delivery   Delivery? @relation(fields: [deliveryId], references: [id])
 
   resolvedById String? @map("resolved_by_id") @db.Uuid
@@ -569,20 +589,20 @@ enum UsageResource {
 }
 
 model BillingPlan {
-  id        String    @id @default(uuid()) @db.Uuid
-  tier      PlanTier  @unique
-  name      String
-  description String?
-  price     Int       @map("price") // cents per interval
-  currency  String    @default("EUR")
-  interval  String    @default("month") // month | year
-  maxVehicles      Int @default(5) @map("max_vehicles")
-  maxDeliveriesPerMonth Int @default(50) @map("max_deliveries_per_month")
-  maxUsers         Int @default(3) @map("max_users")
-  features         Json @default("[]")
-  isActive    Boolean @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                    String   @id @default(uuid()) @db.Uuid
+  tier                  PlanTier @unique
+  name                  String
+  description           String?
+  price                 Int      @map("price") // cents per interval
+  currency              String   @default("EUR")
+  interval              String   @default("month") // month | year
+  maxVehicles           Int      @default(5) @map("max_vehicles")
+  maxDeliveriesPerMonth Int      @default(50) @map("max_deliveries_per_month")
+  maxUsers              Int      @default(3) @map("max_users")
+  features              Json     @default("[]")
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   subscriptions Subscription[]
 
@@ -590,22 +610,22 @@ model BillingPlan {
 }
 
 model Subscription {
-  id              String             @id @default(uuid()) @db.Uuid
-  companyId       String             @unique @map("company_id") @db.Uuid
-  company         Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  planId          String             @map("plan_id") @db.Uuid
-  plan            BillingPlan        @relation(fields: [planId], references: [id])
-  status          SubscriptionStatus @default(active)
-  provider        BillingProvider    @default(stripe)
-  stripeSubscriptionId String?        @unique @map("stripe_subscription_id")
-  stripeCustomerId    String?        @map("stripe_customer_id")
-  mobileMoneyRef     String?         @map("mobile_money_ref")
-  currentPeriodStart DateTime         @default(now()) @map("current_period_start")
-  currentPeriodEnd   DateTime         @map("current_period_end")
-  canceledAt         DateTime?        @map("canceled_at")
-  trialEndsAt        DateTime?        @map("trial_ends_at")
-  createdAt          DateTime         @default(now()) @map("created_at")
-  updatedAt          DateTime         @updatedAt @map("updated_at")
+  id                   String             @id @default(uuid()) @db.Uuid
+  companyId            String             @unique @map("company_id") @db.Uuid
+  company              Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planId               String             @map("plan_id") @db.Uuid
+  plan                 BillingPlan        @relation(fields: [planId], references: [id])
+  status               SubscriptionStatus @default(active)
+  provider             BillingProvider    @default(stripe)
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  stripeCustomerId     String?            @map("stripe_customer_id")
+  mobileMoneyRef       String?            @map("mobile_money_ref")
+  currentPeriodStart   DateTime           @default(now()) @map("current_period_start")
+  currentPeriodEnd     DateTime           @map("current_period_end")
+  canceledAt           DateTime?          @map("canceled_at")
+  trialEndsAt          DateTime?          @map("trial_ends_at")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
 
   invoices Invoice[]
 
@@ -615,22 +635,22 @@ model Subscription {
 }
 
 model Invoice {
-  id                String        @id @default(uuid()) @db.Uuid
-  companyId         String        @map("company_id") @db.Uuid
-  company           Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  subscriptionId    String        @map("subscription_id") @db.Uuid
-  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  invoiceNumber     String        @unique @map("invoice_number")
-  amount            Int           @map("amount") // cents
-  currency          String        @default("EUR")
-  status            InvoiceStatus @default(draft)
+  id                String          @id @default(uuid()) @db.Uuid
+  companyId         String          @map("company_id") @db.Uuid
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  subscriptionId    String          @map("subscription_id") @db.Uuid
+  subscription      Subscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  invoiceNumber     String          @unique @map("invoice_number")
+  amount            Int             @map("amount") // cents
+  currency          String          @default("EUR")
+  status            InvoiceStatus   @default(draft)
   provider          BillingProvider @default(stripe)
-  providerInvoiceId String?       @unique @map("provider_invoice_id")
-  paidAt            DateTime?     @map("paid_at")
-  pdfUrl            String?       @map("pdf_url")
-  pdfData           Bytes?        @map("pdf_data")
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
+  providerInvoiceId String?         @unique @map("provider_invoice_id")
+  paidAt            DateTime?       @map("paid_at")
+  pdfUrl            String?         @map("pdf_url")
+  pdfData           Bytes?          @map("pdf_data")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
 
   @@index([companyId])
   @@index([subscriptionId])
@@ -666,18 +686,18 @@ enum WebhookDeliveryStatus {
 }
 
 model ApiKey {
-  id        String   @id @default(uuid()) @db.Uuid
-  companyId String   @map("company_id") @db.Uuid
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  keyHash   String   @map("key_hash")
-  prefix    String   @map("prefix") // first 8 chars for display
-  name      String   @map("name")
-  scopes    Json     @default("[\"deliveries:read\"]") // ["deliveries:read", "tracking:read"]
-  expiresAt DateTime? @map("expires_at")
+  id         String    @id @default(uuid()) @db.Uuid
+  companyId  String    @map("company_id") @db.Uuid
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  keyHash    String    @map("key_hash")
+  prefix     String    @map("prefix") // first 8 chars for display
+  name       String    @map("name")
+  scopes     Json      @default("[\"deliveries:read\"]") // ["deliveries:read", "tracking:read"]
+  expiresAt  DateTime? @map("expires_at")
   lastUsedAt DateTime? @map("last_used_at")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
   @@index([companyId])
   @@index([keyHash])
@@ -703,19 +723,19 @@ model Webhook {
 }
 
 model WebhookDelivery {
-  id                 String               @id @default(uuid()) @db.Uuid
-  webhookId          String               @map("webhook_id") @db.Uuid
-  webhook            Webhook              @relation(fields: [webhookId], references: [id], onDelete: Cascade)
-  event              String               @map("event")
-  payload            Json                 @map("payload")
+  id                 String                @id @default(uuid()) @db.Uuid
+  webhookId          String                @map("webhook_id") @db.Uuid
+  webhook            Webhook               @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  event              String                @map("event")
+  payload            Json                  @map("payload")
   status             WebhookDeliveryStatus @default(pending)
-  responseStatusCode Int?                 @map("response_status_code")
-  responseBody       String?              @map("response_body")
-  attempts           Int                  @default(0)
-  maxAttempts        Int                  @default(5)
-  nextRetryAt        DateTime?            @map("next_retry_at")
-  createdAt          DateTime             @default(now()) @map("created_at")
-  completedAt        DateTime?            @map("completed_at")
+  responseStatusCode Int?                  @map("response_status_code")
+  responseBody       String?               @map("response_body")
+  attempts           Int                   @default(0)
+  maxAttempts        Int                   @default(5)
+  nextRetryAt        DateTime?             @map("next_retry_at")
+  createdAt          DateTime              @default(now()) @map("created_at")
+  completedAt        DateTime?             @map("completed_at")
 
   @@index([webhookId])
   @@index([status])
@@ -724,19 +744,19 @@ model WebhookDelivery {
 }
 
 model PlatformAdmin {
-  id             String   @id @default(uuid()) @db.Uuid
-  email          String   @unique
-  passwordHash   String   @map("password_hash")
-  firstName      String   @map("first_name")
-  lastName       String   @map("last_name")
-  totpSecret     String?  @map("totp_secret")
-  totpEnabled    Boolean  @default(false) @map("totp_enabled")
-  isActive       Boolean  @default(true) @map("is_active")
-  refreshTokenHash String? @map("refresh_token_hash")
-  resetTokenHash   String? @map("reset_token_hash")
+  id               String    @id @default(uuid()) @db.Uuid
+  email            String    @unique
+  passwordHash     String    @map("password_hash")
+  firstName        String    @map("first_name")
+  lastName         String    @map("last_name")
+  totpSecret       String?   @map("totp_secret")
+  totpEnabled      Boolean   @default(false) @map("totp_enabled")
+  isActive         Boolean   @default(true) @map("is_active")
+  refreshTokenHash String?   @map("refresh_token_hash")
+  resetTokenHash   String?   @map("reset_token_hash")
   resetTokenExpiry DateTime? @map("reset_token_expiry")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   auditLogs PlatformAuditLog[]
 
@@ -744,17 +764,17 @@ model PlatformAdmin {
 }
 
 model PlatformAuditLog {
-  id              String            @id @default(uuid()) @db.Uuid
-  adminId         String            @map("admin_id") @db.Uuid
-  admin           PlatformAdmin     @relation(fields: [adminId], references: [id])
+  id              String              @id @default(uuid()) @db.Uuid
+  adminId         String              @map("admin_id") @db.Uuid
+  admin           PlatformAdmin       @relation(fields: [adminId], references: [id])
   action          PlatformAdminAction
-  targetCompanyId String?           @map("target_company_id") @db.Uuid
-  targetCompany   Company?          @relation(fields: [targetCompanyId], references: [id])
-  targetUserId    String?           @map("target_user_id")
+  targetCompanyId String?             @map("target_company_id") @db.Uuid
+  targetCompany   Company?            @relation(fields: [targetCompanyId], references: [id])
+  targetUserId    String?             @map("target_user_id")
   ip              String?
-  userAgent       String?           @map("user_agent")
+  userAgent       String?             @map("user_agent")
   metadata        Json?
-  createdAt       DateTime          @default(now()) @map("created_at")
+  createdAt       DateTime            @default(now()) @map("created_at")
 
   @@index([adminId])
   @@index([createdAt])

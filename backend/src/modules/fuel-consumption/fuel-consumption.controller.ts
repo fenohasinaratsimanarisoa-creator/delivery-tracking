@@ -32,6 +32,15 @@ export class FuelConsumptionController {
   }
 
   @Roles('admin', 'dispatcher')
+  @Get('daily-reports')
+  getDailyReports(
+    @CurrentUser('companyId') companyId: string,
+    @Query('date') date?: string,
+  ) {
+    return this.fuelService.getDailyReports(companyId, date);
+  }
+
+  @Roles('admin', 'dispatcher')
   @Get(':id')
   findOne(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
     return this.fuelService.findOne(companyId, id);
