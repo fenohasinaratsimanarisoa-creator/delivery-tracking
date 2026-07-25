@@ -350,20 +350,18 @@ export class DeliveriesService {
         proofData.locationMismatch = true;
         proofData.mismatchResolved = false;
 
-        if (dto.status !== DeliveryStatus.delivered) {
-          await this.notifications.create(companyId, {
-            type: NotificationType.location_mismatch,
-            priority: NotificationPriority.high,
-            title: t('delivery.notification.mismatchTitle', lang),
-            message: t('delivery.notification.mismatchMessage', lang, {
-              title: delivery.title,
-              distance: (distance / 1000).toFixed(1),
-              meters: distance,
-            }),
-            link: `/deliveries/${delivery.id}`,
-            deliveryId: delivery.id,
-          });
-        }
+        await this.notifications.create(companyId, {
+          type: NotificationType.location_mismatch,
+          priority: NotificationPriority.high,
+          title: t('delivery.notification.mismatchTitle', lang),
+          message: t('delivery.notification.mismatchMessage', lang, {
+            title: delivery.title,
+            distance: (distance / 1000).toFixed(1),
+            meters: distance,
+          }),
+          link: `/deliveries/${delivery.id}`,
+          deliveryId: delivery.id,
+        });
       } else {
         proofData.locationMismatch = false;
         proofData.mismatchResolved = false;
