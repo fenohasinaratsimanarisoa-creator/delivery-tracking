@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE properties SYSTEM 'http://java.sun.com/dtds/properties.dtd'>
+<properties>
+    <!-- Database: H2 embedded (file-based) for development -->
+    <entry key='database.driver'>org.h2.Driver</entry>
+    <entry key='database.url'>jdbc:h2:/opt/traccar/data/database</entry>
+    <entry key='database.user'>sa</entry>
+    <entry key='database.password'></entry>
+
+    <!-- Web server -->
+    <entry key='web.port'>8082</entry>
+    <entry key='web.address'>0.0.0.0</entry>
+
+    <!-- Geocoding -->
+    <entry key='geocoder.enable'>false</entry>
+
+    <!-- Protocols enabled -->
+    <entry key='gt06.port'>5055</entry>
+
+    <!-- Logging -->
+    <entry key='logger.level'>ALL</entry>
+
+    <!-- Default admin user (change in production!) -->
+    <entry key='users.default'>admin:admin</entry>
+
+    <!-- Position filtering: ~3s dedup window -->
+    <entry key='filter.enable'>true</entry>
+    <entry key='filter.distance'>5</entry>
+    <entry key='filter.future'>300</entry>
+
+    <!-- Coordinate format: decimal degrees -->
+    <entry key='coordinates.format'>dd</entry>
+</properties>

@@ -97,9 +97,11 @@ export function useDriverTracking() {
     refetchInterval: 60_000,
   });
 
-  const driver = profile as { id: string; firstName: string; lastName: string; vehicle?: { id: string; brand: string; model: string; licensePlate: string } } | undefined;
+  const driver = profile as { id: string; firstName: string; lastName: string; vehicle?: { id: string; brand: string; model: string; licensePlate: string; positionSource?: string } } | undefined;
   const deliveries: Delivery[] = deliveriesData?.data ?? [];
   const vehicleId = driver?.vehicle?.id || '';
+  const positionSource = driver?.vehicle?.positionSource || 'phone';
+  const usesPhysicalTracker = positionSource === 'physical_tracker';
 
   const inProgressDelivery = deliveries.find((d) => d.status === 'in_progress');
   const autoDeliveryId = inProgressDelivery?.id || '';
@@ -342,7 +344,7 @@ export function useDriverTracking() {
   }, [drainQueue]);
 
   useEffect(() => {
-    if (!driver) {
+    if (!driver || usesPhysicalTracker) {
       if (startedRef.current) {
         stopTracking();
         startedRef.current = false;
@@ -360,7 +362,7 @@ export function useDriverTracking() {
   }, [driver, startTracking, stopTracking]);
 
   const trackingStatus: TrackingStatus = {
-    active: startedRef.current,
+    active: startedRef.current && !usesPhysicalTracker,
     position,
     confidence: confidenceLevel,
     poorAccuracy,

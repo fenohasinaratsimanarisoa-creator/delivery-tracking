@@ -233,4 +233,8 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
   broadcastDataUpdate(companyId: string, type: string, payload?: Record<string, unknown>) {
     this.server.to(`company:${companyId}`).emit('dataUpdate', { type, ...payload });
   }
+
+  broadcastToCompany(companyId: string, event: string, data: any) {
+    this.server.to(`company:${companyId}`).emit(event, data);
+  }
 }

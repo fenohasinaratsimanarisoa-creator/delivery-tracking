@@ -6,6 +6,7 @@ import { WsAuthService } from '../../common/auth/ws-auth.service';
 import { TrackingGateway } from './tracking.gateway';
 import { TrackingService } from './tracking.service';
 import { GeofenceService } from './geofence.service';
+import { TraccarBridgeService } from './traccar-bridge.service';
 import { TrackingController } from './tracking.controller';
 import { GeofenceController } from './geofence.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -28,6 +29,7 @@ import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
     TrackingGateway,
     TrackingService,
     GeofenceService,
+    TraccarBridgeService,
     WsJwtGuard,
     WsAuthService,
     ApiKeyOrJwtGuard,

@@ -92,6 +92,26 @@ services:
       - backend
     restart: unless-stopped
 
+  traccar:
+    image: traccar/traccar:latest
+    container_name: delivery-tracking-traccar
+    ports:
+      - "8082:8082"    # Web admin interface
+      - "5055:5055"    # GT06 protocol (GPS trackers)
+      - "5001:5001"    # Alternative port
+    environment:
+      - JAVA_OPTS=-Xms256m -Xmx512m
+    volumes:
+      - traccar_data:/opt/traccar/data
+      - ./traccar/traccar.xml:/opt/traccar/conf/traccar.xml:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8082"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   pgdata:
   redisdata:
+  traccar_data:
