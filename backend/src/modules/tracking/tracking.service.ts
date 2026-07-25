@@ -562,20 +562,24 @@ export class TrackingService {
     return raw[0] ?? null;
   }
 
-  async archivePositionsBefore(date: Date): Promise<number> {
+  async archivePositionsBefore(date: Date, companyId: string): Promise<number> {
     const cutoff = date.toISOString();
     const result = await this.prisma.$executeRawUnsafe(
       `
       WITH archived AS (
         DELETE FROM gps_positions
-        WHERE timestamp < $1::timestamp
-        RETURNING id, latitude, longitude, speed, heading, altitude, accuracy, suspect, location, timestamp, created_at, delivery_id, vehicle_id, driver_id
+        USING vehicles
+        WHERE gps_positions.vehicle_id = vehicles.id
+          AND vehicles.company_id = $2::uuid
+          AND gps_positions.timestamp < $1::timestamp
+        RETURNING gps_positions.id, gps_positions.latitude, gps_positions.longitude, gps_positions.speed, gps_positions.heading, gps_positions.altitude, gps_positions.accuracy, gps_positions.suspect, gps_positions.location, gps_positions.timestamp, gps_positions.created_at, gps_positions.delivery_id, gps_positions.vehicle_id, gps_positions.driver_id
       )
       INSERT INTO gps_positions_archive (id, latitude, longitude, speed, heading, altitude, accuracy, suspect, location, timestamp, created_at, delivery_id, vehicle_id, driver_id)
       SELECT id, latitude, longitude, speed, heading, altitude, accuracy, suspect, location, timestamp, created_at, delivery_id, vehicle_id, driver_id
       FROM archived
     `,
       cutoff,
+      companyId,
     );
     return result;
   }

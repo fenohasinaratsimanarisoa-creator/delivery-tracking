@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../prisma/prisma.service';
 import { Socket } from 'socket.io';
 
 export interface WsAuthenticatedUser {
@@ -27,6 +28,7 @@ export class WsAuthService {
   constructor(
     private jwtService: JwtService,
     private configService: ConfigService,
+    private prisma: PrismaService,
   ) {}
 
   async verify(client: Socket): Promise<WsAuthenticatedUser> {
@@ -44,13 +46,22 @@ export class WsAuthService {
         throw new WsAuthError('Invalid token payload', 'INVALID_PAYLOAD');
       }
 
+      const dbUser = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, email: true, role: true, companyId: true, firstName: true, lastName: true, isActive: true },
+      });
+
+      if (!dbUser || !dbUser.isActive) {
+        throw new WsAuthError('User not found or inactive', 'TOKEN_INVALID');
+      }
+
       const user: WsAuthenticatedUser = {
-        id: payload.sub,
-        email: payload.email,
-        role: payload.role,
-        companyId: payload.companyId,
-        firstName: payload.firstName || '',
-        lastName: payload.lastName || '',
+        id: dbUser.id,
+        email: dbUser.email || undefined,
+        role: dbUser.role,
+        companyId: dbUser.companyId,
+        firstName: dbUser.firstName,
+        lastName: dbUser.lastName,
       };
 
       client.data.user = user;

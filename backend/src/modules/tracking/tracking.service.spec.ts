@@ -6,6 +6,7 @@ const mockPrisma = {
   driver: {
     findUnique: jest.fn(),
   },
+  $executeRawUnsafe: jest.fn(),
   gpsPosition: {
     findFirst: jest.fn(),
     create: jest.fn(),
@@ -534,6 +535,32 @@ describe('TrackingService', () => {
       await expect(service.revokePublicToken('delivery-1', 'company-1')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('archivePositionsBefore — multi-tenant scope', () => {
+    it('should filter by companyId using vehicles join', async () => {
+      mockPrisma.$executeRawUnsafe = jest.fn().mockResolvedValue(5);
+
+      await service.archivePositionsBefore(new Date('2026-01-01'), 'company-a');
+
+      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledTimes(1);
+      const sql: string = mockPrisma.$executeRawUnsafe.mock.calls[0][0];
+      const params = mockPrisma.$executeRawUnsafe.mock.calls[0].slice(1);
+
+      expect(sql).toContain('vehicles.company_id = $2::uuid');
+      expect(params[1]).toBe('company-a');
+    });
+
+    it('should not affect positions from other companies', async () => {
+      mockPrisma.$executeRawUnsafe = jest.fn().mockResolvedValue(0);
+
+      const result = await service.archivePositionsBefore(new Date('2026-01-01'), 'company-b');
+
+      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledTimes(1);
+      const params = mockPrisma.$executeRawUnsafe.mock.calls[0].slice(1);
+      expect(params[1]).toBe('company-b');
+      expect(result).toBe(0);
     });
   });
 });

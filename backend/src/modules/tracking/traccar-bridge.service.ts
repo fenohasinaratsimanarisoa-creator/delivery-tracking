@@ -25,6 +25,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly traccarUrl: string;
   private readonly traccarPort: number;
+  private readonly traccarUser: string;
+  private readonly traccarPassword: string;
   private connected = false;
   private lastPositionTime = 0;
 
@@ -36,6 +38,12 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   ) {
     this.traccarUrl = this.configService.get<string>('TRACCAR_URL', 'http://traccar:8082');
     this.traccarPort = this.configService.get<number>('TRACCAR_WS_PORT', 8082);
+    this.traccarUser = this.configService.get<string>('TRACCAR_USER', 'admin');
+    this.traccarPassword = this.configService.get<string>('TRACCAR_PASSWORD', 'admin');
+
+    if (this.traccarUser === 'admin' && this.traccarPassword === 'admin') {
+      this.logger.warn('TRACCAR_USER/TRACCAR_PASSWORD not configured — using default credentials, change in production');
+    }
   }
 
   async onModuleInit() {
@@ -60,7 +68,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       this.socket.on('open', () => {
         this.connected = true;
         this.logger.log(`Traccar bridge connected to ${wsUrl}`);
-        this.socket.send('login admin:admin');
+        this.socket.send(`login ${this.traccarUser}:${this.traccarPassword}`);
       });
 
       this.socket.on('message', async (data: Buffer) => {

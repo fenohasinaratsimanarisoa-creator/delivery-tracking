@@ -135,8 +135,8 @@ export class TrackingController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Archiver les positions GPS avant une date' })
   @Post('archive')
-  async archivePositions(@Body('before') before: string) {
-    const count = await this.trackingService.archivePositionsBefore(new Date(before));
+  async archivePositions(@Body('before') before: string, @CurrentUser('companyId') companyId: string) {
+    const count = await this.trackingService.archivePositionsBefore(new Date(before), companyId);
     return { archived: count };
   }
 
