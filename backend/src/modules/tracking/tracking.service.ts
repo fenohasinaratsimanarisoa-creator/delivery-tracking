@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { NotificationType, NotificationPriority } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -34,7 +34,7 @@ export class TrackingService {
     private prisma: PrismaService,
     private notifications: NotificationsService,
     private geofenceService: GeofenceService,
-    private deliveryProximityService: DeliveryProximityService,
+    @Inject(forwardRef(() => DeliveryProximityService)) private deliveryProximityService: DeliveryProximityService,
     private cacheService: CacheService,
     private dataUpdateBus: DataUpdateBus,
   ) {}
