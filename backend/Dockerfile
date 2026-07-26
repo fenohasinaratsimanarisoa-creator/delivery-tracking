@@ -6,7 +6,7 @@ COPY prisma ./prisma
 RUN npx prisma generate
 COPY tsconfig*.json ./
 COPY src ./src
-RUN npm run build
+RUN npx nest build
 
 FROM node:20-slim AS runner
 WORKDIR /app
