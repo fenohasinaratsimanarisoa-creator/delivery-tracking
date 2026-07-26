@@ -82,6 +82,9 @@ export default function FleetPage() {
   const [deleting, setDeleting] = useState<Vehicle | null>(null);
   const [_highlightedId, setHighlightedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [showAddDevice, setShowAddDevice] = useState(false);
+  const [newDeviceName, setNewDeviceName] = useState('');
+  const [newDeviceId, setNewDeviceId] = useState('');
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -138,6 +141,21 @@ export default function FleetPage() {
     },
     onError: (err: any) => {
       toast(err?.response?.data?.message || 'Erreur', 'error');
+    },
+  });
+
+  const addDeviceMutation = useMutation({
+    mutationFn: (body: { name: string; uniqueId: string }) =>
+      api.post('/vehicles/traccar-devices', body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['traccar-devices'] });
+      toast('Dispositif Traccar ajouté');
+      setShowAddDevice(false);
+      setNewDeviceName('');
+      setNewDeviceId('');
+    },
+    onError: (err: any) => {
+      toast(err?.response?.data?.message || 'Erreur lors de l\'ajout', 'error');
     },
   });
 
@@ -386,19 +404,43 @@ export default function FleetPage() {
                 return (
                   <DialogField key={fieldName} label={def.label} error={err} required={def.required}>
                     {def.type === 'select' ? (
-                      <select
-                        className="dialog-select"
-                        value={val}
-                        onChange={(e) => vehicleForm.setValue(fieldName as keyof VehicleFormValues, e.target.value)}
-                        onBlur={() => vehicleForm.handleBlur(fieldName as keyof VehicleFormValues)}
-                      >
+                      <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'flex-start' }}>
+                        <select
+                          className="dialog-select"
+                          value={val}
+                          onChange={(e) => vehicleForm.setValue(fieldName as keyof VehicleFormValues, e.target.value)}
+                          onBlur={() => vehicleForm.handleBlur(fieldName as keyof VehicleFormValues)}
+                          style={{ flex: 1 }}
+                        >
+                          {def.name === 'traccarDeviceId' && (
+                            <option value="">Sélectionnez un dispositif…</option>
+                          )}
+                          {def.options?.map((o: { value: string; label: string }) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
                         {def.name === 'traccarDeviceId' && (
-                          <option value="">Sélectionnez un dispositif…</option>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddDevice(true)}
+                            title="Ajouter un nouveau dispositif Traccar"
+                            style={{
+                              padding: 'var(--space-sm) var(--space-md)',
+                              border: '1px solid var(--color-input-border)',
+                              borderRadius: 'var(--radius-md)',
+                              background: 'var(--color-surface-alt)',
+                              color: 'var(--color-text)',
+                              cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              fontSize: 'var(--text-xs)',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <Plus size={14} /> Ajouter
+                          </button>
                         )}
-                        {def.options?.map((o: { value: string; label: string }) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
+                      </div>
                     ) : (
                       <input
                         className="dialog-input"
@@ -431,6 +473,88 @@ export default function FleetPage() {
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />
+
+      {showAddDevice && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 7000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div
+            onClick={() => setShowAddDevice(false)}
+            style={{ position: 'absolute', inset: 0, background: 'var(--color-overlay)', backdropFilter: 'blur(6px)' }}
+          />
+          <div style={{
+            position: 'relative',
+            width: 420, maxWidth: 'calc(100vw - 32px)',
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-xl)',
+            boxShadow: 'var(--shadow-dialog)',
+            padding: 'var(--space-xl)',
+          }}>
+            <h3 style={{ margin: '0 0 var(--space-lg)', fontSize: 'var(--text-md)', fontWeight: 700 }}>
+              Nouveau dispositif Traccar
+            </h3>
+            <div style={{ marginBottom: 'var(--space-md)' }}>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 'var(--space-sm)' }}>
+                Nom du traceur *
+              </label>
+              <input
+                className="dialog-input"
+                value={newDeviceName}
+                onChange={(e) => setNewDeviceName(e.target.value)}
+                placeholder="Ex: Traceur Renault Kangoo"
+              />
+            </div>
+            <div style={{ marginBottom: 'var(--space-lg)' }}>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 'var(--space-sm)' }}>
+                Identifiant unique (IMEI) *
+              </label>
+              <input
+                className="dialog-input"
+                value={newDeviceId}
+                onChange={(e) => setNewDeviceId(e.target.value)}
+                placeholder="Ex: 863295042345678"
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setShowAddDevice(false)}
+                style={{
+                  padding: 'var(--space-sm) var(--space-lg)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'transparent',
+                  color: 'var(--color-text)',
+                  cursor: 'pointer',
+                  fontSize: 'var(--text-sm)',
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={!newDeviceName.trim() || !newDeviceId.trim() || addDeviceMutation.isPending}
+                onClick={() => addDeviceMutation.mutate({ name: newDeviceName.trim(), uniqueId: newDeviceId.trim() })}
+                style={{
+                  padding: 'var(--space-sm) var(--space-lg)',
+                  border: 'none',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--color-accent)',
+                  color: 'var(--color-bg)',
+                  cursor: 'pointer',
+                  fontSize: 'var(--text-sm)',
+                  fontWeight: 600,
+                  opacity: (!newDeviceName.trim() || !newDeviceId.trim()) ? 0.5 : 1,
+                }}
+              >
+                {addDeviceMutation.isPending ? 'Ajout...' : 'Ajouter'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

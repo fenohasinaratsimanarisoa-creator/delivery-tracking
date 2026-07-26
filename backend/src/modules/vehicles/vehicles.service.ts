@@ -170,6 +170,40 @@ export class VehiclesService {
     });
   }
 
+  async createTraccarDevice(name: string, uniqueId: string) {
+    const traccarUrl = this.configService.get<string>('TRACCAR_URL', 'http://traccar:8082');
+
+    if (traccarUrl === 'http://traccar:8082' || traccarUrl === 'disabled') {
+      throw new BadRequestException('Traccar is not configured');
+    }
+
+    const cookie = await this.authenticateTraccar(
+      traccarUrl,
+      this.configService.get<string>('TRACCAR_USER', 'admin')!,
+      this.configService.get<string>('TRACCAR_PASSWORD', 'admin')!,
+    );
+
+    const response = await fetch(`${traccarUrl}/api/devices`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: cookie,
+      },
+      body: JSON.stringify({
+        name,
+        uniqueId,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new BadRequestException(`Traccar device creation failed: ${body}`);
+    }
+
+    const device = await response.json();
+    return { id: device.id, name: device.name, uniqueId: device.uniqueId };
+  }
+
   async getAvailableTraccarDevices(companyId: string) {
     const traccarUrl = this.configService.get<string>('TRACCAR_URL', 'http://traccar:8082');
     const traccarUser = this.configService.get<string>('TRACCAR_USER', 'admin');
