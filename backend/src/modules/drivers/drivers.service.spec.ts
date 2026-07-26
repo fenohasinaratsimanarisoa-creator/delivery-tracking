@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { DriversService } from './drivers.service';
 
 const mockPrisma = {
@@ -21,7 +22,7 @@ describe('DriversService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new DriversService(mockPrisma as unknown as PrismaService);
+    service = new DriversService(mockPrisma as unknown as PrismaService, { emitUpdate: jest.fn() } as any);
   });
 
   describe('create', () => {

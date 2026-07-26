@@ -7,7 +7,7 @@ import {
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
-import { OnModuleInit, OnModuleDestroy, Inject, forwardRef } from '@nestjs/common';
+import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { UseGuards, Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
@@ -29,11 +29,14 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
   private driverCleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
-    @Inject(forwardRef(() => TrackingService)) private trackingService: TrackingService,
+    private trackingService: TrackingService,
     private wsAuthService: WsAuthService,
     private dataUpdateBus: DataUpdateBus,
   ) {
     this.dataUpdateBus.on('dataUpdate', (event) => {
+      if (event.targetUserId && event.entity === 'proximityAlert') {
+        this.server.to(`driver:${event.targetUserId}`).emit('proximityAlert', event.payload);
+      }
       if (event.companyId) {
         this.server.to(`company:${event.companyId}`).emit('dataUpdate', {
           entity: event.entity,

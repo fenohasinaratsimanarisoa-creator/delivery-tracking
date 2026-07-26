@@ -1,9 +1,9 @@
-import { Injectable, Logger, Inject, Optional, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import Redis from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { TrackingGateway } from './tracking.gateway';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { CacheService } from '../../common/cache/cache.service';
+import { DataUpdateBus } from '../../common/events/data-update.bus';
 
 const PROXIMITY_THRESHOLD_M = 300;
 const ESCALATION_AFTER_MS = 15 * 60 * 1000;
@@ -16,7 +16,7 @@ export class DeliveryProximityService {
 
   constructor(
     private prisma: PrismaService,
-    @Inject(forwardRef(() => TrackingGateway)) private trackingGateway: TrackingGateway,
+    private dataUpdateBus: DataUpdateBus,
     private cacheService: CacheService,
     @Optional() @Inject(REDIS_CLIENT) private redis: Redis | null,
   ) {}
@@ -135,15 +135,21 @@ export class DeliveryProximityService {
           : 'Vous êtes à proximité du point de livraison. N\'oubliez pas de valider.';
         const urgency = escalationLevel >= 2 ? 'critical' : escalationLevel >= 1 ? 'high' : 'normal';
 
-        this.trackingGateway.sendToDriver(driver.userId, 'proximityAlert', {
-          type: 'proximity',
-          title,
-          message,
-          deliveryId: inProgressDelivery.id,
-          urgency,
-          snoozable: true,
-          escalationLevel,
-          timestamp: timestamp.toISOString(),
+        this.dataUpdateBus.emitUpdate({
+          companyId,
+          entity: 'proximityAlert',
+          action: 'send',
+          targetUserId: driver.userId,
+          payload: {
+            type: 'proximity',
+            title,
+            message,
+            deliveryId: inProgressDelivery.id,
+            urgency,
+            snoozable: true,
+            escalationLevel,
+            timestamp: timestamp.toISOString(),
+          },
         });
 
         this.logger.log(

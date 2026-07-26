@@ -1,4 +1,5 @@
 import { DeliveryProximityService } from './delivery-proximity.service';
+import { DataUpdateBus } from '../../common/events/data-update.bus';
 
 const mockPrisma = {
   driver: {
@@ -9,8 +10,8 @@ const mockPrisma = {
   },
 };
 
-const mockTrackingGateway = {
-  sendToDriver: jest.fn(),
+const mockDataUpdateBus = {
+  emitUpdate: jest.fn(),
 };
 
 const mockCacheService = {
@@ -26,7 +27,7 @@ describe('DeliveryProximityService', () => {
     jest.clearAllMocks();
     service = new DeliveryProximityService(
       mockPrisma as any,
-      mockTrackingGateway as any,
+      mockDataUpdateBus as any,
       mockCacheService as any,
       null,
     );
@@ -46,7 +47,7 @@ describe('DeliveryProximityService', () => {
 
     await service.checkProximity(driverId, vehicleId, companyId, 0, 0, now);
 
-    expect(mockTrackingGateway.sendToDriver).not.toHaveBeenCalled();
+    expect(mockDataUpdateBus.emitUpdate).not.toHaveBeenCalled();
   });
 
   it('does nothing when no in_progress delivery', async () => {
@@ -55,7 +56,7 @@ describe('DeliveryProximityService', () => {
 
     await service.checkProximity(driverId, vehicleId, companyId, 0, 0, now);
 
-    expect(mockTrackingGateway.sendToDriver).not.toHaveBeenCalled();
+    expect(mockDataUpdateBus.emitUpdate).not.toHaveBeenCalled();
   });
 
   it('sends proximityAlert when vehicle is within 300m of delivery point', async () => {
@@ -77,13 +78,16 @@ describe('DeliveryProximityService', () => {
       now,
     );
 
-    expect(mockTrackingGateway.sendToDriver).toHaveBeenCalledWith(
-      userId,
-      'proximityAlert',
+    expect(mockDataUpdateBus.emitUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: 'proximity',
-        deliveryId,
-        urgency: 'normal',
+        companyId,
+        entity: 'proximityAlert',
+        targetUserId: userId,
+        payload: expect.objectContaining({
+          type: 'proximity',
+          deliveryId,
+          urgency: 'normal',
+        }),
       }),
     );
   });
@@ -108,11 +112,14 @@ describe('DeliveryProximityService', () => {
       new Date(),
     );
 
-    expect(mockTrackingGateway.sendToDriver).toHaveBeenCalledWith(
-      userId,
-      'proximityAlert',
+    expect(mockDataUpdateBus.emitUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        urgency: 'high',
+        companyId,
+        entity: 'proximityAlert',
+        targetUserId: userId,
+        payload: expect.objectContaining({
+          urgency: 'high',
+        }),
       }),
     );
   });
@@ -137,11 +144,14 @@ describe('DeliveryProximityService', () => {
       new Date(),
     );
 
-    expect(mockTrackingGateway.sendToDriver).toHaveBeenCalledWith(
-      userId,
-      'proximityAlert',
+    expect(mockDataUpdateBus.emitUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        urgency: 'critical',
+        companyId,
+        entity: 'proximityAlert',
+        targetUserId: userId,
+        payload: expect.objectContaining({
+          urgency: 'critical',
+        }),
       }),
     );
   });
@@ -168,7 +178,7 @@ describe('DeliveryProximityService', () => {
       new Date(),
     );
 
-    expect(mockTrackingGateway.sendToDriver).not.toHaveBeenCalled();
+    expect(mockDataUpdateBus.emitUpdate).not.toHaveBeenCalled();
   });
 
   it('clears proximity state when vehicle leaves zone', async () => {
@@ -190,7 +200,7 @@ describe('DeliveryProximityService', () => {
     );
 
     expect(mockCacheService.invalidate).toHaveBeenCalled();
-    expect(mockTrackingGateway.sendToDriver).not.toHaveBeenCalled();
+    expect(mockDataUpdateBus.emitUpdate).not.toHaveBeenCalled();
   });
 
   it('handles Traccar positions identically to mobile positions', async () => {
@@ -212,12 +222,15 @@ describe('DeliveryProximityService', () => {
       now,
     );
 
-    expect(mockTrackingGateway.sendToDriver).toHaveBeenCalledWith(
-      userId,
-      'proximityAlert',
+    expect(mockDataUpdateBus.emitUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: 'proximity',
-        deliveryId,
+        companyId,
+        entity: 'proximityAlert',
+        targetUserId: userId,
+        payload: expect.objectContaining({
+          type: 'proximity',
+          deliveryId,
+        }),
       }),
     );
   });

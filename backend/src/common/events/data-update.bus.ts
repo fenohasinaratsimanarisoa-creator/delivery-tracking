@@ -5,6 +5,7 @@ export interface DataUpdateEvent {
   companyId: string;
   entity: string;
   action: string;
+  targetUserId?: string;
   payload?: Record<string, unknown>;
 }
 

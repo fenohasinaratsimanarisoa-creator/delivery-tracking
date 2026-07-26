@@ -114,6 +114,7 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
 
     mockDataUpdateBus = {
       emit: jest.fn(),
+      emitUpdate: jest.fn(),
       on: jest.fn(),
     };
 
@@ -124,7 +125,7 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
 
     proximityService = new DeliveryProximityService(
       mockPrisma as any,
-      mockGateway as any,
+      mockDataUpdateBus as any,
       mockCache as any,
       null,
     );
@@ -208,12 +209,14 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
       await trackingService.savePosition(DRIVER_ID, updatePositionDto(), COMPANY_ID);
       await new Promise((r) => setTimeout(r, 50));
 
-      expect(mockGateway.sendToDriver).toHaveBeenCalledWith(
-        USER_ID,
-        'proximityAlert',
+      expect(mockDataUpdateBus.emitUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'proximity',
-          deliveryId: DELIVERY_ID,
+          entity: 'proximityAlert',
+          targetUserId: USER_ID,
+          payload: expect.objectContaining({
+            type: 'proximity',
+            deliveryId: DELIVERY_ID,
+          }),
         }),
       );
     });
@@ -236,12 +239,14 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
       await trackingService.savePosition(DRIVER_ID, updatePositionDto(), COMPANY_ID);
       await new Promise((r) => setTimeout(r, 50));
 
-      expect(mockGateway.sendToDriver).toHaveBeenCalledWith(
-        USER_ID,
-        'proximityAlert',
+      expect(mockDataUpdateBus.emitUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
-          urgency: 'critical',
-          escalationLevel: 2,
+          entity: 'proximityAlert',
+          targetUserId: USER_ID,
+          payload: expect.objectContaining({
+            urgency: 'critical',
+            escalationLevel: 2,
+          }),
         }),
       );
     });
