@@ -7,9 +7,63 @@ interface AlertPayload {
   metadata?: Record<string, unknown>;
 }
 
+interface RateLimitEntry {
+  count: number;
+  firstSeen: number;
+  lastSeen: number;
+}
+
 @Injectable()
 export class AlertService {
   private readonly logger = new Logger(AlertService.name);
+  private readonly errorRateMap = new Map<string, RateLimitEntry>();
+  private readonly RATE_WINDOW_MS = 5 * 60 * 1000; // 5 min
+  private readonly RATE_THRESHOLD = 10; // 10 errors in window = alert
+
+  /**
+   * Track repeated errors and trigger an alert when a threshold is exceeded
+   * within the configured time window. Prevents silent error loops like the
+   * UUID crash that repeated every ~5s for hours undetected.
+   *
+   * The errorKey should uniquely identify the error type (e.g. method name).
+   */
+  async trackRepeatedError(
+    errorKey: string,
+    error: Error,
+    context?: Record<string, unknown>,
+  ): Promise<void> {
+    const now = Date.now();
+    const entry = this.errorRateMap.get(errorKey);
+
+    if (!entry || now - entry.firstSeen > this.RATE_WINDOW_MS) {
+      this.errorRateMap.set(errorKey, { count: 1, firstSeen: now, lastSeen: now });
+      return;
+    }
+
+    entry.count++;
+    entry.lastSeen = now;
+
+    if (entry.count === this.RATE_THRESHOLD) {
+      const durationSec = Math.round((now - entry.firstSeen) / 1000);
+      await this.send({
+        title: `Repeated Error — ${errorKey}`,
+        message: `${error.name}: ${error.message.substring(0, 200)} ` +
+          `— repeated ${entry.count} times in ${durationSec}s`,
+        level: 'critical',
+        metadata: {
+          errorKey,
+          repeatCount: entry.count,
+          durationSeconds: durationSec,
+          intervalSeconds: Math.round(durationSec / entry.count),
+          ...context,
+        },
+      });
+    }
+
+    if (entry.count > this.RATE_THRESHOLD) {
+      this.errorRateMap.set(errorKey, { count: 1, firstSeen: now, lastSeen: now });
+    }
+  }
 
   async send(payload: AlertPayload): Promise<void> {
     this.logger.warn(

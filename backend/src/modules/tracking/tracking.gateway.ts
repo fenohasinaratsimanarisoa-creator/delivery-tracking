@@ -8,18 +8,20 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { UseGuards, Logger } from '@nestjs/common';
+import { UseGuards, UseFilters, Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 import { WsAuthService } from '../../common/auth/ws-auth.service';
 import { TrackingService } from './tracking.service';
 import { UpdatePositionDto, BatchPositionDto } from './dto/update-position.dto';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
+import { WsTrackingExceptionFilter } from '../../common/filters/ws-tracking-exception.filter';
 
 @WebSocketGateway({
   cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:5173' },
 })
 @UseGuards(WsJwtGuard)
+@UseFilters(WsTrackingExceptionFilter)
 export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy {
   @WebSocketServer()
   server!: Server;
