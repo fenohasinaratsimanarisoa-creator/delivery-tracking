@@ -123,13 +123,15 @@ describe('TrackingService', () => {
   });
 
   describe('savePosition', () => {
+    const VID = '00000000-0000-4000-0000-000000000001';
+    const DID = '00000000-0000-4000-0000-00000000000a';
     const dto = {
       latitude: -18.8792,
       longitude: 47.5079,
       speed: 42,
       timestamp: '2026-07-21T10:00:00.000Z',
-      deliveryId: 'delivery-1',
-      vehicleId: 'vehicle-1',
+      deliveryId: DID,
+      vehicleId: VID,
     };
 
     const ts = new Date(dto.timestamp);
@@ -139,26 +141,24 @@ describe('TrackingService', () => {
         timestamp: new Date('2026-07-21T10:00:02.000Z'),
       });
 
-      await expect(service.savePosition('driver-1', dto)).resolves.toBeNull();
+      await expect(service.savePosition('00000000-0000-4000-0000-000000000002', dto)).resolves.toBeNull();
       expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
     });
 
     it('accepts all positions in a 3s-interval sequence (INTERVAL_FAST scenario)', async () => {
       const base = new Date('2026-07-21T10:00:00.000Z');
-      const deliveries = ['delivery-1', 'delivery-1', 'delivery-1'];
+      const deliveries = [DID, DID, DID];
 
       for (let i = 0; i < 10; i++) {
         const ts = new Date(base.getTime() + i * 3000);
         mockPrisma.gpsPosition.findFirst
-          // isDuplicateByTimestamp: return last saved at (i-1)*3s (or null for i=0)
           .mockResolvedValueOnce(
             i === 0 ? null : { timestamp: new Date(base.getTime() + (i - 1) * 3000) },
           )
-          // detectTeleportation: no last position → not teleportation
           .mockResolvedValueOnce(null);
         mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: `gps-3s-${i}`, suspect: false });
 
-        const result = await service.savePosition('driver-1', {
+        const result = await service.savePosition('00000000-0000-4000-0000-000000000002', {
           ...dto,
           deliveryId: deliveries[i],
           timestamp: ts.toISOString(),
@@ -173,26 +173,23 @@ describe('TrackingService', () => {
     it('rejects only positions within 1s clock skew (not legitimate 3s intervals)', async () => {
       const base = new Date('2026-07-21T10:00:00.000Z');
 
-      // First position at T+0s → accepted
       mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-skew-0', suspect: false });
-      const r0 = await service.savePosition('driver-1', { ...dto, timestamp: base.toISOString() });
+      const r0 = await service.savePosition('00000000-0000-4000-0000-000000000002', { ...dto, timestamp: base.toISOString() });
       expect(r0).not.toBeNull();
 
-      // Second position at T+0.5s (clock skew, within 1s window) → rejected
       mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce({ timestamp: base });
-      const r1 = await service.savePosition('driver-1', {
+      const r1 = await service.savePosition('00000000-0000-4000-0000-000000000002', {
         ...dto,
         timestamp: new Date(base.getTime() + 500).toISOString(),
       });
       expect(r1).toBeNull();
 
-      // Third position at T+3s (legitimate movement update) → accepted
       mockPrisma.gpsPosition.findFirst
         .mockResolvedValueOnce({ timestamp: base })
         .mockResolvedValueOnce(null);
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-skew-3', suspect: false });
-      const r2 = await service.savePosition('driver-1', {
+      const r2 = await service.savePosition('00000000-0000-4000-0000-000000000002', {
         ...dto,
         timestamp: new Date(base.getTime() + 3000).toISOString(),
       });
@@ -204,7 +201,7 @@ describe('TrackingService', () => {
 
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-2', suspect: false });
 
-      await expect(service.savePosition('driver-1', dto)).resolves.toEqual({
+      await expect(service.savePosition('00000000-0000-4000-0000-000000000002', dto)).resolves.toEqual({
         id: 'gps-2',
         suspect: false,
       });
@@ -219,9 +216,9 @@ describe('TrackingService', () => {
           suspect: false,
           location: 'POINT(47.5079 -18.8792)',
           timestamp: ts,
-          deliveryId: 'delivery-1',
-          vehicleId: 'vehicle-1',
-          driverId: 'driver-1',
+          deliveryId: DID,
+          vehicleId: VID,
+          driverId: '00000000-0000-4000-0000-000000000002',
         },
       });
     });
@@ -236,7 +233,7 @@ describe('TrackingService', () => {
 
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-3', suspect: true });
 
-      const result = await service.savePosition('driver-1', {
+      const result = await service.savePosition('00000000-0000-4000-0000-000000000002', {
         ...dto,
         timestamp: now.toISOString(),
         latitude: 1,
@@ -247,11 +244,9 @@ describe('TrackingService', () => {
     });
 
     it('marks suspect when timestamp is non-increasing (cross-delivery desync)', async () => {
-      // Previous position on delivery-1 at T+5s
+      const DID2 = '00000000-0000-4000-0000-00000000000b';
       mockPrisma.gpsPosition.findFirst
-        // isDuplicateByTimestamp: no prev for (vehicle-1, delivery-2) → passes
         .mockResolvedValueOnce(null)
-        // detectTeleportation: finds last by vehicleId → timestamp 5s AHEAD of new point
         .mockResolvedValueOnce({
           latitude: -18.8792,
           longitude: 47.5079,
@@ -260,11 +255,9 @@ describe('TrackingService', () => {
 
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-desync', suspect: true });
 
-      const result = await service.savePosition('driver-1', {
+      const result = await service.savePosition('00000000-0000-4000-0000-000000000002', {
         ...dto,
-        // Different delivery → dedup doesn't catch it
-        deliveryId: 'delivery-2',
-        // Timestamp 2s in the past relative to last position on delivery-1
+        deliveryId: DID2,
         timestamp: '2026-07-21T10:00:03.000Z',
         latitude: -18.8795,
         longitude: 47.508,
@@ -275,13 +268,16 @@ describe('TrackingService', () => {
   });
 
   describe('savePosition with alerts', () => {
+    const VID = '00000000-0000-4000-0000-000000000001';
+    const DID = '00000000-0000-4000-0000-00000000000a';
+    const DRIVER = '00000000-0000-4000-0000-000000000002';
     const dto = {
       latitude: -18.8792,
       longitude: 47.5079,
       speed: 0.1,
       timestamp: '2026-07-21T10:00:00.000Z',
-      deliveryId: 'delivery-1',
-      vehicleId: 'vehicle-1',
+      deliveryId: DID,
+      vehicleId: VID,
     };
 
     it('triggers prolonged stop alert for near-zero speeds (GPS noise)', async () => {
@@ -289,7 +285,6 @@ describe('TrackingService', () => {
         .mockResolvedValueOnce(null) // dedup
         .mockResolvedValueOnce(null) // detectTeleportation lastPos
         .mockResolvedValue({
-          // remaining findFirst calls (prolonged stop, offline)
           speed: 0.2,
           timestamp: new Date('2026-07-21T09:54:30.000Z'),
         });
@@ -310,12 +305,11 @@ describe('TrackingService', () => {
         scheduledDate: new Date('2026-07-22T00:00:00.000Z'),
       });
 
-      const result = await service.savePosition('driver-1', dto, 'company-1');
+      const result = await service.savePosition(DRIVER, dto, 'company-1');
       await new Promise((r) => setTimeout(r, 50));
 
       expect(result).not.toBeNull();
       expect(result!.suspect).toBe(false);
-      // Must be at least 1 prolonged_stop alert
       const stopCalls = mockNotifications.create.mock.calls.filter(
         (call: any[]) => call[1]?.type === 'prolonged_stop',
       );
@@ -323,7 +317,6 @@ describe('TrackingService', () => {
     });
 
     it('does NOT trigger delay alert on isolated momentary slowdown', async () => {
-      // Previous 5 positions at normal speed (10 m/s)
       const prevPositions = [
         { speed: 9.8 },
         { speed: 10.2 },
@@ -333,42 +326,32 @@ describe('TrackingService', () => {
       ];
 
       mockPrisma.gpsPosition.findFirst
-        .mockResolvedValueOnce(null) // dedup
-        .mockResolvedValueOnce(null); // detectTeleportation
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
 
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-avg', suspect: false });
 
-      // generateAlerts
       mockPrisma.companySettings.findUnique.mockResolvedValueOnce({});
-      // prolonged stop: speed=0.5, NOT < 0.3 → skip
-      // delay alert: speed=0.5 > 0 → enters
-      // Delivery very close to current pos (~238m). With smoothed average 10 m/s,
-      // ETA = 23.8s → on time. With momentary 0.5 m/s (ignored), ETA = 476s → late.
       mockPrisma.delivery.findUnique.mockResolvedValueOnce({
         deliveryLat: -18.88,
         deliveryLng: 47.51,
-        scheduledDate: new Date('2026-07-21T10:31:00.000Z'), // 30s from now, reachable at 10 m/s
+        scheduledDate: new Date('2026-07-21T10:31:00.000Z'),
       });
-      // getAverageSpeed → returns ~10 m/s (not the momentary 0.5)
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(prevPositions);
-      // offline timeout
       mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null);
 
       const result = await service.savePosition(
-        'driver-1',
+        DRIVER,
         {
           ...dto,
-          speed: 0.5, // momentary slowdown, normal speed was 10
+          speed: 0.5,
           timestamp: '2026-07-21T10:30:00.000Z',
         },
         'company-1',
       );
-      // Wait for fire-and-forget generateAlerts to complete
       await new Promise((r) => setTimeout(r, 50));
 
       expect(result).not.toBeNull();
-      // getAverageSpeed returned ~10, so ETA = distance/10, not distance/0.5
-      // The momentary slowdown did NOT trigger a false delay alert
       const delayCalls = mockNotifications.create.mock.calls.filter(
         (call: any[]) => call[1]?.type === 'delay_alert',
       );
@@ -376,22 +359,87 @@ describe('TrackingService', () => {
     });
   });
 
+  describe('savePosition without delivery (regression test for UUID crash)', () => {
+    const VID = '00000000-0000-4000-0000-000000000001';
+    const DRIVER = '00000000-0000-4000-0000-000000000002';
+
+    it('saves position without deliveryId — no Prisma UUID error', async () => {
+      mockPrisma.gpsPosition.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-nodelivery', suspect: false });
+
+      const result = await service.savePosition(DRIVER, {
+        latitude: -18.8792,
+        longitude: 47.5079,
+        speed: 10,
+        timestamp: '2026-07-21T10:00:00.000Z',
+        vehicleId: VID,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe('gps-nodelivery');
+      expect(mockPrisma.gpsPosition.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            vehicleId: VID,
+            deliveryId: undefined,
+          }),
+        }),
+      );
+    });
+
+    it('rejects empty vehicleId with a clear log, no Prisma crash', async () => {
+      const result = await service.savePosition(DRIVER, {
+        latitude: -18.8792,
+        longitude: 47.5079,
+        timestamp: '2026-07-21T10:00:00.000Z',
+        vehicleId: '',
+      } as any);
+
+      expect(result).toBeNull();
+      expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects empty deliveryId (when present) with a clear log, no Prisma crash', async () => {
+      mockPrisma.gpsPosition.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-ok', suspect: false });
+
+      const result = await service.savePosition(DRIVER, {
+        latitude: -18.8792,
+        longitude: 47.5079,
+        timestamp: '2026-07-21T10:00:00.000Z',
+        vehicleId: VID,
+        deliveryId: '',
+      } as any);
+
+      expect(result).toBeNull();
+      expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('speed alert cooldown (CacheService/Redis)', () => {
+    const VID1 = '00000000-0000-4000-0000-000000000001';
+    const VID2 = '00000000-0000-4000-0000-000000000003';
+    const DID = '00000000-0000-4000-0000-00000000000a';
+    const DRIVER = '00000000-0000-4000-0000-000000000002';
     it('respects cooldown: only one alert created for rapid same-vehicle speed events', async () => {
       const dto = {
         latitude: -18.8792,
         longitude: 47.5079,
         speed: 30,
         timestamp: '2026-07-21T10:00:00.000Z',
-        deliveryId: 'delivery-1',
-        vehicleId: 'vehicle-1',
+        deliveryId: DID,
+        vehicleId: VID1,
       };
 
       mockPrisma.gpsPosition.findFirst
-        .mockResolvedValueOnce(null) // dedup
-        .mockResolvedValueOnce(null) // detectTeleportation
-        .mockResolvedValueOnce(null) // dedup
-        .mockResolvedValueOnce(null); // detectTeleportation
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
 
       mockPrisma.gpsPosition.create.mockResolvedValue({ id: 'gps-cooldown', suspect: false });
 
@@ -409,17 +457,15 @@ describe('TrackingService', () => {
 
       mockPrisma.gpsPosition.findMany.mockResolvedValue([{ speed: 30 }]);
 
-      // First save: no cooldown → cache.get returns null → alert created
       mockCacheService.get.mockResolvedValueOnce(null);
-      await service.savePosition('driver-1', dto, 'company-1');
-      await new Promise((r) => setTimeout(r, 50)); // wait for fire-and-forget generateAlerts
+      await service.savePosition(DRIVER, dto, 'company-1');
+      await new Promise((r) => setTimeout(r, 50));
 
-      expect(mockCacheService.set).toHaveBeenCalledWith('speed_alert:vehicle-1', true, 300);
-      expect(mockCacheService.get).toHaveBeenCalledWith('speed_alert:vehicle-1');
+      expect(mockCacheService.set).toHaveBeenCalledWith(`speed_alert:${VID1}`, true, 300);
+      expect(mockCacheService.get).toHaveBeenCalledWith(`speed_alert:${VID1}`);
 
-      // Second save: cooldown active → cache.get returns true → no alert
       mockCacheService.get.mockResolvedValueOnce(true);
-      await service.savePosition('driver-1', dto, 'company-1');
+      await service.savePosition(DRIVER, dto, 'company-1');
       await new Promise((r) => setTimeout(r, 50));
 
       const speedAlertCalls = mockNotifications.create.mock.calls.filter(
@@ -434,8 +480,8 @@ describe('TrackingService', () => {
         longitude: 47.5079,
         speed: 30,
         timestamp: '2026-07-21T10:00:00.000Z',
-        deliveryId: 'delivery-1',
-        vehicleId: 'vehicle-2',
+        deliveryId: DID,
+        vehicleId: VID2,
       };
 
       mockPrisma.gpsPosition.findFirst
@@ -460,14 +506,12 @@ describe('TrackingService', () => {
 
       mockPrisma.gpsPosition.findMany.mockResolvedValue([{ speed: 30 }]);
 
-      // First save: no cooldown → alert
       mockCacheService.get.mockResolvedValueOnce(null);
-      await service.savePosition('driver-1', dto, 'company-1');
+      await service.savePosition(DRIVER, dto, 'company-1');
       await new Promise((r) => setTimeout(r, 50));
 
-      // Second save: cooldown expired → cache.get returns null → new alert
       mockCacheService.get.mockResolvedValueOnce(null);
-      await service.savePosition('driver-1', dto, 'company-1');
+      await service.savePosition(DRIVER, dto, 'company-1');
       await new Promise((r) => setTimeout(r, 50));
 
       const speedAlertCalls = mockNotifications.create.mock.calls.filter(
@@ -478,21 +522,26 @@ describe('TrackingService', () => {
   });
 
   describe('saveBatch', () => {
+    const VID1 = '00000000-0000-4000-0000-000000000001';
+    const VID2 = '00000000-0000-4000-0000-000000000003';
+    const DID1 = '00000000-0000-4000-0000-00000000000a';
+    const DID2 = '00000000-0000-4000-0000-00000000000b';
+
     it('saves positions and skips those where driver is not assigned', async () => {
       const positions = [
         {
           latitude: 1,
           longitude: 2,
           timestamp: '2026-07-21T10:00:00.000Z',
-          deliveryId: 'delivery-1',
-          vehicleId: 'vehicle-1',
+          deliveryId: DID1,
+          vehicleId: VID1,
         },
         {
           latitude: 3,
           longitude: 4,
           timestamp: '2026-07-21T10:00:05.000Z',
-          deliveryId: 'delivery-2',
-          vehicleId: 'vehicle-2',
+          deliveryId: DID2,
+          vehicleId: VID2,
         },
       ];
 

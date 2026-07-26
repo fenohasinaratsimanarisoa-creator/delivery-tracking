@@ -24,11 +24,11 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
   let mockDataUpdateBus: any;
   let mockGeofence: jest.Mocked<GeofenceService>;
 
-  const COMPANY_ID = 'company-1';
-  const DRIVER_ID = 'driver-1';
-  const USER_ID = 'user-1';
-  const VEHICLE_ID = 'vehicle-1';
-  const DELIVERY_ID = 'delivery-1';
+  const COMPANY_ID = '00000000-0000-4000-0000-0000000000c1';
+  const DRIVER_ID = '00000000-0000-4000-0000-000000000002';
+  const USER_ID = '00000000-0000-4000-0000-0000000000u1';
+  const VEHICLE_ID = '00000000-0000-4000-0000-000000000001';
+  const DELIVERY_ID = '00000000-0000-4000-0000-00000000000a';
   const DELIVERY_LAT = -18.8792;
   const DELIVERY_LNG = 47.5079;
 

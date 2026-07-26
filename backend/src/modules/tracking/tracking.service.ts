@@ -151,11 +151,15 @@ export class TrackingService {
 
   private async isDuplicateByTimestamp(
     vehicleId: string,
-    deliveryId: string,
+    deliveryId: string | undefined,
     timestamp: Date,
   ): Promise<boolean> {
+    const where: { vehicleId: string; deliveryId?: string } = { vehicleId };
+    if (deliveryId) {
+      where.deliveryId = deliveryId;
+    }
     const last = await this.prisma.gpsPosition.findFirst({
-      where: { vehicleId, deliveryId },
+      where,
       orderBy: { timestamp: 'desc' },
       select: { timestamp: true },
     });
@@ -324,9 +328,23 @@ export class TrackingService {
    */
   async savePosition(driverId: string, dto: UpdatePositionDto, companyId?: string) {
     this.metrics.received++;
+
+    if (!dto.vehicleId || dto.vehicleId.length < 16) {
+      this.logger.error(
+        `savePosition rejected: invalid vehicleId="${dto.vehicleId}" — must be a valid UUIDv4`,
+      );
+      return null;
+    }
+    if (dto.deliveryId !== undefined && dto.deliveryId !== null && dto.deliveryId.length < 16) {
+      this.logger.error(
+        `savePosition rejected: invalid deliveryId="${dto.deliveryId}" — must be a valid UUIDv4`,
+      );
+      return null;
+    }
+
     const ts = new Date(dto.timestamp);
 
-    const isDup = await this.isDuplicateByTimestamp(dto.vehicleId, dto.deliveryId || '', ts);
+    const isDup = await this.isDuplicateByTimestamp(dto.vehicleId, dto.deliveryId, ts);
     if (isDup) {
       this.metrics.deduped++;
       this.logger.debug(
@@ -358,7 +376,7 @@ export class TrackingService {
         location: locationStr,
         timestamp: ts,
         deliveryId: dto.deliveryId,
-        vehicleId: dto.vehicleId!,
+        vehicleId: dto.vehicleId,
         driverId,
       },
     });
@@ -377,7 +395,7 @@ export class TrackingService {
 
     if (companyId) {
       this.deliveryProximityService
-        .checkProximity(driverId, dto.vehicleId!, companyId, dto.latitude, dto.longitude, ts)
+        .checkProximity(driverId, dto.vehicleId, companyId, dto.latitude, dto.longitude, ts)
         .catch((err) => this.logger.error(`Proximity check failed: ${err}`));
     }
 

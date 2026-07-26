@@ -1,4 +1,4 @@
-import { IsNumber, Min, Max, IsDateString, IsString, IsOptional, IsArray } from 'class-validator';
+import { IsNumber, Min, Max, IsDateString, IsString, IsOptional, IsArray, IsUUID } from 'class-validator';
 
 export class UpdatePositionDto {
   @IsNumber()
@@ -34,10 +34,10 @@ export class UpdatePositionDto {
   timestamp: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID('4')
   deliveryId?: string;
 
-  @IsString()
+  @IsUUID('4')
   vehicleId: string;
 }
 
