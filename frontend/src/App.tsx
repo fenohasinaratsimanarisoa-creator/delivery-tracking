@@ -43,6 +43,10 @@ const AlertsPage = lazy(() => import('./pages/AlertsPage'));
 const DeliveryDetailPage = lazy(() => import('./pages/DeliveryDetailPage'));
 const DeliveryProofsPage = lazy(() => import('./pages/DeliveryProofsPage'));
 
+function PageErrorBoundary({ children }: { children: React.ReactNode }) {
+  return <ErrorBoundary>{children}</ErrorBoundary>;
+}
+
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={
@@ -216,7 +220,7 @@ export default function App() {
               {/* Admin + Dispatcher routes */}
               <Route path="/dashboard" element={
                 <ProtectedRoute roles={['admin', 'dispatcher']}>
-                  <AppLayout><SuspenseWrapper><DashboardPage /></SuspenseWrapper></AppLayout>
+                  <AppLayout><SuspenseWrapper><PageErrorBoundary><DashboardPage /></PageErrorBoundary></SuspenseWrapper></AppLayout>
                 </ProtectedRoute>
               } />
               <Route path="/deliveries" element={
@@ -241,7 +245,7 @@ export default function App() {
               } />
               <Route path="/map" element={
                 <ProtectedRoute roles={['admin', 'dispatcher']}>
-                  <AppLayout><SuspenseWrapper><MapPage /></SuspenseWrapper></AppLayout>
+                  <AppLayout><SuspenseWrapper><PageErrorBoundary><MapPage /></PageErrorBoundary></SuspenseWrapper></AppLayout>
                 </ProtectedRoute>
               } />
               <Route path="/tracking/replay" element={
@@ -293,12 +297,12 @@ export default function App() {
               {/* Driver routes */}
               <Route path="/my-deliveries" element={
                 <ProtectedRoute roles={['driver']}>
-                  <SuspenseWrapper><DriverTrackingWrapper><AppLayout><SuspenseWrapper><MyDeliveriesPage /></SuspenseWrapper></AppLayout></DriverTrackingWrapper></SuspenseWrapper>
+                  <PageErrorBoundary><SuspenseWrapper><DriverTrackingWrapper><AppLayout><SuspenseWrapper><MyDeliveriesPage /></SuspenseWrapper></AppLayout></DriverTrackingWrapper></SuspenseWrapper></PageErrorBoundary>
                 </ProtectedRoute>
               } />
               <Route path="/my-vehicle" element={
                 <ProtectedRoute roles={['driver']}>
-                  <SuspenseWrapper><DriverTrackingWrapper><AppLayout><SuspenseWrapper><MyVehiclePage /></SuspenseWrapper></AppLayout></DriverTrackingWrapper></SuspenseWrapper>
+                  <PageErrorBoundary><SuspenseWrapper><DriverTrackingWrapper><AppLayout><SuspenseWrapper><MyVehiclePage /></SuspenseWrapper></AppLayout></DriverTrackingWrapper></SuspenseWrapper></PageErrorBoundary>
                 </ProtectedRoute>
               } />
 
@@ -310,7 +314,7 @@ export default function App() {
               } />
               <Route path="/tracking" element={
                 <ProtectedRoute roles={['client']}>
-                  <AppLayout><SuspenseWrapper><ClientTrackingPage /></SuspenseWrapper></AppLayout>
+                  <AppLayout><SuspenseWrapper><PageErrorBoundary><ClientTrackingPage /></PageErrorBoundary></SuspenseWrapper></AppLayout>
                 </ProtectedRoute>
               } />
 

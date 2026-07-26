@@ -40,6 +40,43 @@ services:
           type: web
           property: url
 
+  - type: cron
+    name: deliverytrack-db-backup
+    runtime: docker
+    repo: https://github.com/fenohasinaratsimanarisoa-creator/delivery-tracking
+    branch: main
+    dockerfilePath: ./Dockerfile.backup
+    dockerContext: ./
+    region: frankfurt
+    schedule: "0 3 * * *"
+    envVars:
+      - key: PGUSER
+        fromDatabase:
+          name: deliverytrack-db
+          property: user
+      - key: PGPASSWORD
+        fromDatabase:
+          name: deliverytrack-db
+          property: password
+      - key: PGHOST
+        fromDatabase:
+          name: deliverytrack-db
+          property: host
+      - key: PGDATABASE
+        value: delivery_tracking
+      - key: BACKUP_DIR
+        value: /backup/data
+      - key: BACKUP_RETENTION_DAYS
+        value: '30'
+      - key: BACKUP_S3_BUCKET
+        sync: false
+      - key: BACKUP_S3_ENDPOINT
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
 envVarGroups:
   - name: deliverytrack-secrets
     envVars:

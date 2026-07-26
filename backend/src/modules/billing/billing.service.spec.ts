@@ -65,6 +65,10 @@ const mockInvoicePdfService = {
 const mockEmailService = {
   send: jest.fn(),
   sendDigest: jest.fn(),
+  sendBillingActivated: jest.fn(),
+  sendBillingPaymentFailed: jest.fn(),
+  sendBillingExpired: jest.fn(),
+  sendBillingSuspended: jest.fn(),
 };
 
 const mockRedis = {
@@ -592,7 +596,7 @@ describe('BillingService', () => {
         where: { id: 'sub-1' },
         data: { status: 'past_due' },
       });
-      expect(mockEmailService.send).toHaveBeenCalled();
+      expect(mockEmailService.sendBillingExpired).toHaveBeenCalled();
 
       jest.useRealTimers();
     });

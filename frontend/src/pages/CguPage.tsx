@@ -54,6 +54,13 @@ export default function CguPage() {
             Les présentes Conditions Générales d'Utilisation (ci-après « CGU ») régissent l'accès et l'utilisation
             de la plateforme DeliveryTrack (ci-après « la Plateforme »), éditée par la société DeliveryTrack SARL.
           </p>
+          <p style={{...paragraph, background: '#fef3c7', padding: 12, borderRadius: 8, border: '1px solid #f59e0b'}}>
+            <strong>Phase Pilote Gratuite :</strong> DeliveryTrack est actuellement en phase pilote gratuite.
+            Aucun paiement n'est exigé. Les fonctionnalités sont fournies gratuitement pendant une durée déterminée
+            par DeliveryTrack. À l'issue de cette phase, vous serez informé(e) des conditions de continuation
+            du service. DeliveryTrack se réserve le droit de modifier, suspendre ou arrêter la phase pilote
+            à tout moment sans préavis.
+          </p>
           <p style={paragraph}>
             En créant un compte et en utilisant la Plateforme, vous acceptez sans réserve les présentes CGU.
             Si vous n'acceptez pas ces conditions, veuillez ne pas utiliser la Plateforme.
@@ -70,8 +77,9 @@ export default function CguPage() {
             véhicules et utilisateurs traitées via la Plateforme.
           </p>
           <p style={paragraph}>
-            <strong>Abonnement</strong> : formule payante donnant accès à des fonctionnalités étendues de la Plateforme
-            selon les modalités décrites sur la page de tarification.
+            <strong>Phase pilote</strong> : période d'utilisation gratuite de la Plateforme pendant laquelle
+            les fonctionnalités sont fournies sans frais. Les conditions de la phase pilote sont décrites
+            à l'article 9 des présentes CGU.
           </p>
         </div>
 
@@ -104,7 +112,7 @@ export default function CguPage() {
             <li>Portail client de suivi de livraisons</li>
           </ul>
           <p style={paragraph}>
-            Les fonctionnalités accessibles dépendent du type d'abonnement souscrit par l'utilisateur.
+            Pendant la phase pilote, l'ensemble des fonctionnalités listées ci-dessus est accessible gratuitement.
           </p>
         </div>
 
@@ -173,16 +181,23 @@ export default function CguPage() {
         </div>
 
         <div style={section}>
-          <h2 style={heading}>{t('cgu.section9.title')}</h2>
+          <h2 style={heading}>9. Phase pilote — Conditions spécifiques</h2>
           <p style={paragraph}>
-            9.1. Les tarifs des abonnements sont indiqués sur la page de tarification de la Plateforme.
-            DeliveryTrack se réserve le droit de modifier ses tarifs à tout moment, sous réserve
-            d'une information préalable de 30 jours.
+            9.1. La Plateforme est fournie gratuitement dans le cadre de la phase pilote. Aucune facturation
+            n'est appliquée pendant cette période.
           </p>
           <p style={paragraph}>
-            9.2. La facturation est effectuée mensuellement ou annuellement selon l'option choisie.
-            Le non-paiement entraîne la suspension de l'accès à la Plateforme après une période de grâce
-            de 15 jours.
+            9.2. DeliveryTrack ne garantit pas la disponibilité continue du service pendant la phase pilote.
+            Des interruptions, mises à jour ou modifications des fonctionnalités peuvent survenir sans préavis.
+          </p>
+          <p style={paragraph}>
+            9.3. Les données de géolocalisation et les informations de livraison traitées pendant la phase pilote
+            seront conservées conformément à la politique de confidentialité. En cas d'arrêt ou de transition
+            vers une version payante, vous serez informé(e) au moins 30 jours à l'avance.
+          </p>
+          <p style={paragraph}>
+            9.4. Pendant la phase pilote, le nombre d'utilisateurs, de véhicules et de livraisons peut être
+            limité. DeliveryTrack se réserve le droit d'ajuster ces limites à tout moment.
           </p>
         </div>
 

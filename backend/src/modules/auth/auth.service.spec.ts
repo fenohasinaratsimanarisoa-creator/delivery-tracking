@@ -702,7 +702,7 @@ describe('AuthService', () => {
           passwordHash: 'hashed_random_password',
           firstName: 'Jane',
           lastName: 'Smith',
-          role: 'dispatcher',
+          role: 'admin',
           companyId: 'comp-1',
           googleId: 'google-123',
         },
@@ -759,7 +759,7 @@ describe('AuthService', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             companyId: 'new-company-id',
-            role: 'dispatcher',
+            role: 'admin',
           }),
         }),
       );

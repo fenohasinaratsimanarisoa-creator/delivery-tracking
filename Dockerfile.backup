@@ -1,0 +1,10 @@
+FROM postgis/postgis:16-3.4
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    awscli \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/backup.sh /backup.sh
+RUN chmod +x /backup.sh
+
+ENTRYPOINT ["/backup.sh"]

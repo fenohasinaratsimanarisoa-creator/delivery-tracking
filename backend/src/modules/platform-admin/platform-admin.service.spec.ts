@@ -607,7 +607,7 @@ describe('PlatformAdminService', () => {
 
         const result = await service.verify2faSetup('admin-1', '123456');
 
-        expect(result.message).toBe('2FA activé avec succès');
+        expect(result.message).toBe('2FA enabled successfully');
       });
 
       it('should throw when token is invalid', async () => {
@@ -635,7 +635,7 @@ describe('PlatformAdminService', () => {
 
         const result = await service.disable2fa('admin-1', '123456');
 
-        expect(result.message).toBe('2FA désactivé avec succès');
+        expect(result.message).toBe('2FA disabled successfully');
         expect(mockPrisma.platformAdmin.update).toHaveBeenCalledWith({
           where: { id: 'admin-1' },
           data: { totpEnabled: false, totpSecret: null },

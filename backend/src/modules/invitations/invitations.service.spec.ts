@@ -9,9 +9,15 @@ import { InvitationsService } from './invitations.service';
 jest.mock('bcrypt');
 
 const mockPrisma = {
+  $transaction: jest.fn().mockImplementation((fn: any) => fn(mockPrisma)),
   user: {
     findFirst: jest.fn(),
     create: jest.fn(),
+  },
+  driver: {
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
   },
   invitation: {
     findFirst: jest.fn(),
@@ -153,6 +159,7 @@ describe('InvitationsService', () => {
     };
     const user = { id: 'user-1', email: 'driver@test.com' };
     mockPrisma.invitation.findUnique.mockResolvedValueOnce(invitation);
+    mockPrisma.driver.findFirst.mockResolvedValueOnce(null);
     mockPrisma.user.create.mockResolvedValueOnce(user);
 
     await expect(

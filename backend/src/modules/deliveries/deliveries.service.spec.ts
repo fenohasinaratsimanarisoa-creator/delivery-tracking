@@ -1,9 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { DeliveryStatus } from '@prisma/client';
 import { DeliveriesService } from './deliveries.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { DataUpdateBus } from '../../common/events/data-update.bus';
 
 describe('DeliveriesService - State Machine', () => {
   let service: DeliveriesService;
@@ -39,6 +41,8 @@ describe('DeliveriesService - State Machine', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: NotificationsService, useValue: mockNotifications },
         { provide: WebhooksService, useValue: mockWebhooks },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('false') } },
+        { provide: DataUpdateBus, useValue: { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() } },
       ],
     }).compile();
 
