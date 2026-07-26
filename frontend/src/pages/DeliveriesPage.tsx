@@ -26,6 +26,7 @@ interface DeliveryFormValues {
   pickupLat: string; pickupLng: string; pickupLocationLabel: string;
   deliveryLat: string; deliveryLng: string; deliveryLocationLabel: string;
   driverId: string;
+  vehicleId: string;
   scheduledDate: string;
   notes: string;
 }
@@ -179,7 +180,7 @@ export default function DeliveriesPage() {
     mutationFn: (body: DeliveryFormValues) => {
       const payload: Record<string, unknown> = {
         title: body.title,
-        status: body.status || 'pending',
+        status: body.status || 'in_progress',
         pickupAddress: body.pickupAddress,
         deliveryAddress: body.deliveryAddress,
       };
@@ -191,6 +192,7 @@ export default function DeliveriesPage() {
       if (body.deliveryLng) payload.deliveryLng = parseFloat(body.deliveryLng);
       if (body.deliveryLocationLabel) payload.deliveryLocationLabel = body.deliveryLocationLabel;
       if (body.driverId) payload.driverId = body.driverId;
+      if (body.vehicleId) payload.vehicleId = body.vehicleId;
       if (body.scheduledDate) payload.scheduledDate = body.scheduledDate;
       if (body.notes) payload.notes = body.notes;
       return editing
@@ -236,10 +238,10 @@ export default function DeliveriesPage() {
   });
 
   const emptyForm: DeliveryFormValues = {
-    title: '', description: '', status: 'pending', pickupAddress: '', deliveryAddress: '',
+    title: '', description: '', status: 'in_progress', pickupAddress: '', deliveryAddress: '',
     pickupLat: '', pickupLng: '', pickupLocationLabel: '',
     deliveryLat: '', deliveryLng: '', deliveryLocationLabel: '',
-    driverId: '', scheduledDate: '', notes: '',
+    driverId: '', vehicleId: '', scheduledDate: '', notes: '',
   };
 
   const deliveryForm = useEntityForm<DeliveryFormValues>({
@@ -256,6 +258,7 @@ export default function DeliveriesPage() {
       deliveryLng: editing.deliveryLng?.toString() || '',
       deliveryLocationLabel: editing.deliveryLocationLabel || '',
       driverId: editing.driverId || '',
+      vehicleId: editing.vehicleId || '',
       scheduledDate: editing.scheduledDate?.split('T')[0] || '',
       notes: editing.notes || '',
     } : emptyForm,

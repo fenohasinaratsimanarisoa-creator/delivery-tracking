@@ -299,4 +299,125 @@ describe('DeliveriesService - State Machine', () => {
       });
     });
   });
+
+  describe('BUG A — driver assignment', () => {
+    it('should assign driverId and assignedDriverId when driver exists with userId', async () => {
+      const driver = { id: 'driver-1', userId: 'user-123', companyId: 'comp-1', deletedAt: null };
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(driver);
+      mockPrisma.delivery.create.mockResolvedValueOnce({
+        id: 'del-new', title: 'Test', driverId: 'driver-1', assignedDriverId: 'user-123',
+        status: 'in_progress', companyId: 'comp-1',
+      });
+
+      const result = await service.create('comp-1', {
+        title: 'Test', pickupAddress: 'Pickup', deliveryAddress: 'Delivery',
+        driverId: 'driver-1',
+      } as any);
+
+      expect(mockPrisma.driver.findFirst).toHaveBeenCalledWith({
+        where: { id: 'driver-1', companyId: 'comp-1', deletedAt: null },
+        select: { userId: true },
+      });
+      expect(mockPrisma.delivery.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ driverId: 'driver-1', assignedDriverId: 'user-123' }),
+        }),
+      );
+      expect(result.driverId).toBe('driver-1');
+      expect(result.assignedDriverId).toBe('user-123');
+    });
+
+    it('should throw NotFoundException when driverId does not exist in company', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.create('comp-1', {
+          title: 'Test', pickupAddress: 'Pickup', deliveryAddress: 'Delivery',
+          driverId: 'nonexistent-driver',
+        } as any),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw NotFoundException when driverId belongs to another company', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.create('comp-1', {
+          title: 'Test', pickupAddress: 'Pickup', deliveryAddress: 'Delivery',
+          driverId: 'driver-other-company',
+        } as any),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should assign driver via update', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce({
+        id: 'del-upd', companyId: 'comp-1', title: 'Test',
+        status: 'in_progress', deletedAt: null,
+        vehicle: null, driver: null, deliveryLat: null, deliveryLng: null,
+        assignedDriverId: null, clientId: null,
+      });
+      const driver = { id: 'driver-2', userId: 'user-456', companyId: 'comp-1', deletedAt: null };
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(driver);
+      const updatedDelivery = {
+        id: 'del-upd', title: 'Test', driverId: 'driver-2', assignedDriverId: 'user-456',
+        status: 'in_progress', companyId: 'comp-1',
+      };
+      mockPrisma.delivery.update.mockResolvedValueOnce(updatedDelivery);
+
+      const result = await service.update('comp-1', 'del-upd', { driverId: 'driver-2' } as any);
+
+      expect(mockPrisma.driver.findFirst).toHaveBeenCalledWith({
+        where: { id: 'driver-2', companyId: 'comp-1', deletedAt: null },
+        select: { userId: true },
+      });
+      expect(mockPrisma.delivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ driverId: 'driver-2', assignedDriverId: 'user-456' }),
+        }),
+      );
+      expect(result.driverId).toBe('driver-2');
+      expect(result.assignedDriverId).toBe('user-456');
+    });
+  });
+
+  describe('BUG B — default status in_progress', () => {
+    it('should default to in_progress when no status provided in create', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(null);
+      mockPrisma.delivery.create.mockResolvedValueOnce({
+        id: 'del-dflt', title: 'Default', status: DeliveryStatus.in_progress,
+        companyId: 'comp-1',
+      });
+
+      const result = await service.create('comp-1', {
+        title: 'Default', pickupAddress: 'Pickup', deliveryAddress: 'Delivery',
+      } as any);
+
+      expect(mockPrisma.delivery.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: DeliveryStatus.in_progress }),
+        }),
+      );
+      expect(result.status).toBe(DeliveryStatus.in_progress);
+    });
+
+    it('should respect explicit status when provided in create', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(null);
+      mockPrisma.delivery.create.mockResolvedValueOnce({
+        id: 'del-exp', title: 'Explicit', status: DeliveryStatus.assigned,
+        companyId: 'comp-1',
+      });
+
+      const result = await service.create('comp-1', {
+        title: 'Explicit', pickupAddress: 'Pickup', deliveryAddress: 'Delivery',
+        status: DeliveryStatus.assigned,
+      } as any);
+
+      expect(mockPrisma.delivery.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: DeliveryStatus.assigned }),
+        }),
+      );
+      expect(result.status).toBe(DeliveryStatus.assigned);
+    });
+  });
 });

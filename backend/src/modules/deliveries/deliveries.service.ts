@@ -55,6 +55,7 @@ export class DeliveriesService {
     const delivery = await this.prisma.delivery.create({
       data: {
         ...dto,
+        status: dto.status ?? DeliveryStatus.in_progress,
         assignedDriverId,
         scheduledDate: dto.scheduledDate ? new Date(dto.scheduledDate) : undefined,
         companyId,
@@ -527,7 +528,7 @@ export class DeliveriesService {
         description: produits || undefined,
         notes: notes || undefined,
         pickupAddress: defaultPickupAddress,
-        status: DeliveryStatus.pending,
+        status: DeliveryStatus.in_progress,
         companyId,
       });
     }
