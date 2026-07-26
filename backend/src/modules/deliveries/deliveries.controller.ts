@@ -44,11 +44,12 @@ export class DeliveriesController {
   async importExcel(
     @CurrentUser('companyId') companyId: string,
     @UploadedFile() file: Express.Multer.File,
+    @Query('mode') mode?: string,
   ) {
     if (!file) throw new BadRequestException('Aucun fichier fourni');
     if (!file.originalname.match(/\.xlsx$/i)) throw new BadRequestException('Format de fichier invalide, .xlsx attendu');
     const defaultPickupAddress = process.env.DEFAULT_PICKUP_ADDRESS || 'Entrepôt principal';
-    return this.deliveriesService.importExcel(companyId, file.buffer, defaultPickupAddress);
+    return this.deliveriesService.importExcel(companyId, file.buffer, defaultPickupAddress, mode === 'upsert' ? 'upsert' : 'create-only');
   }
 
   @UseGuards(RolesGuard)

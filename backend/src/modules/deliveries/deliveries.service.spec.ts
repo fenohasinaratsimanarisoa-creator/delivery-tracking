@@ -210,7 +210,7 @@ describe('DeliveriesService - State Machine', () => {
     }
 
     it('should parse valid rows and create deliveries', async () => {
-      mockPrisma.delivery.findUnique.mockResolvedValue(null);
+      mockPrisma.delivery.findFirst.mockResolvedValue(null);
       mockPrisma.delivery.createMany.mockResolvedValue({ count: 2 });
 
       const buffer = await createXlsxBuffer([
@@ -224,7 +224,7 @@ describe('DeliveriesService - State Machine', () => {
       expect(result.created).toBe(2);
       expect(result.errors).toHaveLength(0);
       expect(result.skipped).toHaveLength(0);
-      expect(mockPrisma.delivery.findUnique).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.delivery.findFirst).toHaveBeenCalledTimes(2);
       expect(mockPrisma.delivery.createMany).toHaveBeenCalledWith({
         data: expect.arrayContaining([
           expect.objectContaining({ title: 'CMD-001', externalOrderRef: 'CMD-001', deliveryAddress: 'Ivato', amount: 50000, articlePrice: 45000 }),
@@ -260,10 +260,10 @@ describe('DeliveriesService - State Machine', () => {
       expect(result.created).toBe(0);
     });
 
-    it('should skip duplicate external order refs', async () => {
-      mockPrisma.delivery.findUnique
+    it('should skip duplicate external order refs with reason duplicate', async () => {
+      mockPrisma.delivery.findFirst
         .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: 'existing' });
+        .mockResolvedValueOnce({ id: 'existing', status: 'in_progress' });
       mockPrisma.delivery.createMany.mockResolvedValue({ count: 1 });
 
       const buffer = await createXlsxBuffer([
@@ -277,11 +277,11 @@ describe('DeliveriesService - State Machine', () => {
       expect(result.created).toBe(1);
       expect(result.skipped).toHaveLength(1);
       expect(result.skipped[0].orderRef).toBe('CMD-005');
-      expect(result.skipped[0].reason).toContain('existe déjà');
+      expect(result.skipped[0].reason).toBe('duplicate');
     });
 
     it('should store Observation in notes', async () => {
-      mockPrisma.delivery.findUnique.mockResolvedValue(null);
+      mockPrisma.delivery.findFirst.mockResolvedValue(null);
       mockPrisma.delivery.createMany.mockResolvedValue({ count: 1 });
 
       const buffer = await createXlsxBuffer([
@@ -297,6 +297,59 @@ describe('DeliveriesService - State Machine', () => {
           expect.objectContaining({ notes: 'Observation: Matinée 8h-12h' }),
         ]),
       });
+    });
+
+    it('should upsert existing deliveries and not regress status', async () => {
+      mockPrisma.delivery.findFirst
+        .mockResolvedValueOnce({ id: 'existing-1', status: 'delivered' })
+        .mockResolvedValueOnce(null);
+      mockPrisma.delivery.update.mockResolvedValue({});
+      mockPrisma.delivery.createMany.mockResolvedValue({ count: 1 });
+
+      const buffer = await createXlsxBuffer([
+        ['N° Commande', 'Lieu', 'Montant'],
+        ['CMD-EXIST', 'Ivato', '10000'],
+        ['CMD-NEW', 'Analakely', '20000'],
+      ]);
+
+      const result = await service.importExcel('comp-1', buffer, 'Dépôt', 'upsert');
+
+      expect(result.created).toBe(1);
+      expect(result.updated).toBe(1);
+      expect(mockPrisma.delivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'existing-1' },
+          data: expect.objectContaining({ deliveryAddress: 'Ivato', amount: 10000 }),
+        }),
+      );
+      // Status should NOT be in updateData for delivered — it stays as-is
+      expect(mockPrisma.delivery.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: expect.anything() }) }),
+      );
+    });
+
+    it('should scope duplicate check by companyId', async () => {
+      mockPrisma.delivery.findFirst
+        .mockResolvedValueOnce(null) // comp-1: CMD-SCOPE not found → create
+        .mockResolvedValueOnce(null); // comp-2: CMD-SCOPE not found → create
+      mockPrisma.delivery.createMany.mockResolvedValue({ count: 2 });
+
+      const buffer = await createXlsxBuffer([
+        ['N° Commande', 'Lieu'],
+        ['CMD-SCOPE', 'Ivato'],
+      ]);
+
+      const result1 = await service.importExcel('comp-1', buffer, 'Dépôt');
+      const result2 = await service.importExcel('comp-2', buffer, 'Dépôt');
+
+      expect(result1.created).toBe(1);
+      expect(result2.created).toBe(1);
+      expect(mockPrisma.delivery.findFirst).toHaveBeenNthCalledWith(1,
+        expect.objectContaining({ where: { companyId: 'comp-1', externalOrderRef: 'CMD-SCOPE', deletedAt: null } }),
+      );
+      expect(mockPrisma.delivery.findFirst).toHaveBeenNthCalledWith(2,
+        expect.objectContaining({ where: { companyId: 'comp-2', externalOrderRef: 'CMD-SCOPE', deletedAt: null } }),
+      );
     });
   });
 

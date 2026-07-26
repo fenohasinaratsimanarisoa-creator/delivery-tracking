@@ -90,6 +90,12 @@ export default function DeliveriesPage() {
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const [importMode, setImportMode] = useState<'create-only' | 'upsert'>('create-only');
+  const [importReport, setImportReport] = useState<{
+    created: number; updated: number;
+    skipped: { row: number; orderRef: string; reason: string }[];
+    errors: { row: number; reason: string }[];
+  } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
@@ -142,22 +148,25 @@ export default function DeliveriesPage() {
   }, []);
 
   const importMutation = useMutation({
-    mutationFn: (file: File) => {
+    mutationFn: ({ file, mode }: { file: File; mode: string }) => {
       const formData = new FormData();
       formData.append('file', file);
-      return api.post('/deliveries/import', formData, {
+      return api.post(`/deliveries/import?mode=${mode}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 60000,
       }).then((r) => r.data);
     },
-    onSuccess: (report: { created: number; skipped: { row: number; orderRef: string; reason: string }[]; errors: { row: number; reason: string }[] }) => {
+    onSuccess: (report: { created: number; updated: number; skipped: { row: number; orderRef: string; reason: string }[]; errors: { row: number; reason: string }[] }) => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
       setImporting(false);
+      setImportReport(report);
       const parts: string[] = [];
-      if (report.created > 0) parts.push(`${report.created} livraison${report.created > 1 ? 's' : ''} créée${report.created > 1 ? 's' : ''}`);
-      if (report.skipped.length > 0) parts.push(`${report.skipped.length} ignorée${report.skipped.length > 1 ? 's' : ''}`);
+      if (report.created > 0) parts.push(`${report.created} créée${report.created > 1 ? 's' : ''}`);
+      if (report.updated > 0) parts.push(`${report.updated} mise${report.updated > 1 ? 's' : ''} à jour`);
+      if (report.skipped.length > 0) parts.push(`${report.skipped.length} déjà existante${report.skipped.length > 1 ? 's' : ''}`);
       if (report.errors.length > 0) parts.push(`${report.errors.length} erreur${report.errors.length > 1 ? 's' : ''}`);
-      toast(parts.join(', ') || 'Aucune donnée importée', report.errors.length > 0 ? 'error' : 'success');
+      if (parts.length > 0) toast(parts.join(', ') + ' — voir détail');
+      else toast('Aucune donnée importée');
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
     onError: (err: any) => {
@@ -175,8 +184,8 @@ export default function DeliveriesPage() {
       return;
     }
     setImporting(true);
-    importMutation.mutate(file);
-  }, [importMutation, toast]);
+    importMutation.mutate({ file, mode: importMode });
+  }, [importMutation, toast, importMode]);
 
   const bulkMutation = useMutation({
     mutationFn: (payload: { ids: string[]; action: string; status?: string; driverId?: string }) =>
@@ -381,12 +390,28 @@ export default function DeliveriesPage() {
             style={{ display: 'none' }}
             onChange={handleFileChange}
           />
-          <Button variant="secondary" size="sm" icon={<Upload size={16} />}
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
-          >
-            {importing ? 'Import en cours…' : 'Importer Excel'}
-          </Button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Button variant="secondary" size="sm" icon={<Upload size={16} />}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+            >
+              {importing ? 'Import en cours…' : 'Importer Excel'}
+            </Button>
+            <button
+              onClick={() => setImportMode(importMode === 'create-only' ? 'upsert' : 'create-only')}
+              title={importMode === 'create-only' ? 'Mode: ignorer les doublons' : 'Mode: mettre à jour les existants'}
+              style={{
+                padding: '3px 6px', fontSize: '0.6rem', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--color-border-subtle)',
+                background: importMode === 'upsert' ? 'var(--color-accent-muted)' : 'transparent',
+                color: 'var(--color-text-tertiary)', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+                fontWeight: 600,
+              }}
+            >
+              {importMode === 'create-only' ? 'Ignorer' : 'MàJ'}
+            </button>
+          </div>
           <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
             Nouvelle livraison
           </Button>
@@ -872,6 +897,105 @@ export default function DeliveriesPage() {
           zIndex: 99999,
         }}>
           Recherche des adresses…
+        </div>
+      )}
+
+      {importReport && (
+        <div
+          onClick={() => setImportReport(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 7000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(0,0,0,0.5)',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--color-surface)',
+              borderRadius: 'var(--radius-lg)',
+              padding: 'var(--space-xl)',
+              maxWidth: 600, width: '90vw',
+              maxHeight: '80vh', overflow: 'auto',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.3)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 var(--space-sm)', fontSize: 'var(--text-lg)', color: 'var(--color-text)' }}>
+              Résultat de l'import
+            </h2>
+            <div style={{ display: 'flex', gap: 'var(--space-md)', marginBottom: 'var(--space-md)', flexWrap: 'wrap' }}>
+              <div style={{ textAlign: 'center', padding: 'var(--space-md)', background: 'var(--color-surface-alt)', borderRadius: 'var(--radius-md)', flex: 1, minWidth: 80 }}>
+                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#22c55e' }}>{importReport.created}</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Créées</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: 'var(--space-md)', background: 'var(--color-surface-alt)', borderRadius: 'var(--radius-md)', flex: 1, minWidth: 80 }}>
+                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#3b82f6' }}>{importReport.updated}</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Mises à jour</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: 'var(--space-md)', background: 'var(--color-surface-alt)', borderRadius: 'var(--radius-md)', flex: 1, minWidth: 80 }}>
+                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#f59e0b' }}>{importReport.skipped.length}</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Ignorées</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: 'var(--space-md)', background: 'var(--color-surface-alt)', borderRadius: 'var(--radius-md)', flex: 1, minWidth: 80 }}>
+                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#ef4444' }}>{importReport.errors.length}</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Erreurs</div>
+              </div>
+            </div>
+
+            {importReport.skipped.length > 0 && (
+              <div style={{ marginBottom: 'var(--space-md)' }}>
+                <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 var(--space-xs)' }}>
+                  Commandes ignorées
+                </h3>
+                <div style={{ maxHeight: 200, overflowY: 'auto', fontSize: 'var(--text-xs)' }}>
+                  {importReport.skipped.map((s, i) => (
+                    <div key={i} style={{
+                      padding: '4px 8px', borderBottom: '1px solid var(--color-border-subtle)',
+                      display: 'flex', justifyContent: 'space-between', gap: 8,
+                    }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text)' }}>{s.orderRef}</span>
+                      <span style={{ color: 'var(--color-text-tertiary)' }}>
+                        {s.reason === 'duplicate' ? 'Déjà existante' : s.reason}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {importReport.errors.length > 0 && (
+              <div style={{ marginBottom: 'var(--space-md)' }}>
+                <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 var(--space-xs)' }}>
+                  Erreurs
+                </h3>
+                <div style={{ maxHeight: 150, overflowY: 'auto', fontSize: 'var(--text-xs)' }}>
+                  {importReport.errors.map((e, i) => (
+                    <div key={i} style={{
+                      padding: '4px 8px', borderBottom: '1px solid var(--color-border-subtle)',
+                      color: 'var(--color-text)',
+                    }}>
+                      Ligne {e.row} : {e.reason}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setImportReport(null)}
+                style={{
+                  padding: '8px 20px', borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--color-border-subtle)',
+                  background: 'var(--color-surface)', cursor: 'pointer',
+                  color: 'var(--color-text)', fontSize: 'var(--text-sm)',
+                  fontFamily: 'var(--font-body)', fontWeight: 500,
+                }}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

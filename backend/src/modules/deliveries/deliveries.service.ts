@@ -526,8 +526,14 @@ export class DeliveriesService {
     return result;
   }
 
-  async importExcel(companyId: string, fileBuffer: Uint8Array, defaultPickupAddress: string): Promise<{
+  async importExcel(
+    companyId: string,
+    fileBuffer: Uint8Array,
+    defaultPickupAddress: string,
+    mode: 'create-only' | 'upsert' = 'create-only',
+  ): Promise<{
     created: number;
+    updated: number;
     skipped: { row: number; orderRef: string; reason: string }[];
     errors: { row: number; reason: string }[];
   }> {
@@ -552,7 +558,12 @@ export class DeliveriesService {
       return String(v).trim();
     };
 
-    const result = { created: 0, skipped: [] as { row: number; orderRef: string; reason: string }[], errors: [] as { row: number; reason: string }[] };
+    const result = {
+      created: 0,
+      updated: 0,
+      skipped: [] as { row: number; orderRef: string; reason: string }[],
+      errors: [] as { row: number; reason: string }[],
+    };
     const toCreate: any[] = [];
 
     const totalRows = worksheet.rowCount;
@@ -569,14 +580,10 @@ export class DeliveriesService {
         continue;
       }
 
-      const existing = await this.prisma.delivery.findUnique({
-        where: { externalOrderRef: orderRef },
-        select: { id: true },
+      const existing = await this.prisma.delivery.findFirst({
+        where: { companyId, externalOrderRef: orderRef, deletedAt: null },
+        select: { id: true, status: true },
       });
-      if (existing) {
-        result.skipped.push({ row: rowNum, orderRef, reason: 'Cette commande existe déjà' });
-        continue;
-      }
 
       const adresse = getCol(rowNum, 'Adresse') || undefined;
       const telephone = getCol(rowNum, 'Téléphone') || undefined;
@@ -585,8 +592,35 @@ export class DeliveriesService {
       const produits = getCol(rowNum, 'Produits commandés') || undefined;
       const observation = getCol(rowNum, 'Observation');
       const notesExistantes = getCol(rowNum, 'Notes');
-
       const notes = [notesExistantes, observation ? `Observation: ${observation}` : null].filter(Boolean).join('\n') || undefined;
+
+      if (existing) {
+        if (mode === 'create-only') {
+          result.skipped.push({ row: rowNum, orderRef, reason: 'duplicate' });
+          continue;
+        }
+        // upsert mode: update fields but NEVER regress a status that has progressed beyond in_progress
+        // (delivered, failed, cancelled) — those terminal states must stay unchanged.
+        const newStatus = existing.status;
+        const updateData: any = {
+          deliveryAddress: lieu,
+          deliveryLocationLabel: adresse,
+          clientPhone: telephone,
+          amount: montant,
+          articlePrice: prix,
+          productDescription: produits,
+          description: produits || undefined,
+          notes: notes || undefined,
+          pickupAddress: defaultPickupAddress,
+          ...(newStatus ? {} : { status: DeliveryStatus.in_progress }),
+        };
+        await this.prisma.delivery.update({
+          where: { id: existing.id },
+          data: updateData,
+        });
+        result.updated++;
+        continue;
+      }
 
       toCreate.push({
         title: orderRef,
@@ -610,7 +644,7 @@ export class DeliveriesService {
     }
 
     result.created = toCreate.length;
-    Logger.log(`Import Excel: ${result.created} créées, ${result.skipped.length} ignorées, ${result.errors.length} erreurs`, 'DeliveriesService');
+    Logger.log(`Import Excel (${mode}): ${result.created} créées, ${result.updated} mises à jour, ${result.skipped.length} ignorées, ${result.errors.length} erreurs`, 'DeliveriesService');
     return result;
   }
 }
