@@ -1,0 +1,17 @@
+{
+  "detectiveOptions": {
+    "ts": {
+      "skipTypeImports": true
+    }
+  },
+  "tsConfig": "tsconfig.json",
+  "excludeRegExp": [
+    "\\.spec\\.ts$",
+    "\\.e2e-spec\\.ts$",
+    "\\.d\\.ts$",
+    "^dist/",
+    "^node_modules/",
+    "^test/",
+    "^prisma/"
+  ]
+}

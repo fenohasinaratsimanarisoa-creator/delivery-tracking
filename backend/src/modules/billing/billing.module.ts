@@ -8,7 +8,7 @@ import { InvoicePdfService } from './invoice-pdf.service';
 import { EmailModule } from '../email/email.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), EmailModule],
+  imports: [ScheduleModule, EmailModule],
   controllers: [BillingController, BillingWebhookController],
   providers: [BillingService, StripeService, MobileMoneyService, InvoicePdfService],
   exports: [BillingService],

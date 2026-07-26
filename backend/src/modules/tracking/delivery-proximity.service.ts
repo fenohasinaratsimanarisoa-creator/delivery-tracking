@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional, forwardRef } from '@nestjs/common';
 import Redis from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TrackingGateway } from './tracking.gateway';
@@ -16,7 +16,7 @@ export class DeliveryProximityService {
 
   constructor(
     private prisma: PrismaService,
-    private trackingGateway: TrackingGateway,
+    @Inject(forwardRef(() => TrackingGateway)) private trackingGateway: TrackingGateway,
     private cacheService: CacheService,
     @Optional() @Inject(REDIS_CLIENT) private redis: Redis | null,
   ) {}

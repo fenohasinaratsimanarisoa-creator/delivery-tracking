@@ -5,7 +5,7 @@ import { EmailModule } from '../email/email.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), EmailModule, NotificationsModule],
+  imports: [ScheduleModule, EmailModule, NotificationsModule],
   providers: [DigestService],
 })
 export class DigestModule {}

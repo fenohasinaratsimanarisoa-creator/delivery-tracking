@@ -4,6 +4,8 @@
   "description": "Delivery tracking platform backend",
   "private": true,
   "scripts": {
+    "check-deps": "bash tools/check-circular-deps.sh",
+    "prebuild": "npm run check-deps",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
