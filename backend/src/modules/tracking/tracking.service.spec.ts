@@ -268,6 +268,66 @@ describe('TrackingService', () => {
     });
   });
 
+  describe('teleportation detection — real-world scenarios', () => {
+    const VID = '00000000-0000-4000-0000-000000000001';
+    const DRIVER = '00000000-0000-4000-0000-000000000002';
+    const baseTs = new Date('2026-07-21T10:00:00.000Z');
+
+    function setupLastPos(lat: number, lng: number, secondsAgo: number) {
+      mockPrisma.vehicle.findUnique.mockResolvedValue({ companyId: 'company-1' });
+      mockPrisma.gpsPosition.findFirst
+        .mockReset()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          latitude: lat, longitude: lng,
+          timestamp: new Date(baseTs.getTime() - secondsAgo * 1000),
+          speed: null,
+        });
+    }
+
+    it('Scenario 1 — Urban degraded GPS (accuracy 40m, 30km/h) does NOT trigger suspect', async () => {
+      setupLastPos(-18.8792, 47.5079, 3);
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-urban', suspect: false });
+
+      const result = await service.savePosition(DRIVER, {
+        latitude: -18.8795, longitude: 47.5082,
+        speed: 8.33, timestamp: baseTs.toISOString(),
+        vehicleId: VID, accuracy: 40,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.suspect).toBe(false);
+    });
+
+    it('Scenario 2 — Network gap 5-10 min + burst (legitimate movement, no teleport)', async () => {
+      setupLastPos(-18.8792, 47.5079, 300);
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-gap', suspect: false });
+
+      const result = await service.savePosition(DRIVER, {
+        latitude: -18.8700, longitude: 47.5200,
+        speed: 5.56, timestamp: baseTs.toISOString(),
+        vehicleId: VID, accuracy: 20,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.suspect).toBe(false);
+    });
+
+    it('Scenario 3 — Motorcycle weaving in traffic (sharp but legitimate speed changes)', async () => {
+      setupLastPos(-18.8792, 47.5079, 2);
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-moto', suspect: false });
+
+      const result = await service.savePosition(DRIVER, {
+        latitude: -18.8790, longitude: 47.5080,
+        speed: 13.89, timestamp: baseTs.toISOString(),
+        vehicleId: VID, accuracy: 10,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.suspect).toBe(false);
+    });
+  });
+
   describe('savePosition with alerts', () => {
     const VID = '00000000-0000-4000-0000-000000000001';
     const DID = '00000000-0000-4000-0000-00000000000a';

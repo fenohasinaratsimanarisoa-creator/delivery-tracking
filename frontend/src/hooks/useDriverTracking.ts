@@ -2,10 +2,23 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api/client';
 import { getSocket } from '../services/socket/socket';
-import { enqueuePosition, dequeueAllPositions, clearQueue, queueSize } from '../services/offlineQueue';
+import { enqueuePosition, queueSize, flushQueue } from '../services/offlineQueue';
 import { KalmanFilter } from '../services/tracking/KalmanFilter';
 import { sensorFusion, simulateStationaryFromSpeed } from '../services/tracking/sensorFusion';
 import type { Delivery } from '../types';
+
+let wakeLockRef:any = null;
+async function acquireWakeLock() {
+  if (!navigator.wakeLock) return false;
+  try {
+    wakeLockRef = await navigator.wakeLock.request('screen');
+    wakeLockRef.addEventListener('release', () => { wakeLockRef = null; });
+    return true;
+  } catch { return false; }
+}
+function releaseWakeLock() {
+  if (wakeLockRef) { wakeLockRef.release().catch(() => {}); wakeLockRef = null; }
+}
 
 const ACCURACY_GOOD = 10;
 const ACCURACY_MODERATE = 30;
@@ -45,7 +58,7 @@ export interface DriverPosition {
 }
 
 export interface DriverAlert {
-  type: 'proximity' | 'cascade' | 'geofence' | 'poor_accuracy' | 'queue_full' | 'geo_denied';
+  type: 'proximity' | 'cascade' | 'geofence' | 'poor_accuracy' | 'queue_full' | 'geo_denied' | 'background_stop';
   title: string;
   message: string;
   deliveryId?: string;
@@ -92,6 +105,8 @@ export function useDriverTracking() {
   const rawPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const watchRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hiddenSinceRef = useRef<number>(0);
+  const visibilityHandlerRef = useRef<(() => void) | null>(null);
   const drainIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMovingRef = useRef<number>(Date.now());
   const intervalDurationRef = useRef<number>(INTERVAL_DEFAULT);
@@ -251,14 +266,19 @@ export function useDriverTracking() {
   const drainQueue = useCallback(async () => {
     const socket = getSocket();
     if (!socket.connected) return;
-    const positions = await dequeueAllPositions();
-    if (positions.length === 0) return;
     try {
-      socket.emit('batchPosition', { positions });
-      socket.once('positionsSaved', () => {
-        clearQueue().then(() => refreshQueueCount());
+      await flushQueue(async (positions) => {
+        return new Promise<void>((resolve, reject) => {
+          socket.emit('batchPosition', { positions });
+          socket.once('positionsSaved', () => resolve());
+          const timeout = setTimeout(() => reject(new Error('flush timeout')), 15000);
+          socket.once('positionsSaved', () => { clearTimeout(timeout); resolve(); });
+        });
       });
-    } catch {}
+    } catch (err) {
+      console.warn('[drainQueue] flush failed:', err);
+    }
+    refreshQueueCount();
   }, [refreshQueueCount]);
 
   useEffect(() => {
@@ -412,6 +432,8 @@ export function useDriverTracking() {
 
     sensorFusion.init().then(() => {}).catch(() => {});
 
+    acquireWakeLock();
+
     // Request notification permission when driver starts tracking (non-intrusive)
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
@@ -421,7 +443,27 @@ export function useDriverTracking() {
     tryWatch(true, triedLowAccuracyRef);
     intervalRef.current = setInterval(sendPosition, INTERVAL_DEFAULT);
     drainIntervalRef.current = setInterval(() => { drainQueue(); }, DRAIN_INTERVAL_MS);
-  }, [vehicleId, tryWatch, sendPosition, drainQueue]);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenSinceRef.current = Date.now();
+      } else if (document.visibilityState === 'visible' && hiddenSinceRef.current > 0) {
+        const gapSec = Math.round((Date.now() - hiddenSinceRef.current) / 1000);
+        if (gapSec > 15) {
+          addAlert({
+            type: 'background_stop',
+            title: 'Tracking interrompu',
+            message: `L\'application était en arrière-plan pendant ${gapSec}s. Les positions GPS n\'ont pas été envoyées durant cette période. Gardez l\'app ouverte pour un tracking continu.`,
+            urgency: 'high',
+          });
+        }
+        acquireWakeLock();
+        hiddenSinceRef.current = 0;
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    visibilityHandlerRef.current = () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [vehicleId, tryWatch, sendPosition, drainQueue, addAlert]);
 
   const stopTracking = useCallback(() => {
     if (watchRef.current !== null) {
@@ -436,6 +478,12 @@ export function useDriverTracking() {
       clearInterval(drainIntervalRef.current);
       drainIntervalRef.current = null;
     }
+    if (visibilityHandlerRef.current) {
+      visibilityHandlerRef.current();
+      visibilityHandlerRef.current = null;
+    }
+    releaseWakeLock();
+    hiddenSinceRef.current = 0;
     lastMovingRef.current = Date.now();
     intervalDurationRef.current = INTERVAL_DEFAULT;
     setPosition(null);

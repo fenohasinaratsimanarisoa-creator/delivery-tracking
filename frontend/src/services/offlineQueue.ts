@@ -110,14 +110,26 @@ export async function queueSize(): Promise<number> {
   });
 }
 
+async function deletePositions(ids: number[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    for (const id of ids) store.delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 export async function flushQueue(sendFn: (positions: Record<string, unknown>[]) => Promise<void>): Promise<void> {
   if (isFlushing) return;
   isFlushing = true;
   try {
     const positions = await dequeueAllPositions();
     if (positions.length === 0) return;
+    const ids = positions.map((p) => p.id as number);
     await sendFn(positions);
-    await clearQueue();
+    await deletePositions(ids);
   } finally {
     isFlushing = false;
   }
