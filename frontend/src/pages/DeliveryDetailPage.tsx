@@ -72,6 +72,11 @@ export default function DeliveryDetailPage() {
         {d.vehicle && <InfoCard icon={<Truck size={16} />} label={t('deliveryDetail.infoVehicle')} value={`${d.vehicle.brand} ${d.vehicle.model} (${d.vehicle.licensePlate})`} />}
         {d.scheduledDate && <InfoCard icon={<Clock size={16} />} label={t('deliveryDetail.infoScheduledDate')} value={formatDate(d.scheduledDate)} />}
         <InfoCard icon={<Package size={16} />} label={t('deliveryDetail.infoCreatedDate')} value={formatDate(d.createdAt)} />
+        {d.clientPhone && <InfoCard icon={<User size={16} />} label="Téléphone client" value={d.clientPhone} />}
+        {d.amount !== undefined && d.amount !== null && <InfoCard icon={<Package size={16} />} label="Montant" value={`${d.amount.toLocaleString('fr-FR')} Ar`} />}
+        {d.articlePrice !== undefined && d.articlePrice !== null && <InfoCard icon={<Package size={16} />} label="Prix article" value={`${d.articlePrice.toLocaleString('fr-FR')} Ar`} />}
+        {d.productDescription && <InfoCard icon={<Package size={16} />} label="Produits" value={d.productDescription} />}
+        {d.externalOrderRef && <InfoCard icon={<Package size={16} />} label="N° Commande" value={d.externalOrderRef} />}
       </div>
 
       {d.notes && (

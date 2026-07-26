@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { DeliveryStatus, NotificationType, NotificationPriority } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
+import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
@@ -10,6 +11,7 @@ import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 import { UpdateDeliveryStatusDto } from './dto/update-delivery-status.dto';
 import { haversineDistance } from '../../common/geo/geo.utils';
 import { t, type Language } from '../../common/i18n';
+import { parseAmount } from '../../common/utils/parse-amount';
 
 const TRANSITION_MATRIX: Record<DeliveryStatus, DeliveryStatus[]> = {
   [DeliveryStatus.pending]: [DeliveryStatus.assigned, DeliveryStatus.cancelled],
@@ -449,5 +451,93 @@ export class DeliveriesService {
     ]);
 
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async importExcel(companyId: string, fileBuffer: Uint8Array, defaultPickupAddress: string): Promise<{
+    created: number;
+    skipped: { row: number; orderRef: string; reason: string }[];
+    errors: { row: number; reason: string }[];
+  }> {
+    const workbook = new ExcelJS.Workbook();
+    await (workbook.xlsx as any).load(fileBuffer);
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) throw new BadRequestException('Le fichier Excel est vide');
+
+    const headerRow = worksheet.getRow(1);
+    const colMap = new Map<string, number>();
+    headerRow.eachCell((cell, colNumber) => {
+      const val = String(cell.value || '').trim();
+      if (val) colMap.set(val, colNumber);
+    });
+
+    const getCol = (row: number, name: string): string | undefined => {
+      const col = colMap.get(name);
+      if (!col) return undefined;
+      const cell = worksheet.getRow(row).getCell(col);
+      const v = cell.value;
+      if (v === null || v === undefined) return undefined;
+      return String(v).trim();
+    };
+
+    const result = { created: 0, skipped: [] as { row: number; orderRef: string; reason: string }[], errors: [] as { row: number; reason: string }[] };
+    const toCreate: any[] = [];
+
+    const totalRows = worksheet.rowCount;
+    for (let rowNum = 2; rowNum <= totalRows; rowNum++) {
+      const orderRef = getCol(rowNum, 'N° Commande');
+      const lieu = getCol(rowNum, 'Lieu');
+
+      if (!orderRef) {
+        result.errors.push({ row: rowNum, reason: 'N° Commande manquant' });
+        continue;
+      }
+      if (!lieu) {
+        result.errors.push({ row: rowNum, reason: 'Lieu (adresse de livraison) manquant' });
+        continue;
+      }
+
+      const existing = await this.prisma.delivery.findUnique({
+        where: { externalOrderRef: orderRef },
+        select: { id: true },
+      });
+      if (existing) {
+        result.skipped.push({ row: rowNum, orderRef, reason: 'Cette commande existe déjà' });
+        continue;
+      }
+
+      const adresse = getCol(rowNum, 'Adresse') || undefined;
+      const telephone = getCol(rowNum, 'Téléphone') || undefined;
+      const montant = parseAmount(getCol(rowNum, 'Montant'));
+      const prix = parseAmount(getCol(rowNum, 'Prix'));
+      const produits = getCol(rowNum, 'Produits commandés') || undefined;
+      const observation = getCol(rowNum, 'Observation');
+      const notesExistantes = getCol(rowNum, 'Notes');
+
+      const notes = [notesExistantes, observation ? `Observation: ${observation}` : null].filter(Boolean).join('\n') || undefined;
+
+      toCreate.push({
+        title: orderRef,
+        externalOrderRef: orderRef,
+        deliveryAddress: lieu,
+        deliveryLocationLabel: adresse,
+        clientPhone: telephone,
+        amount: montant,
+        articlePrice: prix,
+        productDescription: produits,
+        description: produits || undefined,
+        notes: notes || undefined,
+        pickupAddress: defaultPickupAddress,
+        status: DeliveryStatus.pending,
+        companyId,
+      });
+    }
+
+    if (toCreate.length > 0) {
+      await this.prisma.delivery.createMany({ data: toCreate });
+    }
+
+    result.created = toCreate.length;
+    Logger.log(`Import Excel: ${result.created} créées, ${result.skipped.length} ignorées, ${result.errors.length} erreurs`, 'DeliveriesService');
+    return result;
   }
 }

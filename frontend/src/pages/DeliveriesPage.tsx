@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Search, ChevronDown, ChevronUp, Upload } from 'lucide-react';
 import Button from '../components/Button';
 import api from '../services/api/client';
 import { formatDate } from '../services/i18n/formatDate';
@@ -12,6 +12,11 @@ import LocationSearchInput from '../components/LocationSearchInput';
 import { reverseGeocode } from '../services/geocoding/geocodingService';
 import { useToast } from '../components/Toast';
 import type { Delivery, Driver } from '../types';
+
+function formatAriary(amount?: number): string {
+  if (amount === undefined || amount === null) return '';
+  return amount.toLocaleString('fr-FR').replace(/\s/g, '\u202F') + '\u00A0Ar';
+}
 
 interface DeliveryFormValues {
   title: string;
@@ -82,6 +87,8 @@ export default function DeliveriesPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['deliveries', page],
@@ -130,6 +137,43 @@ export default function DeliveriesPage() {
     clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => setSearch(val), 200);
   }, []);
+
+  const importMutation = useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return api.post('/deliveries/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000,
+      }).then((r) => r.data);
+    },
+    onSuccess: (report: { created: number; skipped: { row: number; orderRef: string; reason: string }[]; errors: { row: number; reason: string }[] }) => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      setImporting(false);
+      const parts: string[] = [];
+      if (report.created > 0) parts.push(`${report.created} livraison${report.created > 1 ? 's' : ''} créée${report.created > 1 ? 's' : ''}`);
+      if (report.skipped.length > 0) parts.push(`${report.skipped.length} ignorée${report.skipped.length > 1 ? 's' : ''}`);
+      if (report.errors.length > 0) parts.push(`${report.errors.length} erreur${report.errors.length > 1 ? 's' : ''}`);
+      toast(parts.join(', ') || 'Aucune donnée importée', report.errors.length > 0 ? 'error' : 'success');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    },
+    onError: (err: any) => {
+      setImporting(false);
+      toast(err?.response?.data?.message || 'Erreur lors de l\'import Excel', 'error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    },
+  });
+
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.match(/\.xlsx$/i)) {
+      toast('Format de fichier invalide, .xlsx attendu', 'error');
+      return;
+    }
+    setImporting(true);
+    importMutation.mutate(file);
+  }, [importMutation, toast]);
 
   const saveMutation = useMutation({
     mutationFn: (body: DeliveryFormValues) => {
@@ -304,9 +348,24 @@ export default function DeliveriesPage() {
             {meta.total > 0 ? `${meta.total} livraison${meta.total > 1 ? 's' : ''}` : 'Gérez les livraisons de votre flotte'}
           </p>
         </div>
-        <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
-          Nouvelle livraison
-        </Button>
+        <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx"
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
+          <Button variant="secondary" size="sm" icon={<Upload size={16} />}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            {importing ? 'Import en cours…' : 'Importer Excel'}
+          </Button>
+          <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
+            Nouvelle livraison
+          </Button>
+        </div>
       </div>
 
       <div style={{
@@ -474,6 +533,22 @@ export default function DeliveriesPage() {
                 ),
               },
               {
+                key: 'clientPhone', label: 'Tél.',
+                render: (r: Delivery) => (
+                  r.clientPhone
+                    ? <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>{r.clientPhone}</span>
+                    : <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>—</span>
+                ),
+              },
+              {
+                key: 'amount', label: 'Montant',
+                render: (r: Delivery) => (
+                  r.amount !== undefined && r.amount !== null
+                    ? <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{formatAriary(r.amount)}</span>
+                    : <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>—</span>
+                ),
+              },
+              {
                 key: 'description', label: 'Description',
                 render: (r: Delivery) => (
                   <span style={{
@@ -481,7 +556,7 @@ export default function DeliveriesPage() {
                     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                     overflow: 'hidden', maxWidth: 200,
                   }}>
-                    {r.description || (r.notes
+                    {r.productDescription || r.description || (r.notes
                       ? <span style={{ fontStyle: 'italic' }}>📝 {r.notes.slice(0, 60)}</span>
                       : <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
                     )}

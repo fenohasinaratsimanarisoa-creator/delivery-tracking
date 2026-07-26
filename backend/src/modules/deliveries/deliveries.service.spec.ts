@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { DeliveryStatus } from '@prisma/client';
+import * as ExcelJS from 'exceljs';
 import { DeliveriesService } from './deliveries.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -17,9 +18,11 @@ describe('DeliveriesService - State Machine', () => {
       create: jest.fn(),
       findMany: jest.fn(),
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
       count: jest.fn(),
+      createMany: jest.fn(),
     },
     driver: {
       findFirst: jest.fn(),
@@ -194,6 +197,106 @@ describe('DeliveriesService - State Machine', () => {
       const result = await service.update('comp-1', 'del-4', { status: DeliveryStatus.cancelled } as any);
       expect(mockPrisma.delivery.update).toHaveBeenCalled();
       expect(result.status).toBe(DeliveryStatus.cancelled);
+    });
+  });
+
+  describe('importExcel', () => {
+    async function createXlsxBuffer(rows: string[][]): Promise<Buffer> {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Sheet1');
+      rows.forEach((r) => ws.addRow(r));
+      const data = await wb.xlsx.writeBuffer();
+      return data as unknown as Buffer;
+    }
+
+    it('should parse valid rows and create deliveries', async () => {
+      mockPrisma.delivery.findUnique.mockResolvedValue(null);
+      mockPrisma.delivery.createMany.mockResolvedValue({ count: 2 });
+
+      const buffer = await createXlsxBuffer([
+        ['N° Commande', 'Lieu', 'Adresse', 'Téléphone', 'Montant', 'Prix', 'Produits commandés'],
+        ['CMD-001', 'Ivato', 'Lot 45', '0341234567', '50 000Ar', '45 000Ar', 'Cartons A4'],
+        ['CMD-002', 'Analakely', 'Rue 12', '0327654321', '54\u202F000Ar', '50\u202F000Ar', 'Enveloppes'],
+      ]);
+
+      const result = await service.importExcel('comp-1', buffer, 'Entrepôt principal');
+
+      expect(result.created).toBe(2);
+      expect(result.errors).toHaveLength(0);
+      expect(result.skipped).toHaveLength(0);
+      expect(mockPrisma.delivery.findUnique).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.delivery.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({ title: 'CMD-001', externalOrderRef: 'CMD-001', deliveryAddress: 'Ivato', amount: 50000, articlePrice: 45000 }),
+          expect.objectContaining({ title: 'CMD-002', externalOrderRef: 'CMD-002', deliveryAddress: 'Analakely', amount: 54000, articlePrice: 50000 }),
+        ]),
+      });
+    });
+
+    it('should skip rows with missing N° Commande (error)', async () => {
+      const buffer = await createXlsxBuffer([
+        ['N° Commande', 'Lieu', 'Montant'],
+        ['', 'Ivato', '50000'],
+        ['CMD-003', 'Analakely', '30000'],
+      ]);
+
+      const result = await service.importExcel('comp-1', buffer, 'Dépôt');
+
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].reason).toContain('N° Commande manquant');
+      expect(result.created).toBe(1);
+    });
+
+    it('should skip rows with missing Lieu (error)', async () => {
+      const buffer = await createXlsxBuffer([
+        ['N° Commande', 'Lieu', 'Montant'],
+        ['CMD-004', '', '50000'],
+      ]);
+
+      const result = await service.importExcel('comp-1', buffer, 'Dépôt');
+
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].reason).toContain('Lieu');
+      expect(result.created).toBe(0);
+    });
+
+    it('should skip duplicate external order refs', async () => {
+      mockPrisma.delivery.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'existing' });
+      mockPrisma.delivery.createMany.mockResolvedValue({ count: 1 });
+
+      const buffer = await createXlsxBuffer([
+        ['N° Commande', 'Lieu'],
+        ['CMD-005', 'Ivato'],
+        ['CMD-005', 'Analakely'],
+      ]);
+
+      const result = await service.importExcel('comp-1', buffer, 'Dépôt');
+
+      expect(result.created).toBe(1);
+      expect(result.skipped).toHaveLength(1);
+      expect(result.skipped[0].orderRef).toBe('CMD-005');
+      expect(result.skipped[0].reason).toContain('existe déjà');
+    });
+
+    it('should store Observation in notes', async () => {
+      mockPrisma.delivery.findUnique.mockResolvedValue(null);
+      mockPrisma.delivery.createMany.mockResolvedValue({ count: 1 });
+
+      const buffer = await createXlsxBuffer([
+        ['N° Commande', 'Lieu', 'Observation'],
+        ['CMD-006', 'Ivato', 'Matinée 8h-12h'],
+      ]);
+
+      const result = await service.importExcel('comp-1', buffer, 'Dépôt');
+
+      expect(result.created).toBe(1);
+      expect(mockPrisma.delivery.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({ notes: 'Observation: Matinée 8h-12h' }),
+        ]),
+      });
     });
   });
 });

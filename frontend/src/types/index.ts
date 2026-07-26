@@ -80,6 +80,11 @@ export interface Delivery {
   deliveryProofAccuracy?: number;
   locationMismatch?: boolean;
   mismatchResolved?: boolean;
+  clientPhone?: string;
+  amount?: number;
+  articlePrice?: number;
+  productDescription?: string;
+  externalOrderRef?: string;
 }
 
 export interface Position {

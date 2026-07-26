@@ -8,7 +8,11 @@ import {
   Delete,
   Query,
   UseGuards,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { DeliveryStatus } from '@prisma/client';
 import { DeliveriesService } from './deliveries.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
@@ -31,6 +35,20 @@ export class DeliveriesController {
   @Post()
   create(@CurrentUser('companyId') companyId: string, @Body() dto: CreateDeliveryDto) {
     return this.deliveriesService.create(companyId, dto);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
+  @Post('import')
+  @UseInterceptors(FileInterceptor('file'))
+  async importExcel(
+    @CurrentUser('companyId') companyId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('Aucun fichier fourni');
+    if (!file.originalname.match(/\.xlsx$/i)) throw new BadRequestException('Format de fichier invalide, .xlsx attendu');
+    const defaultPickupAddress = process.env.DEFAULT_PICKUP_ADDRESS || 'Entrepôt principal';
+    return this.deliveriesService.importExcel(companyId, file.buffer, defaultPickupAddress);
   }
 
   @UseGuards(RolesGuard)
