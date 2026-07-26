@@ -349,7 +349,7 @@ export default function DeliveriesPage() {
     `${d.firstName} ${d.lastName}${d.phone ? ` — ${d.phone}` : ''}`;
 
   return (
-    <div className="page-padding" style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
+    <div className="page-padding" style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
       <style>{`
         @keyframes dt-row-highlight {
           0% { background: var(--color-accent-muted); }
@@ -359,12 +359,13 @@ export default function DeliveriesPage() {
 
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-sm)',
+        marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-md)',
       }}>
-        <div>
+        <div style={{ minWidth: 0, overflow: 'hidden' }}>
           <h1 className="page-title" style={{
             fontFamily: 'var(--font-display)', fontSize: 'var(--text-xl)', fontWeight: 700,
             color: 'var(--color-text)', letterSpacing: '-0.02em', margin: 0,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
             Livraisons
           </h1>
@@ -372,7 +373,7 @@ export default function DeliveriesPage() {
             {meta.total > 0 ? `${meta.total} livraison${meta.total > 1 ? 's' : ''}` : 'Gérez les livraisons de votre flotte'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', flexShrink: 0, alignItems: 'center' }}>
           <input
             ref={fileInputRef}
             type="file"
