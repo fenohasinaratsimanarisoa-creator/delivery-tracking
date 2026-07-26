@@ -1,18 +1,23 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Optional, Logger } from '@nestjs/common';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from '../redis/redis.module';
 
 @Injectable()
 export class CacheService {
+  private readonly logger = new Logger(CacheService.name);
   private readonly fallback = new Map<string, { value: unknown; expiry: number }>();
 
   constructor(@Optional() @Inject(REDIS_CLIENT) private redis: Redis | null) {}
 
   async get<T>(key: string): Promise<T | null> {
     if (this.redis) {
-      const raw = await this.redis.get(key);
-      if (raw === null) return null;
-      return JSON.parse(raw) as T;
+      try {
+        const raw = await this.redis.get(key);
+        if (raw === null) return null;
+        return JSON.parse(raw) as T;
+      } catch (err) {
+        this.logger.warn(`Redis get failed for key "${key}", using in-memory fallback: ${(err as Error).message}`);
+      }
     }
     const entry = this.fallback.get(key);
     if (!entry) return null;
@@ -25,8 +30,12 @@ export class CacheService {
 
   async set(key: string, value: unknown, ttlSeconds = 60): Promise<void> {
     if (this.redis) {
-      await this.redis.setex(key, ttlSeconds, JSON.stringify(value));
-      return;
+      try {
+        await this.redis.setex(key, ttlSeconds, JSON.stringify(value));
+        return;
+      } catch (err) {
+        this.logger.warn(`Redis set failed for key "${key}", using in-memory fallback: ${(err as Error).message}`);
+      }
     }
     this.fallback.set(key, {
       value,
@@ -36,11 +45,15 @@ export class CacheService {
 
   async invalidate(pattern: string): Promise<void> {
     if (this.redis) {
-      const keys = await this.redis.keys(pattern);
-      if (keys.length > 0) {
-        await this.redis.del(...keys);
+      try {
+        const keys = await this.redis.keys(pattern);
+        if (keys.length > 0) {
+          await this.redis.del(...keys);
+        }
+        return;
+      } catch (err) {
+        this.logger.warn(`Redis invalidate failed for pattern "${pattern}", falling back to in-memory: ${(err as Error).message}`);
       }
-      return;
     }
     for (const key of this.fallback.keys()) {
       if (key.startsWith(pattern.replace('*', ''))) {

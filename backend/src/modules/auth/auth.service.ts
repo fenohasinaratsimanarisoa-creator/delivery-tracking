@@ -165,38 +165,41 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({
-        where: { id: payload.sub },
-        select: {
-          id: true,
-          email: true,
-          role: true,
-          companyId: true,
-          firstName: true,
-          lastName: true,
-          isActive: true,
-          refreshTokenHash: true,
-          totpEnabled: true,
-        },
-      });
-
-      if (!user || !user.isActive || !user.refreshTokenHash) {
-        throw new UnauthorizedException('Invalid refresh token');
-      }
-
-      const isTokenValid = await bcrypt.compare(refreshToken, user.refreshTokenHash);
-      if (!isTokenValid) {
-        await tx.userSession.deleteMany({ where: { userId: user.id } });
-        await tx.user.update({
-          where: { id: user.id },
-          data: { refreshTokenHash: null },
+    const result = await this.prisma.$transaction(
+      async (tx) => {
+        const user = await tx.user.findUnique({
+          where: { id: payload.sub },
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            companyId: true,
+            firstName: true,
+            lastName: true,
+            isActive: true,
+            refreshTokenHash: true,
+            totpEnabled: true,
+          },
         });
-        throw new UnauthorizedException('Refresh token reuse detected — all sessions revoked');
-      }
 
-      return user;
-    });
+        if (!user || !user.isActive || !user.refreshTokenHash) {
+          throw new UnauthorizedException('Invalid refresh token');
+        }
+
+        const isTokenValid = await bcrypt.compare(refreshToken, user.refreshTokenHash);
+        if (!isTokenValid) {
+          await tx.userSession.deleteMany({ where: { userId: user.id } });
+          await tx.user.update({
+            where: { id: user.id },
+            data: { refreshTokenHash: null },
+          });
+          throw new UnauthorizedException('Refresh token reuse detected — all sessions revoked');
+        }
+
+        return user;
+      },
+      { timeout: 15000 },
+    );
 
     return this.generateTokens(result.id, result.email, result.role, result.companyId);
   }
