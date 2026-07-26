@@ -349,7 +349,7 @@ export default function DeliveriesPage() {
     `${d.firstName} ${d.lastName}${d.phone ? ` — ${d.phone}` : ''}`;
 
   return (
-    <div className="page-padding" style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="page-padding" style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
       <style>{`
         @keyframes dt-row-highlight {
           0% { background: var(--color-accent-muted); }
@@ -372,7 +372,7 @@ export default function DeliveriesPage() {
             {meta.total > 0 ? `${meta.total} livraison${meta.total > 1 ? 's' : ''}` : 'Gérez les livraisons de votre flotte'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', flexShrink: 0 }}>
           <input
             ref={fileInputRef}
             type="file"
