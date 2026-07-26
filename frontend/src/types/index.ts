@@ -40,6 +40,8 @@ export interface Vehicle {
   licensePlate: string;
   fuelType: string;
   isActive: boolean;
+  positionSource?: string;
+  traccarDeviceId?: string | null;
   driver?: { id: string; firstName: string; lastName: string } | null;
 }
 

@@ -14,6 +14,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { PlatformAdminService } from './platform-admin.service';
 import { TrackingService } from '../tracking/tracking.service';
+import { TraccarBridgeService } from '../tracking/traccar-bridge.service';
 import { PlatformAdminLoginDto } from './dto/login.dto';
 import { PlatformAdminVerify2faDto } from './dto/verify-2fa.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
@@ -27,6 +28,7 @@ export class PlatformAdminController {
   constructor(
     private readonly service: PlatformAdminService,
     private readonly trackingService: TrackingService,
+    private readonly traccarBridgeService: TraccarBridgeService,
   ) {}
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -149,6 +151,12 @@ export class PlatformAdminController {
   ) {
     await this.service.changePassword(adminId, currentPassword, newPassword);
     return { message: 'Mot de passe modifié avec succès' };
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Get('traccar/status')
+  async getTraccarStatus() {
+    return this.traccarBridgeService.getStatus();
   }
 
   @UseGuards(JwtAuthGuard, SuperAdminGuard)

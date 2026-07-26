@@ -92,7 +92,12 @@ describe('FleetPage', () => {
     mockApiPatch.mockResolvedValue({ data: mockVehicles[0] });
     mockApiDelete.mockResolvedValue({ data: {} });
 
-    mockUseQuery.mockReturnValue({ data: responseData, isLoading: false });
+    mockUseQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => {
+      if (queryKey[0] === 'traccar-devices') {
+        return { data: [], isLoading: false };
+      }
+      return { data: responseData, isLoading: false };
+    });
     mockUseMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
   });
 
@@ -185,7 +190,12 @@ describe('FleetPage', () => {
 
   it('shows empty state when no vehicles', async () => {
     const emptyData = { data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 1 } };
-    mockUseQuery.mockReturnValueOnce({ data: emptyData, isLoading: false });
+    mockUseQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => {
+      if (queryKey[0] === 'traccar-devices') {
+        return { data: [], isLoading: false };
+      }
+      return { data: emptyData, isLoading: false };
+    });
 
     renderPage();
 
@@ -198,7 +208,12 @@ describe('FleetPage', () => {
   });
 
   it('shows skeleton loading state initially', async () => {
-    mockUseQuery.mockReturnValue({ data: null, isLoading: true });
+    mockUseQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => {
+      if (queryKey[0] === 'traccar-devices') {
+        return { data: [], isLoading: false };
+      }
+      return { data: null, isLoading: true };
+    });
     mockUseMutation.mockReturnValue({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false });
 
     renderPage();

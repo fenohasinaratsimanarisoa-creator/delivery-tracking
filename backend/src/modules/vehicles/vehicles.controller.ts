@@ -48,6 +48,13 @@ export class VehiclesController {
 
   @UseGuards(RolesGuard)
   @Roles('admin', 'dispatcher')
+  @Get('available-traccar-devices')
+  getAvailableTraccarDevices(@CurrentUser('companyId') companyId: string) {
+    return this.vehiclesService.getAvailableTraccarDevices(companyId);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
   @Get(':id')
   findOne(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
     return this.vehiclesService.findOne(companyId, id);

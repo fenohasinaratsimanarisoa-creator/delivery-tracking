@@ -14,6 +14,7 @@ interface VehicleFormValues {
   brand: string; model: string; year: string;
   licensePlate: string; fuelType: string;
   vin: string; theoreticalConsumption: string;
+  positionSource: string; traccarDeviceId: string;
 }
 
 const vehicleFields: FieldDef<VehicleFormValues>[] = [
@@ -37,12 +38,19 @@ const vehicleFields: FieldDef<VehicleFormValues>[] = [
       { value: 'GPL', label: 'GPL' },
     ] },
   { name: 'theoreticalConsumption', label: 'Consommation théorique (L/100km)', type: 'number', section: 'specs' },
+  { name: 'positionSource', label: 'Source de position', type: 'select', required: true, section: 'gps',
+    options: [
+      { value: 'phone', label: 'App mobile (chauffeur)' },
+      { value: 'physical_tracker', label: 'Traceur physique (Traccar)' },
+    ] },
+  { name: 'traccarDeviceId', label: 'Dispositif Traccar', type: 'select', section: 'gps' },
 ];
 
 const vehicleSections: FormSection[] = [
   { title: 'Identité du véhicule', fields: ['brand', 'model', 'year'] },
   { title: 'Immatriculation', fields: ['licensePlate', 'vin'] },
   { title: 'Caractéristiques', fields: ['fuelType', 'theoreticalConsumption'] },
+  { title: 'Source GPS', fields: ['positionSource', 'traccarDeviceId'] },
 ];
 
 function SkeletonRows() {
@@ -81,6 +89,12 @@ export default function FleetPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['vehicles', page],
     queryFn: () => api.get(`/vehicles?page=${page}&limit=20`).then((r) => r.data),
+  });
+
+  const { data: traccarDevices } = useQuery({
+    queryKey: ['traccar-devices'],
+    queryFn: () => api.get('/vehicles/available-traccar-devices').then((r) => r.data),
+    staleTime: 30000,
   });
 
   const vehicles: Vehicle[] = data?.data ?? [];
@@ -127,6 +141,20 @@ export default function FleetPage() {
     },
   });
 
+  const traccarDeviceOptions = (traccarDevices || []).map((d: any) => ({
+    value: String(d.id),
+    label: `${d.name} (ID: ${d.id})`,
+  }));
+
+  const fieldsWithTraccar = useMemo(() => {
+    return vehicleFields.map((f) => {
+      if (f.name === 'traccarDeviceId') {
+        return { ...f, options: traccarDeviceOptions };
+      }
+      return f;
+    });
+  }, [traccarDeviceOptions]);
+
   const saveMutation = useMutation({
     mutationFn: (body: VehicleFormValues) => {
       const payload: any = {
@@ -135,9 +163,13 @@ export default function FleetPage() {
         year: Number(body.year),
         licensePlate: body.licensePlate,
         fuelType: body.fuelType,
+        positionSource: body.positionSource || 'phone',
       };
       if (body.vin) payload.vin = body.vin;
       if (body.theoreticalConsumption) payload.theoreticalConsumption = Number(body.theoreticalConsumption);
+      if (body.positionSource === 'physical_tracker' && body.traccarDeviceId) {
+        payload.traccarDeviceId = body.traccarDeviceId;
+      }
       return editing
         ? api.patch(`/vehicles/${editing.id}`, payload)
         : api.post('/vehicles', payload);
@@ -163,8 +195,10 @@ export default function FleetPage() {
       fuelType: editing.fuelType,
       vin: '',
       theoreticalConsumption: '',
-    } : { brand: '', model: '', year: String(new Date().getFullYear()), licensePlate: '', fuelType: 'Diesel', vin: '', theoreticalConsumption: '' },
-    fields: vehicleFields,
+      positionSource: (editing as any).positionSource || 'phone',
+      traccarDeviceId: (editing as any).traccarDeviceId || '',
+    } : { brand: '', model: '', year: String(new Date().getFullYear()), licensePlate: '', fuelType: 'Diesel', vin: '', theoreticalConsumption: '', positionSource: 'phone', traccarDeviceId: '' },
+    fields: fieldsWithTraccar,
     sections: vehicleSections,
     onSubmit: async (values) => { saveMutation.mutate(values); },
   });
@@ -343,7 +377,10 @@ export default function FleetPage() {
           {vehicleSections.map((sec) => (
             <DialogSection key={sec.title} title={sec.title}>
               {sec.fields.map((fieldName) => {
-                const def = vehicleFields.find((f) => f.name === fieldName)!;
+                const def = fieldsWithTraccar.find((f) => f.name === fieldName)!;
+                if (fieldName === 'traccarDeviceId' && vehicleForm.values.positionSource !== 'physical_tracker') {
+                  return null;
+                }
                 const val = vehicleForm.values[fieldName as keyof VehicleFormValues] as string;
                 const err = vehicleForm.touched.has(fieldName) ? vehicleForm.errors[fieldName] : null;
                 return (
@@ -355,7 +392,10 @@ export default function FleetPage() {
                         onChange={(e) => vehicleForm.setValue(fieldName as keyof VehicleFormValues, e.target.value)}
                         onBlur={() => vehicleForm.handleBlur(fieldName as keyof VehicleFormValues)}
                       >
-                        {def.options?.map((o) => (
+                        {def.name === 'traccarDeviceId' && (
+                          <option value="">Sélectionnez un dispositif…</option>
+                        )}
+                        {def.options?.map((o: { value: string; label: string }) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
                       </select>

@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -11,7 +12,38 @@ import { VehicleFilterDto } from './dto/vehicle-filter.dto';
 
 @Injectable()
 export class VehiclesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private configService: ConfigService,
+  ) {}
+
+  private validateTrackerConfig(dto: CreateVehicleDto | UpdateVehicleDto) {
+    const posSource = dto.positionSource ?? 'phone';
+    if (posSource === 'physical_tracker' && !dto.traccarDeviceId) {
+      throw new BadRequestException(
+        'traccarDeviceId is required when positionSource is physical_tracker',
+      );
+    }
+  }
+
+  private async checkTraccarDeviceIdUniqueness(
+    traccarDeviceId: string,
+    excludeId?: string,
+  ) {
+    const existing = await this.prisma.vehicle.findFirst({
+      where: {
+        traccarDeviceId,
+        isActive: true,
+        deletedAt: null,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+    });
+    if (existing) {
+      throw new ConflictException(
+        `traccarDeviceId "${traccarDeviceId}" is already assigned to another active vehicle`,
+      );
+    }
+  }
 
   async create(companyId: string, dto: CreateVehicleDto) {
     const existing = await this.prisma.vehicle.findUnique({
@@ -21,9 +53,17 @@ export class VehiclesService {
       throw new ConflictException('License plate already exists');
     }
 
-    return this.prisma.vehicle.create({
-      data: { ...dto, companyId },
-    });
+    this.validateTrackerConfig(dto);
+    if (dto.traccarDeviceId) {
+      await this.checkTraccarDeviceIdUniqueness(dto.traccarDeviceId);
+    }
+
+    const data: any = { ...dto, companyId };
+    if (!dto.positionSource) {
+      data.positionSource = 'phone';
+    }
+
+    return this.prisma.vehicle.create({ data });
   }
 
   async findAll(companyId: string, filter: VehicleFilterDto) {
@@ -76,6 +116,8 @@ export class VehiclesService {
         model: true,
         licensePlate: true,
         fuelType: true,
+        positionSource: true,
+        traccarDeviceId: true,
         driver: { select: { id: true } },
       },
     });
@@ -101,6 +143,11 @@ export class VehiclesService {
       }
     }
 
+    this.validateTrackerConfig(dto);
+    if (dto.traccarDeviceId) {
+      await this.checkTraccarDeviceIdUniqueness(dto.traccarDeviceId, id);
+    }
+
     return this.prisma.vehicle.update({
       where: { id },
       data: dto,
@@ -121,5 +168,79 @@ export class VehiclesService {
       where: { id },
       data: { deletedAt: new Date() },
     });
+  }
+
+  async getAvailableTraccarDevices(companyId: string) {
+    const traccarUrl = this.configService.get<string>('TRACCAR_URL', 'http://traccar:8082');
+    const traccarUser = this.configService.get<string>('TRACCAR_USER', 'admin');
+    const traccarPassword = this.configService.get<string>('TRACCAR_PASSWORD', 'admin');
+
+    if (traccarUrl === 'http://traccar:8082' || traccarUrl === 'disabled') {
+      throw new BadRequestException('Traccar is not configured');
+    }
+
+    try {
+      const cookie = await this.authenticateTraccar(traccarUrl, traccarUser, traccarPassword);
+      const response = await fetch(`${traccarUrl}/api/devices`, {
+        headers: { Cookie: cookie },
+      });
+      if (!response.ok) {
+        throw new Error(`Traccar API returned ${response.status}`);
+      }
+      const devices: Array<{ id: number; name: string; uniqueId: string }> = await response.json();
+
+      const alreadyLinkedDeviceIds = new Set<string>();
+      const linked = await this.prisma.vehicle.findMany({
+        where: {
+          traccarDeviceId: { not: null },
+          isActive: true,
+          deletedAt: null,
+        },
+        select: { traccarDeviceId: true },
+      });
+      for (const v of linked) {
+        if (v.traccarDeviceId) alreadyLinkedDeviceIds.add(v.traccarDeviceId);
+      }
+
+      return devices
+        .filter((d) => !alreadyLinkedDeviceIds.has(String(d.id)))
+        .map((d) => ({
+          id: d.id,
+          name: d.name,
+          uniqueId: d.uniqueId,
+        }));
+    } catch (err: any) {
+      throw new BadRequestException(
+        `Traccar is unavailable: ${err.message}`,
+      );
+    }
+  }
+
+  private async authenticateTraccar(
+    url: string,
+    user: string,
+    password: string,
+  ): Promise<string> {
+    const loginResponse = await fetch(`${url}/api/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: user, password }),
+    });
+
+    if (!loginResponse.ok) {
+      throw new Error(`Traccar authentication failed: ${loginResponse.status}`);
+    }
+
+    const setCookie = loginResponse.headers.get('set-cookie');
+    if (!setCookie) {
+      throw new Error('Traccar did not return a session cookie');
+    }
+
+    const match = setCookie.match(/JSESSIONID=([^;]+)/);
+    if (!match) {
+      throw new Error('Traccar session cookie (JSESSIONID) not found');
+    }
+
+    return `JSESSIONID=${match[1]}`;
   }
 }

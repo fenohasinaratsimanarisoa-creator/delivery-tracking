@@ -12,6 +12,7 @@ import { GeofenceController } from './geofence.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
 import { CacheModule } from '../../common/cache/cache.module';
+import { RedisModule } from '../../common/redis/redis.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { CacheModule } from '../../common/cache/cache.module';
     }),
     NotificationsModule,
     CacheModule,
+    RedisModule,
   ],
   controllers: [TrackingController, GeofenceController],
   providers: [
@@ -36,6 +38,6 @@ import { CacheModule } from '../../common/cache/cache.module';
     WsAuthService,
     ApiKeyOrJwtGuard,
   ],
-  exports: [TrackingService, GeofenceService],
+  exports: [TrackingService, GeofenceService, TraccarBridgeService],
 })
 export class TrackingModule {}

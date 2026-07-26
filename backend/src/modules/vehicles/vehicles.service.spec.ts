@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { VehiclesService } from './vehicles.service';
 
@@ -16,24 +17,36 @@ const mockPrisma = {
   },
 };
 
+const mockConfigService = {
+  get: jest.fn((key: string, defaultValue?: any) => {
+    if (key === 'TRACCAR_URL') return 'http://traccar:8082';
+    if (key === 'TRACCAR_USER') return 'admin';
+    if (key === 'TRACCAR_PASSWORD') return 'admin';
+    return defaultValue;
+  }),
+};
+
 describe('VehiclesService', () => {
   let service: VehiclesService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new VehiclesService(mockPrisma as unknown as PrismaService);
+    service = new VehiclesService(
+      mockPrisma as unknown as PrismaService,
+      mockConfigService as unknown as ConfigService,
+    );
   });
 
-  describe('create', () => {
-    const dto = {
-      brand: 'Toyota',
-      model: 'Hilux',
-      year: 2024,
-      licensePlate: 'TRK-001',
-      fuelType: 'diesel',
-      theoreticalConsumption: 8.5,
-    };
+  const dto = {
+    brand: 'Toyota',
+    model: 'Hilux',
+    year: 2024,
+    licensePlate: 'TRK-001',
+    fuelType: 'diesel',
+    theoreticalConsumption: 8.5,
+  };
 
+  describe('create', () => {
     it('creates a vehicle when the plate is unique', async () => {
       mockPrisma.vehicle.findUnique.mockResolvedValueOnce(null);
       mockPrisma.vehicle.create.mockResolvedValueOnce({
@@ -46,7 +59,7 @@ describe('VehiclesService', () => {
         id: 'vehicle-1',
       });
       expect(mockPrisma.vehicle.create).toHaveBeenCalledWith({
-        data: { ...dto, companyId: 'company-1' },
+        data: { ...dto, companyId: 'company-1', positionSource: 'phone' },
       });
     });
 
@@ -54,6 +67,52 @@ describe('VehiclesService', () => {
       mockPrisma.vehicle.findUnique.mockResolvedValueOnce({ id: 'vehicle-1' });
 
       await expect(service.create('company-1', dto)).rejects.toThrow(ConflictException);
+      expect(mockPrisma.vehicle.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects physical_tracker without traccarDeviceId', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(null);
+
+      await expect(
+        service.create('company-1', { ...dto, positionSource: 'physical_tracker' }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.create('company-1', { ...dto, positionSource: 'physical_tracker' }),
+      ).rejects.toThrow(/traccarDeviceId is required/);
+      expect(mockPrisma.vehicle.create).not.toHaveBeenCalled();
+    });
+
+    it('accepts physical_tracker with traccarDeviceId', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.create.mockResolvedValueOnce({
+        id: 'vehicle-1',
+        ...dto,
+        companyId: 'company-1',
+        positionSource: 'physical_tracker',
+        traccarDeviceId: '42',
+      });
+
+      await expect(
+        service.create('company-1', {
+          ...dto,
+          positionSource: 'physical_tracker',
+          traccarDeviceId: '42',
+        }),
+      ).resolves.toMatchObject({ id: 'vehicle-1' });
+    });
+
+    it('rejects duplicate traccarDeviceId', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-existing' });
+
+      await expect(
+        service.create('company-1', {
+          ...dto,
+          positionSource: 'physical_tracker',
+          traccarDeviceId: '42',
+        }),
+      ).rejects.toThrow(ConflictException);
       expect(mockPrisma.vehicle.create).not.toHaveBeenCalled();
     });
   });
@@ -89,6 +148,9 @@ describe('VehiclesService', () => {
       skip: 5,
       take: 5,
       orderBy: { createdAt: 'desc' },
+      include: {
+        driver: { select: { id: true, firstName: true, lastName: true } },
+      },
     });
   });
 

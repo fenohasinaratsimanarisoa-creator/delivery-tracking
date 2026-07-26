@@ -1,4 +1,6 @@
-import { IsString, IsInt, IsOptional, IsBoolean, Min, Max, MinLength } from 'class-validator';
+import {
+  IsString, IsInt, IsOptional, IsBoolean, Min, Max, MinLength, IsIn,
+} from 'class-validator';
 
 export class CreateVehicleDto {
   @IsString()
@@ -31,4 +33,12 @@ export class CreateVehicleDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsIn(['phone', 'physical_tracker'])
+  positionSource?: string;
+
+  @IsOptional()
+  @IsString()
+  traccarDeviceId?: string;
 }
