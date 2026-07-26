@@ -16,6 +16,7 @@ import { TrackingService } from './tracking.service';
 import { UpdatePositionDto, BatchPositionDto } from './dto/update-position.dto';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { WsTrackingExceptionFilter } from '../../common/filters/ws-tracking-exception.filter';
+import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
 
 @WebSocketGateway({
   cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:5173' },
@@ -107,6 +108,9 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     const user = client.data.user;
     if (!user || user.role !== 'driver') return;
 
+    return CompanyScopedContext.run(user.companyId, async () => {
+    if (await this.trackingService.isRateLimited(user.id)) return;
+
     if (dto.deliveryId) {
       try {
         await this.trackingService.verifyDriverAssignment(dto.deliveryId, user.id);
@@ -165,7 +169,9 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
     this.server.to(`company:${user.companyId}`).emit('positionUpdate', broadcast);
 
-    return { event: 'positionSaved', data: { id: position.id, suspect: position.suspect } };}
+      return { event: 'positionSaved', data: { id: position.id, suspect: position.suspect } };
+    });
+  }
 
   @SubscribeMessage('batchPosition')
   async handleBatchPosition(
@@ -175,6 +181,7 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     const user = client.data.user;
     if (!user || user.role !== 'driver') return;
 
+    return CompanyScopedContext.run(user.companyId, async () => {
     const driver = await this.trackingService.findDriverByUserId(user.id);
     if (!driver) return;
 
@@ -213,7 +220,8 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
       this.server.to(room).emit('batchPositionUpdate', broadcasts);
     }
 
-    return { event: 'positionsSaved', data: { count: saved.length } };
+      return { event: 'positionsSaved', data: { count: saved.length } };
+    });
   }
 
   @SubscribeMessage('subscribeToDelivery')

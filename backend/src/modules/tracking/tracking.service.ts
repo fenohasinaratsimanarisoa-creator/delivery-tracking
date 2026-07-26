@@ -27,6 +27,7 @@ export class TrackingService {
     deduped: 0,
     teleported: 0,
     batchSaved: 0,
+    rateLimited: 0,
     lastReportTime: Date.now(),
   };
 
@@ -43,11 +44,22 @@ export class TrackingService {
     return { ...this.metrics };
   }
 
+  async isRateLimited(driverId: string): Promise<boolean> {
+    const key = `rate_limit:driver:${driverId}`;
+    const existing = await this.cacheService.get<boolean>(key);
+    if (existing) {
+      this.metrics.rateLimited++;
+      return true;
+    }
+    await this.cacheService.set(key, true, 1);
+    return false;
+  }
+
   logMetrics() {
     const now = Date.now();
     const elapsedMin = (now - this.metrics.lastReportTime) / 60000;
     this.logger.log(
-      `[METRICS] received=${this.metrics.received} saved=${this.metrics.saved} deduped=${this.metrics.deduped} teleported=${this.metrics.teleported} batch=${this.metrics.batchSaved} (last ${elapsedMin.toFixed(1)}min)`,
+      `[METRICS] received=${this.metrics.received} saved=${this.metrics.saved} deduped=${this.metrics.deduped} teleported=${this.metrics.teleported} batch=${this.metrics.batchSaved} rateLimited=${this.metrics.rateLimited} (last ${elapsedMin.toFixed(1)}min)`,
     );
     this.metrics = {
       received: 0,
@@ -55,6 +67,7 @@ export class TrackingService {
       deduped: 0,
       teleported: 0,
       batchSaved: 0,
+      rateLimited: 0,
       lastReportTime: now,
     };
   }
@@ -66,7 +79,7 @@ export class TrackingService {
   async verifyDriverAssignment(deliveryId: string, userId: string): Promise<void> {
     const delivery = await this.prisma.delivery.findUnique({
       where: { id: deliveryId },
-      select: { assignedDriverId: true, driverId: true, companyId: true },
+      select: { assignedDriverId: true, driverId: true },
     });
     if (!delivery) throw new NotFoundException('Delivery not found');
 
@@ -338,6 +351,23 @@ export class TrackingService {
     if (dto.deliveryId !== undefined && dto.deliveryId !== null && dto.deliveryId.length < 16) {
       this.logger.error(
         `savePosition rejected: invalid deliveryId="${dto.deliveryId}" — must be a valid UUIDv4`,
+      );
+      return null;
+    }
+
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id: dto.vehicleId },
+      select: { companyId: true },
+    });
+    if (!vehicle) {
+      this.logger.warn(
+        `savePosition rejected: vehicle ${dto.vehicleId} not found (driverId=${driverId})`,
+      );
+      return null;
+    }
+    if (companyId && vehicle.companyId !== companyId) {
+      this.logger.warn(
+        `Cross-tenant position rejected: vehicle ${dto.vehicleId} belongs to company ${vehicle.companyId}, not ${companyId} (driverId=${driverId})`,
       );
       return null;
     }

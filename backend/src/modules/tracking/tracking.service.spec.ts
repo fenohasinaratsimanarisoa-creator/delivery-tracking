@@ -6,6 +6,9 @@ const mockPrisma = {
   driver: {
     findUnique: jest.fn(),
   },
+  vehicle: {
+    findUnique: jest.fn(),
+  },
   $executeRawUnsafe: jest.fn(),
   $queryRaw: jest.fn(),
   gpsPosition: {
@@ -59,6 +62,7 @@ describe('TrackingService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPrisma.vehicle.findUnique.mockResolvedValue({ companyId: 'company-1' });
     service = new TrackingService(
       mockPrisma as unknown as PrismaService,
       mockNotifications as any,
@@ -83,7 +87,6 @@ describe('TrackingService', () => {
       mockPrisma.delivery.findUnique.mockResolvedValueOnce({
         assignedDriverId: 'user-1',
         driverId: 'driver-1',
-        companyId: 'company-1',
       });
 
       await expect(service.verifyDriverAssignment('delivery-1', 'user-1')).resolves.toBeUndefined();
@@ -93,7 +96,6 @@ describe('TrackingService', () => {
       mockPrisma.delivery.findUnique.mockResolvedValueOnce({
         assignedDriverId: 'other-user',
         driverId: 'driver-1',
-        companyId: 'company-1',
       });
       mockPrisma.driver.findUnique.mockResolvedValueOnce({ id: 'driver-1' });
 
@@ -104,7 +106,6 @@ describe('TrackingService', () => {
       mockPrisma.delivery.findUnique.mockResolvedValueOnce({
         assignedDriverId: 'other-user',
         driverId: 'driver-2',
-        companyId: 'company-1',
       });
       mockPrisma.driver.findUnique.mockResolvedValueOnce({ id: 'driver-1' });
 
@@ -401,6 +402,23 @@ describe('TrackingService', () => {
       expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
     });
 
+    it('rejects cross-tenant vehicle (companyId mismatch) — security isolation', async () => {
+      const VID = '00000000-0000-4000-0000-000000000001';
+      mockPrisma.vehicle.findUnique.mockReset();
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce({ companyId: 'company-B' });
+
+      const result = await service.savePosition(DRIVER, {
+        latitude: -18.8792,
+        longitude: 47.5079,
+        speed: 10,
+        timestamp: '2026-07-21T10:00:00.000Z',
+        vehicleId: VID,
+      }, 'company-A');
+
+      expect(result).toBeNull();
+      expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
+    });
+
     it('rejects empty deliveryId (when present) with a clear log, no Prisma crash', async () => {
       mockPrisma.gpsPosition.findFirst
         .mockResolvedValueOnce(null)
@@ -521,6 +539,29 @@ describe('TrackingService', () => {
     });
   });
 
+  describe('rate limiting (isRateLimited)', () => {
+    it('allows first request and sets 1s cooldown', async () => {
+      mockCacheService.get.mockResolvedValueOnce(null);
+      const result = await service.isRateLimited('driver-1');
+      expect(result).toBe(false);
+      expect(mockCacheService.set).toHaveBeenCalledWith('rate_limit:driver:driver-1', true, 1);
+    });
+
+    it('blocks second request within 1s window', async () => {
+      mockCacheService.get.mockResolvedValueOnce(true);
+      const result = await service.isRateLimited('driver-1');
+      expect(result).toBe(true);
+      expect(mockCacheService.set).not.toHaveBeenCalled();
+    });
+
+    it('increments rateLimited metric on blocked request', async () => {
+      const before = service.getMetrics().rateLimited;
+      mockCacheService.get.mockResolvedValueOnce(true);
+      await service.isRateLimited('driver-1');
+      expect(service.getMetrics().rateLimited).toBe(before + 1);
+    });
+  });
+
   describe('saveBatch', () => {
     const VID1 = '00000000-0000-4000-0000-000000000001';
     const VID2 = '00000000-0000-4000-0000-000000000003';
@@ -549,7 +590,6 @@ describe('TrackingService', () => {
         .mockResolvedValueOnce({
           assignedDriverId: 'user-1',
           driverId: null,
-          companyId: 'company-1',
         })
         .mockResolvedValueOnce(null);
 

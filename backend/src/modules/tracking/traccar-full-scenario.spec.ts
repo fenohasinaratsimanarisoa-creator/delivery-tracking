@@ -68,6 +68,7 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
         findMany: jest.fn(),
       },
       vehicle: {
+        findUnique: jest.fn().mockResolvedValue({ companyId: COMPANY_ID }),
         findFirst: jest.fn(),
         findMany: jest.fn(),
       },

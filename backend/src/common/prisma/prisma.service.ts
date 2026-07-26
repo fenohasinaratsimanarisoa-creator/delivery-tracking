@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { uuidSafetyMiddleware } from './uuid-safety.middleware';
+import { tenantScopeMiddleware } from './tenant-scope.middleware';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -17,6 +18,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   async onModuleInit() {
     this.$use(uuidSafetyMiddleware);
+    this.$use(tenantScopeMiddleware);
     await this.$connect();
   }
 

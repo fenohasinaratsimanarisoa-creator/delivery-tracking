@@ -38,6 +38,7 @@ import { GeocodingModule } from './modules/geocoding/geocoding.module';
 import { RedisModule } from './common/redis/redis.module';
 import { CacheModule } from './common/cache/cache.module';
 import { DataUpdateModule } from './common/events/data-update.module';
+import { TenantModule } from './common/tenant/tenant.module';
 
 @Module({
   imports: [
@@ -108,6 +109,7 @@ import { DataUpdateModule } from './common/events/data-update.module';
     AlertModule,
     EncryptionModule,
     DataUpdateModule,
+    TenantModule,
     HealthModule,
     MetricsModule,
     QueueModule,
