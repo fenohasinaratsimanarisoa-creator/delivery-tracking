@@ -76,8 +76,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--color-bg)' }}>
       <Sidebar />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 1, position: 'relative', overflow: 'auto' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div style={{ flex: 1, position: 'relative', overflow: 'auto', minWidth: 0 }}>
           {children}
         </div>
       </div>
@@ -87,6 +87,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
 function MobileResponsiveStyles() {
   return <style>{`
+/* ─── Global: prevent horizontal overflow beyond viewport ─── */
+html, body, #root {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
 /* ─── Page wrappers: prevent horizontal scroll ─── */
 @media (max-width: 640px) {
   .page-padding {

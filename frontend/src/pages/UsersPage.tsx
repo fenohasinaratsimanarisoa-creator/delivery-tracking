@@ -226,7 +226,7 @@ export default function UsersPage() {
   const onCancel = () => { setDrawerOpen(false); setEditing(null); };
 
   return (
-    <div className="page-padding" style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="page-padding" style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
       <style>{`
         @keyframes dt-row-highlight {
           0% { background: var(--color-accent-muted); }
