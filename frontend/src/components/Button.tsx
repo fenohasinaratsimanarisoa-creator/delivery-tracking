@@ -9,9 +9,9 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const sizeMap: Record<string, React.CSSProperties> = {
-  sm: { padding: 'var(--space-xs, 4px) var(--space-sm, 8px)', fontSize: 'var(--text-xs, 0.625rem)' },
-  md: { padding: 'var(--space-sm, 8px) var(--space-lg, 16px)', fontSize: 'var(--text-sm, 0.875rem)' },
-  lg: { padding: '11px 24px', fontSize: 'var(--text-md, 1rem)' },
+  sm: { padding: 'var(--space-xs, 4px) var(--space-sm, 8px)', fontSize: 'var(--text-xs, 0.625rem)', minHeight: 28, gap: 4 },
+  md: { padding: 'var(--space-sm, 8px) var(--space-lg, 16px)', fontSize: 'var(--text-sm, 0.875rem)', minHeight: 36, gap: 6 },
+  lg: { padding: '12px 24px', fontSize: 'var(--text-md, 1rem)', minHeight: 44, gap: 8 },
 };
 
 const variantMap: Record<string, React.CSSProperties> = {
@@ -19,11 +19,13 @@ const variantMap: Record<string, React.CSSProperties> = {
     background: 'var(--color-accent, #F2A93C)',
     color: 'var(--color-bg, #0B1220)',
     border: 'none',
+    boxShadow: 'var(--shadow-xs, 0 1px 3px rgba(0,0,0,0.3))',
   },
   secondary: {
     background: 'var(--color-surface-alt, #182339)',
     color: 'var(--color-text, #E8ECF3)',
     border: '1px solid var(--color-input-border, rgba(232,236,243,0.15))',
+    boxShadow: 'var(--shadow-xs, 0 1px 3px rgba(0,0,0,0.3))',
   },
   danger: {
     background: 'var(--color-red-muted, rgba(232,84,76,0.15))',
@@ -64,39 +66,51 @@ export default function Button({
         fontWeight: 600,
         borderRadius: 'var(--radius-md, 6px)',
         cursor: disabled || loading ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.6 : 1,
+        opacity: disabled ? 0.5 : 1,
         fontFamily: 'var(--font-body, Inter, sans-serif)',
-        transition: 'background var(--transition-fast, 150ms) ease, color var(--transition-fast, 150ms) ease, border-color var(--transition-fast, 150ms) ease, box-shadow var(--transition-fast, 150ms) ease, transform var(--transition-fast, 150ms) ease',
+        transition: `background var(--duration-base, 200ms) var(--ease-smooth, ease), color var(--duration-base, 200ms) var(--ease-smooth, ease), border-color var(--duration-base, 200ms) var(--ease-smooth, ease), box-shadow var(--duration-base, 200ms) var(--ease-smooth, ease), transform var(--duration-fast, 120ms) var(--ease-snappy, ease)`,
         width: fullWidth ? '100%' : undefined,
         whiteSpace: 'nowrap',
+        position: 'relative',
+        overflow: 'hidden',
         ...sizeMap[size],
         ...variantMap[variant],
         ...style,
       }}
       onMouseEnter={(e) => {
         if (!disabled && !loading) {
+          e.currentTarget.style.transform = 'translateY(-1px)';
           if (variant === 'primary') {
-            e.currentTarget.style.transform = 'translateY(-1px)';
-            e.currentTarget.style.boxShadow = 'var(--shadow-sm, 0 4px 24px rgba(0,0,0,0.4))';
-          }
-          if (variant === 'outline') {
-            e.currentTarget.style.background = 'var(--color-accent-muted, rgba(242,169,60,0.15))';
-          }
-          if (variant === 'secondary') {
+            e.currentTarget.style.boxShadow = 'var(--shadow-glow, 0 0 12px rgba(242,169,60,0.35))';
+          } else if (variant === 'danger') {
+            e.currentTarget.style.boxShadow = 'var(--shadow-glow-danger, 0 0 12px rgba(232,84,76,0.35))';
+          } else if (variant === 'secondary') {
+            e.currentTarget.style.boxShadow = 'var(--shadow-md, 0 4px 12px rgba(0,0,0,0.4))';
             e.currentTarget.style.background = 'var(--color-surface-hover, #1E2A45)';
+          } else if (variant === 'outline') {
+            e.currentTarget.style.background = 'var(--color-accent-muted, rgba(242,169,60,0.15))';
+          } else if (variant === 'ghost') {
+            e.currentTarget.style.background = 'var(--color-accent-muted, rgba(242,169,60,0.08))';
           }
         }
       }}
       onMouseLeave={(e) => {
-        if (variant === 'primary') {
+        if (!disabled && !loading) {
           e.currentTarget.style.transform = '';
-          e.currentTarget.style.boxShadow = '';
+          e.currentTarget.style.boxShadow = variantMap[variant]?.boxShadow || '';
+          if (variant === 'secondary') e.currentTarget.style.background = 'var(--color-surface-alt, #182339)';
+          if (variant === 'outline') e.currentTarget.style.background = 'transparent';
+          if (variant === 'ghost') e.currentTarget.style.background = 'transparent';
         }
-        if (variant === 'outline') {
-          e.currentTarget.style.background = 'transparent';
+      }}
+      onMouseDown={(e) => {
+        if (!disabled && !loading) {
+          e.currentTarget.style.transform = 'scale(0.97)';
         }
-        if (variant === 'secondary') {
-          e.currentTarget.style.background = 'var(--color-surface-alt, #182339)';
+      }}
+      onMouseUp={(e) => {
+        if (!disabled && !loading) {
+          e.currentTarget.style.transform = '';
         }
       }}
       {...rest}
@@ -110,8 +124,11 @@ export default function Button({
           borderTopColor: 'transparent',
           animation: 'dt-spin 0.6s linear infinite',
           display: 'inline-block',
+          flexShrink: 0,
         }} />
-      ) : icon}
+      ) : icon ? (
+        <span style={{ display: 'inline-flex', flexShrink: 0 }}>{icon}</span>
+      ) : null}
       {children}
     </button>
   );

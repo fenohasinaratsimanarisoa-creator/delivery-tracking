@@ -130,6 +130,40 @@ export const radius = {
   full: 9999,
 } as const;
 
+export const shadows = {
+  xs: '0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2)',
+  sm: '0 2px 6px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.2)',
+  md: '0 4px 12px rgba(0,0,0,0.4), 0 1px 4px rgba(0,0,0,0.15)',
+  lg: '0 8px 24px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.2)',
+  xl: '0 12px 40px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.2)',
+  '2xl': '0 20px 60px rgba(0,0,0,0.55), 0 8px 24px rgba(0,0,0,0.25)',
+  glow: '0 0 12px rgba(242,169,60,0.35)',
+  glowDanger: '0 0 12px rgba(232,84,76,0.35)',
+  light: {
+    xs: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
+    sm: '0 2px 6px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)',
+    md: '0 4px 12px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05)',
+    lg: '0 8px 24px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.06)',
+    xl: '0 12px 40px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.08)',
+    '2xl': '0 20px 60px rgba(0,0,0,0.15), 0 8px 24px rgba(0,0,0,0.1)',
+    glow: '0 0 12px rgba(212,139,30,0.2)',
+    glowDanger: '0 0 12px rgba(204,61,54,0.2)',
+  },
+} as const;
+
+export const easing = {
+  premium: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  snappy: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+  smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
+  linear: 'linear',
+} as const;
+
+export const duration = {
+  fast: '120ms',
+  base: '200ms',
+  slow: '350ms',
+} as const;
+
 export function buildCssVars(mode: ThemeMode): string {
   const c = colors[mode];
   return `
@@ -199,8 +233,20 @@ export function buildCssVars(mode: ThemeMode): string {
   --radius-xl: ${radius.xl}px;
   --radius-2xl: ${radius['2xl']}px;
   --radius-full: ${radius.full}px;
-  --transition-fast: 150ms;
-  --transition-normal: 250ms;
+  --shadow-xs: ${mode === 'dark' ? shadows.xs : shadows.light.xs};
+  --shadow-sm: ${mode === 'dark' ? shadows.sm : shadows.light.sm};
+  --shadow-md: ${mode === 'dark' ? shadows.md : shadows.light.md};
+  --shadow-lg: ${mode === 'dark' ? shadows.lg : shadows.light.lg};
+  --shadow-xl: ${mode === 'dark' ? shadows.xl : shadows.light.xl};
+  --shadow-2xl: ${mode === 'dark' ? shadows['2xl'] : shadows.light['2xl']};
+  --shadow-glow: ${mode === 'dark' ? shadows.glow : shadows.light.glow};
+  --shadow-glow-danger: ${mode === 'dark' ? shadows.glowDanger : shadows.light.glowDanger};
+  --ease-premium: ${easing.premium};
+  --ease-snappy: ${easing.snappy};
+  --ease-smooth: ${easing.smooth};
+  --duration-fast: ${duration.fast};
+  --duration-base: ${duration.base};
+  --duration-slow: ${duration.slow};
 }
 `;
 }
