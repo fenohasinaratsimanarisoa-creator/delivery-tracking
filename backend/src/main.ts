@@ -126,5 +126,15 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   await app.listen(port);
   app.get(Logger).log(`Application running on http://localhost:${port}`);
+
+  if (!process.env.SENTRY_DSN) {
+    app.get(Logger).warn('[STARTUP] SENTRY_DSN not set — errors will NOT be reported to Sentry');
+  }
+  if (process.env.BILLING_ENABLED !== 'true') {
+    app.get(Logger).log('[STARTUP] BILLING_ENABLED=false — pilot mode, quotas disabled');
+  }
+  if (!process.env.ALERT_SLACK_WEBHOOK && !process.env.ALERT_DISCORD_WEBHOOK) {
+    app.get(Logger).warn('[STARTUP] No alert webhook configured — critical alerts will not be sent');
+  }
 }
 bootstrap();
