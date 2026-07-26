@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { DeliveryStatus, NotificationType, NotificationPriority } from '@prisma/client';
+import { DeliveryStatus, NotificationType, NotificationPriority, Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -622,7 +622,7 @@ export class DeliveriesService {
         continue;
       }
 
-      toCreate.push({
+      const data = {
         title: orderRef,
         externalOrderRef: orderRef,
         deliveryAddress: lieu,
@@ -636,14 +636,23 @@ export class DeliveriesService {
         pickupAddress: defaultPickupAddress,
         status: DeliveryStatus.in_progress,
         companyId,
-      });
-    }
+      };
 
-    if (toCreate.length > 0) {
-      await this.prisma.delivery.createMany({ data: toCreate });
+      // Per-row create with safety net: if the pre-check (findFirst above) missed a duplicate
+      // (e.g. two rows in the same file with the same externalOrderRef, or a race condition
+      // with a concurrent import), the P2002 is caught and converted to 'skipped' instead of
+      // crashing the entire import.
+      try {
+        await this.prisma.delivery.create({ data });
+        result.created++;
+      } catch (err: any) {
+        if ((err instanceof Prisma.PrismaClientKnownRequestError || err?.name === 'PrismaClientKnownRequestError') && err?.code === 'P2002') {
+          result.skipped.push({ row: rowNum, orderRef, reason: 'duplicate' });
+        } else {
+          result.errors.push({ row: rowNum, reason: err instanceof Error ? err.message : 'Erreur inconnue' });
+        }
+      }
     }
-
-    result.created = toCreate.length;
     Logger.log(`Import Excel (${mode}): ${result.created} créées, ${result.updated} mises à jour, ${result.skipped.length} ignorées, ${result.errors.length} erreurs`, 'DeliveriesService');
     return result;
   }
