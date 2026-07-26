@@ -29,4 +29,12 @@ export class UpdateUserDto {
 
   @IsOptional()
   isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  licenseNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  vehicleId?: string;
 }

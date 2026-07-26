@@ -243,27 +243,89 @@ export class UsersService {
       if (existing) throw new ConflictException('Email already in use');
     }
 
-    const data: any = { ...dto };
-    if (dto.password) {
-      data.passwordHash = await bcrypt.hash(dto.password, 10);
-      delete data.password;
+    const targetRole = dto.role || user.role;
+    if (targetRole === 'driver') {
+      if (dto.vehicleId) {
+        const vehicle = await this.prisma.vehicle.findFirst({
+          where: { id: dto.vehicleId, companyId, deletedAt: null },
+        });
+        if (!vehicle) throw new BadRequestException('Vehicle not found in your company');
+        const alreadyAssigned = await this.prisma.driver.findFirst({
+          where: { vehicleId: dto.vehicleId, deletedAt: null, userId: { not: id } },
+        });
+        if (alreadyAssigned) throw new ConflictException('Vehicle is already assigned to another driver');
+      }
+      if (dto.licenseNumber) {
+        const existingLic = await this.prisma.driver.findUnique({
+          where: { licenseNumber: dto.licenseNumber },
+        });
+        if (existingLic && existingLic.userId !== id) {
+          throw new ConflictException('License number already exists');
+        }
+      }
     }
 
-    return this.prisma.user.update({
-      where: { id },
-      data,
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        role: true,
-        isActive: true,
-        companyId: true,
-        createdAt: true,
-      },
+    const data: any = {};
+    if (dto.email !== undefined) data.email = dto.email;
+    if (dto.firstName !== undefined) data.firstName = dto.firstName;
+    if (dto.lastName !== undefined) data.lastName = dto.lastName;
+    if (dto.phone !== undefined) data.phone = dto.phone;
+    if (dto.role !== undefined) data.role = dto.role;
+    if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.password) {
+      data.passwordHash = await bcrypt.hash(dto.password, 10);
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.update({
+        where: { id },
+        data,
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          role: true,
+          isActive: true,
+          companyId: true,
+          createdAt: true,
+        },
+      });
+
+      if (targetRole === 'driver' && (dto.vehicleId !== undefined || dto.licenseNumber !== undefined)) {
+        const existingDriver = await tx.driver.findFirst({
+          where: { companyId, userId: id, deletedAt: null },
+        });
+        const driverData: any = {};
+        if (dto.vehicleId !== undefined) driverData.vehicleId = dto.vehicleId;
+        if (dto.licenseNumber !== undefined) driverData.licenseNumber = dto.licenseNumber;
+
+        if (existingDriver) {
+          await tx.driver.update({
+            where: { id: existingDriver.id },
+            data: driverData,
+          });
+        } else {
+          await tx.driver.create({
+            data: {
+              firstName: updatedUser.firstName,
+              lastName: updatedUser.lastName,
+              email: updatedUser.email,
+              phone: updatedUser.phone || undefined,
+              licenseNumber: dto.licenseNumber || `DRV-${id.slice(0, 8)}`,
+              companyId,
+              userId: id,
+              ...(dto.vehicleId ? { vehicleId: dto.vehicleId } : {}),
+            },
+          });
+        }
+      }
+
+      return updatedUser;
     });
+
+    return result;
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {

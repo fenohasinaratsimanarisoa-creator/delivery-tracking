@@ -397,6 +397,146 @@ describe('UsersService', () => {
         }),
       );
     });
+
+    it('should assign vehicle to existing driver', async () => {
+      const existingUser = {
+        id: 'user-drv',
+        email: 'driver@test.com',
+        companyId: 'comp-1',
+        deletedAt: null,
+        role: 'driver',
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1', companyId: 'comp-1' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.user.update.mockResolvedValueOnce({
+        id: 'user-drv',
+        email: 'driver@test.com',
+        firstName: 'Driver',
+        lastName: 'Test',
+        phone: null,
+        role: 'driver',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+      });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-1', userId: 'user-drv', companyId: 'comp-1' });
+      mockPrisma.driver.update.mockResolvedValueOnce({ id: 'driver-1', vehicleId: 'vehicle-1' });
+
+      const result = await service.update('comp-1', 'user-drv', { vehicleId: 'vehicle-1' });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(mockPrisma.driver.update).toHaveBeenCalledWith({
+        where: { id: 'driver-1' },
+        data: { vehicleId: 'vehicle-1' },
+      });
+      expect(result).toBeDefined();
+    });
+
+    it('should assign vehicle to user being promoted to driver (no driver record yet)', async () => {
+      const existingUser = {
+        id: 'user-new-drv',
+        email: 'newdrv@test.com',
+        companyId: 'comp-1',
+        deletedAt: null,
+        role: 'dispatcher',
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-2', companyId: 'comp-1' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.user.update.mockResolvedValueOnce({
+        id: 'user-new-drv',
+        email: 'newdrv@test.com',
+        firstName: 'New',
+        lastName: 'Driver',
+        phone: null,
+        role: 'driver',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+      });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.driver.create.mockResolvedValueOnce({ id: 'driver-new', userId: 'user-new-drv', vehicleId: 'vehicle-2' });
+
+      const result = await service.update('comp-1', 'user-new-drv', { role: 'driver', vehicleId: 'vehicle-2' });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(mockPrisma.driver.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ userId: 'user-new-drv', vehicleId: 'vehicle-2' }),
+        }),
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('should throw ConflictException when vehicle is already assigned to another driver', async () => {
+      const existingUser = {
+        id: 'user-drv-2',
+        email: 'driver2@test.com',
+        companyId: 'comp-1',
+        deletedAt: null,
+        role: 'driver',
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1', companyId: 'comp-1' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'other-driver', userId: 'other-user', vehicleId: 'vehicle-1' });
+
+      await expect(
+        service.update('comp-1', 'user-drv-2', { vehicleId: 'vehicle-1' }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should throw ConflictException when licenseNumber is taken by another driver', async () => {
+      const existingUser = {
+        id: 'user-drv-3',
+        email: 'driver3@test.com',
+        companyId: 'comp-1',
+        deletedAt: null,
+        role: 'driver',
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
+      mockPrisma.driver.findUnique.mockResolvedValueOnce({ id: 'other-driver-lic', userId: 'other-user', licenseNumber: 'LIC-999' });
+
+      await expect(
+        service.update('comp-1', 'user-drv-3', { licenseNumber: 'LIC-999' }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should allow keeping the same licenseNumber on update', async () => {
+      const existingUser = {
+        id: 'user-drv-4',
+        email: 'driver4@test.com',
+        companyId: 'comp-1',
+        deletedAt: null,
+        role: 'driver',
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
+      mockPrisma.driver.findUnique.mockResolvedValueOnce({ id: 'driver-4', userId: 'user-drv-4', licenseNumber: 'LIC-777' });
+      mockPrisma.user.update.mockResolvedValueOnce({
+        id: 'user-drv-4',
+        email: 'driver4@test.com',
+        firstName: 'Driver',
+        lastName: 'Four',
+        phone: null,
+        role: 'driver',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+      });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-4', userId: 'user-drv-4', companyId: 'comp-1' });
+      mockPrisma.driver.update.mockResolvedValueOnce({ id: 'driver-4', licenseNumber: 'LIC-777' });
+
+      const result = await service.update('comp-1', 'user-drv-4', { licenseNumber: 'LIC-777' });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(mockPrisma.driver.update).toHaveBeenCalledWith({
+        where: { id: 'driver-4' },
+        data: { licenseNumber: 'LIC-777' },
+      });
+      expect(result).toBeDefined();
+    });
   });
 
   describe('updateProfile', () => {
