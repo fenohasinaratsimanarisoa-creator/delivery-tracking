@@ -420,4 +420,64 @@ describe('DeliveriesService - State Machine', () => {
       expect(result.status).toBe(DeliveryStatus.assigned);
     });
   });
+
+  describe('bulkAction', () => {
+    it('should succeed on valid ids and fail on invalid', async () => {
+      mockPrisma.delivery.findFirst
+        .mockResolvedValueOnce({ id: 'del-ok', status: 'pending', companyId: 'comp-1', deletedAt: null })
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'del-in-progress', status: 'in_progress', companyId: 'comp-1', deletedAt: null });
+      mockPrisma.delivery.update.mockResolvedValue({});
+
+      const result = await service.bulkAction('comp-1', {
+        ids: ['del-ok', 'del-not-found', 'del-in-progress'],
+        action: 'delete',
+      });
+
+      expect(result.succeeded).toEqual(['del-ok']);
+      expect(result.failed).toHaveLength(2);
+      expect(result.failed[0].reason).toContain('introuvable');
+      expect(result.failed[1].reason).toContain('en cours');
+    });
+
+    it('should update status respecting transition matrix', async () => {
+      mockPrisma.delivery.findFirst
+        .mockResolvedValueOnce({ id: 'del-a', status: 'pending', companyId: 'comp-1', deletedAt: null })
+        .mockResolvedValueOnce({ id: 'del-b', status: 'delivered', companyId: 'comp-1', deletedAt: null });
+      mockPrisma.delivery.update.mockResolvedValue({});
+
+      const result = await service.bulkAction('comp-1', {
+        ids: ['del-a', 'del-b'],
+        action: 'updateStatus',
+        status: 'cancelled',
+      });
+
+      expect(result.succeeded).toEqual(['del-a']);
+      expect(result.failed).toHaveLength(1);
+      expect(result.failed[0].reason).toContain('Transition');
+    });
+
+    it('should assign driver and set assignedDriverId', async () => {
+      mockPrisma.delivery.findFirst
+        .mockResolvedValueOnce({ id: 'del-d1', status: 'pending', companyId: 'comp-1', deletedAt: null })
+        .mockResolvedValueOnce({ id: 'del-d2', status: 'pending', companyId: 'comp-1', deletedAt: null });
+      mockPrisma.driver.findFirst
+        .mockResolvedValueOnce({ id: 'drv-1', userId: 'user-99', companyId: 'comp-1' })
+        .mockResolvedValueOnce(null);
+      mockPrisma.delivery.update.mockResolvedValue({});
+
+      const result = await service.bulkAction('comp-1', {
+        ids: ['del-d1', 'del-d2'],
+        action: 'assignDriver',
+        driverId: 'drv-1',
+      });
+
+      expect(result.succeeded).toEqual(['del-d1']);
+      expect(result.failed).toHaveLength(1);
+      expect(result.failed[0].reason).toContain('introuvable');
+      expect(mockPrisma.delivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ driverId: 'drv-1', assignedDriverId: 'user-99' }) }),
+      );
+    });
+  });
 });

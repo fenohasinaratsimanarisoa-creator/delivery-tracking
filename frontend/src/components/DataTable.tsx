@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, CheckSquare, Square } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 interface Column<T> {
@@ -22,11 +22,15 @@ interface Props<T> {
   loading?: boolean;
   emptyMessage?: string;
   keyExtractor: (row: T) => string;
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onSelectionChange?: (ids: Set<string>) => void;
 }
 
 export default function DataTable<T>({
   columns, data, total, page, limit,
   onPageChange, onEdit, onDelete, loading, emptyMessage, keyExtractor,
+  selectable, selectedIds, onSelectionChange,
 }: Props<T>) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
@@ -54,6 +58,30 @@ export default function DataTable<T>({
     const cmp = typeof aVal === 'string' ? aVal.localeCompare(bVal) : aVal - bVal;
     return sortDir === 'asc' ? cmp : -cmp;
   });
+
+  const allSelectedOnPage = selectable && data.length > 0 && data.every((row) => selectedIds?.has(keyExtractor(row)));
+  const someSelectedOnPage = selectable && data.some((row) => selectedIds?.has(keyExtractor(row))) && !allSelectedOnPage;
+
+  const handleSelectAll = () => {
+    if (!onSelectionChange) return;
+    if (allSelectedOnPage) {
+      const next = new Set(selectedIds);
+      data.forEach((row) => next.delete(keyExtractor(row)));
+      onSelectionChange(next);
+    } else {
+      const next = new Set(selectedIds);
+      data.forEach((row) => next.add(keyExtractor(row)));
+      onSelectionChange(next);
+    }
+  };
+
+  const handleRowSelect = (id: string) => {
+    if (!onSelectionChange || !selectedIds) return;
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectionChange(next);
+  };
 
   if (loading) {
     return (
@@ -102,13 +130,26 @@ export default function DataTable<T>({
       <div style={{
         display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)',
       }}>
-        {sorted.map((row) => (
-          <div key={keyExtractor(row)} style={{
+        {sorted.map((row) => {
+          const rowId = keyExtractor(row);
+          return (
+          <div key={rowId} style={{
             background: 'var(--color-surface)',
             border: '1px solid var(--color-border-subtle)',
             borderRadius: 'var(--radius-lg)',
             padding: 'var(--space-md)',
           }}>
+            {selectable && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <button
+                  onClick={() => handleRowSelect(rowId)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--color-accent)' }}
+                  aria-label="Sélectionner"
+                >
+                  {selectedIds?.has(rowId) ? <CheckSquare size={18} /> : <Square size={18} />}
+                </button>
+              </div>
+            )}
             {columns.map((col) => (
               <div key={col.key} style={{
                 display: 'flex', justifyContent: 'space-between',
@@ -167,7 +208,8 @@ export default function DataTable<T>({
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
         {totalPages > 1 && (
           <div style={{
             display: 'flex', justifyContent: 'center', alignItems: 'center',
@@ -221,6 +263,22 @@ export default function DataTable<T>({
               background: 'var(--color-surface-alt)',
               borderBottom: '1px solid var(--color-border-subtle)',
             }}>
+              {selectable && (
+                <th style={{
+                  padding: 'var(--space-md) var(--space-lg)',
+                  width: 48, textAlign: 'center',
+                  position: 'sticky', left: 0, zIndex: 3,
+                  background: 'var(--color-surface-alt)',
+                }}>
+                  <button
+                    onClick={handleSelectAll}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--color-accent)' }}
+                    aria-label={allSelectedOnPage ? 'Tout désélectionner' : 'Tout sélectionner'}
+                  >
+                    {allSelectedOnPage ? <CheckSquare size={16} /> : someSelectedOnPage ? <Square size={16} opacity={0.5} /> : <Square size={16} />}
+                  </button>
+                </th>
+              )}
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -255,6 +313,9 @@ export default function DataTable<T>({
                   textTransform: 'uppercase', letterSpacing: '0.05em',
                   color: 'var(--color-text-secondary)',
                   width: 100, textAlign: 'right',
+                  position: 'sticky', right: 0, zIndex: 2,
+                  background: 'var(--color-surface-alt)',
+                  boxShadow: '-4px 0 8px -4px rgba(0,0,0,0.15)',
                 }}>
                   {t('common.actions')}
                 </th>
@@ -262,17 +323,37 @@ export default function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-              {sorted.map((row, ri) => (
+              {sorted.map((row, ri) => {
+                const rowId = keyExtractor(row);
+                const isSelected = selectedIds?.has(rowId);
+                return (
                 <tr
-                  key={keyExtractor(row)}
+                  key={rowId}
                   style={{
                     borderBottom: ri < sorted.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
                     transition: 'background 0.15s ease',
                     cursor: 'default',
+                    ...(isSelected ? { background: 'var(--color-accent-muted)' } : {}),
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
+                  onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                 >
+                  {selectable && (
+                    <td style={{
+                      padding: 'var(--space-md) var(--space-lg)',
+                      width: 48, textAlign: 'center',
+                      position: 'sticky', left: 0, zIndex: 1,
+                      background: isSelected ? 'var(--color-accent-muted)' : 'var(--color-surface)',
+                    }}>
+                      <button
+                        onClick={() => handleRowSelect(rowId)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--color-accent)' }}
+                        aria-label="Sélectionner"
+                      >
+                        {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                      </button>
+                    </td>
+                  )}
                   {columns.map((col) => (
                     <td key={col.key} style={{
                       padding: 'var(--space-md) var(--space-lg)',
@@ -287,6 +368,9 @@ export default function DataTable<T>({
                   <td style={{
                     padding: 'var(--space-md) var(--space-lg)',
                     textAlign: 'right',
+                    position: 'sticky', right: 0, zIndex: 1,
+                    background: isSelected ? 'var(--color-accent-muted)' : 'var(--color-surface)',
+                    boxShadow: '-4px 0 8px -4px rgba(0,0,0,0.15)',
                   }}>
                     <div style={{ display: 'flex', gap: 'var(--space-xs)', justifyContent: 'flex-end' }}>
                       {onEdit && (
@@ -311,7 +395,8 @@ export default function DataTable<T>({
                   </td>
                 )}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

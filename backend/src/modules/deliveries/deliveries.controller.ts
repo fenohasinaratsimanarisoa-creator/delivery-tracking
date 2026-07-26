@@ -151,6 +151,16 @@ export class DeliveriesController {
   }
 
   @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
+  @Post('bulk-action')
+  async bulkAction(
+    @CurrentUser('companyId') companyId: string,
+    @Body() dto: { ids: string[]; action: string; status?: string; driverId?: string },
+  ) {
+    return this.deliveriesService.bulkAction(companyId, dto);
+  }
+
+  @UseGuards(RolesGuard)
   @Roles('admin')
   @Delete(':id')
   remove(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {

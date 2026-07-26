@@ -90,6 +90,8 @@ export default function DeliveriesPage() {
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['deliveries', page],
@@ -175,6 +177,25 @@ export default function DeliveriesPage() {
     setImporting(true);
     importMutation.mutate(file);
   }, [importMutation, toast]);
+
+  const bulkMutation = useMutation({
+    mutationFn: (payload: { ids: string[]; action: string; status?: string; driverId?: string }) =>
+      api.post('/deliveries/bulk-action', payload).then((r) => r.data),
+    onSuccess: (report: { succeeded: string[]; failed: { id: string; reason: string }[] }) => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      setBulkActionLoading(false);
+      if (report.failed.length > 0) {
+        toast(`${report.succeeded.length} succès, ${report.failed.length} échecs : ${report.failed[0].reason}`, 'error');
+      } else {
+        toast(`${report.succeeded.length} livraison${report.succeeded.length > 1 ? 's' : ''} mise${report.succeeded.length > 1 ? 's' : ''} à jour`);
+      }
+      setSelectedIds(new Set());
+    },
+    onError: (err: any) => {
+      setBulkActionLoading(false);
+      toast(err?.response?.data?.message || 'Erreur lors de l\'action groupée', 'error');
+    },
+  });
 
   const saveMutation = useMutation({
     mutationFn: (body: DeliveryFormValues) => {
@@ -397,6 +418,89 @@ export default function DeliveriesPage() {
         </div>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
+          padding: 'var(--space-sm) var(--space-md)',
+          marginBottom: 'var(--space-sm)',
+          background: 'var(--color-accent-muted)',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--color-accent)',
+          flexWrap: 'wrap',
+        }}>
+          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap' }}>
+            {selectedIds.size} livraison{selectedIds.size > 1 ? 's' : ''} sélectionnée{selectedIds.size > 1 ? 's' : ''}
+          </span>
+          <select
+            style={{
+              padding: '4px 8px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-border-subtle)', background: 'var(--color-surface)',
+              color: 'var(--color-text)', fontFamily: 'var(--font-body)',
+            }}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (!val) return;
+              setBulkActionLoading(true);
+              bulkMutation.mutate({ ids: [...selectedIds], action: 'updateStatus', status: val });
+              e.target.value = '';
+            }}
+            disabled={bulkActionLoading}
+          >
+            <option value="">Changer le statut…</option>
+            {Object.entries(STATUS_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+          <select
+            style={{
+              padding: '4px 8px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-border-subtle)', background: 'var(--color-surface)',
+              color: 'var(--color-text)', fontFamily: 'var(--font-body)',
+            }}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (!val) return;
+              setBulkActionLoading(true);
+              bulkMutation.mutate({ ids: [...selectedIds], action: 'assignDriver', driverId: val });
+              e.target.value = '';
+            }}
+            disabled={bulkActionLoading}
+          >
+            <option value="">Assigner un chauffeur…</option>
+            {drivers.filter((d) => d.isActive).map((d) => (
+              <option key={d.id} value={d.id}>{d.firstName} {d.lastName}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => {
+              setBulkActionLoading(true);
+              bulkMutation.mutate({ ids: [...selectedIds], action: 'delete' });
+            }}
+            disabled={bulkActionLoading}
+            style={{
+              padding: '4px 12px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-md)',
+              border: '1px solid #ef4444', background: 'rgba(239,68,68,0.1)', cursor: 'pointer',
+              color: '#ef4444', fontWeight: 500, fontFamily: 'var(--font-body)',
+            }}
+          >
+            Supprimer
+          </button>
+          {bulkActionLoading && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>En cours…</span>}
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            disabled={bulkActionLoading}
+            style={{
+              marginLeft: 'auto', padding: '4px 8px', fontSize: 'var(--text-xs)',
+              border: 'none', background: 'none', cursor: 'pointer',
+              color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-body)',
+              textDecoration: 'underline',
+            }}
+          >
+            Tout désélectionner
+          </button>
+        </div>
+      )}
+
       <div style={{ flex: 1, overflow: 'auto' }}>
         {isLoading ? (
           <div style={{
@@ -458,6 +562,11 @@ export default function DeliveriesPage() {
           </div>
         ) : (
           <DataTable
+            selectable
+            selectedIds={selectedIds}
+            onSelectionChange={(ids) => {
+              setSelectedIds(ids);
+            }}
             columns={[
               { key: 'title', label: 'Titre', sortable: true },
               {
@@ -571,7 +680,7 @@ export default function DeliveriesPage() {
             total={meta.total}
             page={page}
             limit={20}
-            onPageChange={setPage}
+            onPageChange={(p) => { setPage(p); setSelectedIds(new Set()); }}
             onEdit={(r) => { setEditing(r); setDrawerOpen(true); }}
             onDelete={(r) => setDeleting(r)}
             loading={false}

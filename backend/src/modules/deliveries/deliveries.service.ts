@@ -454,6 +454,78 @@ export class DeliveriesService {
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
+  async bulkAction(companyId: string, dto: { ids: string[]; action: string; status?: string; driverId?: string }): Promise<{
+    succeeded: string[];
+    failed: { id: string; reason: string }[];
+  }> {
+    const result = { succeeded: [] as string[], failed: [] as { id: string; reason: string }[] };
+
+    for (const id of dto.ids) {
+      try {
+        const delivery = await this.prisma.delivery.findFirst({
+          where: { id, companyId, deletedAt: null },
+        });
+        if (!delivery) {
+          result.failed.push({ id, reason: 'Livraison introuvable' });
+          continue;
+        }
+
+        if (dto.action === 'delete') {
+          if (delivery.status === DeliveryStatus.in_progress) {
+            result.failed.push({ id, reason: 'Impossible de supprimer une livraison en cours' });
+            continue;
+          }
+          await this.prisma.delivery.update({
+            where: { id },
+            data: { deletedAt: new Date() },
+          });
+          result.succeeded.push(id);
+        } else if (dto.action === 'updateStatus' && dto.status) {
+          const targetStatus = dto.status as DeliveryStatus;
+          const allowed = TRANSITION_MATRIX[delivery.status];
+          if (!allowed.includes(targetStatus)) {
+            result.failed.push({ id, reason: `Transition ${delivery.status} → ${targetStatus} interdite` });
+            continue;
+          }
+          const updateData: any = { status: targetStatus };
+          if (targetStatus === DeliveryStatus.delivered) {
+            updateData.completedAt = new Date();
+          }
+          await this.prisma.delivery.update({ where: { id }, data: updateData });
+          result.succeeded.push(id);
+        } else if (dto.action === 'assignDriver') {
+          if (!dto.driverId) {
+            result.failed.push({ id, reason: 'Aucun chauffeur fourni' });
+            continue;
+          }
+          const driver = await this.prisma.driver.findFirst({
+            where: { id: dto.driverId, companyId, deletedAt: null },
+            select: { userId: true },
+          });
+          if (!driver) {
+            result.failed.push({ id, reason: 'Chauffeur introuvable dans votre compagnie' });
+            continue;
+          }
+          await this.prisma.delivery.update({
+            where: { id },
+            data: {
+              driverId: dto.driverId,
+              ...(driver.userId ? { assignedDriverId: driver.userId } : {}),
+            },
+          });
+          result.succeeded.push(id);
+        } else {
+          result.failed.push({ id, reason: `Action inconnue: ${dto.action}` });
+        }
+      } catch (err: any) {
+        result.failed.push({ id, reason: err.message || 'Erreur interne' });
+      }
+    }
+
+    Logger.log(`Bulk action "${dto.action}": ${result.succeeded.length} succès, ${result.failed.length} échecs`, 'DeliveriesService');
+    return result;
+  }
+
   async importExcel(companyId: string, fileBuffer: Uint8Array, defaultPickupAddress: string): Promise<{
     created: number;
     skipped: { row: number; orderRef: string; reason: string }[];
