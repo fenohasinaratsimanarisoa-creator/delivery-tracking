@@ -36,12 +36,19 @@ export class DeliveriesService {
 
   async create(companyId: string, dto: CreateDeliveryDto) {
     let assignedDriverId: string | undefined;
+    if (dto.vehicleId) {
+      const vehicle = await this.prisma.vehicle.findFirst({
+        where: { id: dto.vehicleId, companyId, deletedAt: null },
+      });
+      if (!vehicle) throw new NotFoundException('Vehicle not found in your company');
+    }
     if (dto.driverId) {
-      const driver = await this.prisma.driver.findUnique({
-        where: { id: dto.driverId },
+      const driver = await this.prisma.driver.findFirst({
+        where: { id: dto.driverId, companyId, deletedAt: null },
         select: { userId: true },
       });
-      if (driver?.userId) assignedDriverId = driver.userId;
+      if (!driver) throw new NotFoundException('Driver not found in your company');
+      if (driver.userId) assignedDriverId = driver.userId;
     }
     const delivery = await this.prisma.delivery.create({
       data: {
@@ -208,12 +215,19 @@ export class DeliveriesService {
     if (dto.scheduledDate) {
       updateData.scheduledDate = new Date(dto.scheduledDate);
     }
+    if (dto.vehicleId) {
+      const vehicle = await this.prisma.vehicle.findFirst({
+        where: { id: dto.vehicleId, companyId, deletedAt: null },
+      });
+      if (!vehicle) throw new NotFoundException('Vehicle not found in your company');
+    }
     if (dto.driverId) {
-      const driver = await this.prisma.driver.findUnique({
-        where: { id: dto.driverId },
+      const driver = await this.prisma.driver.findFirst({
+        where: { id: dto.driverId, companyId, deletedAt: null },
         select: { userId: true },
       });
-      if (driver?.userId) updateData.assignedDriverId = driver.userId;
+      if (!driver) throw new NotFoundException('Driver not found in your company');
+      if (driver.userId) updateData.assignedDriverId = driver.userId;
     }
     if (
       dto.status &&

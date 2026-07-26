@@ -36,6 +36,31 @@ export class UsersService {
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
+    if (dto.role === 'driver') {
+      if (dto.vehicleId) {
+        const vehicle = await this.prisma.vehicle.findFirst({
+          where: { id: dto.vehicleId, companyId, deletedAt: null },
+        });
+        if (!vehicle) {
+          throw new BadRequestException('Vehicle not found in your company');
+        }
+        const alreadyAssigned = await this.prisma.driver.findFirst({
+          where: { vehicleId: dto.vehicleId, deletedAt: null },
+        });
+        if (alreadyAssigned) {
+          throw new ConflictException('Vehicle is already assigned to another driver');
+        }
+      }
+      if (dto.licenseNumber) {
+        const existingLic = await this.prisma.driver.findUnique({
+          where: { licenseNumber: dto.licenseNumber },
+        });
+        if (existingLic) {
+          throw new ConflictException('License number already exists');
+        }
+      }
+    }
+
     const result = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {

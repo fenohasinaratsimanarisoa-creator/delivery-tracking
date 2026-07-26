@@ -12,7 +12,21 @@ import {
   UpdateAvatarDto,
 } from './dto/update-profile.dto';
 
+import { Prisma } from '@prisma/client';
+
 jest.mock('bcrypt');
+
+// Simulated Prisma error classes since Prisma.PrismaClientKnownRequestError is not directly instantiable in test
+class MockPrismaClientKnownRequestError extends Error {
+  code: string;
+  meta: any;
+  constructor(message: string, code: string, meta?: any) {
+    super(message);
+    this.name = 'PrismaClientKnownRequestError';
+    this.code = code;
+    this.meta = meta;
+  }
+}
 
 const mockPrisma = {
   user: {
@@ -25,8 +39,12 @@ const mockPrisma = {
   },
   driver: {
     findFirst: jest.fn(),
+    findUnique: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+  },
+  vehicle: {
+    findFirst: jest.fn(),
   },
   userSession: {
     deleteMany: jest.fn(),
@@ -100,6 +118,43 @@ describe('UsersService', () => {
       const invalidDto = { ...dto, role: 'invalid_role' as any };
 
       await expect(service.create('comp-1', invalidDto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw ConflictException when licenseNumber already exists', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.driver.findUnique.mockResolvedValueOnce({ id: 'existing-driver' });
+
+      const driverDto: CreateUserDto = { ...dto, role: 'driver', email: 'driver@test.com', licenseNumber: 'EXISTING-LIC-123' };
+
+      await expect(
+        service.create('comp-1', driverDto),
+      ).rejects.toThrow(ConflictException);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException when vehicleId does not exist', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
+
+      const driverDto: CreateUserDto = { ...dto, role: 'driver', email: 'driver2@test.com', vehicleId: 'nonexistent-vehicle' };
+
+      await expect(
+        service.create('comp-1', driverDto),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should throw ConflictException when vehicleId is already assigned to another driver', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1', companyId: 'comp-1' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'other-driver' });
+
+      const driverDto: CreateUserDto = { ...dto, role: 'driver', email: 'driver3@test.com', vehicleId: 'vehicle-1' };
+
+      await expect(
+        service.create('comp-1', driverDto),
+      ).rejects.toThrow(ConflictException);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
   });
 
