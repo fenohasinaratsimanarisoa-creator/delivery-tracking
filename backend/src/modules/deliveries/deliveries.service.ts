@@ -196,9 +196,12 @@ export class DeliveriesService {
     };
   }
 
-  async findOne(companyId: string, id: string) {
+  async findOne(companyId: string, id: string, role?: string, userId?: string) {
+    const where: any = { id, companyId, deletedAt: null };
+    if (role === 'client') where.clientId = userId;
+    if (role === 'driver') where.assignedDriverId = userId;
     const delivery = await this.prisma.delivery.findFirst({
-      where: { id, companyId, deletedAt: null },
+      where,
       include: {
         vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } },
         driver: { select: { id: true, firstName: true, lastName: true } },
@@ -229,17 +232,12 @@ export class DeliveriesService {
       if (!driver) throw new NotFoundException('Driver not found in your company');
       if (driver.userId) updateData.assignedDriverId = driver.userId;
     }
-    if (
-      dto.status &&
-      dto.status !== delivery.status &&
-      (dto.status === ('delivered' as DeliveryStatus) ||
-        dto.status === ('failed' as DeliveryStatus))
-    ) {
+    if (dto.status && dto.status !== delivery.status) {
       const allowed = TRANSITION_MATRIX[delivery.status];
       if (!allowed.includes(dto.status)) {
         throw new BadRequestException(`Cannot transition from ${delivery.status} to ${dto.status}`);
       }
-      if (dto.status === ('delivered' as DeliveryStatus)) {
+      if (dto.status === DeliveryStatus.delivered) {
         updateData.completedAt = new Date();
       }
     }

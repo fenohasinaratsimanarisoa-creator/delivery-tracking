@@ -261,6 +261,59 @@ describe('UsersService', () => {
         select: expect.any(Object),
       });
     });
+
+    it('should allow admin to view any user', async () => {
+      const user = {
+        id: 'other-user', email: 'other@test.com', firstName: 'Other',
+        lastName: 'User', role: 'driver', isActive: true,
+        companyId: 'comp-1', createdAt: new Date(),
+        avatarUrl: null, googleId: null,
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(user);
+
+      const result = await service.findById('other-user', 'comp-1', 'admin-1', 'admin');
+      expect(result).toEqual(user);
+    });
+
+    it('should allow dispatcher to view any user', async () => {
+      const user = {
+        id: 'other-user', email: 'other@test.com', firstName: 'Other',
+        lastName: 'User', role: 'driver', isActive: true,
+        companyId: 'comp-1', createdAt: new Date(),
+        avatarUrl: null, googleId: null,
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(user);
+
+      const result = await service.findById('other-user', 'comp-1', 'disp-1', 'dispatcher');
+      expect(result).toEqual(user);
+    });
+
+    it('should allow user to view their own profile', async () => {
+      const user = {
+        id: 'driver-1', email: 'driver@test.com', firstName: 'Driver',
+        lastName: 'User', role: 'driver', isActive: true,
+        companyId: 'comp-1', createdAt: new Date(),
+        avatarUrl: null, googleId: null,
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(user);
+
+      const result = await service.findById('driver-1', 'comp-1', 'driver-1', 'driver');
+      expect(result).toEqual(user);
+    });
+
+    it('should throw NotFoundException when driver tries to view another user', async () => {
+      await expect(
+        service.findById('other-user', 'comp-1', 'driver-1', 'driver'),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException when client tries to view another user', async () => {
+      await expect(
+        service.findById('other-user', 'comp-1', 'client-1', 'client'),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    });
   });
 
   describe('findByEmail', () => {

@@ -44,6 +44,16 @@ export class UsersController {
     return this.usersService.create(companyId, dto);
   }
 
+  @Get(':id')
+  findOne(
+    @CurrentUser('companyId') companyId: string,
+    @CurrentUser('id') currentUserId: string,
+    @CurrentUser('role') currentUserRole: string,
+    @Param('id') id: string,
+  ) {
+    return this.usersService.findById(id, companyId, currentUserId, currentUserRole);
+  }
+
   @UseGuards(RolesGuard)
   @Roles('admin')
   @Get()
@@ -119,11 +129,6 @@ export class UsersController {
     const avatarUrl = `/uploads/avatars/${file.filename}`;
 
     return this.usersService.updateAvatar(userId, { avatarUrl });
-  }
-
-  @Get(':id')
-  findOne(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
-    return this.usersService.findById(id, companyId);
   }
 
   @UseGuards(RolesGuard)

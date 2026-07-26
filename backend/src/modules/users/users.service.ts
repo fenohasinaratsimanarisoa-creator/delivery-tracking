@@ -148,7 +148,10 @@ export class UsersService {
     };
   }
 
-  async findById(id: string, companyId?: string) {
+  async findById(id: string, companyId?: string, currentUserId?: string, currentUserRole?: string) {
+    if (currentUserId && currentUserRole && id !== currentUserId && currentUserRole !== 'admin' && currentUserRole !== 'dispatcher') {
+      throw new NotFoundException('User not found');
+    }
     const where: any = { id, deletedAt: null };
     if (companyId) where.companyId = companyId;
     const user = await this.prisma.user.findFirst({

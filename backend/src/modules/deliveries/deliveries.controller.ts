@@ -91,9 +91,16 @@ export class DeliveriesController {
     return this.deliveriesService.findProofs(companyId, +page, +limit, status);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher', 'driver', 'client')
   @Get(':id')
-  findOne(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
-    return this.deliveriesService.findOne(companyId, id);
+  findOne(
+    @CurrentUser('companyId') companyId: string,
+    @CurrentUser('role') role: string,
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.deliveriesService.findOne(companyId, id, role, userId);
   }
 
   @UseGuards(RolesGuard)
