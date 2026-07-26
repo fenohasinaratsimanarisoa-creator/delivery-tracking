@@ -380,7 +380,13 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         select: {
           id: true,
           companyId: true,
-          driver: { select: { id: true, userId: true } },
+          driver: {
+            select: {
+              id: true,
+              userId: true,
+              user: { select: { firstName: true, lastName: true } },
+            },
+          },
         },
       });
 
@@ -388,6 +394,20 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
       const driver = vehicleMapping.driver;
       if (!driver?.userId) return;
+
+      const driverUser = driver.user;
+      const driverName = driverUser
+        ? `${driverUser.firstName} ${driverUser.lastName}`
+        : 'Traccar GPS';
+
+      const currentDelivery = await this.prisma.delivery.findFirst({
+        where: {
+          driverId: driver.id,
+          status: 'in_progress',
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
 
       const updateDto = {
         latitude: pos.latitude,
@@ -398,7 +418,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         accuracy: pos.accuracy || 10,
         timestamp: timestamp.toISOString(),
         vehicleId: vehicleMapping.id,
-        deliveryId: undefined,
+        deliveryId: currentDelivery?.id,
       };
 
       let position;
@@ -432,7 +452,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
         const broadcast = {
           driverId: driver.id,
-          driverName: 'Traccar GPS',
+          driverName,
           latitude: pos.latitude,
           longitude: pos.longitude,
           speed: updateDto.speed,

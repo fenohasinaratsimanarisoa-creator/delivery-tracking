@@ -4,6 +4,7 @@ import type { TrackingStatus } from '../../hooks/useDriverTracking';
 export const TrackingContext = createContext<TrackingStatus>({
   active: false,
   position: null,
+  positionSource: 'phone',
   confidence: 1,
   poorAccuracy: false,
   isStationary: false,

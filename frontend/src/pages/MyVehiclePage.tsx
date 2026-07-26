@@ -17,6 +17,7 @@ interface DriverProfile {
     year: number;
     licensePlate: string;
     fuelType: string;
+    positionSource?: string;
   };
 }
 
@@ -121,6 +122,7 @@ export default function MyVehiclePage() {
           <Row label={t('myVehicle.fields.year')} value={String(vehicle.year)} />
           <Row label={t('myVehicle.fields.licensePlate')} value={vehicle.licensePlate} />
           <Row label={t('myVehicle.fields.fuelType')} value={vehicle.fuelType} />
+      <Row label="Suivi GPS" value={vehicle.positionSource === 'physical_tracker' ? 'Traceur GPS physique' : 'Application mobile'} />
         </div>
       </div>
     </div>

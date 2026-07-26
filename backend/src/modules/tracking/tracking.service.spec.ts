@@ -36,13 +36,17 @@ const mockNotifications = {
 };
 
 const mockGeofenceService = {
-  checkGeofences: jest.fn(),
+  checkGeofences: jest.fn().mockResolvedValue(null),
+};
+
+const mockDeliveryProximityService = {
+  checkProximity: jest.fn().mockResolvedValue(undefined),
 };
 
 const mockCacheService = {
   get: jest.fn(),
   set: jest.fn(),
-  invalidate: jest.fn(),
+  invalidate: jest.fn().mockResolvedValue(undefined),
 };
 
 const mockDataUpdateBus = {
@@ -59,6 +63,7 @@ describe('TrackingService', () => {
       mockPrisma as unknown as PrismaService,
       mockNotifications as any,
       mockGeofenceService as any,
+      mockDeliveryProximityService as any,
       mockCacheService as any,
       mockDataUpdateBus as any,
     );

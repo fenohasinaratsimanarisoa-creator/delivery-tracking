@@ -3,6 +3,7 @@ import { NotificationType, NotificationPriority } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GeofenceService } from './geofence.service';
+import { DeliveryProximityService } from './delivery-proximity.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { UpdatePositionDto } from './dto/update-position.dto';
@@ -33,6 +34,7 @@ export class TrackingService {
     private prisma: PrismaService,
     private notifications: NotificationsService,
     private geofenceService: GeofenceService,
+    private deliveryProximityService: DeliveryProximityService,
     private cacheService: CacheService,
     private dataUpdateBus: DataUpdateBus,
   ) {}
@@ -371,6 +373,12 @@ export class TrackingService {
       this.generateAlerts(dto, companyId, driverId, saved).catch((err) =>
         this.logger.error(`Alert generation failed: ${err}`),
       );
+    }
+
+    if (companyId) {
+      this.deliveryProximityService
+        .checkProximity(driverId, dto.vehicleId!, companyId, dto.latitude, dto.longitude, ts)
+        .catch((err) => this.logger.error(`Proximity check failed: ${err}`));
     }
 
     return saved;

@@ -272,4 +272,8 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
   broadcastToCompany(companyId: string, event: string, data: any) {
     this.server.to(`company:${companyId}`).emit(event, data);
   }
+
+  sendToDriver(userId: string, event: string, data: any) {
+    this.server.to(`driver:${userId}`).emit(event, data);
+  }
 }

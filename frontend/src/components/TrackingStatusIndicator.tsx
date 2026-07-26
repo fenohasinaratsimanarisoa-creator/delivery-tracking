@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Navigation, WifiOff, AlertTriangle, Radio } from 'lucide-react';
+import { Navigation, WifiOff, AlertTriangle, Radio, Cpu } from 'lucide-react';
 import type { TrackingStatus } from '../hooks/useDriverTracking';
 
 const containerStyle: React.CSSProperties = {
@@ -15,6 +15,22 @@ const containerStyle: React.CSSProperties = {
 
 export default function TrackingStatusIndicator({ status }: { status: TrackingStatus }) {
   const { t } = useTranslation();
+
+  const isPhysicalTracker = status.positionSource === 'physical_tracker';
+
+  if (isPhysicalTracker) {
+    return (
+      <div style={{
+        ...containerStyle,
+        background: 'var(--color-teal-muted)',
+        color: 'var(--color-teal)',
+        cursor: 'help',
+      }} title="Suivi par traceur GPS physique installé sur le véhicule">
+        <Cpu size={12} />
+        Traceur GPS
+      </div>
+    );
+  }
 
   if (status.geolocationDenied) {
     return (

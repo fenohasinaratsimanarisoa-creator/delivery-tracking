@@ -56,6 +56,7 @@ export interface DriverAlert {
 export interface TrackingStatus {
   active: boolean;
   position: DriverPosition | null;
+  positionSource: string;
   confidence: number;
   poorAccuracy: boolean;
   isStationary: boolean;
@@ -118,6 +119,8 @@ export function useDriverTracking() {
   const vehicleId = driver?.vehicle?.id || '';
   const positionSource = driver?.vehicle?.positionSource || 'phone';
   const usesPhysicalTracker = positionSource === 'physical_tracker';
+  const usesPhysicalTrackerRef = useRef(usesPhysicalTracker);
+  usesPhysicalTrackerRef.current = usesPhysicalTracker;
 
   const inProgressDelivery = deliveries.find((d) => d.status === 'in_progress');
   const autoDeliveryId = inProgressDelivery?.id || '';
@@ -455,6 +458,18 @@ export function useDriverTracking() {
         });
       }
     });
+    socket.on('proximityAlert', (alert: any) => {
+      if (alert.type === 'proximity' && usesPhysicalTrackerRef.current) {
+        const urgency = alert.urgency || 'normal';
+        addAlert({
+          type: 'proximity',
+          title: alert.title || 'Livraison',
+          message: alert.message,
+          deliveryId: alert.deliveryId,
+          urgency,
+        });
+      }
+    });
     const onOnline = () => { drainQueue(); };
     window.addEventListener('online', onOnline);
 
@@ -464,6 +479,7 @@ export function useDriverTracking() {
       if (drainIntervalRef.current !== null) clearInterval(drainIntervalRef.current);
       socket.off('connect', drainQueue);
       socket.off('dataUpdate');
+      socket.off('proximityAlert');
       window.removeEventListener('online', onOnline);
     };
   }, [drainQueue, addAlert]);
@@ -487,8 +503,9 @@ export function useDriverTracking() {
   }, [driver, startTracking, stopTracking]);
 
   const trackingStatus: TrackingStatus = {
-    active: startedRef.current && !usesPhysicalTracker,
+    active: startedRef.current || usesPhysicalTracker,
     position,
+    positionSource,
     confidence: confidenceLevel,
     poorAccuracy,
     isStationary,

@@ -6,6 +6,7 @@ import { WsAuthService } from '../../common/auth/ws-auth.service';
 import { TrackingGateway } from './tracking.gateway';
 import { TrackingService } from './tracking.service';
 import { GeofenceService } from './geofence.service';
+import { DeliveryProximityService } from './delivery-proximity.service';
 import { TraccarBridgeService } from './traccar-bridge.service';
 import { TrackingController } from './tracking.controller';
 import { GeofenceController } from './geofence.controller';
@@ -33,11 +34,12 @@ import { RedisModule } from '../../common/redis/redis.module';
     TrackingGateway,
     TrackingService,
     GeofenceService,
+    DeliveryProximityService,
     TraccarBridgeService,
     WsJwtGuard,
     WsAuthService,
     ApiKeyOrJwtGuard,
   ],
-  exports: [TrackingService, GeofenceService, TraccarBridgeService],
+  exports: [TrackingService, GeofenceService, DeliveryProximityService, TraccarBridgeService],
 })
 export class TrackingModule {}
