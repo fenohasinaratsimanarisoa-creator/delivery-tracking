@@ -7,17 +7,17 @@ import { KalmanFilter } from '../services/tracking/KalmanFilter';
 import { sensorFusion, simulateStationaryFromSpeed } from '../services/tracking/sensorFusion';
 import type { Delivery } from '../types';
 
-let wakeLockRef:any = null;
+let wakeLockRef: WakeLockSentinel | null = null;
 async function acquireWakeLock() {
   if (!navigator.wakeLock) return false;
   try {
     wakeLockRef = await navigator.wakeLock.request('screen');
-    wakeLockRef.addEventListener('release', () => { wakeLockRef = null; });
+    wakeLockRef!.addEventListener('release', () => { wakeLockRef = null; });
     return true;
   } catch { return false; }
 }
 function releaseWakeLock() {
-  if (wakeLockRef) { wakeLockRef.release().catch(() => {}); wakeLockRef = null; }
+  if (wakeLockRef) { wakeLockRef.release?.(); wakeLockRef = null; }
 }
 
 const ACCURACY_GOOD = 10;
@@ -93,8 +93,8 @@ export function useDriverTracking() {
   const [alerts, setAlerts] = useState<DriverAlert[]>([]);
   const lastProximityAlertRef = useRef(0);
   const soundEnabledRef = useRef(true);
-  const inProgressDeliveryRef = useRef<any>(null);
-  const allDeliveriesRef = useRef<any[]>([]);
+  const inProgressDeliveryRef = useRef<Delivery | null>(null);
+  const allDeliveriesRef = useRef<Delivery[]>([]);
   const proximitySnoozedUntilRef = useRef(0);
   const escalationLevelRef = useRef(0);
   const enterProximityTimeRef = useRef(0);
@@ -118,13 +118,13 @@ export function useDriverTracking() {
 
   const { data: profile } = useQuery({
     queryKey: ['driver-profile'],
-    queryFn: () => api.get('/drivers/profile').then((r: any) => r.data),
+    queryFn: () => api.get('/drivers/profile').then((r) => r.data),
     staleTime: 60_000,
   });
 
   const { data: deliveriesData } = useQuery({
     queryKey: ['my-deliveries'],
-    queryFn: () => api.get('/deliveries/my-deliveries').then((r: any) => r.data),
+    queryFn: () => api.get('/deliveries/my-deliveries').then((r) => r.data),
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
@@ -141,7 +141,7 @@ export function useDriverTracking() {
   const autoDeliveryId = inProgressDelivery?.id || '';
 
   deliveryIdRef.current = autoDeliveryId;
-  inProgressDeliveryRef.current = inProgressDelivery;
+  inProgressDeliveryRef.current = inProgressDelivery ?? null;
   allDeliveriesRef.current = deliveries;
   if (autoDeliveryId !== activeDeliveryId) {
     setActiveDeliveryId(autoDeliveryId);
@@ -175,7 +175,7 @@ export function useDriverTracking() {
   const checkProximity = useCallback((lat: number, lng: number) => {
     const now = Date.now();
     const deliveries = allDeliveriesRef.current;
-    const inProgress = deliveries.filter((d: any) => d.status === 'in_progress');
+    const inProgress = deliveries.filter((d: Delivery) => d.status === 'in_progress');
 
     if (inProgress.length === 0) {
       removeAlert('proximity', '');
@@ -495,7 +495,7 @@ export function useDriverTracking() {
   useEffect(() => {
     const socket = getSocket();
     socket.on('connect', drainQueue);
-    socket.on('dataUpdate', (event: any) => {
+    socket.on('dataUpdate', (event: { entity: string; action: string; geofenceName: string; deliveryId?: string }) => {
       if (event.entity === 'geofence_event') {
         addAlert({
           type: 'geofence',
@@ -506,7 +506,7 @@ export function useDriverTracking() {
         });
       }
     });
-    socket.on('proximityAlert', (alert: any) => {
+    socket.on('proximityAlert', (alert: { type: string; urgency?: 'normal' | 'high' | 'critical'; title?: string; message: string; deliveryId?: string }) => {
       if (alert.type === 'proximity' && usesPhysicalTrackerRef.current) {
         const urgency = alert.urgency || 'normal';
         addAlert({

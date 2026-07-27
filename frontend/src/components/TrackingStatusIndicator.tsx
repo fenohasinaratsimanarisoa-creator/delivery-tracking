@@ -10,9 +10,9 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
 
   if (isPhysicalTracker) {
     return (
-      <div className={`${styles.container} ${styles.physicalTracker}`} title="Suivi par traceur GPS physique installé sur le véhicule">
+      <div className={`${styles.container} ${styles.physicalTracker}`} title={t('trackingIndicator.physicalTrackerTitle')}>
         <Cpu size={12} />
-        Traceur GPS
+        {t('trackingIndicator.physicalTracker')}
       </div>
     );
   }
@@ -21,7 +21,7 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
     return (
       <div className={`${styles.container} ${styles.denied}`} title={t('tracking.geolocationDeniedHint') || 'Autorisez la geolocalisation dans les parametres du navigateur'}>
         <AlertTriangle size={12} />
-        GPS bloqué
+        {t('trackingIndicator.gpsBlocked')}
       </div>
     );
   }
@@ -30,7 +30,7 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
     return (
       <div className={`${styles.container} ${styles.inactive}`}>
         <Radio size={12} />
-        GPS en attente
+        {t('trackingIndicator.gpsPending')}
       </div>
     );
   }
@@ -39,7 +39,7 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
     return (
       <div className={`${styles.container} ${styles.searching}`}>
         <Radio size={12} />
-        Recherche signal...
+        {t('trackingIndicator.searching')}
       </div>
     );
   }
@@ -48,7 +48,7 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
     return (
       <div className={`${styles.container} ${styles.poorAccuracy}`}>
         <WifiOff size={12} />
-        GPS faible
+        {t('trackingIndicator.poorAccuracy')}
       </div>
     );
   }
@@ -56,7 +56,7 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
   return (
     <div className={`${styles.container} ${styles.active}`}>
       <Navigation size={12} />
-      {status.isStationary ? 'Arrêté' : 'En route'}
+      {status.isStationary ? t('trackingIndicator.stationary') : t('trackingIndicator.moving')}
       {status.queueCount > 0 ? ` (${status.queueCount})` : ''}
     </div>
   );

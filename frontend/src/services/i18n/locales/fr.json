@@ -209,6 +209,25 @@
     "count_plural": "{{count}} livraisons",
     "validation": {
       "validNumber": "Doit être un nombre valide"
+    },
+    "import": {
+      "resultTitle": "Résultat de l'import",
+      "stats": {
+        "created": "Créées",
+        "updated": "Mises à jour",
+        "skipped": "Ignorées",
+        "errors": "Erreurs"
+      },
+      "skippedTitle": "Commandes ignorées",
+      "alreadyExists": "Déjà existante",
+      "tooltip": {
+        "skipDuplicates": "Mode: ignorer les doublons",
+        "updateExisting": "Mode: mettre à jour les existants"
+      },
+      "mode": {
+        "skip": "Ignorer",
+        "update": "MàJ"
+      }
     }
   },
   "fleet": {
@@ -222,7 +241,8 @@
     "formSections": {
       "identity": "Identité du véhicule",
       "registration": "Immatriculation",
-      "features": "Caractéristiques"
+      "features": "Caractéristiques",
+      "positionSource": "Source de position"
     },
     "fields": {
       "brand": "Marque",
@@ -231,7 +251,8 @@
       "licensePlate": "Plaque d'immatriculation",
       "vin": "Numéro VIN",
       "fuelType": "Type de carburant",
-      "theoreticalConsumption": "Consommation théorique (L/100km)"
+      "theoreticalConsumption": "Consommation théorique (L/100km)",
+      "positionSource": "Source de position"
     },
     "fuelTypes": {
       "gasoline": "Essence",
@@ -383,7 +404,43 @@
     "helpGps": "• Rapport GPS : estimation automatique basée sur les positions GPS des véhicules. La consommation théorique du véhicule est utilisée pour estimer le coût. Complémentaire à la saisie manuelle."
   },
   "reports": {
-    "title": "Rapports"
+    "title": "Rapports",
+    "subtitle": "Analysez les performances de votre flotte",
+    "period": {
+      "7days": "7 jours",
+      "30days": "30 jours",
+      "custom": "Personnalisé"
+    },
+    "stats": {
+      "onTime": "À l'heure"
+    },
+    "charts": {
+      "statusBreakdown": "Répartition par statut",
+      "dailyEvolution": "Évolution par jour",
+      "deliveries": "Livraisons",
+      "vehicles": "Véhicules",
+      "drivers": "Chauffeurs"
+    },
+    "tabs": {
+      "delivery": "Livraisons",
+      "fleet": "Flotte",
+      "driver": "Chauffeurs"
+    },
+    "toast": {
+      "downloaded": "Rapport {tab} téléchargé ({format})"
+    },
+    "driverStats": {
+      "totalDeliveries": "Total livraisons",
+      "completed": "Complétées",
+      "onTimeGlobal": "Ponctualité globale",
+      "activeDrivers": "Chauffeurs actifs"
+    },
+    "fleetStats": {
+      "activeVehicles": "Véhicules actifs",
+      "online": "En ligne",
+      "totalDistance": "Distance totale",
+      "totalFuel": "Carburant total"
+    }
   },
   "users": {
     "title": "Utilisateurs",
@@ -566,7 +623,12 @@
       "model": "Modèle",
       "year": "Année",
       "licensePlate": "Immatriculation",
-      "fuelType": "Carburant"
+      "fuelType": "Carburant",
+      "positionSource": "Suivi GPS"
+    },
+    "positionSource": {
+      "physicalTracker": "Traceur GPS physique",
+      "mobileApp": "Application mobile"
     }
   },
   "myOrders": {
@@ -841,7 +903,8 @@
       "description": "Cette page sera disponible prochainement."
     },
     "errorBoundary": {
-      "title": "Erreur"
+      "title": "Erreur",
+      "retry": "Réessayer"
     },
     "notificationBell": {
       "title": "Notifications",
@@ -972,6 +1035,35 @@
   "activeDelivery": {
     "pickup": "📍",
     "dropoff": "🏁"
+  },
+  "proximityAlert": {
+    "viewDeliveries": "Voir mes livraisons",
+    "retry": "Réessayer"
+  },
+  "trackingIndicator": {
+    "physicalTrackerTitle": "Suivi par traceur GPS physique installé sur le véhicule",
+    "physicalTracker": "Traceur GPS",
+    "gpsBlocked": "GPS bloqué",
+    "gpsPending": "GPS en attente",
+    "searching": "Recherche signal...",
+    "poorAccuracy": "GPS faible",
+    "stationary": "Arrêté",
+    "moving": "En route"
+  },
+  "locationSearch": {
+    "placeholder": "Rechercher un lieu…",
+    "copy": "Copier",
+    "adjustOnMap": "Ajuster sur la carte",
+    "noResults": "Aucun résultat trouvé — précisez votre recherche ou utilisez la carte",
+    "mapHint": "Cliquez sur la carte ou glissez le marqueur pour ajuster"
+  },
+  "api": {
+    "error": {
+      "timeout": "La requête a pris trop de temps. Vérifiez votre connexion.",
+      "network": "Impossible de joindre le serveur. Vérifiez votre connexion.",
+      "rateLimit": "Trop de requêtes. Veuillez patienter.",
+      "server": "Erreur serveur. Veuillez réessayer plus tard."
+    }
   },
   "dateFormats": {
     "short": "dd/MM/yyyy",
@@ -1171,7 +1263,27 @@
     "dataSaverOn": "📶 Éco",
     "dataSaverOff": "📶 Std",
     "dataSaverTooltipOn": "Économie de données activée",
-    "dataSaverTooltipOff": "Activer l'économie de données"
+    "dataSaverTooltipOff": "Activer l'économie de données",
+    "instruction": {
+      "fork": "Tenez la droite",
+      "merge": "Rejoignez",
+      "endOfRoad": "Au bout de la route",
+      "useLane": "Utilisez la voie",
+      "continue": "Continuez tout droit",
+      "offRamp": "Prenez la sortie",
+      "onRamp": "Prenez l'entrée",
+      "defaultContinue": "Continuez",
+      "arrive": "Vous êtes arrivé",
+      "depart": "Départ"
+    },
+    "modifier": {
+      "left": "à gauche",
+      "right": "à droite",
+      "straight": "tout droit",
+      "uturn": "en U",
+      "slightLeft": "légèrement à gauche",
+      "slightRight": "légèrement à droite"
+    }
   },
   "notificationBell": {
     "deleteAllTitle": "Tout effacer",

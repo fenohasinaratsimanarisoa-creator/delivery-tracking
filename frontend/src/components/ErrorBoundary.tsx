@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import i18n from '../services/i18n/i18n';
 import styles from './ErrorBoundary.module.css';
 
 interface Props { children: ReactNode; }
@@ -24,7 +25,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       return (
         <div className={styles.container}>
-          <h1 className={styles.heading}>{'Erreur'}</h1>
+          <h1 className={styles.heading}>{i18n.t('components.errorBoundary.title')}</h1>
           <pre className={styles.errorMessage}>
             {this.state.error.message}
           </pre>
@@ -32,7 +33,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             {this.state.info?.componentStack || ''}
           </pre>
           <button onClick={this.handleRetry} className={styles.retryBtn}>
-            {'Réessayer'}
+            {i18n.t('components.errorBoundary.retry')}
           </button>
         </div>
       );

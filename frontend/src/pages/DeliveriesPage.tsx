@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Plus, Search, ChevronDown, ChevronUp, Upload } from 'lucide-react';
 import Button from '../components/Button';
 import api from '../services/api/client';
@@ -13,6 +14,8 @@ import LocationSearchInput from '../components/LocationSearchInput';
 import { reverseGeocode } from '../services/geocoding/geocodingService';
 import { useToast } from '../components/Toast';
 import type { Delivery, Driver } from '../types';
+
+type ApiError = { response?: { data?: { message?: string } } };
 
 function formatAriary(amount?: number): string {
   if (amount === undefined || amount === null) return '';
@@ -81,6 +84,7 @@ export default function DeliveriesPage() {
   const [search, setSearch] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const { toast } = useToast();
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -164,7 +168,7 @@ export default function DeliveriesPage() {
       else toast('Aucune donnée importée');
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       setImporting(false);
       toast(err?.response?.data?.message || 'Erreur lors de l\'import Excel', 'error');
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -195,7 +199,7 @@ export default function DeliveriesPage() {
       }
       setSelectedIds(new Set());
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       setBulkActionLoading(false);
       toast(err?.response?.data?.message || 'Erreur lors de l\'action groupée', 'error');
     },
@@ -233,7 +237,7 @@ export default function DeliveriesPage() {
       setDrawerOpen(false);
       setEditing(null);
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast(err?.response?.data?.message || "Erreur lors de l'enregistrement", 'error');
     },
   });
@@ -245,7 +249,7 @@ export default function DeliveriesPage() {
       toast('Livraison supprimée');
       setDeleting(null);
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast(err?.response?.data?.message || 'Erreur lors de la suppression', 'error');
       setDeleting(null);
     },
@@ -257,7 +261,7 @@ export default function DeliveriesPage() {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
       toast('Alerte marquée comme traitée');
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast(err?.response?.data?.message || 'Erreur', 'error');
     },
   });
@@ -387,11 +391,11 @@ export default function DeliveriesPage() {
             </Button>
             <button
               onClick={() => setImportMode(importMode === 'create-only' ? 'upsert' : 'create-only')}
-              title={importMode === 'create-only' ? 'Mode: ignorer les doublons' : 'Mode: mettre à jour les existants'}
+              title={importMode === 'create-only' ? t('deliveries.import.tooltip.skipDuplicates') : t('deliveries.import.tooltip.updateExisting')}
               className={styles.importModeToggle}
               style={{ background: importMode === 'upsert' ? 'var(--color-accent-muted)' : 'transparent' }}
             >
-              {importMode === 'create-only' ? 'Ignorer' : 'MàJ'}
+              {importMode === 'create-only' ? t('deliveries.import.mode.skip') : t('deliveries.import.mode.update')}
             </button>
           </div>
           <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
@@ -767,38 +771,38 @@ export default function DeliveriesPage() {
             className={styles.importModal}
           >
             <h2 className={styles.importTitle}>
-              Résultat de l'import
+              {t('deliveries.import.resultTitle')}
             </h2>
             <div className={styles.importStatsRow}>
               <div className={styles.importStatCard}>
                 <div className={styles.importStatNumber} style={{ color: '#22c55e' }}>{importReport.created}</div>
-                <div className={styles.importStatLabel}>Créées</div>
+                <div className={styles.importStatLabel}>{t('deliveries.import.stats.created')}</div>
               </div>
               <div className={styles.importStatCard}>
                 <div className={styles.importStatNumber} style={{ color: '#3b82f6' }}>{importReport.updated}</div>
-                <div className={styles.importStatLabel}>Mises à jour</div>
+                <div className={styles.importStatLabel}>{t('deliveries.import.stats.updated')}</div>
               </div>
               <div className={styles.importStatCard}>
                 <div className={styles.importStatNumber} style={{ color: '#f59e0b' }}>{importReport.skipped.length}</div>
-                <div className={styles.importStatLabel}>Ignorées</div>
+                <div className={styles.importStatLabel}>{t('deliveries.import.stats.skipped')}</div>
               </div>
               <div className={styles.importStatCard}>
                 <div className={styles.importStatNumber} style={{ color: '#ef4444' }}>{importReport.errors.length}</div>
-                <div className={styles.importStatLabel}>Erreurs</div>
+                <div className={styles.importStatLabel}>{t('deliveries.import.stats.errors')}</div>
               </div>
             </div>
 
             {importReport.skipped.length > 0 && (
               <div className={styles.importSkippedSection}>
                 <h3 className={styles.importSectionTitle}>
-                  Commandes ignorées
+                  {t('deliveries.import.skippedTitle')}
                 </h3>
                 <div className={styles.importSkippedList}>
                   {importReport.skipped.map((s, i) => (
                     <div key={i} className={styles.importSkippedItem}>
                       <span className={styles.importSkippedRef}>{s.orderRef}</span>
                       <span className={styles.importSkippedReason}>
-                        {s.reason === 'duplicate' ? 'Déjà existante' : s.reason}
+                        {s.reason === 'duplicate' ? t('deliveries.import.alreadyExists') : s.reason}
                       </span>
                     </div>
                   ))}

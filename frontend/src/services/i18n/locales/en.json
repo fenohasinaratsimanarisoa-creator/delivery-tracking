@@ -209,6 +209,25 @@
     "count_plural": "{{count}} deliveries",
     "validation": {
       "validNumber": "Must be a valid number"
+    },
+    "import": {
+      "resultTitle": "Import results",
+      "stats": {
+        "created": "Created",
+        "updated": "Updated",
+        "skipped": "Skipped",
+        "errors": "Errors"
+      },
+      "skippedTitle": "Skipped orders",
+      "alreadyExists": "Already exists",
+      "tooltip": {
+        "skipDuplicates": "Mode: skip duplicates",
+        "updateExisting": "Mode: update existing"
+      },
+      "mode": {
+        "skip": "Skip",
+        "update": "Update"
+      }
     }
   },
   "fleet": {
@@ -222,7 +241,8 @@
     "formSections": {
       "identity": "Vehicle Identity",
       "registration": "Registration",
-      "features": "Features"
+      "features": "Features",
+      "positionSource": "Position Source"
     },
     "fields": {
       "brand": "Brand",
@@ -231,7 +251,8 @@
       "licensePlate": "License plate",
       "vin": "VIN number",
       "fuelType": "Fuel type",
-      "theoreticalConsumption": "Theoretical consumption (L/100km)"
+      "theoreticalConsumption": "Theoretical consumption (L/100km)",
+      "positionSource": "Position source"
     },
     "fuelTypes": {
       "gasoline": "Gasoline",
@@ -383,7 +404,43 @@
     "helpGps": "• GPS Report: automatic estimation based on vehicle GPS positions. Uses the vehicle's theoretical consumption to estimate costs. Complements manual entries."
   },
   "reports": {
-    "title": "Reports"
+    "title": "Reports",
+    "subtitle": "Analyze your fleet's performance",
+    "period": {
+      "7days": "7 days",
+      "30days": "30 days",
+      "custom": "Custom"
+    },
+    "stats": {
+      "onTime": "On time"
+    },
+    "charts": {
+      "statusBreakdown": "Status breakdown",
+      "dailyEvolution": "Daily evolution",
+      "deliveries": "Deliveries",
+      "vehicles": "Vehicles",
+      "drivers": "Drivers"
+    },
+    "tabs": {
+      "delivery": "Deliveries",
+      "fleet": "Fleet",
+      "driver": "Drivers"
+    },
+    "toast": {
+      "downloaded": "Report {tab} downloaded ({format})"
+    },
+    "driverStats": {
+      "totalDeliveries": "Total deliveries",
+      "completed": "Completed",
+      "onTimeGlobal": "Global on-time rate",
+      "activeDrivers": "Active drivers"
+    },
+    "fleetStats": {
+      "activeVehicles": "Active vehicles",
+      "online": "Online",
+      "totalDistance": "Total distance",
+      "totalFuel": "Total fuel"
+    }
   },
   "users": {
     "title": "Users",
@@ -566,7 +623,12 @@
       "model": "Model",
       "year": "Year",
       "licensePlate": "License plate",
-      "fuelType": "Fuel"
+      "fuelType": "Fuel",
+      "positionSource": "GPS tracking"
+    },
+    "positionSource": {
+      "physicalTracker": "Physical GPS tracker",
+      "mobileApp": "Mobile app"
     }
   },
   "myOrders": {
@@ -841,7 +903,8 @@
       "description": "This page will be available soon."
     },
     "errorBoundary": {
-      "title": "Error"
+      "title": "Error",
+      "retry": "Retry"
     },
     "notificationBell": {
       "title": "Notifications",
@@ -972,6 +1035,35 @@
   "activeDelivery": {
     "pickup": "📍",
     "dropoff": "🏁"
+  },
+  "proximityAlert": {
+    "viewDeliveries": "View my deliveries",
+    "retry": "Retry"
+  },
+  "trackingIndicator": {
+    "physicalTrackerTitle": "Tracking via physical GPS tracker installed on the vehicle",
+    "physicalTracker": "GPS Tracker",
+    "gpsBlocked": "GPS blocked",
+    "gpsPending": "GPS pending",
+    "searching": "Searching for signal...",
+    "poorAccuracy": "Poor GPS",
+    "stationary": "Stationary",
+    "moving": "On the road"
+  },
+  "locationSearch": {
+    "placeholder": "Search for a place…",
+    "copy": "Copy",
+    "adjustOnMap": "Adjust on map",
+    "noResults": "No results found — refine your search or use the map",
+    "mapHint": "Click on the map or drag the marker to adjust"
+  },
+  "api": {
+    "error": {
+      "timeout": "The request timed out. Check your connection.",
+      "network": "Unable to reach the server. Check your connection.",
+      "rateLimit": "Too many requests. Please wait.",
+      "server": "Server error. Please try again later."
+    }
   },
   "dateFormats": {
     "short": "MM/dd/yyyy",
@@ -1171,7 +1263,27 @@
     "dataSaverOn": "📶 Eco",
     "dataSaverOff": "📶 Std",
     "dataSaverTooltipOn": "Data saver enabled",
-    "dataSaverTooltipOff": "Enable data saver"
+    "dataSaverTooltipOff": "Enable data saver",
+    "instruction": {
+      "fork": "Keep right",
+      "merge": "Merge",
+      "endOfRoad": "At the end of the road",
+      "useLane": "Use the lane",
+      "continue": "Continue straight",
+      "offRamp": "Take the exit",
+      "onRamp": "Take the ramp",
+      "defaultContinue": "Continue",
+      "arrive": "You have arrived",
+      "depart": "Depart"
+    },
+    "modifier": {
+      "left": "left",
+      "right": "right",
+      "straight": "straight",
+      "uturn": "U-turn",
+      "slightLeft": "slightly left",
+      "slightRight": "slightly right"
+    }
   },
   "notificationBell": {
     "deleteAllTitle": "Clear all",

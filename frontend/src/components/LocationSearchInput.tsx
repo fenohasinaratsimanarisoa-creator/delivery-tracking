@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -69,9 +70,11 @@ async function fetchPlaceDetails(placeId: string): Promise<GeocodingResult | nul
 }
 
 export default memo(function LocationSearchInput({
-  placeholder = 'Rechercher un lieu…', value, onChange, onBlur, error,
+  placeholder, value, onChange, onBlur, error,
   recentPlaces, showCopyButton, onCopyFromOther, copyTooltip, distanceFrom,
 }: LocationSearchInputProps) {
+  const { t } = useTranslation();
+  const resolvedPlaceholder = placeholder || t('locationSearch.placeholder');
   const [inputValue, setInputValue] = useState(value.label || '')
   const [results, setResults] = useState<GeocodingResult[]>([])
   const [netLoading, setNetLoading] = useState(false)
@@ -155,7 +158,7 @@ export default memo(function LocationSearchInput({
       <div className={styles.inputRow}>
         <div className={styles.inputWrap}>
           <Search size={14} className={styles.searchIcon} />
-          <input ref={inputRef} type="text" placeholder={placeholder} className={`dialog-input ${styles.input}`} value={inputValue} onChange={onInputChange}
+          <input ref={inputRef} type="text" placeholder={resolvedPlaceholder} className={`dialog-input ${styles.input}`} value={inputValue} onChange={onInputChange}
             onFocus={() => { if (!gpsPreloaded.current) { gpsPreloaded.current = true; preload() } }}
             onBlur={() => {
               if (inputValue.trim() && !value.label) {
@@ -165,8 +168,8 @@ export default memo(function LocationSearchInput({
             }} onKeyDown={handleKeyDown} autoComplete="off" />
           {netLoading && <Loader2 size={14} className={styles.loaderIcon} />}
         </div>
-        {showCopyButton && <button type="button" onClick={onCopyFromOther} title={copyTooltip || 'Copier'} className={styles.copyBtn}><ArrowRightFromLine size={14} /></button>}
-        <button type="button" onClick={() => setShowMap(!showMap)} title="Ajuster sur la carte" className={styles.mapBtn}><Crosshair size={14} /></button>
+        {showCopyButton && <button type="button" onClick={onCopyFromOther} title={copyTooltip || t('locationSearch.copy')} className={styles.copyBtn}><ArrowRightFromLine size={14} /></button>}
+        <button type="button" onClick={() => setShowMap(!showMap)} title={t('locationSearch.adjustOnMap')} className={styles.mapBtn}><Crosshair size={14} /></button>
       </div>
       {error && <div className={styles.errorText}>{error}</div>}
       {showDropdown && (
@@ -182,7 +185,7 @@ export default memo(function LocationSearchInput({
         </div>
       )}
       {open && !netLoading && allResults.length === 0 && inputValue.trim().length >= 2 && (
-        <div className={styles.noResults}>Aucun résultat trouvé — précisez votre recherche ou utilisez la carte</div>
+        <div className={styles.noResults}>{t('locationSearch.noResults')}</div>
       )}
       {showMap && (
         <div className={styles.mapContainer}>
@@ -190,7 +193,7 @@ export default memo(function LocationSearchInput({
             <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             <DraggableMarker position={mapPos} onChange={handleMapConfirm} /><MapUpdater center={mapPos} />
           </MapContainer>
-          <div className={styles.mapHint}>Cliquez sur la carte ou glissez le marqueur pour ajuster</div>
+          <div className={styles.mapHint}>{t('locationSearch.mapHint')}</div>
         </div>
       )}
     </div>

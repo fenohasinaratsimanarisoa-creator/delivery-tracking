@@ -71,33 +71,33 @@ function buildInstructionText(step: RouteStep): string {
   const modifier = step.maneuverModifier || '';
   const street = step.streetName || '';
   const typeMap: Record<string, string> = {
-    depart: lang === 'fr' ? 'Départ' : 'Depart',
+    depart: i18n.t('navigation.instruction.depart'),
     turn: lang === 'fr' ? 'Tournez' : 'Turn',
     'new name': lang === 'fr' ? 'Continuez' : 'Continue',
     arrive: lang === 'fr' ? 'Arrivée' : 'Arrive',
     roundabout: lang === 'fr' ? 'Prenez le rond-point' : 'Take the roundabout',
     rotary: lang === 'fr' ? 'Prenez le rond-point' : 'Take the roundabout',
-    fork: lang === 'fr' ? 'Tenez la droite' : 'Keep right',
-    merge: lang === 'fr' ? 'Rejoignez' : 'Merge',
-    'end of road': lang === 'fr' ? 'Au bout de la route' : 'End of road',
-    'use lane': lang === 'fr' ? 'Utilisez la voie' : 'Use the lane',
-    continue: lang === 'fr' ? 'Continuez tout droit' : 'Continue straight',
-    'off ramp': lang === 'fr' ? 'Prenez la sortie' : 'Take the exit',
-    'on ramp': lang === 'fr' ? 'Prenez l\'entrée' : 'Take the ramp',
+    fork: i18n.t('navigation.instruction.fork'),
+    merge: i18n.t('navigation.instruction.merge'),
+    'end of road': i18n.t('navigation.instruction.endOfRoad'),
+    'use lane': i18n.t('navigation.instruction.useLane'),
+    continue: i18n.t('navigation.instruction.continue'),
+    'off ramp': i18n.t('navigation.instruction.offRamp'),
+    'on ramp': i18n.t('navigation.instruction.onRamp'),
   };
-  const typeLabel = typeMap[step.maneuverType || ''] || (lang === 'fr' ? 'Continuez' : 'Continue');
+  const typeLabel = typeMap[step.maneuverType || ''] || i18n.t('navigation.instruction.defaultContinue');
   const modMap: Record<string, string> = {
-    left: lang === 'fr' ? 'à gauche' : 'left',
-    right: lang === 'fr' ? 'à droite' : 'right',
-    straight: lang === 'fr' ? 'tout droit' : 'straight',
-    uturn: lang === 'fr' ? 'en U' : 'U-turn',
-    slight_left: lang === 'fr' ? 'légèrement à gauche' : 'slightly left',
-    slight_right: lang === 'fr' ? 'légèrement à droite' : 'slightly right',
+    left: i18n.t('navigation.modifier.left'),
+    right: i18n.t('navigation.modifier.right'),
+    straight: i18n.t('navigation.modifier.straight'),
+    uturn: i18n.t('navigation.modifier.uturn'),
+    slight_left: i18n.t('navigation.modifier.slightLeft'),
+    slight_right: i18n.t('navigation.modifier.slightRight'),
     sharp_left: lang === 'fr' ? 'à gauche' : 'hard left',
     sharp_right: lang === 'fr' ? 'à droite' : 'hard right',
   };
-  if (step.maneuverType === 'arrive') return lang === 'fr' ? 'Vous êtes arrivé' : 'You have arrived';
-  if (step.maneuverType === 'depart') return `${lang === 'fr' ? 'Départ' : 'Depart'}${street ? ' — ' + street : ''}`;
+  if (step.maneuverType === 'arrive') return i18n.t('navigation.instruction.arrive');
+  if (step.maneuverType === 'depart') return `${i18n.t('navigation.instruction.depart')}${street ? ' — ' + street : ''}`;
   const modLabel = modMap[modifier] || '';
   if (street) return `${typeLabel} ${modLabel} sur ${street}`;
   return `${typeLabel} ${modLabel}`;

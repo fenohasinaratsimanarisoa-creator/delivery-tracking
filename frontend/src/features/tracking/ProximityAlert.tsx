@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Bell, BellOff, ArrowRight, X } from 'lucide-react';
 import type { TrackingStatus, DriverAlert } from '../../hooks/useDriverTracking';
 import styles from './ProximityAlert.module.css';
@@ -11,6 +12,7 @@ const URGENCY_CONFIG = {
 };
 
 function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingStatus }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const soundEnabledRef = useRef(true);
   const audioPlayedRef = useRef(false);
@@ -73,7 +75,7 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
             navigate('/my-deliveries');
           }} className={styles.actionBtn} style={{ background: colors.border }}>
             <ArrowRight size={16} />
-            {'Voir mes livraisons'}
+            {t('proximityAlert.viewDeliveries')}
           </button>
         </div>
       )}
@@ -85,7 +87,7 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
             // eslint-disable-next-line no-restricted-globals
             location.reload();
           }} className={`${styles.actionBtn} ${styles.actionBtnLight}`} style={{ background: colors.border }}>
-            {'Réessayer'}
+            {t('proximityAlert.retry')}
           </button>
         </div>
       )}

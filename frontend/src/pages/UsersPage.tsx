@@ -11,6 +11,8 @@ import { useEntityForm, type FieldDef, type FormSection } from '../hooks/useEnti
 import { useToast } from '../components/Toast';
 import type { AppUser, VehicleListItem } from '../types';
 
+type ApiError = { response?: { data?: { message?: string } } };
+
 interface UserFormValues {
   firstName: string; lastName: string; email: string;
   phone: string; role: string; password: string;
@@ -133,7 +135,7 @@ export default function UsersPage() {
       toast('Utilisateur supprimé');
       setDeleting(null);
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast(err?.response?.data?.message || 'Erreur lors de la suppression', 'error');
       setDeleting(null);
     },
@@ -145,14 +147,14 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast(err?.response?.data?.message || 'Erreur', 'error');
     },
   });
 
   const saveMutation = useMutation({
     mutationFn: (body: UserFormValues) => {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         email: body.email,
         firstName: body.firstName,
         lastName: body.lastName,
@@ -179,7 +181,7 @@ export default function UsersPage() {
       setDrawerOpen(false);
       setEditing(null);
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast(err?.response?.data?.message || 'Erreur lors de l\'enregistrement', 'error');
     },
   });

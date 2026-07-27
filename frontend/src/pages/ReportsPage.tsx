@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import i18n from '../services/i18n/i18n';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -9,6 +11,54 @@ import Button from '../components/Button';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import styles from './ReportsPage.module.css';
+
+interface DeliveryReport {
+  total: number;
+  onTimeRate: number;
+  completedCount: number;
+  onTimeCount: number;
+  statusBreakdown: { status: string; count: number }[];
+  byDay: { label: string; count: number }[];
+}
+
+interface FleetVehicle {
+  vehicleId: string;
+  vehicleName: string;
+  licensePlate: string;
+  deliveriesCount: number;
+  distanceKm: number;
+  fuelLiters: number;
+  avgConsumption: number;
+  isOnline: boolean;
+}
+
+interface FleetReport {
+  activeCount: number;
+  onlineCount: number;
+  totalDistance: number;
+  totalFuel: number;
+  vehicles: FleetVehicle[];
+}
+
+interface DriverReportEntry {
+  driverId: string;
+  driverName: string;
+  isActive: boolean;
+  phone?: string;
+  totalDeliveries: number;
+  completedDeliveries: number;
+  inProgressDeliveries: number;
+  failedDeliveries: number;
+  onTimeDeliveries: number;
+  onTimeRate: number;
+}
+
+interface DriverReport {
+  totalDeliveries: number;
+  totalCompleted: number;
+  overallOnTimeRate: number;
+  drivers: DriverReportEntry[];
+}
 
 const COLORS = {
   accent: '#F2A93C',
@@ -91,6 +141,7 @@ const tooltipStyle = {
 };
 
 export default function ReportsPage() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('delivery');
   const [period, setPeriod] = useState<'week' | 'month' | 'custom'>('month');
   const [customFrom, setCustomFrom] = useState(daysAgo(30));
@@ -125,21 +176,21 @@ export default function ReportsPage() {
     a.href = url;
     a.download = `rapport-${tab}-${today()}.${ext}`;
     a.click();
-    toast(`Rapport ${tab} téléchargé (${format.toUpperCase()})`);
+    toast(t('reports.toast.downloaded', { tab, format: format.toUpperCase() }));
   }, [tab, from, to, toast]);
 
   const reportTabs: { key: Tab; label: string }[] = [
-    { key: 'delivery', label: 'Livraisons' },
-    { key: 'fleet', label: 'Flotte' },
-    { key: 'driver', label: 'Chauffeurs' },
+    { key: 'delivery', label: t('reports.tabs.delivery') },
+    { key: 'fleet', label: t('reports.tabs.fleet') },
+    { key: 'driver', label: t('reports.tabs.driver') },
   ];
 
   return (
     <div className={styles.pageContainer}>
       <div className={styles.header}>
         <div>
-          <h1 className={styles.pageTitle}>Rapports</h1>
-          <p className={styles.pageSubtitle}>Analysez les performances de votre flotte</p>
+          <h1 className={styles.pageTitle}>{t('reports.title')}</h1>
+          <p className={styles.pageSubtitle}>{t('reports.subtitle')}</p>
         </div>
 
         <div className={styles.periodBar}>
@@ -150,7 +201,7 @@ export default function ReportsPage() {
                 onClick={() => setPeriod(p)}
                 className={`${styles.periodBtn} ${period === p ? styles.periodBtnActive : styles.periodBtnInactive}`}
               >
-                {p === 'week' ? '7 jours' : p === 'month' ? '30 jours' : 'Personnalisé'}
+                {p === 'week' ? t('reports.period.7days') : p === 'month' ? t('reports.period.30days') : t('reports.period.custom')}
               </button>
             ))}
           </div>
@@ -197,26 +248,26 @@ export default function ReportsPage() {
   );
 }
 
-function renderDeliveryReport(data: any, loading: boolean) {
+function renderDeliveryReport(data: DeliveryReport | undefined, loading: boolean) {
   if (loading) return <div className={styles.loadingContainer}><Skeleton /><Skeleton height={300} /></div>;
   if (!data) return null;
 
   return (
     <div className={styles.section}>
       <div className={styles.statsGrid}>
-        <StatBox label="Total livraisons" value={formatNumber(data.total)} color={COLORS.accent} />
-        <StatBox label="Taux à l'heure" value={`${data.onTimeRate}%`} color={data.onTimeRate >= 80 ? COLORS.teal : COLORS.red} />
-        <StatBox label="Livrées" value={formatNumber(data.completedCount)} color={COLORS.teal} />
-        <StatBox label="À l'heure" value={formatNumber(data.onTimeCount)} color={COLORS.blue} />
+        <StatBox label={i18n.t('reports.driverStats.totalDeliveries')} value={formatNumber(data.total)} color={COLORS.accent} />
+        <StatBox label={i18n.t('reports.stats.onTime')} value={`${data.onTimeRate}%`} color={data.onTimeRate >= 80 ? COLORS.teal : COLORS.red} />
+        <StatBox label={i18n.t('reports.driverStats.completed')} value={formatNumber(data.completedCount)} color={COLORS.teal} />
+        <StatBox label={i18n.t('reports.stats.onTime')} value={formatNumber(data.onTimeCount)} color={COLORS.blue} />
       </div>
 
       <div className={styles.chartsGrid2}>
-        <Card title="Répartition par statut">
+        <Card title={i18n.t('reports.charts.statusBreakdown')}>
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
               <Pie data={data.statusBreakdown} dataKey="count" nameKey="status"
                 cx="50%" cy="50%" outerRadius={90} innerRadius={50}>
-                {data.statusBreakdown.map((entry: any) => (
+                {data.statusBreakdown.map((entry: { status: string; count: number }) => (
                   <Cell key={entry.status} fill={STATUS_COLORS[entry.status] || COLORS.gray} />
                 ))}
               </Pie>
@@ -227,7 +278,7 @@ function renderDeliveryReport(data: any, loading: boolean) {
           </ResponsiveContainer>
         </Card>
 
-        <Card title="Évolution par jour">
+        <Card title={i18n.t('reports.charts.dailyEvolution')}>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={data.byDay}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle, rgba(232,236,243,0.08))" />
@@ -235,7 +286,7 @@ function renderDeliveryReport(data: any, loading: boolean) {
                 tickFormatter={(v: string) => v.slice(5)} />
               <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-secondary, #9BA6B9)' }} />
               <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="count" fill={COLORS.accent} radius={[3, 3, 0, 0]} name="Livraisons" />
+              <Bar dataKey="count" fill={COLORS.accent} radius={[3, 3, 0, 0]} name={i18n.t('reports.charts.deliveries')} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -244,17 +295,17 @@ function renderDeliveryReport(data: any, loading: boolean) {
   );
 }
 
-function renderFleetReport(data: any, loading: boolean) {
+function renderFleetReport(data: FleetReport | undefined, loading: boolean) {
   if (loading) return <div className={styles.loadingContainer}><Skeleton /><Skeleton height={300} /></div>;
   if (!data) return null;
 
   return (
     <div className={styles.section}>
       <div className={styles.statsGrid}>
-        <StatBox label="Véhicules actifs" value={formatNumber(data.activeCount)} color={COLORS.accent} />
-        <StatBox label="En ligne" value={formatNumber(data.onlineCount)} color={COLORS.teal} />
-        <StatBox label="Distance totale" value={`${formatNumber(Math.round(data.totalDistance))} km`} color={COLORS.blue} />
-        <StatBox label="Carburant total" value={`${formatNumber(Math.round(data.totalFuel))} L`} color={COLORS.purple} />
+        <StatBox label={i18n.t('reports.fleetStats.activeVehicles')} value={formatNumber(data.activeCount)} color={COLORS.accent} />
+        <StatBox label={i18n.t('reports.fleetStats.online')} value={formatNumber(data.onlineCount)} color={COLORS.teal} />
+        <StatBox label={i18n.t('reports.fleetStats.totalDistance')} value={`${formatNumber(Math.round(data.totalDistance))} km`} color={COLORS.blue} />
+        <StatBox label={i18n.t('reports.fleetStats.totalFuel')} value={`${formatNumber(Math.round(data.totalFuel))} L`} color={COLORS.purple} />
       </div>
 
       <Card title="Distance par véhicule">
@@ -309,7 +360,7 @@ function renderFleetReport(data: any, loading: boolean) {
               </tr>
             </thead>
             <tbody>
-              {data.vehicles.map((v: any) => (
+              {data.vehicles.map((v: FleetVehicle) => (
                 <tr key={v.vehicleId} className={styles.tableRow}>
                   <td className={styles.tableCell}>{v.vehicleName}</td>
                   <td className={styles.tableCellMono}>{v.licensePlate}</td>
@@ -332,19 +383,19 @@ function renderFleetReport(data: any, loading: boolean) {
   );
 }
 
-function renderDriverReport(data: any, loading: boolean) {
+function renderDriverReport(data: DriverReport | undefined, loading: boolean) {
   if (loading) return <div className={styles.loadingContainer}><Skeleton /><Skeleton height={300} /></div>;
   if (!data) return null;
 
-  const sorted = [...(data.drivers || [])].sort((a: any, b: any) => b.totalDeliveries - a.totalDeliveries);
+  const sorted = [...(data.drivers || [])].sort((a: DriverReportEntry, b: DriverReportEntry) => b.totalDeliveries - a.totalDeliveries);
 
   return (
     <div className={styles.section}>
       <div className={styles.statsGrid}>
-        <StatBox label="Total livraisons" value={formatNumber(data.totalDeliveries)} color={COLORS.accent} />
-        <StatBox label="Complétées" value={formatNumber(data.totalCompleted)} color={COLORS.teal} />
-        <StatBox label="Ponctualité globale" value={`${data.overallOnTimeRate}%`} color={data.overallOnTimeRate >= 80 ? COLORS.teal : COLORS.red} />
-        <StatBox label="Chauffeurs actifs" value={formatNumber(data.drivers.filter((d: any) => d.isActive).length)} color={COLORS.blue} />
+        <StatBox label={i18n.t('reports.driverStats.totalDeliveries')} value={formatNumber(data.totalDeliveries)} color={COLORS.accent} />
+        <StatBox label={i18n.t('reports.driverStats.completed')} value={formatNumber(data.totalCompleted)} color={COLORS.teal} />
+        <StatBox label={i18n.t('reports.driverStats.onTimeGlobal')} value={`${data.overallOnTimeRate}%`} color={data.overallOnTimeRate >= 80 ? COLORS.teal : COLORS.red} />
+        <StatBox label={i18n.t('reports.driverStats.activeDrivers')} value={formatNumber(data.drivers.filter((d: DriverReportEntry) => d.isActive).length)} color={COLORS.blue} />
       </div>
 
       <Card title="Livraisons par chauffeur">
@@ -374,7 +425,7 @@ function renderDriverReport(data: any, loading: boolean) {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((d: any) => (
+              {sorted.map((d: DriverReportEntry) => (
                 <tr key={d.driverId} className={styles.tableRow}>
                   <td className={styles.tableCellBold}>{d.driverName}</td>
                   <td className={styles.tableCell} style={{ color: 'var(--color-text-secondary, #9BA6B9)', fontSize: '0.75rem' }}>{d.phone || '-'}</td>

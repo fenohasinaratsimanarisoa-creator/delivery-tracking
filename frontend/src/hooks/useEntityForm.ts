@@ -43,7 +43,7 @@ export function useEntityForm<T extends Record<string, any>>({
   initial, fields, sections: _sections, onSubmit, onSuccess,
 }: UseEntityFormOptions<T>) {
   const buildInitial = useCallback(() => {
-    const obj: any = {};
+    const obj: Record<string, unknown> = {};
     for (const f of fields) {
       obj[f.name as string] = initial?.[f.name] ?? '';
     }
@@ -150,10 +150,11 @@ export function useEntityForm<T extends Record<string, any>>({
       if (mountedRef.current) {
         onSuccess?.();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (mountedRef.current) {
-        const msg = err?.response?.data?.message;
-        setServerError(Array.isArray(msg) ? msg[0] : (msg || err?.message || i18n.t('common.saveError')));
+        const apiErr = err as { response?: { data?: { message?: string | string[] } }; message?: string };
+        const msg = apiErr?.response?.data?.message;
+        setServerError(Array.isArray(msg) ? msg[0] : (msg || apiErr?.message || i18n.t('common.saveError')));
       }
     } finally {
       if (mountedRef.current) setSaving(false);

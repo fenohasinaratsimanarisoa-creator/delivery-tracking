@@ -82,7 +82,7 @@ export default function MyVehiclePage() {
           <Row label={t('myVehicle.fields.year')} value={String(vehicle.year)} />
           <Row label={t('myVehicle.fields.licensePlate')} value={vehicle.licensePlate} />
           <Row label={t('myVehicle.fields.fuelType')} value={vehicle.fuelType} />
-      <Row label="Suivi GPS" value={vehicle.positionSource === 'physical_tracker' ? 'Traceur GPS physique' : 'Application mobile'} />
+      <Row label={t('myVehicle.fields.positionSource')} value={vehicle.positionSource === 'physical_tracker' ? t('myVehicle.positionSource.physicalTracker') : t('myVehicle.positionSource.mobileApp')} />
         </div>
       </div>
     </div>

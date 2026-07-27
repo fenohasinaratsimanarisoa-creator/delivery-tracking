@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { getAccessToken, setAccessToken } from '../auth/tokenStore';
 import { getApiBaseUrl } from './config';
+import i18n from '../i18n/i18n';
 
 let csrfToken: string | null = null;
 let csrfHmac: string | null = null;
@@ -49,17 +50,17 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.code === 'ECONNABORTED') {
-      error.userMessage = 'La requête a pris trop de temps. Vérifiez votre connexion.';
+      error.userMessage = i18n.t('api.error.timeout');
       return Promise.reject(error);
     }
     if (!error.response) {
-      error.userMessage = 'Impossible de joindre le serveur. Vérifiez votre connexion.';
+      error.userMessage = i18n.t('api.error.network');
       return Promise.reject(error);
     }
     if (error.response?.status !== 401 || error.config._retry) {
       const status = error.response?.status;
-      if (status === 429) error.userMessage = 'Trop de requêtes. Veuillez patienter.';
-      else if (status >= 500) error.userMessage = 'Erreur serveur. Veuillez réessayer plus tard.';
+      if (status === 429) error.userMessage = i18n.t('api.error.rateLimit');
+      else if (status >= 500) error.userMessage = i18n.t('api.error.server');
       return Promise.reject(error);
     }
 

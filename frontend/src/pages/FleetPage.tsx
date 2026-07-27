@@ -11,6 +11,8 @@ import { useToast } from '../components/Toast';
 import type { Vehicle } from '../types';
 import styles from './FleetPage.module.css';
 
+type ApiError = { response?: { data?: { message?: string } } };
+
 interface VehicleFormValues {
   brand: string; model: string; year: string;
   licensePlate: string; fuelType: string;
@@ -121,7 +123,7 @@ export default function FleetPage() {
       toast('Véhicule supprimé');
       setDeleting(null);
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast(err?.response?.data?.message || 'Erreur lors de la suppression', 'error');
       setDeleting(null);
     },
@@ -134,7 +136,7 @@ export default function FleetPage() {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles', 'list'] });
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast(err?.response?.data?.message || 'Erreur', 'error');
     },
   });
@@ -149,12 +151,12 @@ export default function FleetPage() {
       setNewDeviceName('');
       setNewDeviceId('');
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast(err?.response?.data?.message || 'Erreur lors de l\'ajout', 'error');
     },
   });
 
-  const traccarDeviceOptions = (traccarDevices || []).map((d: any) => ({
+  const traccarDeviceOptions = ((traccarDevices ?? []) as { id: string; name: string }[]).map((d) => ({
     value: String(d.id),
     label: `${d.name} (ID: ${d.id})`,
   }));
@@ -170,7 +172,7 @@ export default function FleetPage() {
 
   const saveMutation = useMutation({
     mutationFn: (body: VehicleFormValues) => {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         brand: body.brand,
         model: body.model,
         year: Number(body.year),
@@ -208,8 +210,8 @@ export default function FleetPage() {
       fuelType: editing.fuelType,
       vin: '',
       theoreticalConsumption: '',
-      positionSource: (editing as any).positionSource || 'phone',
-      traccarDeviceId: (editing as any).traccarDeviceId || '',
+      positionSource: editing.positionSource || 'phone',
+      traccarDeviceId: editing.traccarDeviceId || '',
     } : { brand: '', model: '', year: String(new Date().getFullYear()), licensePlate: '', fuelType: 'Diesel', vin: '', theoreticalConsumption: '', positionSource: 'phone', traccarDeviceId: '' },
     fields: fieldsWithTraccar,
     sections: vehicleSections,

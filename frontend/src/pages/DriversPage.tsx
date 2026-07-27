@@ -10,6 +10,8 @@ import { useToast } from '../components/Toast';
 import type { Driver, VehicleListItem } from '../types';
 import styles from './DriversPage.module.css';
 
+type ApiError = { response?: { data?: { message?: string } } };
+
 interface DriverFormValues {
   firstName: string; lastName: string; email: string;
   phone: string; licenseNumber: string; vehicleId: string;
@@ -112,14 +114,14 @@ export default function DriversPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['drivers'] });
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast(err?.response?.data?.message || 'Erreur', 'error');
     },
   });
 
   const saveMutation = useMutation({
     mutationFn: (body: DriverFormValues) => {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         firstName: body.firstName,
         lastName: body.lastName,
         email: body.email || undefined,
@@ -139,7 +141,7 @@ export default function DriversPage() {
       setDrawerOpen(false);
       setEditing(null);
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast(err?.response?.data?.message || 'Erreur lors de l\'enregistrement', 'error');
     },
   });

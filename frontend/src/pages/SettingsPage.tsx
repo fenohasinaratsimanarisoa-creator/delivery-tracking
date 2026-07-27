@@ -11,6 +11,16 @@ import { useToast } from '../components/Toast';
 import AppearanceSection from '../features/settings/sections/AppearanceSection';
 import styles from './SettingsPage.module.css';
 
+type ApiError = { response?: { data?: { message?: string } } };
+
+interface Session {
+  id: string;
+  device?: string;
+  ip?: string;
+  lastActivity?: string;
+  isCurrent?: boolean;
+}
+
 function PasswordStrength({ password }: { password: string }) {
   const { t } = useTranslation();
   const score = password.length < 8 ? 0 : (
@@ -86,7 +96,12 @@ export default function SettingsPage() {
   );
 }
 
-function ProfileSection({ user, updateUser, t, toast }: any) {
+function ProfileSection({ user, updateUser, t, toast }: {
+  user: { firstName?: string; lastName?: string } | null;
+  updateUser: (data: { firstName: string; lastName: string }) => void;
+  t: (key: string) => string;
+  toast: (msg: string, type?: 'error' | 'success' | 'info') => void;
+}) {
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
 
@@ -96,7 +111,7 @@ function ProfileSection({ user, updateUser, t, toast }: any) {
       updateUser({ firstName, lastName });
       toast(t('settingsProfile.updated'));
     },
-    onError: (err: any) => toast(err?.response?.data?.message || t('common.error'), 'error'),
+    onError: (err: ApiError) => toast(err?.response?.data?.message || t('common.error'), 'error'),
   });
 
   return (
@@ -117,12 +132,15 @@ function ProfileSection({ user, updateUser, t, toast }: any) {
   );
 }
 
-function SecuritySection({ t, toast }: any) {
+function SecuritySection({ t, toast }: {
+  t: (key: string) => string;
+  toast: (msg: string, type?: 'error' | 'success' | 'info') => void;
+}) {
   const [pwCurrent, setPwCurrent] = useState('');
   const [pwNew, setPwNew] = useState('');
   const [pwConfirm, setPwConfirm] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [tfaSecret, setTfaSecret] = useState('');
   const [tfaQr, setTfaQr] = useState('');
   const [tfaEnabled, setTfaEnabled] = useState(false);
@@ -130,31 +148,31 @@ function SecuritySection({ t, toast }: any) {
   const pwMutation = useMutation({
     mutationFn: (body: { currentPassword: string; newPassword: string; confirmPassword: string }) => api.patch('/users/me/password', body),
     onSuccess: () => { toast(t('settingsSecurity.passwordChanged')); setPwCurrent(''); setPwNew(''); setPwConfirm(''); },
-    onError: (err: any) => toast(err?.response?.data?.message || t('common.error'), 'error'),
+    onError: (err: ApiError) => toast(err?.response?.data?.message || t('common.error'), 'error'),
   });
 
   const tfaEnableMutation = useMutation({
     mutationFn: (token: string) => api.post('/auth/2fa/verify', { token }),
     onSuccess: () => { toast(t('settingsSecurity.twoFactorEnabledToast')); setTfaEnabled(true); },
-    onError: (err: any) => toast(err?.response?.data?.message || t('settingsSecurity.twoFactorInvalidCode'), 'error'),
+    onError: (err: ApiError) => toast(err?.response?.data?.message || t('settingsSecurity.twoFactorInvalidCode'), 'error'),
   });
 
   const tfaDisableMutation = useMutation({
     mutationFn: (token: string) => api.post('/auth/2fa/disable', { token }),
     onSuccess: () => { toast(t('settingsSecurity.twoFactorDisabledToast')); setTfaEnabled(false); setTfaSecret(''); setTfaQr(''); },
-    onError: (err: any) => toast(err?.response?.data?.message || t('settingsSecurity.twoFactorInvalidCode'), 'error'),
+    onError: (err: ApiError) => toast(err?.response?.data?.message || t('settingsSecurity.twoFactorInvalidCode'), 'error'),
   });
 
   const sessionRevoke = useMutation({
     mutationFn: (id: string) => api.delete(`/auth/sessions/${id}`),
     onSuccess: () => { fetchSessions(); toast(t('settingsSecurity.sessionRevoked')); },
-    onError: (err: any) => toast(err?.response?.data?.message || t('common.error'), 'error'),
+    onError: (err: ApiError) => toast(err?.response?.data?.message || t('common.error'), 'error'),
   });
 
   const sessionRevokeAll = useMutation({
     mutationFn: () => api.post('/auth/sessions/revoke-all'),
     onSuccess: () => { fetchSessions(); toast(t('settingsSecurity.allSessionsRevoked')); },
-    onError: (err: any) => toast(err?.response?.data?.message || t('common.error'), 'error'),
+    onError: (err: ApiError) => toast(err?.response?.data?.message || t('common.error'), 'error'),
   });
 
   const fetchSessions = async () => { try { const r = await api.get('/auth/sessions'); setSessions(r.data); } catch {} };
@@ -222,11 +240,11 @@ function SecuritySection({ t, toast }: any) {
           <Button variant="secondary" size="sm" onClick={fetchSessions}>{t('settingsSecurity.loadSessions') || 'Charger'}</Button>
         </div>
         {sessions.length === 0 && <p className={styles.noSessions}>{t('settingsSecurity.noSessions') || 'Aucune session'}</p>}
-        {sessions.map((s: any) => (
+        {sessions.map((s: Session) => (
           <div key={s.id} className={styles.sessionItem}>
             <div>
               <div className={styles.sessionDevice}>{s.device || 'Unknown'} {s.isCurrent && <span className={styles.sessionCurrent}>({t('settingsSecurity.currentSession')})</span>}</div>
-              <div className={styles.sessionMeta}>{s.ip} · {formatDateTime(s.lastActivity)}</div>
+              <div className={styles.sessionMeta}>{s.ip} · {s.lastActivity ? formatDateTime(s.lastActivity) : ''}</div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => sessionRevoke.mutate(s.id)} disabled={s.isCurrent}><LogOut size={12} /></Button>
           </div>
@@ -237,7 +255,10 @@ function SecuritySection({ t, toast }: any) {
   );
 }
 
-function NotificationsSection({ t, toast }: any) {
+function NotificationsSection({ t, toast }: {
+  t: (key: string) => string;
+  toast: (msg: string, type?: 'error' | 'success' | 'info') => void;
+}) {
   const { data: prefs, refetch: refetchPrefs } = useQuery({ queryKey: ['notification-prefs'], queryFn: () => api.get('/users/me/preferences').then(r => r.data) });
   const prefMutation = useMutation({
     mutationFn: (body: Record<string, boolean>) => api.patch('/users/me/preferences', body),
@@ -277,7 +298,7 @@ function NotificationsSection({ t, toast }: any) {
   );
 }
 
-function LanguageSection({ t }: any) {
+function LanguageSection({ t }: { t: (key: string) => string }) {
   const [lang, setLang] = useState(getLanguage());
   return (
     <section className={styles.settingsSection}>
