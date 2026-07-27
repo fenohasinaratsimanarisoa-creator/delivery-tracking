@@ -47,6 +47,9 @@ export class UsageGuard implements CanActivate {
     const path = request.route?.path || '';
 
     if (path.includes('/deliveries') && request.method === 'POST') {
+      const limit = plan.maxDeliveriesPerMonth;
+      if (limit == null) return;
+
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const count = await this.prisma.delivery.count({
@@ -56,7 +59,6 @@ export class UsageGuard implements CanActivate {
           createdAt: { gte: startOfMonth },
         },
       });
-      const limit = plan.maxDeliveriesPerMonth;
 
       if (count >= limit) {
         throw new ForbiddenException(
@@ -67,8 +69,10 @@ export class UsageGuard implements CanActivate {
     }
 
     if (path.includes('/vehicles') && request.method === 'POST') {
-      const count = await this.prisma.vehicle.count({ where: { companyId, deletedAt: null } });
       const limit = plan.maxVehicles;
+      if (limit == null) return;
+
+      const count = await this.prisma.vehicle.count({ where: { companyId, deletedAt: null } });
 
       if (count >= limit) {
         throw new ForbiddenException(
@@ -79,10 +83,12 @@ export class UsageGuard implements CanActivate {
     }
 
     if (path.includes('/users') && request.method === 'POST') {
+      const limit = plan.maxUsers;
+      if (limit == null) return;
+
       const count = await this.prisma.user.count({
         where: { companyId, deletedAt: null, isActive: true },
       });
-      const limit = plan.maxUsers;
 
       if (count >= limit) {
         throw new ForbiddenException(

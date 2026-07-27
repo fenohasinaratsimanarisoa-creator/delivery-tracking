@@ -769,7 +769,7 @@ export default function DeliveriesPage() {
           {/* === SECTION 2: Adresses === */}
           <DialogSection title="Adresses">
             <DialogField label="Point d'enlèvement" required
-              error={deliveryForm.touched.has('pickupLat') ? deliveryForm.errors.pickupLat : null}>
+              error={deliveryForm.touched.has('pickupAddress') ? deliveryForm.errors.pickupAddress : null}>
               <LocationSearchInput
                 placeholder="Ex: Analakely Antananarivo…"
                 value={{
@@ -778,16 +778,13 @@ export default function DeliveriesPage() {
                   label: deliveryForm.values.pickupLocationLabel || deliveryForm.values.pickupAddress,
                 }}
                 onChange={(v) => setLocationField('pickup', v)}
-                onBlur={() => {
-                  deliveryForm.handleBlur('pickupLat');
-                  deliveryForm.handleBlur('pickupLng');
-                }}
+                onBlur={() => deliveryForm.handleBlur('pickupAddress')}
                 recentPlaces={recentPlaces}
               />
             </DialogField>
 
             <DialogField label="Point de livraison" required
-              error={deliveryForm.touched.has('deliveryLat') ? deliveryForm.errors.deliveryLat : null}>
+              error={deliveryForm.touched.has('deliveryAddress') ? deliveryForm.errors.deliveryAddress : null}>
               <LocationSearchInput
                 placeholder="Ex: Ivato Antananarivo…"
                 value={{
@@ -796,10 +793,7 @@ export default function DeliveriesPage() {
                   label: deliveryForm.values.deliveryLocationLabel || deliveryForm.values.deliveryAddress,
                 }}
                 onChange={(v) => setLocationField('delivery', v)}
-                onBlur={() => {
-                  deliveryForm.handleBlur('deliveryLat');
-                  deliveryForm.handleBlur('deliveryLng');
-                }}
+                onBlur={() => deliveryForm.handleBlur('deliveryAddress')}
                 recentPlaces={recentPlaces}
                 showCopyButton={!!(deliveryForm.values.pickupLocationLabel || deliveryForm.values.pickupAddress)}
                 onCopyFromOther={copyPickupToDelivery}

@@ -129,7 +129,19 @@ export function useEntityForm<T extends Record<string, any>>({
     setErrors(newErrors);
 
     const hasError = Object.values(newErrors).some(Boolean);
-    if (hasError) return;
+    if (hasError) {
+      if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+        const fieldsInError = Object.entries(newErrors)
+          .filter(([, v]) => v)
+          .map(([k, v]) => `${k}: "${v}"`);
+        console.warn(
+          `[useEntityForm] Validation échouée — ${fieldsInError.length} champ(s) en erreur :\n` +
+          fieldsInError.join('\n') +
+          '\nVérifier que chaque champ requis a bien son erreur affichée dans le JSX.',
+        );
+      }
+      return;
+    }
 
     setSaving(true);
     setServerError(null);

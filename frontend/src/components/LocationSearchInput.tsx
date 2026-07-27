@@ -156,7 +156,12 @@ export default memo(function LocationSearchInput({
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', pointerEvents: 'none', zIndex: 1 }} />
           <input ref={inputRef} type="text" placeholder={placeholder} className="dialog-input" value={inputValue} onChange={onInputChange}
             onFocus={() => { if (!gpsPreloaded.current) { gpsPreloaded.current = true; preload() } }}
-            onBlur={onBlur} onKeyDown={handleKeyDown} autoComplete="off" style={{ paddingLeft: 32, paddingRight: 32 }} />
+            onBlur={() => {
+              if (inputValue.trim() && !value.label) {
+                onChange({ lat: null, lng: null, label: inputValue.trim() });
+              }
+              onBlur?.();
+            }} onKeyDown={handleKeyDown} autoComplete="off" style={{ paddingLeft: 32, paddingRight: 32 }} />
           {netLoading && <Loader2 size={14} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', animation: 'dt-spin 0.6s linear infinite' }} />}
         </div>
         {showCopyButton && <button type="button" onClick={onCopyFromOther} title={copyTooltip || 'Copier'} style={{ padding: 6, border: '1px solid var(--color-input-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-input-bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', flexShrink: 0 }}><ArrowRightFromLine size={14} /></button>}
