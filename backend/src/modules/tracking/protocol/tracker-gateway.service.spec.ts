@@ -8,10 +8,13 @@ describe('TrackerGatewayService', () => {
   let detectionLayer: ProtocolDetectionLayer;
   let gateway: TrackerGatewayService;
 
+  const mockPrisma = {} as any;
+  const mockTrackingGateway = { broadcastToCompany: () => {} } as any;
+
   beforeEach(() => {
     registry = new GpsProtocolRegistry();
     detectionLayer = new ProtocolDetectionLayer(registry);
-    gateway = new TrackerGatewayService(detectionLayer);
+    gateway = new TrackerGatewayService(detectionLayer, mockPrisma, mockTrackingGateway);
   });
 
   it('registers built-in drivers on construction', () => {

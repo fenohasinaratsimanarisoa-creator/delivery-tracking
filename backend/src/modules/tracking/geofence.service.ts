@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { haversineDistance } from '../../common/geo/geo.utils';
 
 @Injectable()
 export class GeofenceService {
@@ -29,7 +30,7 @@ export class GeofenceService {
     const events: Array<{ event: string; geofenceId: string; geofenceName: string }> = [];
 
     for (const gf of geofences) {
-      const distance = this.haversineDistance(latitude, longitude, gf.lat, gf.lng);
+      const distance = haversineDistance(latitude, longitude, gf.lat, gf.lng);
       const inside = distance <= gf.radiusMeters;
 
       const previouslyInside = lastEvent?.geofenceId === gf.id && lastEvent.event === 'entry';
@@ -52,14 +53,4 @@ export class GeofenceService {
     return events;
   }
 
-  private haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371000;
-    const toRad = (deg: number) => (deg * Math.PI) / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  }
 }

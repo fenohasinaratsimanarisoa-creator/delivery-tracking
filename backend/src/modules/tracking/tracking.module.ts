@@ -20,6 +20,7 @@ import { GpsProtocolRegistry } from './protocol/registry/gps-protocol-registry';
 import { ProtocolDetectionLayer } from './protocol/detection/protocol-detection-layer';
 import { TrackerGatewayService } from './protocol/tracker-gateway.service';
 import { GpsEventProcessorService } from './protocol/gps-event-processor.service';
+import { DeviceCommandService } from './protocol/commands/device-command.service';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { GpsEventProcessorService } from './protocol/gps-event-processor.service
     ProtocolDetectionLayer,
     TrackerGatewayService,
     GpsEventProcessorService,
+    DeviceCommandService,
   ],
   exports: [TrackingService, GeofenceService, DeliveryProximityService, TraccarBridgeService],
 })

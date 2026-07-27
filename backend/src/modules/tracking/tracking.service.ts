@@ -7,6 +7,7 @@ import { DeliveryProximityService } from './delivery-proximity.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { UpdatePositionDto } from './dto/update-position.dto';
+import { haversineDistance } from '../../common/geo/geo.utils';
 
 const TELEPORT_SPEED_THRESHOLD_MS = 55.56;
 const TELEPORT_DISTANCE_THRESHOLD_M = 5000;
@@ -124,7 +125,7 @@ export class TrackingService {
       return true;
     }
 
-    const distance = this.haversineDistance(last.latitude, last.longitude, latitude, longitude);
+    const distance = haversineDistance(last.latitude, last.longitude, latitude, longitude);
     const speedMs = distance / timeDiffSec;
 
     // If accuracy is poor, the apparent teleportation could be just GPS noise
@@ -244,7 +245,7 @@ export class TrackingService {
         select: { scheduledDate: true, deliveryLat: true, deliveryLng: true },
       });
       if (delivery?.deliveryLat && delivery?.deliveryLng && delivery?.scheduledDate) {
-        const distanceRemaining = this.haversineDistance(
+        const distanceRemaining = haversineDistance(
           dto.latitude,
           dto.longitude,
           delivery.deliveryLat,
@@ -520,7 +521,7 @@ export class TrackingService {
 
     let totalDistance = 0;
     for (let i = 1; i < positions.length; i++) {
-      totalDistance += this.haversineDistance(
+      totalDistance += haversineDistance(
         positions[i - 1].latitude,
         positions[i - 1].longitude,
         positions[i].latitude,
@@ -817,14 +818,4 @@ export class TrackingService {
     return Buffer.from(buf);
   }
 
-  haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371000;
-    const toRad = (deg: number) => (deg * Math.PI) / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  }
 }

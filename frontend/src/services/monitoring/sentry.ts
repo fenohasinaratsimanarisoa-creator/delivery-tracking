@@ -44,7 +44,7 @@ export function setSentryUser(user: { id: string; email?: string; companyId?: st
   }
   Sentry.setUser({
     id: user.id,
-    email: user.email ? undefined : undefined,
+    email: user.email || undefined,
     ip_address: undefined,
   });
   Sentry.setTag('companyId', user.companyId || 'anonymous');

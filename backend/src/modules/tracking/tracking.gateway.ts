@@ -17,6 +17,7 @@ import { UpdatePositionDto, BatchPositionDto } from './dto/update-position.dto';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { WsTrackingExceptionFilter } from '../../common/filters/ws-tracking-exception.filter';
 import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
+import { haversineDistance } from '../../common/geo/geo.utils';
 
 @WebSocketGateway({
   cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:5173' },
@@ -131,7 +132,7 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
       if (last) {
         const timeDiffSec = (new Date(dto.timestamp).getTime() - last.timestamp.getTime()) / 1000;
         if (timeDiffSec > 0) {
-          const distance = this.trackingService.haversineDistance(
+          const distance = haversineDistance(
             last.latitude,
             last.longitude,
             dto.latitude,

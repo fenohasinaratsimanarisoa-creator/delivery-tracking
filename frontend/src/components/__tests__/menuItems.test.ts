@@ -1,9 +1,30 @@
 import { describe, it, expect } from 'vitest';
 import { getMenuItemsForRole, allMenuItems } from '../menuItems';
 
+const mockT = (key: string): string => {
+  const map: Record<string, string> = {
+    'nav.dashboard': 'Dashboard',
+    'nav.deliveries': 'Livraisons',
+    'nav.fleet': 'Flotte',
+    'nav.drivers': 'Chauffeurs',
+    'nav.map': 'Carte temps réel',
+    'nav.fuel': 'Carburant',
+    'nav.reports': 'Rapports',
+    'nav.users': 'Utilisateurs',
+    'nav.settings': 'Paramètres',
+    'nav.alerts': 'Alertes',
+    'nav.deliveryProofs': 'Preuves de livraison',
+    'nav.myDeliveries': 'Mes livraisons',
+    'nav.myVehicle': 'Mon véhicule',
+    'nav.myOrders': 'Mes commandes',
+    'nav.tracking': 'Suivi livraison',
+  };
+  return map[key] || key;
+};
+
 describe('getMenuItemsForRole', () => {
   it('admin has access to all admin items', () => {
-    const items = getMenuItemsForRole('admin');
+    const items = getMenuItemsForRole('admin', mockT);
     expect(items.length).toBeGreaterThanOrEqual(9);
     const labels = items.map((i) => i.label);
     expect(labels).toContain('Dashboard');
@@ -18,23 +39,23 @@ describe('getMenuItemsForRole', () => {
     expect(labels).toContain('Alertes');
   });
 
-  it('dispatcher has access to 6 items', () => {
-    const items = getMenuItemsForRole('dispatcher');
-    expect(items).toHaveLength(6);
+  it('dispatcher has access to 7 items', () => {
+    const items = getMenuItemsForRole('dispatcher', mockT);
+    expect(items).toHaveLength(7);
     for (const item of items) {
       expect(item.roles).toContain('dispatcher');
     }
   });
 
-  it('driver has access to 3 items', () => {
-    const items = getMenuItemsForRole('driver');
-    expect(items).toHaveLength(3);
+  it('driver has access to 2 items', () => {
+    const items = getMenuItemsForRole('driver', mockT);
+    expect(items).toHaveLength(2);
     const labels = items.map((i) => i.label);
-    expect(labels).toEqual(['Mes livraisons', 'Ma position', 'Mon véhicule']);
+    expect(labels).toEqual(['Mes livraisons', 'Mon véhicule']);
   });
 
   it('client has access to 2 items', () => {
-    const items = getMenuItemsForRole('client');
+    const items = getMenuItemsForRole('client', mockT);
     expect(items).toHaveLength(2);
     const labels = items.map((i) => i.label);
     expect(labels).toEqual(['Mes commandes', 'Suivi livraison']);

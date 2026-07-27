@@ -8,6 +8,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
 import { FuelFilterDto } from './dto/fuel-filter.dto';
+import { haversineDistance as haversineDistanceM } from '../../common/geo/geo.utils';
 
 const DEFAULT_FUEL_PRICES: Record<string, number> = {
   essence: 5000,
@@ -192,15 +193,6 @@ export class FuelConsumptionService {
     this.logger.log('Daily fuel report generation complete.');
   }
 
-  private haversineDistanceM(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const R = 6371000;
-    const toRad = (d: number) => (d * Math.PI) / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lng2 - lng1);
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  }
-
   async generateDailyReportForCompanyOnDemand(companyId: string, dateStr?: string) {
     const date = dateStr ? new Date(dateStr) : new Date();
     await this.generateDailyReportForCompany(companyId, date);
@@ -267,7 +259,7 @@ export class FuelConsumptionService {
 
       let totalDistance = 0;
       for (let i = 1; i < positions.length; i++) {
-        const segDist = this.haversineDistanceM(
+        const segDist = haversineDistanceM(
           positions[i - 1].latitude, positions[i - 1].longitude,
           positions[i].latitude, positions[i].longitude,
         );

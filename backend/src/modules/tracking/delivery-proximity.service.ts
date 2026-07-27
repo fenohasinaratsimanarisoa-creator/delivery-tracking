@@ -4,6 +4,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { CacheService } from '../../common/cache/cache.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
+import { haversineDistance } from '../../common/geo/geo.utils';
 
 const PROXIMITY_THRESHOLD_M = 300;
 const ESCALATION_AFTER_MS = 15 * 60 * 1000;
@@ -21,17 +22,6 @@ export class DeliveryProximityService {
     private cacheService: CacheService,
     @Optional() @Inject(REDIS_CLIENT) private redis: Redis | null,
   ) {}
-
-  private haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const R = 6371000;
-    const toRad = (d: number) => (d * Math.PI) / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lng2 - lng1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  }
 
   private async getProximityKey(deliveryId: string, vehicleId: string): Promise<string> {
     return `proximity:entered:${deliveryId}:${vehicleId}`;
@@ -114,7 +104,7 @@ export class DeliveryProximityService {
       }
       this.lastDeliveryId = inProgressDelivery.id;
 
-      const dist = this.haversineDistance(
+      const dist = haversineDistance(
         latitude,
         longitude,
         inProgressDelivery.deliveryLat!,

@@ -39,7 +39,7 @@ export default function Sidebar() {
 
   const role = user?.role ?? 'admin';
   const trackingStatus = useTrackingStatus();
-  const items = getMenuItemsForRole(role);
+  const items = getMenuItemsForRole(role, t);
 
   const isActive = (path: string) => {
     if (path === '/dashboard') return location.pathname === '/dashboard';

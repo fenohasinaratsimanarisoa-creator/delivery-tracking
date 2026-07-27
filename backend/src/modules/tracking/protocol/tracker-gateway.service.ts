@@ -8,6 +8,8 @@ import { Gt06Driver } from './drivers/gt06.driver';
 import { TeltonikaDriver } from './drivers/teltonika.driver';
 import { Tk103Driver } from './drivers/tk103.driver';
 import { H02Driver } from './drivers/h02.driver';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { TrackingGateway } from '../tracking.gateway';
 
 const DEFAULT_PORTS: { protocol: TrackerProtocol; port: number }[] = [
   { protocol: TrackerProtocol.GT06, port: 5055 },
@@ -34,7 +36,11 @@ export class TrackerGatewayService implements OnModuleInit, OnModuleDestroy {
   private connections: Map<string, TrackerConnection> = new Map();
   private registry: GpsProtocolRegistry;
 
-  constructor(private detectionLayer: ProtocolDetectionLayer) {
+  constructor(
+    private detectionLayer: ProtocolDetectionLayer,
+    private prisma: PrismaService,
+    private trackingGateway: TrackingGateway,
+  ) {
     this.registry = detectionLayer['registry'];
     this.registerBuiltinDrivers();
   }
@@ -166,6 +172,50 @@ export class TrackerGatewayService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async onPositionReceived(event: any): Promise<void> {
-    this.logger.debug(`Événement unifié reçu: ${JSON.stringify({ imei: event.imei, lat: event.latitude, lng: event.longitude, protocol: event.protocol })}`);
+    const { imei, latitude, longitude, timestamp, speed, heading, altitude, protocol } = event;
+
+    const trackerDevice = await this.prisma.trackerDevice.findUnique({
+      where: { imei },
+      include: { vehicle: { include: { driver: true } } },
+    });
+
+    if (!trackerDevice?.vehicle) {
+      this.logger.warn(`No vehicle linked to IMEI ${imei}`);
+      return;
+    }
+
+    const now = new Date(timestamp ?? new Date());
+
+    await this.prisma.gpsPosition.create({
+      data: {
+        vehicleId: trackerDevice.vehicle.id,
+        driverId: trackerDevice.vehicle.driver?.id ?? trackerDevice.vehicle.id,
+        latitude,
+        longitude,
+        speed: speed ?? null,
+        heading: heading ?? null,
+        altitude: altitude ?? null,
+        timestamp: now,
+        location: `${latitude},${longitude}`,
+      },
+    });
+
+    await this.prisma.trackerDevice.update({
+      where: { id: trackerDevice.id },
+      data: { lastPositionAt: now },
+    });
+
+    this.trackingGateway.broadcastToCompany(trackerDevice.companyId, 'positionUpdate', {
+      vehicleId: trackerDevice.vehicle.id,
+      latitude,
+      longitude,
+      speed: speed ?? null,
+      heading: heading ?? null,
+      altitude: altitude ?? null,
+      timestamp: now.toISOString(),
+      source: 'tracker',
+    });
+
+    this.logger.log(`Position persisted and broadcast: IMEI=${imei} lat=${latitude.toFixed(4)} lng=${longitude.toFixed(4)} proto=${protocol}`);
   }
 }

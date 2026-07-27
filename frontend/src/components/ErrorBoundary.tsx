@@ -16,17 +16,24 @@ export default class ErrorBoundary extends Component<Props, State> {
     console.error('[ErrorBoundary]', error, info.componentStack);
   }
 
+  handleRetry = () => {
+    this.setState({ error: null, info: null });
+  };
+
   render() {
     if (this.state.error) {
       return (
         <div className={styles.container}>
-          <h1 className={styles.heading}>Erreur</h1>
+          <h1 className={styles.heading}>{'Erreur'}</h1>
           <pre className={styles.errorMessage}>
             {this.state.error.message}
           </pre>
           <pre className={styles.stackTrace}>
             {this.state.info?.componentStack || ''}
           </pre>
+          <button onClick={this.handleRetry} className={styles.retryBtn}>
+            {'Réessayer'}
+          </button>
         </div>
       );
     }

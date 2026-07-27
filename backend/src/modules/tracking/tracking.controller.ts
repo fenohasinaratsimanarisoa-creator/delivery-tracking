@@ -22,6 +22,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
 import { ApiKeyScope } from '../api-keys/decorators/api-key-scope.decorator';
+import { DeviceCommandService } from './protocol/commands/device-command.service';
 
 @ApiTags('Tracking')
 @Controller('tracking')
@@ -30,6 +31,7 @@ export class TrackingController {
     private readonly trackingService: TrackingService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly deviceCommandService: DeviceCommandService,
   ) {}
 
   @UseGuards(ApiKeyOrJwtGuard)
@@ -277,16 +279,7 @@ export class TrackingController {
     @Body('parameters') parameters: Record<string, unknown>,
     @CurrentUser('companyId') companyId: string,
   ) {
-    const { DeviceCommandService } = await import('./protocol/commands/device-command.service');
-    const { PrismaService } = await import('../../common/prisma/prisma.service');
-    const { GpsProtocolRegistry } = await import('./protocol/registry/gps-protocol-registry');
-    const { Queue } = await import('bullmq');
-    const { ConfigService } = await import('@nestjs/config');
-    const config = new ConfigService();
-    const redisUrl = config.get<string>('REDIS_URL');
-    const queue = new Queue('device-commands', { connection: redisUrl ? { url: redisUrl } : { host: '127.0.0.1', port: 6379 } });
-    const svc = new DeviceCommandService(queue as any, new (await import('../../common/prisma/prisma.service')).PrismaService() as any, new GpsProtocolRegistry());
-    return svc.sendCommand(companyId, deviceId, command as any, parameters);
+    return this.deviceCommandService.sendCommand(companyId, deviceId, command as any, parameters);
   }
 
   @ApiOperation({ summary: 'Get tracking info via public token (no auth required)' })

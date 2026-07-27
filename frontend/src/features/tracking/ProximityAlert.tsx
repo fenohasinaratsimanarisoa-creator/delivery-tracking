@@ -73,7 +73,7 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
             navigate('/my-deliveries');
           }} className={styles.actionBtn} style={{ background: colors.border }}>
             <ArrowRight size={16} />
-            Voir mes livraisons
+            {'Voir mes livraisons'}
           </button>
         </div>
       )}
@@ -85,7 +85,7 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
             // eslint-disable-next-line no-restricted-globals
             location.reload();
           }} className={`${styles.actionBtn} ${styles.actionBtnLight}`} style={{ background: colors.border }}>
-            Réessayer
+            {'Réessayer'}
           </button>
         </div>
       )}
