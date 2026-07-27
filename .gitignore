@@ -37,3 +37,7 @@ backend/LEGAL.md
 backend/OBSERVABILITY.md
 backend/REGRESSION_TRACKING_LIVE.md
 backend/SECURITY_AUDIT.md
+
+# Redis dump / artifacts racine
+dump.rdb
+package-lock.json

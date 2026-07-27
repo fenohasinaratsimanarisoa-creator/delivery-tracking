@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import api from '../services/api/client';
 import Button from '../components/Button';
 import type { Delivery } from '../types';
+import styles from './TripReplayPage.module.css';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -117,34 +118,16 @@ export default function TripReplayPage() {
     : [-18.8792, 47.5079];
 
   return (
-    <div style={{
-      padding: 'var(--space-2xl, 32px)',
-      background: 'var(--color-bg, #0B1220)', minHeight: '100vh',
-    }}>
-      <h1 style={{
-        color: 'var(--color-text, #E8ECF3)',
-        fontFamily: 'var(--font-display, Space Grotesk, sans-serif)',
-        fontSize: 'var(--text-2xl, 1.5rem)', fontWeight: 700,
-        marginBottom: 'var(--space-lg, 16px)',
-      }}>
+    <div className={styles.page}>
+      <h1 className={styles.pageTitle}>
         {t('trackingReplay.title') || 'Trip Replay'}
       </h1>
 
-      <div style={{ display: 'flex', gap: 'var(--space-md, 12px)', alignItems: 'center', marginBottom: 'var(--space-lg, 16px)' }}>
+      <div className={styles.controlsRow}>
         <select
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
-          style={{
-            padding: 'var(--space-sm, 8px) var(--space-md, 12px)',
-            flex: 1, maxWidth: 400,
-            border: '1px solid var(--color-input-border, rgba(232,236,243,0.15))',
-            borderRadius: 'var(--radius-md, 6px)',
-            background: 'var(--color-input-bg, #121B2E)',
-            color: 'var(--color-text, #E8ECF3)',
-            fontSize: 'var(--text-sm, 0.875rem)',
-            outline: 'none',
-            fontFamily: 'var(--font-body, Inter, sans-serif)',
-          }}
+          className={styles.select}
         >
           <option value="">-- Select delivery --</option>
           {deliveries.map((d) => (
@@ -155,13 +138,7 @@ export default function TripReplayPage() {
 
       {positions.length > 0 && (
         <>
-          <div style={{
-            height: 500,
-            borderRadius: 'var(--radius-lg, 8px)',
-            overflow: 'hidden',
-            marginBottom: 'var(--space-lg, 16px)',
-            border: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
-          }}>
+          <div className={styles.mapArea}>
             <MapContainer center={center} zoom={14} style={{ height: '100%', width: '100%' }}>
               <MapLayerSwitcher />
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -175,25 +152,10 @@ export default function TripReplayPage() {
             </MapContainer>
           </div>
 
-          <div style={{
-            display: 'flex', gap: 'var(--space-md, 12px)', alignItems: 'center',
-            flexWrap: 'wrap',
-            padding: 'var(--space-lg, 16px)',
-            background: 'var(--color-surface, #121B2E)',
-            borderRadius: 'var(--radius-lg, 8px)',
-            border: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
-          }}>
+          <div className={styles.playbackControls}>
             <button
               onClick={() => setPlaying(!playing)}
-              style={{
-                padding: 'var(--space-sm, 8px) var(--space-lg, 16px)',
-                background: playing ? '#dc3545' : '#22c55e',
-                color: '#fff', border: 'none',
-                borderRadius: 'var(--radius-md, 6px)',
-                cursor: 'pointer', fontWeight: 600,
-                fontSize: 'var(--text-sm, 0.875rem)',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}
+              className={`${styles.playBtn} ${playing ? styles.playBtnPlaying : styles.playBtnStopped}`}
             >
               {playing ? '⏹ Stop' : '▶ Play'}
             </button>
@@ -202,22 +164,7 @@ export default function TripReplayPage() {
               <button
                 key={s}
                 onClick={() => setSpeed(s)}
-                style={{
-                  padding: 'var(--space-sm, 6px) var(--space-md, 12px)',
-                  border: s === speed
-                    ? '2px solid var(--color-accent, #F2A93C)'
-                    : '1px solid var(--color-input-border, rgba(232,236,243,0.15))',
-                  borderRadius: 'var(--radius-md, 6px)',
-                  cursor: 'pointer',
-                  background: s === speed
-                    ? 'var(--color-accent-bg, rgba(242,169,60,0.08))'
-                    : 'var(--color-surface, #121B2E)',
-                  color: s === speed
-                    ? 'var(--color-accent, #F2A93C)'
-                    : 'var(--color-text-secondary, #9BA6B9)',
-                  fontWeight: s === speed ? 600 : 400,
-                  fontSize: 'var(--text-sm, 0.875rem)',
-                }}
+                className={`${styles.speedBtn} ${s === speed ? styles.speedBtnActive : styles.speedBtnInactive}`}
               >
                 {s}x
               </button>
@@ -233,11 +180,7 @@ export default function TripReplayPage() {
             </Button>
 
             {matchConfidence > 0 && (
-              <span style={{
-                fontSize: 'var(--text-xs, 0.75rem)',
-                color: 'var(--color-teal, #3FA796)',
-                fontFamily: 'var(--font-mono, monospace)',
-              }}>
+              <span className={styles.matchConfidence}>
                 confiance: {(matchConfidence * 100).toFixed(0)}%
               </span>
             )}
@@ -248,28 +191,15 @@ export default function TripReplayPage() {
               max={positions.length - 1}
               value={currentIdx}
               onChange={(e) => { setCurrentIdx(Number(e.target.value)); setPlaying(false); }}
-              style={{ flex: 1, minWidth: 120, accentColor: 'var(--color-accent, #F2A93C)' }}
+              className={styles.slider}
             />
-            <span style={{
-              fontSize: 'var(--text-sm, 0.85rem)',
-              color: 'var(--color-text-tertiary, #7A8BA3)',
-              fontFamily: 'var(--font-mono, monospace)',
-            }}>
+            <span className={styles.positionCounter}>
               {currentIdx + 1} / {positions.length}
             </span>
           </div>
 
           {currentPos && (
-            <div style={{
-              marginTop: 'var(--space-md, 12px)',
-              fontSize: 'var(--text-sm, 0.85rem)',
-              color: 'var(--color-text-secondary, #9BA6B9)',
-              fontFamily: 'var(--font-mono, monospace)',
-              padding: 'var(--space-md, 12px)',
-              background: 'var(--color-surface, #121B2E)',
-              borderRadius: 'var(--radius-md, 6px)',
-              border: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
-            }}>
+            <div className={styles.positionInfo}>
               Lat: {currentPos.latitude.toFixed(6)}, Lng: {currentPos.longitude.toFixed(6)}
               {currentPos.speed !== undefined && ` | ${(currentPos.speed * 3.6).toFixed(1)} km/h`}
               {' | '}{new Date(currentPos.timestamp).toLocaleString()}

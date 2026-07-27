@@ -4,6 +4,7 @@ import { Plus, Search, ChevronDown, ChevronUp, Upload } from 'lucide-react';
 import Button from '../components/Button';
 import api from '../services/api/client';
 import { formatDate } from '../services/i18n/formatDate';
+import styles from './DeliveriesPage.module.css';
 import DataTable from '../components/DataTable';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
@@ -56,19 +57,13 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 function SkeletonRows() {
-  const shimmer = {
-    height: 14, background: 'var(--color-skeleton)', borderRadius: 4,
-    animation: 'dt-shimmer 1.5s infinite linear',
-    backgroundImage: 'linear-gradient(90deg, var(--color-skeleton) 25%, rgba(255,255,255,0.05) 50%, var(--color-skeleton) 75%)',
-    backgroundSize: '200% 100%',
-  };
   return (
     <>
       {[1, 2, 3, 4].map((i) => (
-        <tr key={`sk-${i}`} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <tr key={`sk-${i}`} className={styles.skeletonRow}>
           {[40, 35, 30, 25, 20].map((w, j) => (
-            <td key={j} style={{ padding: 'var(--space-md) var(--space-lg)' }}>
-              <div style={{ ...shimmer, width: `${w}%` }} />
+            <td key={j} className={styles.skeletonCell}>
+              <div className={styles.shimmer} style={{ width: `${w}%` }} />
             </td>
           ))}
         </tr>
@@ -358,7 +353,7 @@ export default function DeliveriesPage() {
     `${d.firstName} ${d.lastName}${d.phone ? ` — ${d.phone}` : ''}`;
 
   return (
-    <div className="page-padding" style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+    <div className={`page-padding ${styles.pageContainer}`}>
       <style>{`
         @keyframes dt-row-highlight {
           0% { background: var(--color-accent-muted); }
@@ -366,31 +361,24 @@ export default function DeliveriesPage() {
         }
       `}</style>
 
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-md)',
-      }}>
-        <div style={{ minWidth: 0, overflow: 'hidden' }}>
-          <h1 className="page-title" style={{
-            fontFamily: 'var(--font-display)', fontSize: 'var(--text-xl)', fontWeight: 700,
-            color: 'var(--color-text)', letterSpacing: '-0.02em', margin: 0,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>
+      <div className={styles.headerRow}>
+        <div className={styles.headerTitleWrapper}>
+          <h1 className={`page-title ${styles.pageTitle}`}>
             Livraisons
           </h1>
-          <p style={{ margin: 'var(--space-xs) 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+          <p className={styles.pageSubtitle}>
             {meta.total > 0 ? `${meta.total} livraison${meta.total > 1 ? 's' : ''}` : 'Gérez les livraisons de votre flotte'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', flexShrink: 0, alignItems: 'center' }}>
+        <div className={styles.actionButtonsRow}>
           <input
             ref={fileInputRef}
             type="file"
             accept=".xlsx"
-            style={{ display: 'none' }}
+            className={styles.hiddenFileInput}
             onChange={handleFileChange}
           />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div className={styles.importGroup}>
             <Button variant="secondary" size="sm" icon={<Upload size={16} />}
               onClick={() => fileInputRef.current?.click()}
               disabled={importing}
@@ -400,14 +388,8 @@ export default function DeliveriesPage() {
             <button
               onClick={() => setImportMode(importMode === 'create-only' ? 'upsert' : 'create-only')}
               title={importMode === 'create-only' ? 'Mode: ignorer les doublons' : 'Mode: mettre à jour les existants'}
-              style={{
-                padding: '3px 6px', fontSize: '0.6rem', borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--color-border-subtle)',
-                background: importMode === 'upsert' ? 'var(--color-accent-muted)' : 'transparent',
-                color: 'var(--color-text-tertiary)', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
-                fontWeight: 600,
-              }}
+              className={styles.importModeToggle}
+              style={{ background: importMode === 'upsert' ? 'var(--color-accent-muted)' : 'transparent' }}
             >
               {importMode === 'create-only' ? 'Ignorer' : 'MàJ'}
             </button>
@@ -418,51 +400,24 @@ export default function DeliveriesPage() {
         </div>
       </div>
 
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-        marginBottom: 'var(--space-lg)',
-      }}>
-        <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
-          <Search size={14} style={{
-            position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-            color: 'var(--color-text-tertiary)', pointerEvents: 'none',
-          }} />
+      <div className={styles.searchRow}>
+        <div className={styles.searchInputWrapper}>
+          <Search size={14} className={styles.searchIcon} />
           <input
             placeholder="Rechercher une livraison…"
             onChange={(e) => handleSearch(e.target.value)}
-            style={{
-              width: '100%', padding: 'var(--space-sm) var(--space-sm) var(--space-sm) 36px',
-              background: 'var(--color-input-bg)',
-              border: '1px solid var(--color-input-border)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--color-text)',
-              fontSize: 'var(--text-sm)',
-              fontFamily: 'var(--font-body)',
-              outline: 'none',
-            }}
+            className={styles.searchInput}
           />
         </div>
       </div>
 
       {selectedIds.size > 0 && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-          padding: 'var(--space-sm) var(--space-md)',
-          marginBottom: 'var(--space-sm)',
-          background: 'var(--color-accent-muted)',
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--color-accent)',
-          flexWrap: 'wrap',
-        }}>
-          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap' }}>
+        <div className={styles.bulkActionBar}>
+          <span className={styles.bulkActionCount}>
             {selectedIds.size} livraison{selectedIds.size > 1 ? 's' : ''} sélectionnée{selectedIds.size > 1 ? 's' : ''}
           </span>
           <select
-            style={{
-              padding: '4px 8px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--color-border-subtle)', background: 'var(--color-surface)',
-              color: 'var(--color-text)', fontFamily: 'var(--font-body)',
-            }}
+            className={styles.bulkActionSelect}
             onChange={(e) => {
               const val = e.target.value;
               if (!val) return;
@@ -478,11 +433,7 @@ export default function DeliveriesPage() {
             ))}
           </select>
           <select
-            style={{
-              padding: '4px 8px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--color-border-subtle)', background: 'var(--color-surface)',
-              color: 'var(--color-text)', fontFamily: 'var(--font-body)',
-            }}
+            className={styles.bulkActionSelect}
             onChange={(e) => {
               const val = e.target.value;
               if (!val) return;
@@ -503,46 +454,29 @@ export default function DeliveriesPage() {
               bulkMutation.mutate({ ids: [...selectedIds], action: 'delete' });
             }}
             disabled={bulkActionLoading}
-            style={{
-              padding: '4px 12px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-md)',
-              border: '1px solid #ef4444', background: 'rgba(239,68,68,0.1)', cursor: 'pointer',
-              color: '#ef4444', fontWeight: 500, fontFamily: 'var(--font-body)',
-            }}
+            className={styles.bulkDeleteBtn}
           >
             Supprimer
           </button>
-          {bulkActionLoading && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>En cours…</span>}
+          {bulkActionLoading && <span className={styles.bulkLoadingText}>En cours…</span>}
           <button
             onClick={() => setSelectedIds(new Set())}
             disabled={bulkActionLoading}
-            style={{
-              marginLeft: 'auto', padding: '4px 8px', fontSize: 'var(--text-xs)',
-              border: 'none', background: 'none', cursor: 'pointer',
-              color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-body)',
-              textDecoration: 'underline',
-            }}
+            className={styles.clearSelectionBtn}
           >
             Tout désélectionner
           </button>
         </div>
       )}
 
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div className={styles.tableContainer}>
         {isLoading ? (
-          <div style={{
-            background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-border-subtle)',
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+          <div className={styles.skeletonTableWrapper}>
+            <table className={styles.skeletonTable}>
               <thead>
-                <tr style={{ background: 'var(--color-surface-alt)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                <tr className={styles.skeletonTheadTr}>
                   {['Titre', 'Statut', 'Adresse livraison', 'Chauffeur', 'Date', 'Description', ''].map((l) => (
-                    <th key={l} style={{
-                      padding: 'var(--space-md) var(--space-lg)', fontWeight: 600,
-                      fontSize: 'var(--text-xs)', textTransform: 'uppercase',
-                      letterSpacing: '0.05em', color: 'var(--color-text-secondary)',
-                      textAlign: l === '' ? 'right' : 'left', whiteSpace: 'nowrap',
-                    }}>
+                    <th key={l} className={styles.skeletonTh} style={{ textAlign: l === '' ? 'right' : 'left' }}>
                       {l}
                     </th>
                   ))}
@@ -554,30 +488,14 @@ export default function DeliveriesPage() {
             </table>
           </div>
         ) : filtered.length === 0 ? (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            padding: 'var(--space-4xl)',
-            background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-border-subtle)', gap: 'var(--space-md)',
-          }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 'var(--radius-full)',
-              background: 'var(--color-accent-muted)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--color-accent)', fontSize: 24,
-            }}>
+          <div className={styles.emptyState}>
+            <div className={styles.emptyStateIcon}>
               <Plus size={24} />
             </div>
-            <p style={{
-              margin: 0, fontSize: 'var(--text-md)', fontWeight: 500,
-              color: 'var(--color-text-secondary)', textAlign: 'center',
-            }}>
+            <p className={styles.emptyStateTitle}>
               {search ? 'Aucune livraison ne correspond' : 'Aucune livraison enregistrée'}
             </p>
-            <p style={{
-              margin: 0, fontSize: 'var(--text-sm)',
-              color: 'var(--color-text-tertiary)', textAlign: 'center',
-            }}>
+            <p className={styles.emptyStateDesc}>
               {search ? 'Essayez un autre terme' : 'Créez votre première livraison'}
             </p>
             {!search && (
@@ -598,46 +516,22 @@ export default function DeliveriesPage() {
               {
                 key: 'status', label: 'Statut', sortable: true,
                 render: (r: Delivery) => (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '2px 8px',
-                      borderRadius: 'var(--radius-full)',
-                      fontSize: 'var(--text-xs)',
-                      fontWeight: 500,
-                      fontFamily: 'var(--font-mono)',
-                      background: `${STATUS_COLORS[r.status] || '#6b7280'}20`,
-                      color: STATUS_COLORS[r.status] || '#6b7280',
-                    }}>
+                  <div className={styles.statusColumn}>
+                    <span className={styles.statusBadge}
+                      style={{
+                        background: `${STATUS_COLORS[r.status] || '#6b7280'}20`,
+                        color: STATUS_COLORS[r.status] || '#6b7280',
+                      }}>
                       {STATUS_LABELS[r.status] || r.status}
                     </span>
                     {r.locationMismatch && !r.mismatchResolved && (
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        background: 'rgba(239, 68, 68, 0.12)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        borderRadius: 'var(--radius-sm, 4px)',
-                        padding: '4px 8px',
-                        fontSize: 'var(--text-xs, 0.625rem)',
-                        color: '#ef4444',
-                        fontWeight: 500,
-                        whiteSpace: 'nowrap',
-                      }}>
+                      <div className={styles.mismatchAlert}>
                         <span style={{ fontSize: '0.75rem' }}>⚠️</span>
                         <span>{r.deliveryProofDistance != null ? `${r.deliveryProofDistance}m d'écart` : 'Écart détecté'}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); resolveMismatchMutation.mutate(r.id); }}
                           disabled={resolveMismatchMutation.isPending}
-                          style={{
-                            background: 'rgba(239, 68, 68, 0.15)',
-                            border: 'none',
-                            color: '#ef4444',
-                            cursor: 'pointer',
-                            borderRadius: '3px',
-                            padding: '1px 6px',
-                            fontSize: '0.6rem',
-                            fontFamily: 'var(--font-body)',
-                          }}
+                          className={styles.mismatchResolveBtn}
                         >
                           ✓ Traité
                         </button>
@@ -652,18 +546,18 @@ export default function DeliveriesPage() {
                 render: (r: Delivery) => (
                   r.driver
                     ? `${r.driver.firstName} ${r.driver.lastName}`
-                    : <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>Non assigné</span>
+                    : <span className={styles.textMuted}>Non assigné</span>
                 ),
               },
               {
                 key: 'createdAt', label: 'Date', sortable: true,
                 render: (r: Delivery) => (
                   <div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                    <div className={styles.dateText}>
                       {formatDate(r.createdAt)}
                     </div>
                     {r.scheduledDate && (
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-accent, #F2A93C)', marginTop: 2 }}>
+                      <div className={styles.scheduledDate}>
                         📅 {formatDate(r.scheduledDate)}
                       </div>
                     )}
@@ -674,29 +568,25 @@ export default function DeliveriesPage() {
                 key: 'clientPhone', label: 'Tél.',
                 render: (r: Delivery) => (
                   r.clientPhone
-                    ? <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>{r.clientPhone}</span>
-                    : <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>—</span>
+                    ? <span className={styles.monoText}>{r.clientPhone}</span>
+                    : <span className={styles.textMuted}>—</span>
                 ),
               },
               {
                 key: 'amount', label: 'Montant',
                 render: (r: Delivery) => (
                   r.amount !== undefined && r.amount !== null
-                    ? <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{formatAriary(r.amount)}</span>
-                    : <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>—</span>
+                    ? <span className={styles.semiBoldMono}>{formatAriary(r.amount)}</span>
+                    : <span className={styles.textMuted}>—</span>
                 ),
               },
               {
                 key: 'description', label: 'Description',
                 render: (r: Delivery) => (
-                  <span style={{
-                    fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary, #9BA6B9)',
-                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden', maxWidth: 200,
-                  }}>
+                  <span className={styles.descriptionText}>
                     {r.productDescription || r.description || (r.notes
-                      ? <span style={{ fontStyle: 'italic' }}>📝 {r.notes.slice(0, 60)}</span>
-                      : <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
+                      ? <span className={styles.notesItalic}>📝 {r.notes.slice(0, 60)}</span>
+                      : <span className={styles.textMuted}>—</span>
                     )}
                   </span>
                 ),
@@ -758,7 +648,7 @@ export default function DeliveriesPage() {
                   ))}
                 </select>
                 {drivers.filter((d) => d.isActive).length === 0 && (
-                  <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                  <div className={styles.driverEmptyText}>
                     Aucun chauffeur actif disponible
                   </div>
                 )}
@@ -803,36 +693,19 @@ export default function DeliveriesPage() {
           </DialogSection>
 
           {/* === SECTION 3: Options avancées (repliables) === */}
-          <div style={{ marginBottom: 'var(--space-xl)' }}>
+          <div className={styles.advancedSection}>
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: 'var(--space-sm) 0',
-                border: 'none', background: 'none',
-                cursor: 'pointer',
-                fontSize: 'var(--text-xs)',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                color: 'var(--color-text-tertiary)',
-                fontFamily: 'var(--font-body)',
-              }}
+              className={styles.advancedToggle}
             >
               {showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               {showAdvanced ? 'Masquer les options avancées' : 'Options avancées'}
             </button>
 
             {showAdvanced && (
-              <div style={{
-                marginTop: 'var(--space-md)',
-                padding: 'var(--space-lg)',
-                background: 'var(--color-surface-alt)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-border-subtle)',
-              }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
+              <div className={styles.advancedContent}>
+                <div className={styles.advancedGrid}>
                   <DialogField label="Date planifiée">
                     <input className="dialog-input" type="date"
                       value={deliveryForm.values.scheduledDate}
@@ -856,23 +729,21 @@ export default function DeliveriesPage() {
                 </div>
 
                 <DialogField label="Description">
-                  <textarea className="dialog-input"
+                  <textarea className={`dialog-input ${styles.textareaField}`}
                     value={deliveryForm.values.description}
                     onChange={(e) => deliveryForm.setValue('description', e.target.value)}
                     onBlur={() => deliveryForm.handleBlur('description')}
                     placeholder="Description détaillée de la livraison…"
-                    rows={2}
-                    style={{ resize: 'vertical', fontFamily: 'var(--font-body)' }} />
+                    rows={2} />
                 </DialogField>
 
                 <DialogField label="Notes / Instructions chauffeur">
-                  <textarea className="dialog-input"
+                  <textarea className={`dialog-input ${styles.textareaField}`}
                     value={deliveryForm.values.notes}
                     onChange={(e) => deliveryForm.setValue('notes', e.target.value)}
                     onBlur={() => deliveryForm.handleBlur('notes')}
                     placeholder="Instructions particulières, informations complémentaires…"
-                    rows={3}
-                    style={{ resize: 'vertical', fontFamily: 'var(--font-body)' }} />
+                    rows={3} />
                 </DialogField>
               </div>
             )}
@@ -881,15 +752,7 @@ export default function DeliveriesPage() {
       </EntityDialog>
 
       {reverseLoading && (
-        <div style={{
-          position: 'fixed', bottom: 16, right: 16,
-          padding: '8px 16px', background: 'var(--color-surface)',
-          border: '1px solid var(--color-border-subtle)',
-          borderRadius: 'var(--radius-md)', fontSize: '0.8rem',
-          color: 'var(--color-text-secondary)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          zIndex: 99999,
-        }}>
+        <div className={styles.reverseToast}>
           Recherche des adresses…
         </div>
       )}
@@ -897,58 +760,44 @@ export default function DeliveriesPage() {
       {importReport && (
         <div
           onClick={() => setImportReport(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 7000,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(0,0,0,0.5)',
-          }}
+          className={styles.importOverlay}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'var(--color-surface)',
-              borderRadius: 'var(--radius-lg)',
-              padding: 'var(--space-xl)',
-              maxWidth: 600, width: '90vw',
-              maxHeight: '80vh', overflow: 'auto',
-              boxShadow: '0 16px 48px rgba(0,0,0,0.3)',
-            }}
+            className={styles.importModal}
           >
-            <h2 style={{ margin: '0 0 var(--space-sm)', fontSize: 'var(--text-lg)', color: 'var(--color-text)' }}>
+            <h2 className={styles.importTitle}>
               Résultat de l'import
             </h2>
-            <div style={{ display: 'flex', gap: 'var(--space-md)', marginBottom: 'var(--space-md)', flexWrap: 'wrap' }}>
-              <div style={{ textAlign: 'center', padding: 'var(--space-md)', background: 'var(--color-surface-alt)', borderRadius: 'var(--radius-md)', flex: 1, minWidth: 80 }}>
-                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#22c55e' }}>{importReport.created}</div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Créées</div>
+            <div className={styles.importStatsRow}>
+              <div className={styles.importStatCard}>
+                <div className={styles.importStatNumber} style={{ color: '#22c55e' }}>{importReport.created}</div>
+                <div className={styles.importStatLabel}>Créées</div>
               </div>
-              <div style={{ textAlign: 'center', padding: 'var(--space-md)', background: 'var(--color-surface-alt)', borderRadius: 'var(--radius-md)', flex: 1, minWidth: 80 }}>
-                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#3b82f6' }}>{importReport.updated}</div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Mises à jour</div>
+              <div className={styles.importStatCard}>
+                <div className={styles.importStatNumber} style={{ color: '#3b82f6' }}>{importReport.updated}</div>
+                <div className={styles.importStatLabel}>Mises à jour</div>
               </div>
-              <div style={{ textAlign: 'center', padding: 'var(--space-md)', background: 'var(--color-surface-alt)', borderRadius: 'var(--radius-md)', flex: 1, minWidth: 80 }}>
-                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#f59e0b' }}>{importReport.skipped.length}</div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Ignorées</div>
+              <div className={styles.importStatCard}>
+                <div className={styles.importStatNumber} style={{ color: '#f59e0b' }}>{importReport.skipped.length}</div>
+                <div className={styles.importStatLabel}>Ignorées</div>
               </div>
-              <div style={{ textAlign: 'center', padding: 'var(--space-md)', background: 'var(--color-surface-alt)', borderRadius: 'var(--radius-md)', flex: 1, minWidth: 80 }}>
-                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#ef4444' }}>{importReport.errors.length}</div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Erreurs</div>
+              <div className={styles.importStatCard}>
+                <div className={styles.importStatNumber} style={{ color: '#ef4444' }}>{importReport.errors.length}</div>
+                <div className={styles.importStatLabel}>Erreurs</div>
               </div>
             </div>
 
             {importReport.skipped.length > 0 && (
-              <div style={{ marginBottom: 'var(--space-md)' }}>
-                <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 var(--space-xs)' }}>
+              <div className={styles.importSkippedSection}>
+                <h3 className={styles.importSectionTitle}>
                   Commandes ignorées
                 </h3>
-                <div style={{ maxHeight: 200, overflowY: 'auto', fontSize: 'var(--text-xs)' }}>
+                <div className={styles.importSkippedList}>
                   {importReport.skipped.map((s, i) => (
-                    <div key={i} style={{
-                      padding: '4px 8px', borderBottom: '1px solid var(--color-border-subtle)',
-                      display: 'flex', justifyContent: 'space-between', gap: 8,
-                    }}>
-                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text)' }}>{s.orderRef}</span>
-                      <span style={{ color: 'var(--color-text-tertiary)' }}>
+                    <div key={i} className={styles.importSkippedItem}>
+                      <span className={styles.importSkippedRef}>{s.orderRef}</span>
+                      <span className={styles.importSkippedReason}>
                         {s.reason === 'duplicate' ? 'Déjà existante' : s.reason}
                       </span>
                     </div>
@@ -958,16 +807,13 @@ export default function DeliveriesPage() {
             )}
 
             {importReport.errors.length > 0 && (
-              <div style={{ marginBottom: 'var(--space-md)' }}>
-                <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 var(--space-xs)' }}>
+              <div className={styles.importErrorSection}>
+                <h3 className={styles.importSectionTitle}>
                   Erreurs
                 </h3>
-                <div style={{ maxHeight: 150, overflowY: 'auto', fontSize: 'var(--text-xs)' }}>
+                <div className={styles.importErrorList}>
                   {importReport.errors.map((e, i) => (
-                    <div key={i} style={{
-                      padding: '4px 8px', borderBottom: '1px solid var(--color-border-subtle)',
-                      color: 'var(--color-text)',
-                    }}>
+                    <div key={i} className={styles.importErrorItem}>
                       Ligne {e.row} : {e.reason}
                     </div>
                   ))}
@@ -975,16 +821,10 @@ export default function DeliveriesPage() {
               </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div className={styles.importCloseBtnRow}>
               <button
                 onClick={() => setImportReport(null)}
-                style={{
-                  padding: '8px 20px', borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border-subtle)',
-                  background: 'var(--color-surface)', cursor: 'pointer',
-                  color: 'var(--color-text)', fontSize: 'var(--text-sm)',
-                  fontFamily: 'var(--font-body)', fontWeight: 500,
-                }}
+                className={styles.importCloseBtn}
               >
                 Fermer
               </button>

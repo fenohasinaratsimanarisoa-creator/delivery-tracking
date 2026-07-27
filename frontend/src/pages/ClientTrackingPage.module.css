@@ -1,0 +1,73 @@
+.page {
+  padding: 20px;
+}
+
+.pageCentered {
+  padding: 20px;
+  text-align: center;
+  color: #c00;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+}
+
+.orderList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.orderCard {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid #eee;
+}
+
+.orderTitle {
+  font-weight: bold;
+}
+
+.orderStatusBadge {
+  margin-left: 8px;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.orderAddress {
+  font-size: 0.85rem;
+  color: #555;
+  margin-top: 4px;
+}
+
+.mapContainer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.deliveryInfo {
+  padding: 16px 20px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+}
+
+.deliveryTitle {
+  margin: 0 0 8px;
+}
+
+.deliveryDetails {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.mapArea {
+  flex: 1;
+}

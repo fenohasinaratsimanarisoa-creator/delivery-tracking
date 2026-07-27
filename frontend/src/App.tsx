@@ -9,6 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import CookieConsentBanner from './components/CookieConsentBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useDataUpdates } from './hooks/useDataUpdates';
+import styles from './App.module.css';
 
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./features/auth/RegisterPage'));
@@ -50,19 +51,8 @@ function PageErrorBoundary({ children }: { children: React.ReactNode }) {
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: '100%', width: '100%',
-        color: 'var(--color-text-secondary, #9BA6B9)',
-        fontSize: '0.875rem',
-      }}>
-        <div style={{
-          width: 20, height: 20, borderRadius: '50%',
-          border: '2px solid var(--color-border, rgba(242,169,60,0.2))',
-          borderTopColor: 'var(--color-accent, #F2A93C)',
-          animation: 'dt-spin 0.6s linear infinite',
-          marginRight: 8,
-        }} />
+      <div className={styles.suspenseFallback}>
+        <div className={styles.spinner} />
         Chargement...
       </div>
     }>
@@ -74,132 +64,15 @@ function SuspenseWrapper({ children }: { children: React.ReactNode }) {
 function AppLayout({ children }: { children: React.ReactNode }) {
   useDataUpdates();
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--color-bg)' }}>
+    <div className={styles.appLayoutRoot}>
       <Sidebar />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <div style={{ flex: 1, position: 'relative', overflow: 'auto', minWidth: 0 }}>
+      <div className={styles.appLayoutContent}>
+        <div className={styles.appLayoutMain}>
           {children}
         </div>
       </div>
     </div>
   );
-}
-
-function MobileResponsiveStyles() {
-  return <style>{`
-/* ─── Global: prevent horizontal overflow beyond viewport ─── */
-html, body, #root {
-  overflow-x: hidden;
-  max-width: 100vw;
-}
-
-/* ─── Page wrappers: prevent horizontal scroll ─── */
-@media (max-width: 640px) {
-  .page-padding {
-    padding: var(--space-md) !important;
-  }
-  .page-padding-lg {
-    padding: var(--space-md) !important;
-  }
-  h1.page-title {
-    font-size: var(--text-lg) !important;
-  }
-}
-
-/* ─── Reports page mobile ─── */
-@media (max-width: 640px) {
-  .reports-header {
-    flex-direction: column !important;
-    align-items: stretch !important;
-  }
-  .reports-period-bar {
-    flex-wrap: wrap;
-  }
-  .reports-grid-2 {
-    grid-template-columns: 1fr !important;
-  }
-  .reports-tabs-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-}
-
-/* ─── Settings page mobile ─── */
-@media (max-width: 640px) {
-  .settings-two-col {
-    flex-direction: column !important;
-  }
-  .settings-pw-row {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: var(--space-md) !important;
-  }
-  .settings-2fa-form {
-    flex-direction: column !important;
-    align-items: stretch !important;
-  }
-  .settings-2fa-form input {
-    width: 100% !important;
-    max-width: 200px;
-    margin: 0 auto;
-  }
-  .settings-2fa-actions {
-    justify-content: center !important;
-  }
-}
-
-/* ─── Reports tables mobile ─── */
-@media (max-width: 640px) {
-  .reports-table-wrap table {
-    font-size: var(--text-xs) !important;
-  }
-  .reports-table-wrap th,
-  .reports-table-wrap td {
-    padding: 6px 8px !important;
-  }
-}
-
-/* ─── Notifications panel on small screens ─── */
-@media (max-width: 480px) {
-  .notif-panel {
-    right: 4px !important;
-    left: 4px !important;
-    width: auto !important;
-    max-height: calc(100vh - 60px) !important;
-  }
-}
-
-/* ─── Touch targets: minimum 44px ─── */
-@media (pointer: coarse) {
-  .touch-target {
-    min-height: 44px;
-    min-width: 44px;
-  }
-}
-
-/* ─── Entity Dialog on very small screens ─── */
-@media (max-width: 400px) {
-  .dt-dialog-card {
-    max-width: calc(100vw - 8px) !important;
-    max-height: calc(100vh - 8px) !important;
-    border-radius: var(--radius-md) !important;
-  }
-}
-
-/* ─── Sidebar hamburger adjustments on very small screens ─── */
-@media (max-width: 360px) {
-  .sidebar-hamburger {
-    top: 6px !important;
-    left: 6px !important;
-    padding: 6px !important;
-  }
-}
-
-/* ─── Prevent text size adjustment on mobile ─── */
-html {
-  -webkit-text-size-adjust: 100%;
-}
-  `}</style>;
 }
 
 export default function App() {
@@ -210,7 +83,6 @@ export default function App() {
         <AuthProvider>
           <ToastProvider>
                 <CookieConsentBanner />
-                <MobileResponsiveStyles />
             <Routes>
               <Route path="/login" element={<SuspenseWrapper><LoginPage /></SuspenseWrapper>} />
               <Route path="/register" element={<SuspenseWrapper><RegisterPage /></SuspenseWrapper>} />

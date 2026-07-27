@@ -9,6 +9,7 @@ import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../co
 import { useEntityForm, type FieldDef, type FormSection } from '../hooks/useEntityForm';
 import { useToast } from '../components/Toast';
 import type { Vehicle } from '../types';
+import styles from './FleetPage.module.css';
 
 interface VehicleFormValues {
   brand: string; model: string; year: string;
@@ -54,19 +55,13 @@ const vehicleSections: FormSection[] = [
 ];
 
 function SkeletonRows() {
-  const shimmer = {
-    height: 14, background: 'var(--color-skeleton)', borderRadius: 4,
-    animation: 'dt-shimmer 1.5s infinite linear',
-    backgroundImage: 'linear-gradient(90deg, var(--color-skeleton) 25%, rgba(255,255,255,0.05) 50%, var(--color-skeleton) 75%)',
-    backgroundSize: '200% 100%',
-  };
   return (
     <>
       {[1, 2, 3, 4].map((i) => (
-        <tr key={`sk-${i}`} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <tr key={`sk-${i}`} className={styles.skeletonRow}>
           {[40, 30, 20, 35, 25, 25, 20].map((w, j) => (
-            <td key={j} style={{ padding: 'var(--space-md) var(--space-lg)' }}>
-              <div style={{ ...shimmer, width: `${w}%` }} />
+            <td key={j} className={styles.skeletonCell}>
+              <div className={styles.shimmer} style={{ width: `${w}%` }} />
             </td>
           ))}
         </tr>
@@ -230,26 +225,13 @@ export default function FleetPage() {
   const onCancel = () => { setDrawerOpen(false); setEditing(null); };
 
   return (
-    <div className="page-padding" style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-      <style>{`
-        @keyframes dt-row-highlight {
-          0% { background: var(--color-accent-muted); }
-          100% { background: transparent; }
-        }
-      `}</style>
-
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-sm)',
-      }}>
+    <div className={`page-padding ${styles.pageContainer}`}>
+      <div className={styles.headerRow}>
         <div>
-          <h1 style={{
-            fontFamily: 'var(--font-display)', fontSize: 'var(--text-xl)', fontWeight: 700,
-            color: 'var(--color-text)', letterSpacing: '-0.02em', margin: 0,
-          }}>
+          <h1 className={styles.pageTitle}>
             Flotte
           </h1>
-          <p style={{ margin: 'var(--space-xs) 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+          <p className={styles.pageSubtitle}>
             {meta.total > 0 ? `${meta.total} véhicule${meta.total > 1 ? 's' : ''} dans votre flotte` : 'Gérez vos véhicules'}
           </p>
         </div>
@@ -258,48 +240,27 @@ export default function FleetPage() {
         </Button>
       </div>
 
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-        marginBottom: 'var(--space-lg)',
-      }}>
+      <div className={styles.searchBarContainer}>
         <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
-          <Search size={14} style={{
+          <Search size={14} className={styles.searchIcon} style={{
             position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-            color: 'var(--color-text-tertiary)', pointerEvents: 'none',
           }} />
           <input
             placeholder="Rechercher un véhicule…"
             onChange={(e) => handleSearch(e.target.value)}
-            style={{
-              width: '100%', padding: 'var(--space-sm) var(--space-sm) var(--space-sm) 36px',
-              background: 'var(--color-input-bg)',
-              border: '1px solid var(--color-input-border)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--color-text)',
-              fontSize: 'var(--text-sm)',
-              fontFamily: 'var(--font-body)',
-              outline: 'none',
-            }}
+            className={styles.searchInput}
           />
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div className={styles.tableContainer}>
         {isLoading ? (
-          <div style={{
-            background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-border-subtle)',
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+          <div className={styles.skeletonWrapper}>
+            <table className={styles.skeletonTable}>
               <thead>
-                <tr style={{ background: 'var(--color-surface-alt)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                <tr className={styles.skeletonTheadTr}>
                   {['Marque', 'Modèle', 'Année', 'Plaque', 'Carburant', 'Chauffeur', 'Statut', ''].map((l) => (
-                    <th key={l} style={{
-                      padding: 'var(--space-md) var(--space-lg)', fontWeight: 600,
-                      fontSize: 'var(--text-xs)', textTransform: 'uppercase',
-                      letterSpacing: '0.05em', color: 'var(--color-text-secondary)',
-                      textAlign: l === '' ? 'right' : 'left', whiteSpace: 'nowrap',
-                    }}>
+                    <th key={l} className={styles.skeletonTh} style={{ textAlign: l === '' ? 'right' : 'left' }}>
                       {l}
                     </th>
                   ))}
@@ -311,30 +272,14 @@ export default function FleetPage() {
             </table>
           </div>
         ) : filtered.length === 0 ? (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            padding: 'var(--space-4xl)',
-            background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-border-subtle)', gap: 'var(--space-md)',
-          }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 'var(--radius-full)',
-              background: 'var(--color-accent-muted)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--color-accent)', fontSize: 24,
-            }}>
+          <div className={styles.emptyState}>
+            <div className={styles.emptyStateIcon}>
               <Plus size={24} />
             </div>
-            <p style={{
-              margin: 0, fontSize: 'var(--text-md)', fontWeight: 500,
-              color: 'var(--color-text-secondary)', textAlign: 'center',
-            }}>
+            <p className={styles.emptyStateTitle}>
               {search ? 'Aucun véhicule ne correspond' : 'Aucun véhicule enregistré'}
             </p>
-            <p style={{
-              margin: 0, fontSize: 'var(--text-sm)',
-              color: 'var(--color-text-tertiary)', textAlign: 'center',
-            }}>
+            <p className={styles.emptyStateDesc}>
               {search ? 'Essayez un autre terme' : 'Ajoutez le premier véhicule à votre flotte'}
             </p>
             {!search && (
@@ -404,7 +349,7 @@ export default function FleetPage() {
                 return (
                   <DialogField key={fieldName} label={def.label} error={err} required={def.required}>
                     {def.type === 'select' ? (
-                      <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'flex-start' }}>
+                      <div className={styles.formSelectWrapper}>
                         <select
                           className="dialog-select"
                           value={val}
@@ -424,18 +369,7 @@ export default function FleetPage() {
                             type="button"
                             onClick={() => setShowAddDevice(true)}
                             title="Ajouter un nouveau dispositif Traccar"
-                            style={{
-                              padding: 'var(--space-sm) var(--space-md)',
-                              border: '1px solid var(--color-input-border)',
-                              borderRadius: 'var(--radius-md)',
-                              background: 'var(--color-surface-alt)',
-                              color: 'var(--color-text)',
-                              cursor: 'pointer',
-                              display: 'flex', alignItems: 'center', gap: 6,
-                              fontSize: 'var(--text-xs)',
-                              whiteSpace: 'nowrap',
-                              flexShrink: 0,
-                            }}
+                            className={styles.addDeviceBtn}
                           >
                             <Plus size={14} /> Ajouter
                           </button>
@@ -481,22 +415,14 @@ export default function FleetPage() {
         }}>
           <div
             onClick={() => setShowAddDevice(false)}
-            style={{ position: 'absolute', inset: 0, background: 'var(--color-overlay)', backdropFilter: 'blur(6px)' }}
+            className={styles.modalBackdrop}
           />
-          <div style={{
-            position: 'relative',
-            width: 420, maxWidth: 'calc(100vw - 32px)',
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-xl)',
-            boxShadow: 'var(--shadow-dialog)',
-            padding: 'var(--space-xl)',
-          }}>
-            <h3 style={{ margin: '0 0 var(--space-lg)', fontSize: 'var(--text-md)', fontWeight: 700 }}>
+          <div className={styles.modalContent}>
+            <h3 className={styles.modalTitle}>
               Nouveau dispositif Traccar
             </h3>
-            <div style={{ marginBottom: 'var(--space-md)' }}>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 'var(--space-sm)' }}>
+            <div className={styles.modalField}>
+              <label className={styles.modalLabel}>
                 Nom du traceur *
               </label>
               <input
@@ -506,8 +432,8 @@ export default function FleetPage() {
                 placeholder="Ex: Traceur Renault Kangoo"
               />
             </div>
-            <div style={{ marginBottom: 'var(--space-lg)' }}>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 'var(--space-sm)' }}>
+            <div className={styles.modalField}>
+              <label className={styles.modalLabel}>
                 Identifiant unique (IMEI) *
               </label>
               <input
@@ -517,19 +443,11 @@ export default function FleetPage() {
                 placeholder="Ex: 863295042345678"
               />
             </div>
-            <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'flex-end' }}>
+            <div className={styles.modalActions}>
               <button
                 type="button"
                 onClick={() => setShowAddDevice(false)}
-                style={{
-                  padding: 'var(--space-sm) var(--space-lg)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'transparent',
-                  color: 'var(--color-text)',
-                  cursor: 'pointer',
-                  fontSize: 'var(--text-sm)',
-                }}
+                className={styles.cancelBtn}
               >
                 Annuler
               </button>
@@ -537,17 +455,8 @@ export default function FleetPage() {
                 type="button"
                 disabled={!newDeviceName.trim() || !newDeviceId.trim() || addDeviceMutation.isPending}
                 onClick={() => addDeviceMutation.mutate({ name: newDeviceName.trim(), uniqueId: newDeviceId.trim() })}
-                style={{
-                  padding: 'var(--space-sm) var(--space-lg)',
-                  border: 'none',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'var(--color-accent)',
-                  color: 'var(--color-bg)',
-                  cursor: 'pointer',
-                  fontSize: 'var(--text-sm)',
-                  fontWeight: 600,
-                  opacity: (!newDeviceName.trim() || !newDeviceId.trim()) ? 0.5 : 1,
-                }}
+                className={styles.submitBtn}
+                style={{ opacity: (!newDeviceName.trim() || !newDeviceId.trim()) ? 0.5 : 1 }}
               >
                 {addDeviceMutation.isPending ? 'Ajout...' : 'Ajouter'}
               </button>

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Package, Search } from 'lucide-react';
 import api from '../services/api/client';
+import styles from './DeliveryProofsPage.module.css';
 import DataTable from '../components/DataTable';
 import { formatDate } from '../services/i18n/formatDate';
 
@@ -40,10 +41,10 @@ function SkeletonRows() {
   return (
     <>
       {[1, 2, 3, 4, 5].map((i) => (
-        <tr key={`sk-${i}`} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <tr key={`sk-${i}`} className={styles.skeletonRow}>
           {[40, 30, 25, 20, 20, 20].map((w, j) => (
-            <td key={j} style={{ padding: 'var(--space-md) var(--space-lg)' }}>
-              <div style={{ height: 14, width: `${w}%`, background: 'var(--color-skeleton)', borderRadius: 4 }} />
+            <td key={j} className={styles.skeletonCell}>
+              <div className={styles.shimmer} style={{ width: `${w}%` }} />
             </td>
           ))}
         </tr>
@@ -82,42 +83,32 @@ export default function DeliveryProofsPage() {
   };
 
   return (
-    <div style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+    <div className={styles.pageContainer}>
+      <div className={styles.headerRow}>
         <div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text)', margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Package size={22} style={{ color: 'var(--color-accent)' }} />
+          <h1 className={styles.pageTitle}>
+            <Package size={22} className={styles.pageTitleIcon} />
             Preuves de livraison
           </h1>
-          <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
+          <p className={styles.pageSubtitle}>
             {meta.total > 0 ? `${meta.total} confirmation${meta.total > 1 ? 's' : ''}` : 'Historique des validations de livraison'}
           </p>
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', pointerEvents: 'none' }} />
+      <div className={styles.searchRow}>
+        <div className={styles.searchInputWrapper}>
+          <Search size={14} className={styles.searchIcon} />
           <input
             placeholder="Rechercher..."
             onChange={(e) => setSearch(e.target.value)}
-            style={{
-              width: '100%', padding: '8px 8px 8px 36px',
-              background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)',
-              borderRadius: 'var(--radius-md)', color: 'var(--color-text)', fontSize: '0.8rem',
-              fontFamily: 'var(--font-body)', outline: 'none',
-            }}
+            className={styles.searchInput}
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          style={{
-            padding: '8px 12px', background: 'var(--color-input-bg)',
-            border: '1px solid var(--color-input-border)', borderRadius: 'var(--radius-md)',
-            color: 'var(--color-text)', fontSize: '0.8rem', fontFamily: 'var(--font-body)',
-            cursor: 'pointer',
-          }}
+          className={styles.statusFilterSelect}
         >
           <option value="">Tous les statuts</option>
           <option value="delivered">Livré</option>
@@ -125,14 +116,14 @@ export default function DeliveryProofsPage() {
         </select>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div className={styles.tableContainer}>
         {isLoading ? (
-          <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border-subtle)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+          <div className={styles.skeletonTableWrapper}>
+            <table className={styles.skeletonTable}>
               <thead>
-                <tr style={{ background: 'var(--color-surface-alt)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                <tr className={styles.skeletonTheadTr}>
                   {['Livraison', 'Chauffeur', 'Statut', 'Écart', 'Preuve GPS', 'Validé le'].map((l) => (
-                    <th key={l} style={{ padding: '10px 14px', fontWeight: 600, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-secondary)', textAlign: 'left', whiteSpace: 'nowrap' }}>{l}</th>
+                    <th key={l} className={styles.skeletonTh}>{l}</th>
                   ))}
                 </tr>
               </thead>
@@ -147,7 +138,7 @@ export default function DeliveryProofsPage() {
               {
                 key: 'status', label: 'Statut', sortable: true,
                 render: (r: DeliveryProof) => (
-                  <span style={{ color: STATUS_COLORS[r.status], fontWeight: 500 }}>
+                  <span className={styles.statusText} style={{ color: STATUS_COLORS[r.status] }}>
                     {STATUS_LABELS[r.status] || r.status}
                   </span>
                 ),

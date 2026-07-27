@@ -1,0 +1,110 @@
+@keyframes dt-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.page {
+  padding: var(--space-2xl, 32px);
+  background: var(--color-bg, #0B1220);
+  min-height: 100vh;
+}
+
+.pageTitle {
+  color: var(--color-text, #E8ECF3);
+  font-family: var(--font-display, Space Grotesk, sans-serif);
+  font-size: var(--text-2xl, 1.5rem);
+  font-weight: 700;
+  margin-bottom: var(--space-xl, 20px);
+}
+
+.loadingSkeleton {
+  height: 300px;
+  background: var(--color-skeleton, rgba(255,255,255,0.04));
+  border-radius: var(--radius-lg, 8px);
+  animation: dt-shimmer 1.5s infinite linear;
+  background-image: linear-gradient(90deg, var(--color-skeleton, rgba(255,255,255,0.04)) 25%, rgba(255,255,255,0.05) 50%, var(--color-skeleton, rgba(255,255,255,0.04)) 75%);
+  background-size: 200% 100%;
+}
+
+.emptyState {
+  padding: var(--space-2xl, 32px);
+  text-align: center;
+  color: var(--color-text-tertiary, #7A8BA3);
+  background: var(--color-bg, #0B1220);
+  min-height: 100vh;
+}
+
+.emptyStateTitle {
+  color: var(--color-text, #E8ECF3);
+}
+
+.noVehicleCard {
+  background: var(--color-surface, #121B2E);
+  border-radius: var(--radius-xl, 12px);
+  padding: 40px;
+  text-align: center;
+  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+}
+
+.noVehicleIcon {
+  margin-bottom: 12px;
+  color: var(--color-text-tertiary, #7A8BA3);
+}
+
+.noVehicleText {
+  font-size: 1.1rem;
+  color: var(--color-text, #E8ECF3);
+}
+
+.noVehicleSubtext {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary, #9BA6B9);
+}
+
+.vehicleCard {
+  background: var(--color-surface, #121B2E);
+  border-radius: var(--radius-xl, 12px);
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+}
+
+.vehicleHeader {
+  background: linear-gradient(135deg, var(--color-accent, #F2A93C), #d4902e);
+  color: var(--color-bg, #0B1220);
+  padding: var(--space-xl, 20px) var(--space-2xl, 24px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vehicleName {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.vehiclePlate {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.vehicleBody {
+  padding: var(--space-2xl, 24px);
+}
+
+.row {
+  display: flex;
+  padding: var(--space-sm, 10px) 0;
+  border-bottom: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  font-size: var(--text-sm, 0.9rem);
+}
+
+.rowLabel {
+  width: 160px;
+  color: var(--color-text-tertiary, #7A8BA3);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.rowValue {
+  color: var(--color-text, #E8ECF3);
+}

@@ -15,6 +15,7 @@ import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
 import MapLayerSwitcher from '../../components/MapLayerSwitcher';
+import styles from './RealTimeMap.module.css';
 
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
@@ -55,18 +56,7 @@ function createStaticIcon(rotation = 0, focused = false, confidence = 1) {
   });
 }
 
-const MARKER_CSS = `
-.dt-marker-moving, .dt-marker-static, .dt-marker-focused { background: none !important; border: none !important; z-index: 10000 !important; position: relative !important; }
-.dt-marker-halo { position: absolute; top: 3px; left: 3px; width: 46px; height: 46px; border-radius: 50%; background: rgba(242,169,60,0.2); border: 3px solid var(--color-status-moving, #F2A93C); }
-.dt-marker-halo-static { position: absolute; top: 3px; left: 3px; width: 46px; height: 46px; border-radius: 50%; background: rgba(63,167,150,0.15); border: 3px solid var(--color-status-static, #3FA796); opacity: 0.7; }
-.dt-marker-emoji { position: absolute; top: 8px; left: 8px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 22px; line-height: 1; transition: transform 0.3s ease; }
-.dt-marker-halo.dt-marker-focus, .dt-marker-halo-static.dt-marker-focus { box-shadow: 0 0 0 4px var(--color-accent-muted); }
-@keyframes dt-pulse-moving { 0% { opacity: 0.8; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.2); } 100% { opacity: 0.8; transform: scale(1); } }
-@keyframes dt-focus-pulse { 0% { opacity: 0; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0; transform: scale(1.3); } }
-.leaflet-popup-content-wrapper { background: var(--color-glass, rgba(18,27,46,0.88)) !important; color: var(--color-text, #E8ECF3) !important; border-radius: var(--radius-xl, 12px) !important; border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15)) !important; box-shadow: var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5)) !important; font-family: var(--font-body, Inter, sans-serif) !important; font-size: 0.8rem !important; backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important; }
-.leaflet-popup-tip { background: var(--color-glass, rgba(18,27,46,0.88)) !important; border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15)) !important; backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important; }
-@media (prefers-reduced-motion: reduce) { .dt-marker-halo { animation: none !important; } .dt-marker-halo.dt-marker-focus { animation: none !important; opacity: 0.5 !important; } }
-`;
+
 
 interface VehicleData {
   id: string;
@@ -371,9 +361,9 @@ function MapFlyToDriver({ lat, lng }: { lat: number; lng: number }) {
 
 function DetailRow({ label, value, color, mono }: { label: string; value: string; color?: string; mono?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-      <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.7rem', flexShrink: 0 }}>{label}</span>
-      <span style={{ fontWeight: 500, color: color || 'var(--color-text)', fontFamily: mono ? 'var(--font-mono)' : 'var(--font-body)', fontSize: '0.75rem', textAlign: 'right' }}>{value}</span>
+    <div className={styles.detailRow}>
+      <span className={styles.detailLabel}>{label}</span>
+      <span className={`${styles.detailValue}${mono ? ` ${styles.detailValueMono}` : ''}`} style={{ color: color || 'var(--color-text)' }}>{value}</span>
     </div>
   );
 }
@@ -420,13 +410,7 @@ function DestinationMarker({ lat, lng }: { lat: number; lng: number }) {
   useEffect(() => {
     const icon = L.divIcon({
       className: 'dt-destination-marker',
-      html: `<div style="
-        width: 20px; height: 20px;
-        background: var(--color-red, #E8544C);
-        border: 3px solid white;
-        border-radius: 50%;
-        box-shadow: 0 0 8px rgba(232,84,76,0.6);
-      "></div>`,
+      html: `<div></div>`,
       iconSize: [20, 20],
       iconAnchor: [10, 10],
     });
@@ -459,7 +443,6 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
   const [routingLoading, setRoutingLoading] = useState(false);
   const [driverFilter, setDriverFilter] = useState('');
   const [selectedDriver, setSelectedDriver] = useState<VehicleData | null>(null);
-  const styleInjected = useRef(false);
   const devPerf = useDevicePerformance();
 
   const { data: driversData } = useQuery({
@@ -524,15 +507,6 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
     if (filteredVehicles.length <= devPerf.maxAnimatedMarkers) return filteredVehicles;
     return filteredVehicles.slice(0, devPerf.maxAnimatedMarkers);
   }, [filteredVehicles, devPerf.maxAnimatedMarkers]);
-
-  useEffect(() => {
-    if (!styleInjected.current) {
-      const style = document.createElement('style');
-      style.textContent = MARKER_CSS;
-      document.head.appendChild(style);
-      styleInjected.current = true;
-    }
-  }, []);
 
   const recalcRoute = useCallback(async (lat: number, lng: number) => {
     const dLat = deliveryLatRef.current;
@@ -740,7 +714,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
     <MapContainer
       center={center}
       zoom={13}
-      style={{ height: '100%', width: '100%' }}
+      className={styles.mapContainer}
       zoomControl={true}
     >
       <MapStyleOverrider />
@@ -750,35 +724,18 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
       <div style={{
         position: 'absolute', top: 10, left: 50, zIndex: 1000,
       }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: 'var(--color-glass, rgba(18,27,46,0.92))',
-          border: '1px solid var(--color-glass-border, rgba(242,169,60,0.15))',
-          borderRadius: 'var(--radius-md, 8px)',
-          padding: '4px 10px',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          boxShadow: 'var(--shadow-md, 0 4px 20px rgba(0,0,0,0.4))',
-        }}>
-          <Search size={14} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
+        <div className={styles.searchBar}>
+          <Search size={14} className={styles.searchIcon} />
           <input
             placeholder="Rechercher un chauffeur…"
             value={driverFilter}
             onChange={(e) => setDriverFilter(e.target.value)}
-            style={{
-              background: 'transparent', border: 'none', outline: 'none',
-              color: 'var(--color-text)', fontSize: '0.75rem',
-              width: 220, fontFamily: 'var(--font-body)',
-            }}
+            className={styles.searchInput}
           />
           {driverFilter && (
             <button
               onClick={() => { setDriverFilter(''); setSelectedDriver(null); }}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                padding: 0, display: 'flex', alignItems: 'center',
-                color: 'var(--color-text-tertiary)',
-              }}
+              className={styles.searchClearButton}
             >
               <X size={14} />
             </button>
@@ -787,16 +744,9 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
         {driverFilter && (
           <div style={{
             position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
-            maxHeight: 240, overflowY: 'auto',
-            background: 'var(--color-glass, rgba(18,27,46,0.95))',
-            border: '1px solid var(--color-glass-border, rgba(242,169,60,0.15))',
-            borderRadius: 'var(--radius-md, 8px)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            boxShadow: 'var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5))',
-          }}>
+          }} className={styles.searchResults}>
             {searchResults.length === 0 ? (
-              <div style={{ padding: '10px 14px', fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
+              <div className={styles.searchResultEmpty}>
                 Aucun résultat
               </div>
             ) : (
@@ -810,21 +760,12 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                     }
                     setDriverFilter('');
                   }}
-                  style={{
-                    padding: '8px 14px', cursor: v.isOffline ? 'default' : 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    fontSize: '0.75rem', color: 'var(--color-text)',
-                    borderBottom: '1px solid var(--color-border-subtle)',
-                    transition: 'background 0.1s',
-                    opacity: v.isOffline ? 0.5 : 1,
-                  }}
-                  onMouseEnter={(e) => { if (!v.isOffline) e.currentTarget.style.background = 'var(--color-accent-muted)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  className={`${styles.searchResultItem}${v.isOffline ? ` ${styles.searchResultItemOffline}` : ''}`}
                 >
-                  <span style={{ fontSize: '1rem' }}>{v.isOffline ? '⏸️' : '🚗'}</span>
+                  <span className={styles.searchResultIcon}>{v.isOffline ? '⏸️' : '🚗'}</span>
                   <div>
-                    <div style={{ fontWeight: 500 }}>{v.name}</div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>
+                    <div className={styles.searchResultName}>{v.name}</div>
+                    <div className={styles.searchResultSub}>
                       {v.isOffline || v.status === 'offline'
                         ? 'Hors ligne — aucune position récente'
                         : `${v.status === 'moving' ? 'En route' : 'À l\'arrêt'} · ${v.accuracy !== undefined ? `±${Math.round(v.accuracy)}m · ` : ''}${formatTime(v.timestamp)}`
@@ -844,28 +785,18 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
           <MapFlyToDriver lat={selectedDriver.lat} lng={selectedDriver.lng} />
           <div style={{
             position: 'absolute', bottom: 20, right: 10, zIndex: 1000,
-            width: 300, maxHeight: 400, overflowY: 'auto',
-            background: 'var(--color-glass, rgba(18,27,46,0.95))',
-            border: '1px solid var(--color-glass-border, rgba(242,169,60,0.15))',
-            borderRadius: 'var(--radius-lg, 12px)',
-            padding: 16,
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            boxShadow: 'var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5))',
-            fontSize: '0.75rem',
-            color: 'var(--color-text)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>🚗 {selectedDriver.name}</div>
+          }} className={styles.driverCard}>
+            <div className={styles.driverCardHeader}>
+              <div className={styles.driverCardTitle}>🚗 {selectedDriver.name}</div>
               <button
                 onClick={() => setSelectedDriver(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: 2 }}
+                className={styles.driverCardClose}
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className={styles.driverCardBody}>
               <DetailRow label="Statut" value={selectedDriver.status === 'moving' ? 'En mouvement' : 'À l\'arrêt'} color={selectedDriver.status === 'moving' ? 'var(--color-accent)' : 'var(--color-teal)'} />
               {selectedDriver.speed !== undefined && (
                 <DetailRow label="Vitesse" value={`${(selectedDriver.speed * 3.6).toFixed(1)} km/h`} />
@@ -900,13 +831,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
             </div>
 
             {(!selectedDriver.timestamp || Date.now() - new Date(selectedDriver.timestamp).getTime() > 120_000) && (
-              <div style={{
-                marginTop: 12, padding: '8px 12px',
-                background: 'var(--color-red-muted)',
-                borderRadius: 'var(--radius-md, 6px)',
-                fontSize: '0.7rem', color: 'var(--color-red)',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}>
+              <div className={styles.warningBanner}>
                 ⚠️ Position non actualisée depuis plus de 2 minutes
               </div>
             )}
@@ -941,27 +866,15 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
         <div style={{
           position: 'absolute', bottom: 60, left: '50%', transform: 'translateX(-50%)',
           zIndex: 1000,
-          padding: '8px 20px',
-          background: 'var(--color-glass, rgba(18,27,46,0.88))',
-          border: '1px solid var(--color-glass-border, rgba(242,169,60,0.15))',
-          borderRadius: 'var(--radius-xl, 12px)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          display: 'flex', alignItems: 'center', gap: 16,
-          fontSize: '0.8rem',
-          color: 'var(--color-text, #E8ECF3)',
-          pointerEvents: 'none',
-          whiteSpace: 'nowrap',
-          boxShadow: 'var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5))',
-        }}>
-          <span style={{ fontFamily: 'var(--font-mono, monospace)', color: 'var(--color-teal, #3FA796)', fontWeight: 700 }}>
+        }} className={styles.etaBanner}>
+          <span className={styles.etaText}>
             🕐 ETA: {routingETA}
           </span>
-          <span style={{ color: 'var(--color-text-secondary, #9BA6B9)' }}>
+          <span className={styles.etaDistance}>
             🛣️ {formatDistance(routingDistance)}
           </span>
           {routingLoading && (
-            <span style={{ color: 'var(--color-text-tertiary, #7A8BA3)', fontSize: '0.65rem' }}>
+            <span className={styles.etaLoading}>
               ↻
             </span>
           )}
@@ -971,12 +884,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
       {exceededMarkerLimit && (
         <div style={{
           position: 'absolute', top: 8, left: 8, zIndex: 1000,
-          background: 'var(--color-surface, #121B2E)',
-          border: '1px solid var(--color-accent, #F2A93C)',
-          borderRadius: 6, padding: '4px 10px',
-          fontSize: '0.7rem', color: 'var(--color-text-secondary, #9BA6B9)',
-          pointerEvents: 'none',
-        }}>
+        }} className={styles.markerLimitNotice}>
           {allPositions.length} véhicules — affichage limité à {devPerf.maxAnimatedMarkers}
         </div>
       )}
@@ -984,13 +892,8 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
       {visibleVehicles.length === 0 && (
         <div style={{
           position: 'absolute', bottom: 110, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 1000, padding: '6px 14px',
-          background: 'var(--color-glass, rgba(18,27,46,0.88))',
-          border: '1px solid var(--color-glass-border, rgba(242,169,60,0.15))',
-          borderRadius: 'var(--radius-md, 6px)',
-          fontSize: '0.75rem', color: 'var(--color-text-secondary, #9BA6B9)',
-          pointerEvents: 'none', whiteSpace: 'nowrap',
-        }}>
+          zIndex: 1000,
+        }} className={styles.emptyState}>
           Aucun véhicule actif — {allPositions.length} reçue(s)
         </div>
       )}

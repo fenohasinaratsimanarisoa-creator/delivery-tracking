@@ -9,6 +9,7 @@ import Button from '../components/Button';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import AppearanceSection from '../features/settings/sections/AppearanceSection';
+import styles from './SettingsPage.module.css';
 
 function PasswordStrength({ password }: { password: string }) {
   const { t } = useTranslation();
@@ -19,24 +20,24 @@ function PasswordStrength({ password }: { password: string }) {
   const colors = ['#ef4444', '#f59e0b', '#3b82f6', '#22c55e'];
   const labels = [t('settingsSecurity.passwordVeryWeak'), t('settingsSecurity.passwordWeak'), t('settingsSecurity.passwordMedium'), t('settingsSecurity.passwordStrong')];
   return (
-    <div style={{ marginTop: 4 }}>
-      <div style={{ display: 'flex', gap: 3 }}>
+    <div className={styles.pwStrength}>
+      <div className={styles.pwBars}>
         {bars.map((active, i) => (
-          <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: active ? colors[score - 1] : 'var(--color-border-subtle)', transition: 'background 0.15s' }} />
+          <div key={i} className={styles.pwBar} style={{ background: active ? colors[score - 1] : 'var(--color-border-subtle)' }} />
         ))}
       </div>
-      {password.length > 0 && <div style={{ fontSize: '0.65rem', color: colors[Math.max(0, score - 1)], marginTop: 2, fontWeight: 600 }}>{labels[Math.max(0, score - 1)]}</div>}
+      {password.length > 0 && <div className={styles.pwLabel} style={{ color: colors[Math.max(0, score - 1)] }}>{labels[Math.max(0, score - 1)]}</div>}
     </div>
   );
 }
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-sm, 8px) 0', cursor: 'pointer', borderBottom: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))', fontSize: 'var(--text-sm, 0.875rem)', color: 'var(--color-text, #E8ECF3)' }}
+    <label className={styles.toggleRow}
       onClick={() => onChange(!checked)}>
       <span>{label}</span>
-      <div style={{ width: 40, height: 22, borderRadius: 11, background: checked ? 'var(--color-accent)' : 'var(--color-input-border)', position: 'relative', cursor: 'pointer', transition: 'background 0.15s', flexShrink: 0 }}>
-        <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: checked ? 21 : 3, transition: 'left 0.15s' }} />
+      <div className={styles.toggleTrack} style={{ background: checked ? 'var(--color-accent)' : 'var(--color-input-border)' }}>
+        <div className={styles.toggleThumb} style={{ left: checked ? 21 : 3 }} />
       </div>
     </label>
   );
@@ -56,22 +57,15 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<string>('profile');
 
   return (
-    <div style={{ padding: 'var(--space-xl)', maxWidth: 800, margin: '0 auto' }}>
-      <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text)', marginBottom: 24 }}>{t('settings.title')}</h1>
+    <div className={styles.pageContainer}>
+      <h1 className={styles.pageTitle}>{t('settings.title')}</h1>
 
-      <div style={{ display: 'flex', gap: 2, marginBottom: 24, borderBottom: '1px solid var(--color-border-subtle)', overflowX: 'auto' }}>
+      <div className={styles.tabsContainer}>
         {tabs.map(tb => (
           <button
             key={tb.key}
             onClick={() => setActiveTab(tb.key)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '10px 16px', fontSize: '0.85rem', fontWeight: activeTab === tb.key ? 600 : 400,
-              color: activeTab === tb.key ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-              background: 'none', border: 'none', borderBottom: activeTab === tb.key ? '2px solid var(--color-accent)' : '2px solid transparent',
-              cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', transition: 'color 0.15s, border-color 0.15s',
-              marginBottom: -1,
-            }}
+            className={`${styles.tabButton} ${activeTab === tb.key ? styles.tabActive : styles.tabInactive}`}
           >
             <tb.icon size={16} />
             {t(tb.labelKey)}
@@ -80,7 +74,7 @@ export default function SettingsPage() {
       </div>
 
       {activeTab === 'profile' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div className={styles.sectionGap}>
           <ProfileSection user={user} updateUser={updateUser} t={t} toast={toast} key="profile" />
           <AppearanceSection />
         </div>
@@ -106,9 +100,9 @@ function ProfileSection({ user, updateUser, t, toast }: any) {
   });
 
   return (
-    <section style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-xl)', padding: 20 }}>
-      <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: '0 0 16px', color: 'var(--color-text)' }}>{t('settings.profile')}</h2>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <section className={styles.settingsSection}>
+      <h2 className={styles.sectionTitle} style={{ marginBottom: 16 }}>{t('settings.profile')}</h2>
+      <div className={styles.flexColumn}>
         <Field label={t('settings.firstName')}>
           <input className="dialog-input" value={firstName} onChange={e => setFirstName(e.target.value)} />
         </Field>
@@ -167,11 +161,11 @@ function SecuritySection({ t, toast }: any) {
   const loadTfa = async () => { try { const r = await api.get('/auth/2fa/generate'); setTfaSecret(r.data.secret); setTfaQr(r.data.qrCode); } catch {} };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <section style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-xl)', padding: 20 }}>
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: '0 0 4px', color: 'var(--color-text)' }}>{t('settingsSecurity.passwordTitle')}</h2>
-        <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', margin: '0 0 16px' }}>{t('settingsSecurity.passwordSubtitle')}</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className={styles.sectionGap}>
+      <section className={styles.settingsSection}>
+        <h2 className={styles.sectionTitle}>{t('settingsSecurity.passwordTitle')}</h2>
+        <p className={styles.sectionSubtitle}>{t('settingsSecurity.passwordSubtitle')}</p>
+        <div className={styles.flexColumn}>
           <Field label={t('settingsSecurity.currentPassword')}>
             <input className="dialog-input" type="password" value={pwCurrent} onChange={e => setPwCurrent(e.target.value)} />
           </Field>
@@ -193,16 +187,16 @@ function SecuritySection({ t, toast }: any) {
         </div>
       </section>
 
-      <section style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-xl)', padding: 20 }}>
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: '0 0 4px', color: 'var(--color-text)' }}>{t('settingsSecurity.twoFactorTitle')}</h2>
-        <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', margin: '0 0 16px' }}>{t('settingsSecurity.twoFactorSubtitle')}</p>
+      <section className={styles.settingsSection}>
+        <h2 className={styles.sectionTitle}>{t('settingsSecurity.twoFactorTitle')}</h2>
+        <p className={styles.sectionSubtitle}>{t('settingsSecurity.twoFactorSubtitle')}</p>
         {!tfaSecret ? (
           <Button variant="secondary" size="sm" onClick={loadTfa}>🛡️ {t('settingsSecurity.setupTwoFactor')}</Button>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {tfaQr && <img src={tfaQr} alt="QR Code" style={{ width: 200, height: 200, borderRadius: 8 }} />}
-            {tfaSecret && <div style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', wordBreak: 'break-all' }}>{tfaSecret}</div>}
-            <div style={{ display: 'flex', gap: 8 }}>
+          <div className={styles.twoFactorForm}>
+            {tfaQr && <img src={tfaQr} alt="QR Code" className={styles.qrCode} />}
+            {tfaSecret && <div className={styles.tfaSecret}>{tfaSecret}</div>}
+            <div className={styles.flexRowGap}>
               <Field label={t('settingsSecurity.twoFactorCode')}>
                 <input className="dialog-input" value={twoFactorCode} maxLength={6} onChange={e => setTwoFactorCode(e.target.value)} />
               </Field>
@@ -219,20 +213,20 @@ function SecuritySection({ t, toast }: any) {
         )}
       </section>
 
-      <section style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-xl)', padding: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <section className={styles.settingsSection}>
+        <div className={styles.sectionHeaderRow}>
           <div>
-            <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: '0 0 4px', color: 'var(--color-text)' }}>{t('settingsSecurity.sessionTitle')}</h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', margin: 0 }}>{t('settingsSecurity.sessionSubtitle')}</p>
+            <h2 className={styles.sectionHeaderTitle}>{t('settingsSecurity.sessionTitle')}</h2>
+            <p className={styles.sectionHeaderSubtitle}>{t('settingsSecurity.sessionSubtitle')}</p>
           </div>
           <Button variant="secondary" size="sm" onClick={fetchSessions}>{t('settingsSecurity.loadSessions') || 'Charger'}</Button>
         </div>
-        {sessions.length === 0 && <p style={{ fontSize: '0.8rem', color: 'var(--color-text-tertiary)' }}>{t('settingsSecurity.noSessions') || 'Aucune session'}</p>}
+        {sessions.length === 0 && <p className={styles.noSessions}>{t('settingsSecurity.noSessions') || 'Aucune session'}</p>}
         {sessions.map((s: any) => (
-          <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--color-border-subtle)', fontSize: '0.8rem' }}>
+          <div key={s.id} className={styles.sessionItem}>
             <div>
-              <div style={{ color: 'var(--color-text)' }}>{s.device || 'Unknown'} {s.isCurrent && <span style={{ color: 'var(--color-accent)', fontWeight: 600 }}>({t('settingsSecurity.currentSession')})</span>}</div>
-              <div style={{ color: 'var(--color-text-tertiary)', fontSize: '0.7rem' }}>{s.ip} · {formatDateTime(s.lastActivity)}</div>
+              <div className={styles.sessionDevice}>{s.device || 'Unknown'} {s.isCurrent && <span className={styles.sessionCurrent}>({t('settingsSecurity.currentSession')})</span>}</div>
+              <div className={styles.sessionMeta}>{s.ip} · {formatDateTime(s.lastActivity)}</div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => sessionRevoke.mutate(s.id)} disabled={s.isCurrent}><LogOut size={12} /></Button>
           </div>
@@ -255,14 +249,14 @@ function NotificationsSection({ t, toast }: any) {
 
   const notifKeys = ['deliveryStatus', 'fuelAnomaly', 'deliveryDelayed', 'maintenanceDue', 'system'] as const;
 
-  if (!prefs) return <div style={{ padding: 20, color: 'var(--color-text-tertiary)' }}>{t('common.loading')}</div>;
+  if (!prefs) return <div className={styles.loadingState}>{t('common.loading')}</div>;
 
   return (
-    <section style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-xl)', padding: 20 }}>
-      <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: '0 0 4px', color: 'var(--color-text)' }}>{t('settingsNotifications.title')}</h2>
-      <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', margin: '0 0 16px' }}>{t('settingsNotifications.subtitle')}</p>
+    <section className={styles.settingsSection}>
+      <h2 className={styles.sectionTitle}>{t('settingsNotifications.title')}</h2>
+      <p className={styles.sectionSubtitle}>{t('settingsNotifications.subtitle')}</p>
 
-      <h3 style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <h3 className={styles.sectionHeader3}>
         {t('settingsNotifications.emailSection')}
       </h3>
       {notifKeys.map(key => (
@@ -271,7 +265,7 @@ function NotificationsSection({ t, toast }: any) {
           label={t(`settingsNotifications.preferences.${key}`)} />
       ))}
 
-      <h3 style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', margin: '16px 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <h3 className={styles.sectionHeader3Gap}>
         {t('settingsNotifications.inAppSection')}
       </h3>
       {notifKeys.map(key => (
@@ -286,9 +280,9 @@ function NotificationsSection({ t, toast }: any) {
 function LanguageSection({ t }: any) {
   const [lang, setLang] = useState(getLanguage());
   return (
-    <section style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-xl)', padding: 20 }}>
-      <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: '0 0 16px', color: 'var(--color-text)' }}>{t('settings.language')}</h2>
-      <div style={{ display: 'flex', gap: 8 }}>
+    <section className={styles.settingsSection}>
+      <h2 className={styles.sectionTitle} style={{ marginBottom: 16 }}>{t('settings.language')}</h2>
+      <div className={styles.languageButtons}>
         {(['fr', 'en'] as const).map(l => (
           <Button key={l} variant={lang === l ? 'primary' : 'secondary'} size="sm" onClick={() => { setLang(l); setLanguage(l); }}>
             {l === 'fr' ? '🇫🇷 Français' : '🇬🇧 English'}
@@ -302,7 +296,7 @@ function LanguageSection({ t }: any) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label style={{ fontWeight: 600, fontSize: '0.75rem', display: 'block', marginBottom: 4, color: 'var(--color-text-secondary)' }}>{label}</label>
+      <label className={styles.fieldLabel}>{label}</label>
       {children}
     </div>
   );

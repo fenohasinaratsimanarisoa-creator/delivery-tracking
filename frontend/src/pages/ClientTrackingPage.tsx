@@ -6,6 +6,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api/client';
+import styles from './ClientTrackingPage.module.css';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -85,38 +86,34 @@ export default function ClientTrackingPage() {
 
   if (!deliveryId) {
     return (
-      <div style={{ padding: 20 }}>
+      <div className={styles.page}>
         <h1>{t('clientTracking.title')}</h1>
         {orders.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>
+          <div className={styles.emptyState}>
             <p>{t('clientTracking.noActiveOrders')}</p>
           </div>
         )}
         {orders.filter((o) => o.status === 'in_progress' || o.status === 'assigned').length === 0 && (
-          <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>
+          <div className={styles.emptyState}>
             <p>{t('clientTracking.noInProgress')}</p>
           </div>
         )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className={styles.orderList}>
           {orders
             .filter((o: any) => o.status === 'in_progress' || o.status === 'assigned')
             .map((o: any) => (
               <div
                 key={o.id}
                 onClick={() => window.location.href = `/tracking?deliveryId=${o.id}`}
-                style={{
-                  background: '#fff', borderRadius: 8, padding: 16, cursor: 'pointer',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)', border: '1px solid #eee',
-                }}
+                className={styles.orderCard}
               >
-                <strong>{o.title}</strong>
-                <span style={{
-                  marginLeft: 8, background: o.status === 'in_progress' ? '#007bff' : '#17a2b8',
-                  color: '#fff', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem',
+                <strong className={styles.orderTitle}>{o.title}</strong>
+                <span className={styles.orderStatusBadge} style={{
+                  background: o.status === 'in_progress' ? '#007bff' : '#17a2b8',
                 }}>
                   {o.status === 'in_progress' ? t('clientTracking.status.in_progress') : t('clientTracking.status.assigned')}
                 </span>
-                <div style={{ fontSize: '0.85rem', color: '#555', marginTop: 4 }}>
+                <div className={styles.orderAddress}>
                   📦 {o.deliveryAddress}
                 </div>
               </div>
@@ -128,7 +125,7 @@ export default function ClientTrackingPage() {
 
   if (error) {
     return (
-      <div style={{ padding: 20, textAlign: 'center', color: '#c00' }}>
+      <div className={styles.pageCentered}>
         <h1>{t('clientTracking.title')}</h1>
         <p>{error}</p>
       </div>
@@ -142,11 +139,11 @@ export default function ClientTrackingPage() {
     : [delivery?.pickupLat ?? -18.8792, delivery?.pickupLng ?? 47.5079];
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className={styles.mapContainer}>
       {delivery && (
-        <div style={{ padding: '16px 20px', background: '#fff', borderBottom: '1px solid #ddd' }}>
-          <h2 style={{ margin: '0 0 8px' }}>{delivery.title}</h2>
-          <div style={{ fontSize: '0.85rem', color: '#555' }}>
+        <div className={styles.deliveryInfo}>
+          <h2 className={styles.deliveryTitle}>{delivery.title}</h2>
+          <div className={styles.deliveryDetails}>
             <div>📦 {delivery.deliveryAddress}</div>
             {delivery.driver && <div>👤 {t('clientTracking.driver')} : {delivery.driver.firstName} {delivery.driver.lastName}</div>}
             {delivery.vehicle && <div>🚛 {t('clientTracking.vehicle')} : {delivery.vehicle.brand} {delivery.vehicle.model} ({delivery.vehicle.licensePlate})</div>}
@@ -156,7 +153,7 @@ export default function ClientTrackingPage() {
           </div>
         </div>
       )}
-      <div style={{ flex: 1 }}>
+      <div className={styles.mapArea}>
         <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

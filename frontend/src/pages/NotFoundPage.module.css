@@ -1,0 +1,45 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+  background: var(--color-bg, #0B1220);
+}
+
+.errorCode {
+  font-size: 4rem;
+  font-weight: 700;
+  color: var(--color-red, #E8544C);
+  margin-bottom: 8px;
+  font-family: var(--font-display, Space Grotesk, sans-serif);
+}
+
+.heading {
+  margin: 0 0 8px;
+  color: var(--color-text, #E8ECF3);
+  font-family: var(--font-display, Space Grotesk, sans-serif);
+}
+
+.message {
+  margin: 0 0 24px;
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-text-secondary, #9BA6B9);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 24px;
+  background: var(--color-accent, #F2A93C);
+  color: var(--color-bg, #0B1220);
+  border: none;
+  border-radius: var(--radius-md, 6px);
+  cursor: pointer;
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  font-family: var(--font-body, Inter, sans-serif);
+}

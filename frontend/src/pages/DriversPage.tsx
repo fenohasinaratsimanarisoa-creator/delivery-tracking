@@ -8,6 +8,7 @@ import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../co
 import { useEntityForm, type FieldDef, type FormSection } from '../hooks/useEntityForm';
 import { useToast } from '../components/Toast';
 import type { Driver, VehicleListItem } from '../types';
+import styles from './DriversPage.module.css';
 
 interface DriverFormValues {
   firstName: string; lastName: string; email: string;
@@ -37,26 +38,24 @@ function SkeletonRows() {
   return (
     <>
       {[1, 2, 3, 4, 5].map((i) => (
-        <tr key={`sk-${i}`} style={{
-          borderBottom: '1px solid var(--color-border-subtle)',
-        }}>
-          <td style={{ padding: 'var(--space-md) var(--space-lg)' }}>
-            <div style={{ height: 14, width: '60%', background: 'var(--color-skeleton)', borderRadius: 4, animation: 'dt-shimmer 1.5s infinite linear', backgroundImage: 'linear-gradient(90deg, var(--color-skeleton) 25%, rgba(255,255,255,0.05) 50%, var(--color-skeleton) 75%)', backgroundSize: '200% 100%' }} />
+        <tr key={`sk-${i}`} className={styles.skeletonRow}>
+          <td className={styles.skeletonCell}>
+            <div className={styles.shimmer} style={{ width: '60%' }} />
           </td>
-          <td style={{ padding: 'var(--space-md) var(--space-lg)' }}>
-            <div style={{ height: 14, width: '40%', background: 'var(--color-skeleton)', borderRadius: 4, animation: 'dt-shimmer 1.5s infinite linear', backgroundImage: 'linear-gradient(90deg, var(--color-skeleton) 25%, rgba(255,255,255,0.05) 50%, var(--color-skeleton) 75%)', backgroundSize: '200% 100%' }} />
+          <td className={styles.skeletonCell}>
+            <div className={styles.shimmer} style={{ width: '40%' }} />
           </td>
-          <td style={{ padding: 'var(--space-md) var(--space-lg)' }}>
-            <div style={{ height: 14, width: '35%', background: 'var(--color-skeleton)', borderRadius: 4, animation: 'dt-shimmer 1.5s infinite linear', backgroundImage: 'linear-gradient(90deg, var(--color-skeleton) 25%, rgba(255,255,255,0.05) 50%, var(--color-skeleton) 75%)', backgroundSize: '200% 100%' }} />
+          <td className={styles.skeletonCell}>
+            <div className={styles.shimmer} style={{ width: '35%' }} />
           </td>
-          <td style={{ padding: 'var(--space-md) var(--space-lg)' }}>
-            <div style={{ height: 14, width: '50%', background: 'var(--color-skeleton)', borderRadius: 4, animation: 'dt-shimmer 1.5s infinite linear', backgroundImage: 'linear-gradient(90deg, var(--color-skeleton) 25%, rgba(255,255,255,0.05) 50%, var(--color-skeleton) 75%)', backgroundSize: '200% 100%' }} />
+          <td className={styles.skeletonCell}>
+            <div className={styles.shimmer} style={{ width: '50%' }} />
           </td>
-          <td style={{ padding: 'var(--space-md) var(--space-lg)' }}>
-            <div style={{ height: 14, width: '40%', background: 'var(--color-skeleton)', borderRadius: 4, animation: 'dt-shimmer 1.5s infinite linear', backgroundImage: 'linear-gradient(90deg, var(--color-skeleton) 25%, rgba(255,255,255,0.05) 50%, var(--color-skeleton) 75%)', backgroundSize: '200% 100%' }} />
+          <td className={styles.skeletonCell}>
+            <div className={styles.shimmer} style={{ width: '40%' }} />
           </td>
-          <td style={{ padding: 'var(--space-md) var(--space-lg)', textAlign: 'right' }}>
-            <div style={{ height: 14, width: 60, background: 'var(--color-skeleton)', borderRadius: 4, marginLeft: 'auto', animation: 'dt-shimmer 1.5s infinite linear', backgroundImage: 'linear-gradient(90deg, var(--color-skeleton) 25%, rgba(255,255,255,0.05) 50%, var(--color-skeleton) 75%)', backgroundSize: '200% 100%' }} />
+          <td className={styles.skeletonCell} style={{ textAlign: 'right' }}>
+            <div className={styles.shimmer} style={{ width: 60, marginLeft: 'auto' }} />
           </td>
         </tr>
       ))}
@@ -179,94 +178,47 @@ export default function DriversPage() {
   const onCancel = () => { setDrawerOpen(false); setEditing(null); };
 
   return (
-    <div className="page-padding" style={{ padding: 'var(--space-xl)', height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-      <style>{`
-        @keyframes dt-row-highlight {
-          0% { background: var(--color-accent-muted); }
-          100% { background: transparent; }
-        }
-      `}</style>
-
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: 'var(--space-sm)',
-      }}>
+    <div className={`page-padding ${styles.pageContainer}`}>
+      <div className={styles.headerRow}>
         <div>
-          <h1 className="page-title" style={{
-            fontFamily: 'var(--font-display)', fontSize: 'var(--text-xl)', fontWeight: 700,
-            color: 'var(--color-text)', letterSpacing: '-0.02em', margin: 0,
-          }}>
+          <h1 className={`page-title ${styles.pageTitle}`}>
             Chauffeurs
           </h1>
-          <p style={{
-            margin: 'var(--space-xs) 0 0',
-            fontSize: 'var(--text-sm)',
-            color: 'var(--color-text-secondary)',
-          }}>
+          <p className={styles.pageSubtitle}>
             {meta.total > 0 ? `${meta.total} chauffeur${meta.total > 1 ? 's' : ''} dans votre flotte` : 'Les chauffeurs apparaissent ici après création depuis Utilisateurs (rôle "Chauffeur")'}
           </p>
         </div>
       </div>
 
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-        marginBottom: 'var(--space-lg)',
-      }}>
+      <div className={styles.searchBarContainer}>
         <div style={{
           position: 'relative', flex: 1, maxWidth: 320,
         }}>
-          <Search size={14} style={{
+          <Search size={14} className={styles.searchIcon} style={{
             position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-            color: 'var(--color-text-tertiary)', pointerEvents: 'none',
           }} />
           <input
             placeholder="Rechercher un chauffeur…"
             onChange={(e) => handleSearch(e.target.value)}
-            style={{
-              width: '100%', padding: 'var(--space-sm) var(--space-sm) var(--space-sm) 36px',
-              background: 'var(--color-input-bg)',
-              border: '1px solid var(--color-input-border)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--color-text)',
-              fontSize: 'var(--text-sm)',
-              fontFamily: 'var(--font-body)',
-              outline: 'none',
-              transition: 'border-color 0.15s',
-            }}
+            className={styles.searchInput}
           />
         </div>
         {search && (
-          <span style={{
-            fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)',
-            fontFamily: 'var(--font-mono)',
-          }}>
+          <span className={styles.resultCount}>
             {filtered.length} résultat{filtered.length !== 1 ? 's' : ''}
           </span>
         )}
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div className={styles.tableContainer}>
         {isLoading ? (
-          <div style={{
-            background: 'var(--color-surface)',
-            borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-border-subtle)',
-            overflow: 'hidden',
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+          <div className={styles.skeletonWrapper}>
+            <table className={styles.skeletonTable}>
               <thead>
-                <tr style={{
-                  background: 'var(--color-surface-alt)',
-                  borderBottom: '1px solid var(--color-border-subtle)',
-                }}>
+                <tr className={styles.skeletonTheadTr}>
                   {['Nom', 'Email', 'Téléphone', 'Permis', 'Véhicule', 'Statut', ''].map((l) => (
-                    <th key={l} style={{
-                      padding: 'var(--space-md) var(--space-lg)',
-                      fontWeight: 600, fontSize: 'var(--text-xs)',
-                      textTransform: 'uppercase', letterSpacing: '0.05em',
-                      color: 'var(--color-text-secondary)',
+                    <th key={l} className={styles.skeletonTh} style={{
                       textAlign: l === '' ? 'right' : 'left',
-                      whiteSpace: 'nowrap',
                     }}>
                       {l}
                     </th>
@@ -279,33 +231,14 @@ export default function DriversPage() {
             </table>
           </div>
         ) : filtered.length === 0 ? (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            padding: 'var(--space-4xl)',
-            background: 'var(--color-surface)',
-            borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-border-subtle)',
-            gap: 'var(--space-md)',
-          }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 'var(--radius-full)',
-              background: 'var(--color-accent-muted)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--color-accent)',
-              fontSize: 24,
-            }}>
+          <div className={styles.emptyState}>
+            <div className={styles.emptyStateIcon}>
               <Search size={24} />
             </div>
-            <p style={{
-              margin: 0, fontSize: 'var(--text-md)', fontWeight: 500,
-              color: 'var(--color-text-secondary)', textAlign: 'center',
-            }}>
+            <p className={styles.emptyStateTitle}>
             {search ? 'Aucun chauffeur ne correspond à cette recherche' : 'Aucun chauffeur enregistré'}
           </p>
-          <p style={{
-            margin: 0, fontSize: 'var(--text-sm)',
-            color: 'var(--color-text-tertiary)', textAlign: 'center',
-          }}>
+          <p className={styles.emptyStateDesc}>
             {search ? 'Essayez un autre terme' : 'Créez un chauffeur depuis Utilisateurs → Nouvel utilisateur → rôle Chauffeur'}
           </p>
         </div>

@@ -8,6 +8,7 @@ import { FileText, FileSpreadsheet, Calendar } from 'lucide-react';
 import Button from '../components/Button';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
+import styles from './ReportsPage.module.css';
 
 const COLORS = {
   accent: '#F2A93C',
@@ -54,70 +55,27 @@ function formatNumber(n: number) {
 
 function Skeleton({ width = '100%', height = 200 }: { width?: string; height?: number }) {
   return (
-    <div style={{
-      width, height,
-      background: 'var(--color-skeleton, #1E2A45)',
-      borderRadius: 'var(--radius-lg, 8px)',
-      animation: 'dt-shimmer 1.5s infinite linear',
-      backgroundImage: 'linear-gradient(90deg, var(--color-skeleton, #1E2A45) 25%, rgba(255,255,255,0.03) 50%, var(--color-skeleton, #1E2A45) 75%)',
-      backgroundSize: '200% 100%',
-    }} />
+    <div className={styles.skeleton} style={{ width, height }} />
   );
 }
 
 function Card({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <div style={{
-      background: 'var(--color-surface, #121B2E)',
-      border: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
-      borderRadius: 'var(--radius-lg, 8px)',
-      overflow: 'hidden',
-    }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: 'var(--space-md, 12px) var(--space-lg, 16px)',
-        borderBottom: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
-      }}>
-        <h3 style={{
-          fontFamily: 'var(--font-display, Space Grotesk, sans-serif)',
-          fontSize: 'var(--text-sm, 0.875rem)',
-          fontWeight: 600,
-          color: 'var(--color-text, #E8ECF3)',
-          margin: 0,
-        }}>
-          {title}
-        </h3>
+    <div className={styles.card}>
+      <div className={styles.cardHeader}>
+        <h3 className={styles.cardTitle}>{title}</h3>
         {action}
       </div>
-      <div style={{ padding: 'var(--space-lg, 16px)' }}>
-        {children}
-      </div>
+      <div className={styles.cardBody}>{children}</div>
     </div>
   );
 }
 
 function StatBox({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div style={{
-      padding: 'var(--space-md, 12px) var(--space-lg, 16px)',
-      background: 'var(--color-surface-alt, #182339)',
-      borderRadius: 'var(--radius-md, 6px)',
-      border: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
-    }}>
-      <div style={{
-        fontSize: 'var(--text-xs, 0.75rem)',
-        color: 'var(--color-text-secondary, #9BA6B9)',
-        marginBottom: 4,
-        fontWeight: 500,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        fontSize: 'var(--text-xl, 1.25rem)',
-        fontWeight: 700,
-        fontFamily: 'var(--font-mono, JetBrains Mono, monospace)',
-        color: color || 'var(--color-text, #E8ECF3)',
-      }}>
+    <div className={styles.statBox}>
+      <div className={styles.statLabel}>{label}</div>
+      <div className={styles.statValue} style={{ color: color || 'var(--color-text, #E8ECF3)' }}>
         {value}
       </div>
     </div>
@@ -177,106 +135,50 @@ export default function ReportsPage() {
   ];
 
   return (
-    <div style={{
-      padding: 'var(--space-xl, 20px)',
-      height: '100%', display: 'flex', flexDirection: 'column',
-      color: 'var(--color-text, #E8ECF3)',
-      fontFamily: 'var(--font-body, Inter, sans-serif)',
-    }}>
-      <style>{`
-        @keyframes dt-spin { to { transform: rotate(360deg); } }
-      `}</style>
-
-      <div className="reports-header" style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-        marginBottom: 'var(--space-lg, 16px)', flexWrap: 'wrap', gap: 'var(--space-md, 12px)',
-      }}>
+    <div className={styles.pageContainer}>
+      <div className={styles.header}>
         <div>
-          <h1 style={{
-            fontFamily: 'var(--font-display, Space Grotesk, sans-serif)',
-            fontSize: 'var(--text-xl, 1.25rem)', fontWeight: 700,
-            color: 'var(--color-text, #E8ECF3)',
-            letterSpacing: '-0.02em', margin: 0,
-          }}>
-            Rapports
-          </h1>
-          <p style={{
-            margin: 'var(--space-xs, 4px) 0 0',
-            fontSize: 'var(--text-sm, 0.875rem)',
-            color: 'var(--color-text-secondary, #9BA6B9)',
-          }}>
-            Analysez les performances de votre flotte
-          </p>
+          <h1 className={styles.pageTitle}>Rapports</h1>
+          <p className={styles.pageSubtitle}>Analysez les performances de votre flotte</p>
         </div>
 
-          <div className="reports-period-bar" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div style={{
-            display: 'flex', gap: 0,
-            border: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
-            borderRadius: 'var(--radius-md, 6px)',
-            overflow: 'hidden',
-          }}>
+        <div className={styles.periodBar}>
+          <div className={styles.periodBtnGroup}>
             {(['week', 'month', 'custom'] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
-                style={{
-                  padding: '6px 14px',
-                  border: 'none',
-                  background: period === p ? 'var(--color-accent, #F2A93C)' : 'transparent',
-                  color: period === p ? 'var(--color-bg, #0B1220)' : 'var(--color-text-secondary, #9BA6B9)',
-                  cursor: 'pointer',
-                  fontSize: 'var(--text-xs, 0.75rem)',
-                  fontWeight: 600,
-                  fontFamily: 'var(--font-body, Inter, sans-serif)',
-                  transition: 'background 0.1s',
-                }}
+                className={`${styles.periodBtn} ${period === p ? styles.periodBtnActive : styles.periodBtnInactive}`}
               >
                 {p === 'week' ? '7 jours' : p === 'month' ? '30 jours' : 'Personnalisé'}
               </button>
             ))}
           </div>
           {period === 'custom' && (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <Calendar size={14} style={{ color: 'var(--color-text-tertiary, #7A8BA3)' }} />
+            <div className={styles.customPeriodRow}>
+              <Calendar size={14} />
               <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
-                style={dateInputStyle} />
-              <span style={{ color: 'var(--color-text-tertiary, #7A8BA3)', fontSize: '0.75rem' }}>→</span>
+                className={styles.dateInput} />
+              <span className={styles.customPeriodArrow}>→</span>
               <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
-                style={dateInputStyle} />
+                className={styles.dateInput} />
             </div>
           )}
         </div>
       </div>
 
-      <div className="reports-tabs-wrap" style={{
-        display: 'flex', gap: 'var(--space-sm, 8px)',
-        marginBottom: 'var(--space-lg, 16px)',
-        borderBottom: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
-      }}>
+      <div className={styles.tabsWrap}>
         {reportTabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            style={{
-              padding: 'var(--space-sm, 8px) var(--space-lg, 16px)',
-              border: 'none',
-              borderBottom: tab === t.key ? '2px solid var(--color-accent, #F2A93C)' : '2px solid transparent',
-              background: 'transparent',
-              color: tab === t.key ? 'var(--color-accent, #F2A93C)' : 'var(--color-text-secondary, #9BA6B9)',
-              cursor: 'pointer',
-              fontSize: 'var(--text-sm, 0.875rem)',
-              fontWeight: 600,
-              fontFamily: 'var(--font-body, Inter, sans-serif)',
-              transition: 'color 0.15s, border-color 0.15s',
-              marginBottom: -1,
-            }}
+            className={`${styles.tabBtn} ${tab === t.key ? styles.tabBtnActive : styles.tabBtnInactive}`}
           >
             {t.label}
           </button>
         ))}
-        <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div className={styles.tabSpacer} />
+        <div className={styles.tabActions}>
           <Button variant="secondary" size="sm" icon={<FileText size={14} />} onClick={() => exportFile('pdf')} title="Télécharger PDF">
             PDF
           </Button>
@@ -286,7 +188,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div className={styles.scrollArea}>
         {tab === 'delivery' && renderDeliveryReport(deliveryData, deliveryLoading)}
         {tab === 'fleet' && renderFleetReport(fleetData, fleetLoading)}
         {tab === 'driver' && renderDriverReport(driverData, driverLoading)}
@@ -295,31 +197,20 @@ export default function ReportsPage() {
   );
 }
 
-const dateInputStyle: React.CSSProperties = {
-  padding: '4px 8px',
-  background: 'var(--color-input-bg, #121B2E)',
-  border: '1px solid var(--color-input-border, rgba(232,236,243,0.15))',
-  borderRadius: 'var(--radius-md, 6px)',
-  color: 'var(--color-text, #E8ECF3)',
-  fontSize: '0.75rem',
-  fontFamily: 'var(--font-body, Inter, sans-serif)',
-  outline: 'none',
-};
-
 function renderDeliveryReport(data: any, loading: boolean) {
-  if (loading) return <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><Skeleton /><Skeleton height={300} /></div>;
+  if (loading) return <div className={styles.loadingContainer}><Skeleton /><Skeleton height={300} /></div>;
   if (!data) return null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg, 16px)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+    <div className={styles.section}>
+      <div className={styles.statsGrid}>
         <StatBox label="Total livraisons" value={formatNumber(data.total)} color={COLORS.accent} />
         <StatBox label="Taux à l'heure" value={`${data.onTimeRate}%`} color={data.onTimeRate >= 80 ? COLORS.teal : COLORS.red} />
         <StatBox label="Livrées" value={formatNumber(data.completedCount)} color={COLORS.teal} />
         <StatBox label="À l'heure" value={formatNumber(data.onTimeCount)} color={COLORS.blue} />
       </div>
 
-      <div className="reports-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className={styles.chartsGrid2}>
         <Card title="Répartition par statut">
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
@@ -354,12 +245,12 @@ function renderDeliveryReport(data: any, loading: boolean) {
 }
 
 function renderFleetReport(data: any, loading: boolean) {
-  if (loading) return <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><Skeleton /><Skeleton height={300} /></div>;
+  if (loading) return <div className={styles.loadingContainer}><Skeleton /><Skeleton height={300} /></div>;
   if (!data) return null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg, 16px)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+    <div className={styles.section}>
+      <div className={styles.statsGrid}>
         <StatBox label="Véhicules actifs" value={formatNumber(data.activeCount)} color={COLORS.accent} />
         <StatBox label="En ligne" value={formatNumber(data.onlineCount)} color={COLORS.teal} />
         <StatBox label="Distance totale" value={`${formatNumber(Math.round(data.totalDistance))} km`} color={COLORS.blue} />
@@ -379,7 +270,7 @@ function renderFleetReport(data: any, loading: boolean) {
         </ResponsiveContainer>
       </Card>
 
-      <div className="reports-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className={styles.chartsGrid2}>
         <Card title="Consommation (L/100km)">
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={data.vehicles} layout="vertical" margin={{ left: 80 }}>
@@ -408,31 +299,26 @@ function renderFleetReport(data: any, loading: boolean) {
       </div>
 
       <Card title="Détail des véhicules">
-        <div className="reports-table-wrap" style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm, 0.875rem)' }}>
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))' }}>
+              <tr className={styles.tableHeadRow}>
                 {['Véhicule', 'Immatriculation', 'Livraisons', 'Distance', 'Carburant', 'Consommation', 'État'].map((h) => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--color-text-secondary, #9BA6B9)' }}>{h}</th>
+                  <th key={h} className={styles.tableHeadCell}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {data.vehicles.map((v: any) => (
-                <tr key={v.vehicleId} style={{ borderBottom: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))' }}>
-                  <td style={{ padding: '8px 12px' }}>{v.vehicleName}</td>
-                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono, monospace)', fontSize: '0.75rem' }}>{v.licensePlate}</td>
-                  <td style={{ padding: '8px 12px' }}>{v.deliveriesCount}</td>
-                  <td style={{ padding: '8px 12px' }}>{v.distanceKm} km</td>
-                  <td style={{ padding: '8px 12px' }}>{v.fuelLiters} L</td>
-                  <td style={{ padding: '8px 12px' }}>{v.avgConsumption} L/100km</td>
-                  <td style={{ padding: '8px 12px' }}>
-                    <span style={{
-                      display: 'inline-block', padding: '2px 8px', borderRadius: 12,
-                      fontSize: '0.7rem', fontWeight: 500,
-                      background: v.isOnline ? 'rgba(63,167,150,0.15)' : 'rgba(107,114,128,0.15)',
-                      color: v.isOnline ? '#3FA796' : '#9CA3AF',
-                    }}>
+                <tr key={v.vehicleId} className={styles.tableRow}>
+                  <td className={styles.tableCell}>{v.vehicleName}</td>
+                  <td className={styles.tableCellMono}>{v.licensePlate}</td>
+                  <td className={styles.tableCell}>{v.deliveriesCount}</td>
+                  <td className={styles.tableCell}>{v.distanceKm} km</td>
+                  <td className={styles.tableCell}>{v.fuelLiters} L</td>
+                  <td className={styles.tableCell}>{v.avgConsumption} L/100km</td>
+                  <td className={styles.tableCell}>
+                    <span className={`${styles.statusBadge} ${v.isOnline ? styles.statusBadgeOnline : styles.statusBadgeOffline}`}>
                       {v.isOnline ? 'En ligne' : 'Hors-ligne'}
                     </span>
                   </td>
@@ -447,14 +333,14 @@ function renderFleetReport(data: any, loading: boolean) {
 }
 
 function renderDriverReport(data: any, loading: boolean) {
-  if (loading) return <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><Skeleton /><Skeleton height={300} /></div>;
+  if (loading) return <div className={styles.loadingContainer}><Skeleton /><Skeleton height={300} /></div>;
   if (!data) return null;
 
   const sorted = [...(data.drivers || [])].sort((a: any, b: any) => b.totalDeliveries - a.totalDeliveries);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg, 16px)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+    <div className={styles.section}>
+      <div className={styles.statsGrid}>
         <StatBox label="Total livraisons" value={formatNumber(data.totalDeliveries)} color={COLORS.accent} />
         <StatBox label="Complétées" value={formatNumber(data.totalCompleted)} color={COLORS.teal} />
         <StatBox label="Ponctualité globale" value={`${data.overallOnTimeRate}%`} color={data.overallOnTimeRate >= 80 ? COLORS.teal : COLORS.red} />
@@ -478,34 +364,31 @@ function renderDriverReport(data: any, loading: boolean) {
       </Card>
 
       <Card title="Détail des chauffeurs">
-        <div className="reports-table-wrap" style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm, 0.875rem)' }}>
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))' }}>
+              <tr className={styles.tableHeadRow}>
                 {['Chauffeur', 'Téléphone', 'Livraisons', 'Complétées', 'À l\'heure', 'Ponctualité', 'Échouées'].map((h) => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--color-text-secondary, #9BA6B9)' }}>{h}</th>
+                  <th key={h} className={styles.tableHeadCell}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {sorted.map((d: any) => (
-                <tr key={d.driverId} style={{ borderBottom: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))' }}>
-                  <td style={{ padding: '8px 12px', fontWeight: 500 }}>{d.driverName}</td>
-                  <td style={{ padding: '8px 12px', color: 'var(--color-text-secondary, #9BA6B9)', fontSize: '0.75rem' }}>{d.phone || '-'}</td>
-                  <td style={{ padding: '8px 12px' }}>{d.totalDeliveries}</td>
-                  <td style={{ padding: '8px 12px' }}>{d.completedDeliveries}</td>
-                  <td style={{ padding: '8px 12px' }}>{d.onTimeDeliveries}</td>
-                  <td style={{ padding: '8px 12px' }}>
-                    <span style={{
+                <tr key={d.driverId} className={styles.tableRow}>
+                  <td className={styles.tableCellBold}>{d.driverName}</td>
+                  <td className={styles.tableCell} style={{ color: 'var(--color-text-secondary, #9BA6B9)', fontSize: '0.75rem' }}>{d.phone || '-'}</td>
+                  <td className={styles.tableCell}>{d.totalDeliveries}</td>
+                  <td className={styles.tableCell}>{d.completedDeliveries}</td>
+                  <td className={styles.tableCell}>{d.onTimeDeliveries}</td>
+                  <td className={styles.tableCell}>
+                    <span className={styles.punctualityValue} style={{
                       color: d.onTimeRate >= 80 ? COLORS.teal : d.onTimeRate >= 50 ? COLORS.accent : COLORS.red,
-                      fontWeight: 600,
-                      fontFamily: 'var(--font-mono, monospace)',
-                      fontSize: '0.8rem',
                     }}>
                       {d.onTimeRate}%
                     </span>
                   </td>
-                  <td style={{ padding: '8px 12px', color: d.failedDeliveries > 0 ? COLORS.red : 'inherit' }}>
+                  <td className={styles.tableCell} style={{ color: d.failedDeliveries > 0 ? COLORS.red : 'inherit' }}>
                     {d.failedDeliveries}
                   </td>
                 </tr>

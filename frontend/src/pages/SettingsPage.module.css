@@ -1,0 +1,240 @@
+.pageContainer {
+  padding: var(--space-xl);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.pageTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 24px;
+}
+
+.tabsContainer {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  overflow-x: auto;
+}
+
+.tabButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 0.85rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+
+.tabActive {
+  font-weight: 600;
+  color: var(--color-accent);
+  border-bottom: 2px solid var(--color-accent);
+}
+
+.tabInactive {
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  border-bottom: 2px solid transparent;
+}
+
+.sectionGap {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settingsSection {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+}
+
+.sectionTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--color-text);
+}
+
+.sectionSubtitle {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin: 0 0 16px;
+}
+
+.flexColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.flexRowGap {
+  display: flex;
+  gap: 8px;
+}
+
+.sectionHeaderRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.sectionHeaderTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--color-text);
+}
+
+.sectionHeaderSubtitle {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.noSessions {
+  font-size: 0.8rem;
+  color: var(--color-text-tertiary);
+}
+
+.sessionItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: 0.8rem;
+}
+
+.sessionDevice {
+  color: var(--color-text);
+}
+
+.sessionCurrent {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.sessionMeta {
+  color: var(--color-text-tertiary);
+  font-size: 0.7rem;
+}
+
+.pwStrength {
+  margin-top: 4px;
+}
+
+.pwBars {
+  display: flex;
+  gap: 3px;
+}
+
+.pwBar {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.pwLabel {
+  font-size: 0.65rem;
+  margin-top: 2px;
+  font-weight: 600;
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.toggleTrack {
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.toggleThumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  position: absolute;
+  top: 3px;
+  transition: left 0.15s;
+}
+
+.loadingState {
+  padding: 20px;
+  color: var(--color-text-tertiary);
+}
+
+.sectionHeader3 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sectionHeader3Gap {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 16px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.twoFactorForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qrCode {
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+}
+
+.tfaSecret {
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  word-break: break-all;
+}
+
+.fieldLabel {
+  font-weight: 600;
+  font-size: 0.75rem;
+  display: block;
+  margin-bottom: 4px;
+  color: var(--color-text-secondary);
+}
+
+.languageButtons {
+  display: flex;
+  gap: 8px;
+}

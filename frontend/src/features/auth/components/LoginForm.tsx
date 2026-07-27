@@ -4,7 +4,7 @@ import {
   Eye, EyeOff, LogIn, Loader2, AlertCircle, Lock, ShieldCheck,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { keyframes } from '../../../styles/theme';
+import styles from './LoginForm.module.css';
 
 interface Props {
   onSubmit: (email: string, password: string) => Promise<void>;
@@ -20,245 +20,6 @@ function prefersReducedMotion(): boolean {
   } catch {
     return false;
   }
-}
-
-const raw = {
-  form: {
-    width: '100%',
-  },
-  brand: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 4,
-  },
-  brandIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    background: `linear-gradient(135deg, var(--color-accent), #1e40af)`,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 700,
-    flexShrink: 0,
-  },
-  brandName: {
-    fontSize: 18,
-    fontWeight: 700,
-    color: 'var(--color-text)',
-    letterSpacing: '-0.01em',
-  },
-  socialProof: {
-    fontSize: 12,
-    color: 'var(--color-text-tertiary)',
-    marginBottom: 24,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-  },
-  socialDot: {
-    width: 3,
-    height: 3,
-    borderRadius: '50%',
-    background: 'var(--color-text-tertiary)',
-    flexShrink: 0,
-  },
-  welcome: {
-    fontSize: 22,
-    fontWeight: 700,
-    color: 'var(--color-text)',
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: 'var(--color-text-secondary)',
-    marginBottom: 24,
-    lineHeight: 1.5,
-  },
-  fieldGroup: {
-    marginBottom: 18,
-    position: 'relative' as const,
-  },
-  inputOuter: {
-    position: 'relative' as const,
-    borderRadius: 'var(--radius-md)',
-    border: `1px solid ${'var(--color-input-border)'}`,
-    background: 'var(--color-input-bg)',
-    transition: 'border-color var(--transition-normal), box-shadow var(--transition-normal)',
-    overflow: 'hidden',
-  },
-  inputOuterFocus: {
-    borderColor: 'var(--color-accent)',
-    boxShadow: '0 0 0 3px var(--color-accent-muted)',
-  },
-  inputOuterError: {
-    borderColor: 'var(--color-red)',
-    boxShadow: '0 0 0 3px var(--color-red-muted)',
-  },
-  input: {
-    width: '100%',
-    padding: '20px 40px 8px 14px',
-    border: 'none',
-    outline: 'none',
-    background: 'transparent',
-    fontSize: 14,
-    color: 'var(--color-text)',
-    boxSizing: 'border-box' as const,
-    borderRadius: 'var(--radius-md)',
-  },
-  label: {
-    position: 'absolute' as const,
-    left: 14,
-    top: 14,
-    fontSize: 14,
-    color: 'var(--color-text-tertiary)',
-    pointerEvents: 'none' as const,
-    transition: 'all var(--transition-fast)',
-    transformOrigin: 'left top',
-  },
-  labelUp: {
-    transform: 'translateY(-8px) scale(0.85)',
-    color: 'var(--color-text-secondary)',
-  },
-  passwordToggle: {
-    position: 'absolute' as const,
-    right: 10,
-    top: '50%',
-    transform: 'translateY(-50%)',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    padding: 4,
-    color: 'var(--color-text-tertiary)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'color var(--transition-fast)',
-  },
-  fieldError: {
-    fontSize: 12,
-    color: 'var(--color-red)',
-    marginTop: 4,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-  },
-  options: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  checkboxLabel: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    fontSize: 13,
-    color: 'var(--color-text-secondary)',
-    cursor: 'pointer',
-    userSelect: 'none' as const,
-  },
-  checkbox: {
-    width: 16,
-    height: 16,
-    accentColor: 'var(--color-accent)',
-    cursor: 'pointer',
-  },
-  forgotLink: {
-    fontSize: 13,
-    color: 'var(--color-accent)',
-    textDecoration: 'none',
-    cursor: 'pointer',
-    transition: 'opacity var(--transition-fast)',
-  },
-  submitBtn: {
-    width: '100%',
-    padding: '11px 24px',
-    border: 'none',
-    borderRadius: 'var(--radius-md)',
-    fontSize: 15,
-    fontWeight: 600,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    transition: 'transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-normal)',
-    position: 'relative' as const,
-    overflow: 'hidden',
-  },
-  submitBtnActive: {
-    background: `linear-gradient(180deg, var(--color-accent), #1648c0)`,
-    color: 'var(--color-bg)',
-    boxShadow: 'var(--shadow-sm)',
-  },
-  submitBtnDisabled: {
-    background: '#94b9f8',
-    color: 'var(--color-bg)',
-    cursor: 'not-allowed',
-  },
-  securityRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 16,
-    fontSize: 12,
-    color: 'var(--color-text-tertiary)',
-  },
-  generalError: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '10px 14px',
-    borderRadius: 'var(--radius-md)',
-    background: 'var(--color-red-muted)',
-    border: `1px solid ${'var(--color-red)'}`,
-    color: 'var(--color-red)',
-    fontSize: 13,
-    marginBottom: 20,
-    lineHeight: 1.4,
-  },
-  divider: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 20,
-    marginBottom: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    background: 'var(--color-input-border)',
-  },
-  dividerText: {
-    fontSize: 12,
-    color: 'var(--color-text-tertiary)',
-    fontWeight: 500,
-  },
-  ssoButton: {
-    width: '100%',
-    padding: '10px 24px',
-    borderRadius: 'var(--radius-md)',
-    border: `1px solid ${'var(--color-input-border)'}`,
-    background: 'var(--color-input-bg)',
-    fontSize: 13,
-    fontWeight: 500,
-    color: 'var(--color-text-secondary)',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    transition: `border-color ${'var(--transition-fast)'}, background ${'var(--transition-fast)'}`,
-  },
-};
-
-function s<K extends keyof typeof raw>(k: K): (typeof raw)[K] {
-  return raw[k];
 }
 
 function animate(delay: number): React.CSSProperties {
@@ -299,40 +60,27 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
     onSubmit(email, password);
   };
 
-  const inputOuterStyle = (field: 'email' | 'password', err: boolean) => ({
-    ...s('inputOuter'),
-    ...(focused === field ? s('inputOuterFocus') : {}),
-    ...(err ? s('inputOuterError') : {}),
-  });
-
-  const labelStyle = (val: string) => ({
-    ...s('label'),
-    ...(val || focused === 'email' || focused === 'password' ? s('labelUp') : {}),
-  });
-
   return (
     <>
-      <style>{keyframes}</style>
-
-      <div style={s('form')}>
+      <div className={styles.form}>
         <div style={animate(0)}>
-          <div style={s('brand')}>
-            <div style={s('brandIcon')}>DT</div>
-            <span style={s('brandName')}>DeliveryTrack</span>
+          <div className={styles.brand}>
+            <div className={styles.brandIcon}>DT</div>
+            <span className={styles.brandName}>DeliveryTrack</span>
           </div>
-          <div style={s('socialProof')}>
+          <div className={styles.socialProof}>
             <ShieldCheck size={12} />
             <span>{t('auth.login.secure')}</span>
-            <span style={s('socialDot')} />
+            <span className={styles.socialDot} />
             <span>{t('auth.login.uptime')}</span>
           </div>
         </div>
 
         <div style={animate(0.04)}>
-          <h2 style={s('welcome')}>
+          <h2 className={styles.welcome}>
             {cachedName ? t('auth.login.welcomeBack', { name: cachedName }) : t('auth.login.welcome')}
           </h2>
-          <p style={s('subtitle')}>
+          <p className={styles.subtitle}>
             {cachedEmail
               ? t('auth.login.enterPassword')
               : t('auth.login.loginPrompt')}
@@ -341,18 +89,18 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
 
         {error && (
           <div style={animate(0.08)}>
-            <div style={s('generalError')}>
-              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+            <div className={styles.generalError}>
+              <AlertCircle size={16} className={styles.alertIcon} />
               <span>{error}</span>
             </div>
           </div>
         )}
 
         <form onSubmit={handleSubmit} noValidate>
-          <div style={{ ...s('fieldGroup'), ...animate(0.1) } as React.CSSProperties}>
-            <div style={inputOuterStyle('email', !!emailErr)}>
+          <div className={styles.fieldGroup} style={animate(0.1)}>
+            <div className={`${styles.inputOuter} ${focused === 'email' ? styles.inputFocus : ''} ${emailErr ? styles.inputOuterError : ''}`}>
               <label
-                style={labelStyle(email)}
+                className={`${styles.label} ${(email || focused === 'email' || focused === 'password') ? styles.labelUp : ''}`}
                 htmlFor="login-email"
               >
                 {t('auth.login.email')}
@@ -362,7 +110,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
                 id="login-email"
                 type="email"
                 autoComplete="email"
-                style={s('input')}
+                className={styles.input}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onFocus={() => setFocused('email')}
@@ -370,17 +118,17 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
               />
             </div>
             {emailErr && (
-              <div style={s('fieldError')}>
+              <div className={styles.fieldError}>
                 <AlertCircle size={12} />
                 <span>{t('auth.login.invalidEmail')}</span>
               </div>
             )}
           </div>
 
-          <div style={{ ...s('fieldGroup'), ...animate(0.14) } as React.CSSProperties}>
-            <div style={inputOuterStyle('password', !!passwordErr)}>
+          <div className={styles.fieldGroup} style={animate(0.14)}>
+            <div className={`${styles.inputOuter} ${focused === 'password' ? styles.inputFocus : ''} ${passwordErr ? styles.inputOuterError : ''}`}>
               <label
-                style={labelStyle(password)}
+                className={`${styles.label} ${(password || focused === 'email' || focused === 'password') ? styles.labelUp : ''}`}
                 htmlFor="login-password"
               >
                 {t('auth.login.password')}
@@ -389,7 +137,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
                 id="login-password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
-                style={s('input')}
+                className={styles.input}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onFocus={() => setFocused('password')}
@@ -397,7 +145,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
               />
               <button
                 type="button"
-                style={s('passwordToggle')}
+                className={styles.passwordToggle}
                 onClick={() => setShowPassword((p) => !p)}
                 tabIndex={-1}
                 aria-label={showPassword ? t('common.hide') : t('common.show')}
@@ -406,7 +154,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
               </button>
             </div>
             {passwordErr && (
-              <div style={s('fieldError')}>
+              <div className={styles.fieldError}>
                 <AlertCircle size={12} />
                 <span>{t('auth.login.passwordRequired')}</span>
               </div>
@@ -414,17 +162,17 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
           </div>
 
           <div style={animate(0.18)}>
-            <div style={s('options')}>
-              <label style={s('checkboxLabel')}>
+            <div className={styles.options}>
+              <label className={styles.checkboxLabel}>
                 <input
                   type="checkbox"
-                  style={s('checkbox')}
+                  className={styles.checkbox}
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
                 />
                 {t('auth.login.rememberMe')}
               </label>
-              <Link to="/forgot-password" style={s('forgotLink')}>
+              <Link to="/forgot-password" className={styles.forgotLink}>
                 {t('auth.login.forgotPassword')}
               </Link>
             </div>
@@ -434,10 +182,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
             <button
               type="submit"
               disabled={loading || !isFormValid}
-              style={{
-                ...s('submitBtn'),
-                ...(loading || !isFormValid ? s('submitBtnDisabled') : s('submitBtnActive')),
-              }}
+              className={`${styles.submitBtn} ${loading || !isFormValid ? styles.submitBtnDisabled : styles.submitBtnActive}`}
               onMouseEnter={(e) => {
                 if (!loading && isFormValid) {
                   e.currentTarget.style.transform = 'translateY(-1px)';
@@ -451,7 +196,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
             >
               {loading ? (
                 <>
-                  <Loader2 size={18} style={{ animation: 'dt-spin 0.8s linear infinite' }} />
+                  <Loader2 size={18} className={styles.spinner} />
                   {t('auth.login.submitting')}
                 </>
               ) : (
@@ -465,7 +210,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
         </form>
 
         <div style={animate(0.26)}>
-          <div style={s('securityRow')}>
+          <div className={styles.securityRow}>
             <Lock size={12} />
             <span>{t('auth.login.secureConnection')}</span>
           </div>
@@ -473,14 +218,14 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
 
         {googleConfigured === true && (
           <div style={animate(0.30)}>
-            <div style={s('divider')}>
-              <span style={s('dividerLine')} />
-              <span style={s('dividerText')}>{t('common.or')}</span>
-              <span style={s('dividerLine')} />
+            <div className={styles.divider}>
+              <span className={styles.dividerLine} />
+              <span className={styles.dividerText}>{t('common.or')}</span>
+              <span className={styles.dividerLine} />
             </div>
             <button
               type="button"
-              style={s('ssoButton')}
+              className={styles.ssoButton}
               onClick={() => { window.location.href = '/api/auth/google'; }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = 'var(--color-accent)';
@@ -491,15 +236,15 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
                 e.currentTarget.style.background = 'var(--color-input-bg)';
               }}
             >
-              <span style={{ fontWeight: 700, fontSize: 15, color: '#4285f4' }}>G</span>
+              <span className={styles.googleG}>G</span>
               {t('auth.login.googleLogin')}
             </button>
           </div>
         )}
 
-        <div style={{ ...animate(0.30), textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--color-text-secondary)' } as React.CSSProperties}>
+        <div className={styles.footerText} style={animate(0.30)}>
           {t('auth.login.noAccount')}{' '}
-          <Link to="/register" style={{ color: 'var(--color-accent)', fontWeight: 600, textDecoration: 'none' }}>
+          <Link to="/register" className={styles.signupLink}>
             {t('auth.login.createAccount')}
           </Link>
         </div>
