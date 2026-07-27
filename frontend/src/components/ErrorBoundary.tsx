@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import * as Sentry from '@sentry/react';
 import i18n from '../services/i18n/i18n';
 import styles from './ErrorBoundary.module.css';
 
@@ -15,6 +16,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     this.setState({ info });
     console.error('[ErrorBoundary]', error, info.componentStack);
+    Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
   }
 
   handleRetry = () => {

@@ -32,26 +32,29 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
   private disconnectedDrivers = new Map<string, Date>();
   private driverCleanupTimer: ReturnType<typeof setInterval> | null = null;
 
+  private dataUpdateListener: (event: any) => void;
+
   constructor(
     private trackingService: TrackingService,
     private wsAuthService: WsAuthService,
     private dataUpdateBus: DataUpdateBus,
   ) {
-    this.dataUpdateBus.on('dataUpdate', (event) => {
+    this.dataUpdateListener = (event) => {
       if (event.targetUserId && event.entity === 'proximityAlert') {
-        this.server.to(`driver:${event.targetUserId}`).emit('proximityAlert', event.payload);
+        this.server?.to(`driver:${event.targetUserId}`).emit('proximityAlert', event.payload);
       }
       if (event.companyId) {
-        this.server.to(`company:${event.companyId}`).emit('dataUpdate', {
+        this.server?.to(`company:${event.companyId}`).emit('dataUpdate', {
           entity: event.entity,
           action: event.action,
           ...(event.payload || {}),
         });
       }
-    });
+    };
   }
 
   onModuleInit() {
+    this.dataUpdateBus.on('dataUpdate', this.dataUpdateListener);
     this.driverCleanupTimer = setInterval(() => {
       const cutoff = Date.now() - 86_400_000;
       for (const [id, ts] of this.disconnectedDrivers) {
@@ -61,6 +64,7 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   onModuleDestroy() {
+    this.dataUpdateBus.off('dataUpdate', this.dataUpdateListener);
     if (this.driverCleanupTimer) clearInterval(this.driverCleanupTimer);
   }
 

@@ -40,9 +40,12 @@ export async function checkLatency(): Promise<number> {
 
 export function shouldQueueDueToLatency(): Promise<boolean> {
   const now = Date.now();
-  if (now - lastLatencyCheck < 10000) return Promise.resolve(false);
+  if (now - lastLatencyCheck < 10000) return checkLatency().then((latency) => latency > LATENCY_THRESHOLD_MS);
   lastLatencyCheck = now;
-  return checkLatency().then((latency) => latency > LATENCY_THRESHOLD_MS);
+  return checkLatency().then((latency) => {
+    lastLatencyCheck = Date.now();
+    return latency > LATENCY_THRESHOLD_MS;
+  });
 }
 
 export async function enqueuePosition(pos: Record<string, unknown>): Promise<void> {

@@ -43,17 +43,25 @@ export class GeofenceService {
       const previouslyInside = lastEventPerGeofence.get(gf.id) === 'entry';
 
       if (inside && !previouslyInside) {
-        await this.prisma.geofenceEvent.create({
-          data: { geofenceId: gf.id, vehicleId, deliveryId, event: 'entry', latitude, longitude },
-        });
-        events.push({ event: 'entry', geofenceId: gf.id, geofenceName: gf.name });
+        try {
+          await this.prisma.geofenceEvent.create({
+            data: { geofenceId: gf.id, vehicleId, deliveryId, event: 'entry', latitude, longitude },
+          });
+          events.push({ event: 'entry', geofenceId: gf.id, geofenceName: gf.name });
+        } catch (err) {
+          this.logger.error(`Failed to create geofence entry event for ${gf.id}: ${(err as Error).message}`);
+        }
       }
 
       if (!inside && previouslyInside) {
-        await this.prisma.geofenceEvent.create({
-          data: { geofenceId: gf.id, vehicleId, deliveryId, event: 'exit', latitude, longitude },
-        });
-        events.push({ event: 'exit', geofenceId: gf.id, geofenceName: gf.name });
+        try {
+          await this.prisma.geofenceEvent.create({
+            data: { geofenceId: gf.id, vehicleId, deliveryId, event: 'exit', latitude, longitude },
+          });
+          events.push({ event: 'exit', geofenceId: gf.id, geofenceName: gf.name });
+        } catch (err) {
+          this.logger.error(`Failed to create geofence exit event for ${gf.id}: ${(err as Error).message}`);
+        }
       }
     }
 

@@ -199,13 +199,13 @@ export class TrackingController {
     const lastPos = await this.trackingService.getLastPositionByTraccarId(deviceId);
     const now = Date.now();
     if (!lastPos) {
-      return { status: 'never_connected', deviceId, message: 'Aucune position reçue pour ce device' };
+      return { status: 'never_connected', deviceId, message: 'No position received for this device' };
     }
     const elapsedMin = (now - lastPos.timestamp.getTime()) / 60000;
     if (elapsedMin < 5) {
       return { status: 'receiving', deviceId, lastPosition: lastPos.timestamp, elapsedMin: Math.round(elapsedMin) };
     }
-    return { status: 'stale', deviceId, lastPosition: lastPos.timestamp, elapsedMin: Math.round(elapsedMin), message: `Dernière position reçue il y a ${Math.round(elapsedMin)} minutes` };
+    return { status: 'stale', deviceId, lastPosition: lastPos.timestamp, elapsedMin: Math.round(elapsedMin), message: `Last position received ${Math.round(elapsedMin)} minutes ago` };
   }
 
   @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)

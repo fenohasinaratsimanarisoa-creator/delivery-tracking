@@ -125,10 +125,10 @@ export class DeliveryProximityService {
 
         if (await this.isSnoozed(inProgressDelivery.id, vehicleId)) return;
 
-        const title = inProgressDelivery.title || 'Livraison';
+        const title = inProgressDelivery.title || 'Delivery';
         const message = escalationLevel >= 2
-          ? `⚠️ Vous êtes sur place depuis plus de ${Math.round(timeInZone / 60000)} min. Veuillez valider la livraison.`
-          : 'Vous êtes à proximité du point de livraison. N\'oubliez pas de valider.';
+          ? `⚠️ You have been on site for ${Math.round(timeInZone / 60000)} min. Please validate the delivery.`
+          : 'You are near the delivery point. Please validate.';
         const urgency = escalationLevel >= 2 ? 'critical' : escalationLevel >= 1 ? 'high' : 'normal';
 
         this.dataUpdateBus.emitUpdate({

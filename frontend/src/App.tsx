@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AuthProvider } from './hooks/AuthContext';
 import QueryProvider from './components/QueryProvider';
 import { ToastProvider } from './components/Toast';
@@ -49,11 +50,12 @@ function PageErrorBoundary({ children }: { children: React.ReactNode }) {
 }
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   return (
     <Suspense fallback={
       <div className={styles.suspenseFallback}>
         <div className={styles.spinner} />
-        Chargement...
+        {t('app.suspenseFallback')}
       </div>
     }>
       {children}
