@@ -28,6 +28,7 @@ import { Enable2faDto, Verify2faDto, Disable2faDto } from './dto/two-factor.dto'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CsrfGuard, getDevFallbackSecret } from '../../common/guards/csrf.guard';
 import { Public } from '../../common/decorators/public.decorator';
+import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -92,6 +93,7 @@ export class AuthController {
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Public()
+  @SkipCsrf()
   @Post('register')
   @HttpCode(HttpStatus.OK)
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
@@ -103,6 +105,7 @@ export class AuthController {
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Public()
+  @SkipCsrf()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(
@@ -124,7 +127,6 @@ export class AuthController {
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Public()
-  @UseGuards(CsrfGuard)
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -202,6 +204,7 @@ export class AuthController {
 
   @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Public()
+  @SkipCsrf()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -213,6 +216,7 @@ export class AuthController {
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Public()
+  @SkipCsrf()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() dto: ResetPasswordDto) {
@@ -276,6 +280,7 @@ export class AuthController {
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Public()
+  @SkipCsrf()
   @Post('2fa/authenticate')
   @HttpCode(HttpStatus.OK)
   async authenticate2fa(@Body() dto: Verify2faDto, @CurrentUser('id') userId?: string) {

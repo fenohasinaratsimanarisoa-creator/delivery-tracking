@@ -22,6 +22,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
 
 @Controller('platform-admin')
 export class PlatformAdminController {
@@ -33,6 +34,7 @@ export class PlatformAdminController {
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Public()
+  @SkipCsrf()
   @Post('auth/login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: PlatformAdminLoginDto, @Req() req: any) {
@@ -42,6 +44,7 @@ export class PlatformAdminController {
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Public()
+  @SkipCsrf()
   @Post('auth/verify-2fa')
   @HttpCode(HttpStatus.OK)
   async verify2fa(@Body() dto: PlatformAdminVerify2faDto, @Req() req: any) {
@@ -50,6 +53,7 @@ export class PlatformAdminController {
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Public()
+  @SkipCsrf()
   @Post('auth/setup-2fa')
   @HttpCode(HttpStatus.OK)
   async setup2fa(@Body() dto: PlatformAdminVerify2faDto, @Req() req: any) {

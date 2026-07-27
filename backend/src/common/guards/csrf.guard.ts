@@ -5,7 +5,9 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
+import { SKIP_CSRF_KEY } from '../decorators/skip-csrf.decorator';
 import * as crypto from 'crypto';
 
 let devFallbackSecret: string | null = null;
@@ -34,9 +36,18 @@ export function validateCsrfSecret(configService: ConfigService): void {
 
 @Injectable()
 export class CsrfGuard implements CanActivate {
-  constructor(private configService: ConfigService) {}
+  constructor(
+    private configService: ConfigService,
+    private reflector: Reflector,
+  ) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const skipCsrf = this.reflector.getAllAndOverride<boolean>(SKIP_CSRF_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (skipCsrf) return true;
+
     const request = context.switchToHttp().getRequest();
 
     if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') {

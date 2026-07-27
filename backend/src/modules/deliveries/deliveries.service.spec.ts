@@ -511,10 +511,10 @@ describe('DeliveriesService - State Machine', () => {
 
   describe('bulkAction', () => {
     it('should succeed on valid ids and fail on invalid', async () => {
-      mockPrisma.delivery.findFirst
-        .mockResolvedValueOnce({ id: 'del-ok', status: 'pending', companyId: 'comp-1', deletedAt: null })
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: 'del-in-progress', status: 'in_progress', companyId: 'comp-1', deletedAt: null });
+      mockPrisma.delivery.findMany.mockResolvedValue([
+        { id: 'del-ok', status: 'pending', companyId: 'comp-1', deletedAt: null },
+        { id: 'del-in-progress', status: 'in_progress', companyId: 'comp-1', deletedAt: null },
+      ]);
       mockPrisma.delivery.update.mockResolvedValue({});
 
       const result = await service.bulkAction('comp-1', {
@@ -529,9 +529,10 @@ describe('DeliveriesService - State Machine', () => {
     });
 
     it('should update status respecting transition matrix', async () => {
-      mockPrisma.delivery.findFirst
-        .mockResolvedValueOnce({ id: 'del-a', status: 'pending', companyId: 'comp-1', deletedAt: null })
-        .mockResolvedValueOnce({ id: 'del-b', status: 'delivered', companyId: 'comp-1', deletedAt: null });
+      mockPrisma.delivery.findMany.mockResolvedValue([
+        { id: 'del-a', status: 'pending', companyId: 'comp-1', deletedAt: null },
+        { id: 'del-b', status: 'delivered', companyId: 'comp-1', deletedAt: null },
+      ]);
       mockPrisma.delivery.update.mockResolvedValue({});
 
       const result = await service.bulkAction('comp-1', {
@@ -546,12 +547,12 @@ describe('DeliveriesService - State Machine', () => {
     });
 
     it('should assign driver and set assignedDriverId', async () => {
-      mockPrisma.delivery.findFirst
-        .mockResolvedValueOnce({ id: 'del-d1', status: 'pending', companyId: 'comp-1', deletedAt: null })
-        .mockResolvedValueOnce({ id: 'del-d2', status: 'pending', companyId: 'comp-1', deletedAt: null });
+      mockPrisma.delivery.findMany.mockResolvedValue([
+        { id: 'del-d1', status: 'pending', companyId: 'comp-1', deletedAt: null },
+        { id: 'del-d2', status: 'pending', companyId: 'comp-1', deletedAt: null },
+      ]);
       mockPrisma.driver.findFirst
-        .mockResolvedValueOnce({ id: 'drv-1', userId: 'user-99', companyId: 'comp-1' })
-        .mockResolvedValueOnce(null);
+        .mockResolvedValueOnce({ id: 'drv-1', userId: 'user-99', companyId: 'comp-1' });
       mockPrisma.delivery.update.mockResolvedValue({});
 
       const result = await service.bulkAction('comp-1', {

@@ -460,11 +460,16 @@ export class DeliveriesService {
   }> {
     const result = { succeeded: [] as string[], failed: [] as { id: string; reason: string }[] };
 
+    if (dto.ids.length === 0) return result;
+
+    const deliveries = await this.prisma.delivery.findMany({
+      where: { id: { in: dto.ids }, companyId, deletedAt: null },
+    });
+    const deliveryMap = new Map(deliveries.map((d) => [d.id, d]));
+
     for (const id of dto.ids) {
       try {
-        const delivery = await this.prisma.delivery.findFirst({
-          where: { id, companyId, deletedAt: null },
-        });
+        const delivery = deliveryMap.get(id);
         if (!delivery) {
           result.failed.push({ id, reason: 'Livraison introuvable' });
           continue;
