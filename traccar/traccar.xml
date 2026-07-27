@@ -14,8 +14,43 @@
     <!-- Geocoding -->
     <entry key='geocoder.enable'>false</entry>
 
-    <!-- Protocols enabled -->
+    <!-- ============================================================
+         PROTOCOLS ACTIVÉS — Traceurs GPS physiques
+         Chaque protocole est sur un port TCP dédié, sans collision.
+         Voir TRACCAR_SETUP.md pour la correspondance protocole ↔ modèles.
+         ============================================================ -->
+    <!-- GT06 / GT02 / GT02D / GT03 / Concox / JM-VL03 etc. -->
     <entry key='gt06.port'>5055</entry>
+
+    <!-- Teltonika FMB / FM / TAVL / GH protocol families -->
+    <entry key='teltonika.port'>5056</entry>
+
+    <!-- H02 (modèles génériques chinois, boîtiers économiques) -->
+    <entry key='h02.port'>5057</entry>
+
+    <!-- TK103 / TK102 / Coban / ST-901 / ST-90x -->
+    <entry key='tk103.port'>5058</entry>
+
+    <!-- Meitrack (MVT-380 / MVT-600 / T1 / P99 / etc.) -->
+    <entry key='meitrack.port'>5059</entry>
+
+    <!-- OsmAnd (utile pour tester avec un smartphone en mode "faux traceur") -->
+    <entry key='osmand.port'>5060</entry>
+
+    <!-- Lézard (EZ90 / EZ21 / EZ630 / Delta) — aussi courant sur le marché MG -->
+    <entry key='l100.port'>5061</entry>
+
+    <!-- Gator / Watch GPS (montres GPS, balises) -->
+    <entry key='wristwatch.port'>5062</entry>
+
+    <!-- Naviset / Navtelecom -->
+    <entry key='navtelecom.port'>5063</entry>
+
+    <!-- Sanav / Xexun / GStar / GlobalSat (entrée de gamme) -->
+    <entry key='xexun.port'>5064</entry>
+
+    <!-- AST (Falcom / AST) -->
+    <entry key='ast.port'>5065</entry>
 
     <!-- Logging -->
     <entry key='logger.level'>ALL</entry>

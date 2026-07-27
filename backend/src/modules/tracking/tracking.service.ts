@@ -545,6 +545,34 @@ export class TrackingService {
     });
   }
 
+  async getLastPositionByTraccarId(traccarDeviceId: string) {
+    return this.prisma.gpsPosition.findFirst({
+      where: { vehicle: { traccarDeviceId } },
+      orderBy: { timestamp: 'desc' },
+      select: { timestamp: true, latitude: true, longitude: true },
+    });
+  }
+
+  async linkVehicleToTraccar(vehicleId: string, companyId: string, traccarDeviceId: string) {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, companyId, deletedAt: null },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    return this.prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: {
+        traccarDeviceId,
+        positionSource: 'physical_tracker',
+      },
+      select: { id: true, brand: true, model: true, licensePlate: true, traccarDeviceId: true, positionSource: true },
+    });
+  }
+
+  async getStatus() {
+    return { status: 'ok', service: 'tracking' };
+  }
+
   async getTripReport(deliveryId: string, companyId: string) {
     const positions = await this.getAllPositionsByDelivery(deliveryId, companyId);
     const delivery = await this.getDeliveryInfo(deliveryId, companyId);

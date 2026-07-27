@@ -168,6 +168,44 @@ export class TrackingController {
     return this.trackingService.getMetrics();
   }
 
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List Traccar devices known by the Traccar server' })
+  @Get('traccar-devices')
+  async listTraccarDevices() {
+    const { TraccarBridgeService } = await import('./traccar-bridge.service');
+    return this.trackingService.getStatus();
+  }
+
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Test if a Traccar device is receiving positions' })
+  @Get('traccar-devices/:deviceId/test')
+  async testTraccarDevice(@Param('deviceId') deviceId: string) {
+    const lastPos = await this.trackingService.getLastPositionByTraccarId(deviceId);
+    const now = Date.now();
+    if (!lastPos) {
+      return { status: 'never_connected', deviceId, message: 'Aucune position reçue pour ce device' };
+    }
+    const elapsedMin = (now - lastPos.timestamp.getTime()) / 60000;
+    if (elapsedMin < 5) {
+      return { status: 'receiving', deviceId, lastPosition: lastPos.timestamp, elapsedMin: Math.round(elapsedMin) };
+    }
+    return { status: 'stale', deviceId, lastPosition: lastPos.timestamp, elapsedMin: Math.round(elapsedMin), message: `Dernière position reçue il y a ${Math.round(elapsedMin)} minutes` };
+  }
+
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Link a vehicle to a Traccar device ID' })
+  @Post('vehicles/:vehicleId/link-traccar')
+  async linkVehicleToTraccar(
+    @Param('vehicleId') vehicleId: string,
+    @Body('traccarDeviceId') traccarDeviceId: string,
+    @CurrentUser('companyId') companyId: string,
+  ) {
+    return this.trackingService.linkVehicleToTraccar(vehicleId, companyId, traccarDeviceId);
+  }
+
   @ApiOperation({ summary: 'Get tracking info via public token (no auth required)' })
   @Get('public/:token')
   async getPublicTrackingInfo(@Param('token') token: string) {

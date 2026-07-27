@@ -29,6 +29,8 @@ const INITIAL_RECONNECT_DELAY_MS = 2000;
 const PENDING_POSITIONS_LIMIT = 1000;
 const PENDING_POSITIONS_RETENTION_MS = 3600000;
 const SILENT_DEVICE_CHECK_INTERVAL_MS = 60000;
+const TRACCAR_HEALTH_CHECK_INTERVAL_MS = 300000;
+const NEVER_CONNECTED_GRACE_PERIOD_MS = 30 * 60 * 1000;
 
 @Injectable()
 export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
@@ -36,7 +38,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private socket: any = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private backfillTimer: ReturnType<typeof setTimeout> | null = null;
-  private silentDeviceTimer: ReturnType<typeof setInterval> | null = null;
+  private silenceTimer: ReturnType<typeof setInterval> | null = null;
+  private healthTimer: ReturnType<typeof setInterval> | null = null;
+  private neverConnectedTimer: ReturnType<typeof setInterval> | null = null;
   private readonly traccarUrl: string;
   private readonly traccarUser: string;
   private readonly traccarPassword: string;
@@ -80,6 +84,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.startSilentDeviceCheck();
+    this.startHealthCheck();
+    this.startNeverConnectedCheck();
     this.startDisconnectionMonitor();
     await this.connect();
   }
@@ -104,7 +110,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy() {
     this.disconnect();
-    if (this.silentDeviceTimer) clearInterval(this.silentDeviceTimer);
+    if (this.silenceTimer) clearInterval(this.silenceTimer);
+    if (this.healthTimer) clearInterval(this.healthTimer);
+    if (this.neverConnectedTimer) clearInterval(this.neverConnectedTimer);
     if (this.disconnectionMonitorTimer) clearInterval(this.disconnectionMonitorTimer);
   }
 
@@ -117,8 +125,83 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  private startHealthCheck() {
+    this.healthTimer = setInterval(async () => {
+      try {
+        if (!this.sessionCookie) {
+          this.logger.warn('Traccar health check: no session — Traccar may be unreachable');
+          return;
+        }
+        const response = await fetch(`${this.traccarUrl}/api/server`, {
+          headers: { Cookie: this.sessionCookie },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!response.ok) {
+          this.logger.warn(`Traccar health check failed: HTTP ${response.status}`);
+        }
+      } catch (err: any) {
+        this.logger.warn(`Traccar health check: Traccar serveur injoignable — ${err.message}`);
+      }
+    }, TRACCAR_HEALTH_CHECK_INTERVAL_MS);
+  }
+
+  private async checkNeverConnectedDevices() {
+    try {
+      const vehiclesWithTrackers = await this.prisma.vehicle.findMany({
+          where: {
+            positionSource: 'physical_tracker',
+            isActive: true,
+            deletedAt: null,
+            driver: { isActive: true, deletedAt: null },
+          },
+          select: {
+            id: true,
+            companyId: true,
+            createdAt: true,
+            traccarDeviceId: true,
+            driver: { select: { id: true, userId: true } },
+          },
+        });
+
+        for (const vehicle of vehiclesWithTrackers) {
+          if (!vehicle.driver?.userId) continue;
+          if (!vehicle.traccarDeviceId) continue;
+
+          const creationAgeMin = (Date.now() - vehicle.createdAt.getTime()) / 60000;
+
+          if (creationAgeMin < NEVER_CONNECTED_GRACE_PERIOD_MS / 60000) continue;
+
+          const lastPos = await this.trackingService.getLastPosition(vehicle.id);
+          if (lastPos) continue;
+
+          const cooldownKey = `never_connected_alert:${vehicle.id}`;
+          if (this.redis) {
+            const existing = await this.redis.get(cooldownKey);
+            if (existing) continue;
+            await this.redis.setex(cooldownKey, 86400, '1');
+          }
+
+          await this.notifications.create(vehicle.companyId, {
+            type: NotificationType.device_offline,
+            priority: NotificationPriority.high,
+            title: 'Traceur physique : jamais connecté',
+            message: `Le traceur "${vehicle.traccarDeviceId}" n'a encore jamais envoyé de position (créé il y a ${Math.round(creationAgeMin)} min). Vérifiez : (1) SIM active et APN correct, (2) protocole activé dans traccar.xml, (3) port ouvert sur le firewall, (4) device créé dans Traccar avec le bon IMEI.`,
+            userId: vehicle.driver.userId,
+          });
+        }
+    } catch (err: any) {
+      this.logger.error(`Never-connected check error: ${err.message}`);
+    }
+  }
+
+  private startNeverConnectedCheck() {
+    this.neverConnectedTimer = setInterval(() => {
+      this.checkNeverConnectedDevices();
+    }, SILENT_DEVICE_CHECK_INTERVAL_MS);
+  }
+
   private startSilentDeviceCheck() {
-    this.silentDeviceTimer = setInterval(() => {
+    this.silenceTimer = setInterval(() => {
       this.checkSilentPhysicalDevices().catch((err) =>
         this.logger.error(`Silent device check error: ${err.message}`),
       );
