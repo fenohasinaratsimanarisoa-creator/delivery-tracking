@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api/client';
+import { formatAriary } from '../services/formatAriary';
 import type { FuelLog } from '../types';
 import styles from './FuelPage.module.css';
 
@@ -216,7 +217,7 @@ export default function FuelPage() {
                     <td className={styles.td}>{r.vehiclePlate}</td>
                     <td className={styles.td}>{r.distanceKm?.toFixed(1)} km</td>
                     <td className={styles.td}>{r.consumptionLPer100Km?.toFixed(1) ?? '-'} L/100km</td>
-                    <td className={styles.td}>{r.estimatedCost?.toFixed(2)} Ar</td>
+                    <td className={styles.td}>{formatAriary(r.estimatedCost)}</td>
                     <td className={styles.td}>{r.reportDate ? new Date(r.reportDate).toLocaleDateString() : '-'}</td>
                   </tr>
                 ))}

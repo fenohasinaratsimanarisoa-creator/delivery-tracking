@@ -228,20 +228,22 @@ model Geofence {
 }
 
 model GeofenceEvent {
-  id         String   @id @default(uuid()) @db.Uuid
-  geofenceId String   @map("geofence_id") @db.Uuid
-  geofence   Geofence @relation(fields: [geofenceId], references: [id])
-  vehicleId  String   @map("vehicle_id") @db.Uuid
-  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
-  deliveryId String   @map("delivery_id") @db.Uuid
-  delivery   Delivery @relation(fields: [deliveryId], references: [id])
-  event      String // "entry" | "exit"
-  latitude   Float
-  longitude  Float
-  timestamp  DateTime @default(now())
+  id          String   @id @default(uuid()) @db.Uuid
+  geofenceId  String   @map("geofence_id") @db.Uuid
+  geofence    Geofence @relation(fields: [geofenceId], references: [id])
+  vehicleId   String   @map("vehicle_id") @db.Uuid
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
+  deliveryId  String   @map("delivery_id") @db.Uuid
+  delivery    Delivery @relation(fields: [deliveryId], references: [id])
+  event       String
+  latitude    Float?
+  longitude   Float?
+  timestamp   DateTime @default(now())
 
   @@index([geofenceId])
   @@index([vehicleId])
+  @@index([deliveryId])
+  @@index([vehicleId, deliveryId, timestamp])
   @@index([timestamp])
   @@map("geofence_events")
 }
@@ -480,9 +482,13 @@ model Delivery {
 
   @@unique([companyId, externalOrderRef])
   @@index([companyId])
+  @@index([companyId, status])
   @@index([status])
   @@index([assignedDriverId])
+  @@index([driverId])
+  @@index([driverId, status])
   @@index([clientId])
+  @@index([deletedAt])
   @@map("deliveries")
 }
 

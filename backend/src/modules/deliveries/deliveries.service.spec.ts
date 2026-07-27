@@ -468,11 +468,11 @@ describe('DeliveriesService - State Machine', () => {
     });
   });
 
-  describe('BUG B — default status in_progress', () => {
-    it('should default to in_progress when no status provided in create', async () => {
+  describe('default status pending', () => {
+    it('should default to pending when no status provided in create', async () => {
       mockPrisma.driver.findFirst.mockResolvedValue(null);
       mockPrisma.delivery.create.mockResolvedValueOnce({
-        id: 'del-dflt', title: 'Default', status: DeliveryStatus.in_progress,
+        id: 'del-dflt', title: 'Default', status: DeliveryStatus.pending,
         companyId: 'comp-1',
       });
 
@@ -482,10 +482,10 @@ describe('DeliveriesService - State Machine', () => {
 
       expect(mockPrisma.delivery.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ status: DeliveryStatus.in_progress }),
+          data: expect.objectContaining({ status: DeliveryStatus.pending }),
         }),
       );
-      expect(result.status).toBe(DeliveryStatus.in_progress);
+      expect(result.status).toBe(DeliveryStatus.pending);
     });
 
     it('should respect explicit status when provided in create', async () => {

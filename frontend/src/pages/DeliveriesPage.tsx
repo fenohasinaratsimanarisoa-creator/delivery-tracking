@@ -12,15 +12,11 @@ import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../co
 import { useEntityForm, type FieldDef } from '../hooks/useEntityForm';
 import LocationSearchInput from '../components/LocationSearchInput';
 import { reverseGeocode } from '../services/geocoding/geocodingService';
+import { formatAriary } from '../services/formatAriary';
 import { useToast } from '../components/Toast';
 import type { Delivery, Driver } from '../types';
 
 type ApiError = { response?: { data?: { message?: string } } };
-
-function formatAriary(amount?: number): string {
-  if (amount === undefined || amount === null) return '';
-  return amount.toLocaleString('fr-FR').replace(/\s/g, '\u202F') + '\u00A0Ar';
-}
 
 interface DeliveryFormValues {
   title: string;
@@ -209,7 +205,7 @@ export default function DeliveriesPage() {
     mutationFn: (body: DeliveryFormValues) => {
       const payload: Record<string, unknown> = {
         title: body.title,
-        status: body.status || 'in_progress',
+        status: body.status || 'pending',
         pickupAddress: body.pickupAddress,
         deliveryAddress: body.deliveryAddress,
       };
@@ -267,7 +263,7 @@ export default function DeliveriesPage() {
   });
 
   const emptyForm: DeliveryFormValues = {
-    title: '', description: '', status: 'in_progress', pickupAddress: '', deliveryAddress: '',
+    title: '', description: '', status: 'pending', pickupAddress: '', deliveryAddress: '',
     pickupLat: '', pickupLng: '', pickupLocationLabel: '',
     deliveryLat: '', deliveryLng: '', deliveryLocationLabel: '',
     driverId: '', vehicleId: '', scheduledDate: '', notes: '',

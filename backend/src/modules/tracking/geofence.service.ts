@@ -21,11 +21,18 @@ export class GeofenceService {
     const geofences = await this.findForDelivery(deliveryId);
     if (geofences.length === 0) return [];
 
-    const lastEvent = await this.prisma.geofenceEvent.findFirst({
+    const allEvents = await this.prisma.geofenceEvent.findMany({
       where: { vehicleId, deliveryId },
       orderBy: { timestamp: 'desc' },
       select: { geofenceId: true, event: true },
     });
+
+    const lastEventPerGeofence = new Map<string, string>();
+    for (const ev of allEvents) {
+      if (!lastEventPerGeofence.has(ev.geofenceId)) {
+        lastEventPerGeofence.set(ev.geofenceId, ev.event);
+      }
+    }
 
     const events: Array<{ event: string; geofenceId: string; geofenceName: string }> = [];
 
@@ -33,7 +40,7 @@ export class GeofenceService {
       const distance = haversineDistance(latitude, longitude, gf.lat, gf.lng);
       const inside = distance <= gf.radiusMeters;
 
-      const previouslyInside = lastEvent?.geofenceId === gf.id && lastEvent.event === 'entry';
+      const previouslyInside = lastEventPerGeofence.get(gf.id) === 'entry';
 
       if (inside && !previouslyInside) {
         await this.prisma.geofenceEvent.create({

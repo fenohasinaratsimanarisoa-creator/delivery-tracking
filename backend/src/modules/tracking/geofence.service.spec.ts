@@ -5,7 +5,7 @@ const mockPrisma = {
     findMany: jest.fn(),
   },
   geofenceEvent: {
-    findFirst: jest.fn(),
+    findMany: jest.fn(),
     create: jest.fn(),
   },
 };
@@ -35,7 +35,7 @@ describe('GeofenceService', () => {
     mockPrisma.geofence.findMany.mockResolvedValue([
       { id: 'gf-1', name: 'Zone A', lat: baseLat, lng: baseLng, radiusMeters: 200 },
     ]);
-    mockPrisma.geofenceEvent.findFirst.mockResolvedValue(null);
+    mockPrisma.geofenceEvent.findMany.mockResolvedValue([]);
 
     const result = await service.checkGeofences(deliveryId, vehicleId, baseLat, baseLng);
 
@@ -49,7 +49,7 @@ describe('GeofenceService', () => {
       { id: 'gf-1', name: 'Zone A', lat: baseLat, lng: baseLng, radiusMeters: 200 },
       { id: 'gf-2', name: 'Zone B', lat: baseLat + 0.0005, lng: baseLng + 0.0005, radiusMeters: 200 },
     ]);
-    mockPrisma.geofenceEvent.findFirst.mockResolvedValue(null);
+    mockPrisma.geofenceEvent.findMany.mockResolvedValue([]);
 
     const result = await service.checkGeofences(deliveryId, vehicleId, baseLat, baseLng);
 
@@ -63,7 +63,7 @@ describe('GeofenceService', () => {
     mockPrisma.geofence.findMany.mockResolvedValue([
       { id: 'gf-1', name: 'Zone A', lat: baseLat, lng: baseLng, radiusMeters: 200 },
     ]);
-    mockPrisma.geofenceEvent.findFirst.mockResolvedValue({ geofenceId: 'gf-1', event: 'entry' });
+    mockPrisma.geofenceEvent.findMany.mockResolvedValue([{ geofenceId: 'gf-1', event: 'entry' }]);
 
     const result = await service.checkGeofences(deliveryId, vehicleId, baseLat + 1, baseLng + 1);
 
@@ -80,7 +80,7 @@ describe('GeofenceService', () => {
       { id: 'gf-1', name: 'Zone A', lat: baseLat, lng: baseLng, radiusMeters: 200 },
       { id: 'gf-2', name: 'Zone B', lat: farLat, lng: farLng, radiusMeters: 200 },
     ]);
-    mockPrisma.geofenceEvent.findFirst.mockResolvedValue({ geofenceId: 'gf-1', event: 'entry' });
+    mockPrisma.geofenceEvent.findMany.mockResolvedValue([{ geofenceId: 'gf-1', event: 'entry' }]);
 
     const result = await service.checkGeofences(deliveryId, vehicleId, farLat, farLng);
 
