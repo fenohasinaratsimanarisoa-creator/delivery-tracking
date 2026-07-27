@@ -20,7 +20,7 @@ const tabStyle = (active: boolean): React.CSSProperties => ({
 });
 
 export default function FuelPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [tab, setTab] = useState<'manual' | 'gps'>('manual');
@@ -121,7 +121,7 @@ export default function FuelPage() {
                       <td className={styles.td}>{l.kilometers}</td>
                       <td className={styles.td}>{l.calculatedConsumption?.toFixed(1) ?? '-'}</td>
                       <td className={styles.td}>{l.cost.toFixed(2)} €</td>
-                      <td className={styles.td}>{new Date(l.fillDate).toLocaleDateString()}</td>
+                      <td className={styles.td}>{new Date(l.fillDate).toLocaleDateString(i18n.language)}</td>
                       <td className={styles.td}>
                         {l.anomalyFlag
                           ? <span className={styles.anomalyBadge}>{t('fuel.anomaly')}</span>
@@ -218,7 +218,7 @@ export default function FuelPage() {
                     <td className={styles.td}>{r.distanceKm?.toFixed(1)} km</td>
                     <td className={styles.td}>{r.consumptionLPer100Km?.toFixed(1) ?? '-'} L/100km</td>
                     <td className={styles.td}>{formatAriary(r.estimatedCost)}</td>
-                    <td className={styles.td}>{r.reportDate ? new Date(r.reportDate).toLocaleDateString() : '-'}</td>
+                    <td className={styles.td}>{r.reportDate ? new Date(r.reportDate).toLocaleDateString(i18n.language) : '-'}</td>
                   </tr>
                 ))}
               </tbody>

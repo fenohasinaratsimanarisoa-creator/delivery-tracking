@@ -46,7 +46,7 @@ interface DeliveryDetails {
 
 export default function ClientTrackingPage() {
   const [searchParams] = useSearchParams();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const deliveryId = searchParams.get('deliveryId');
   const [positions, setPositions] = useState<GpsPosition[]>([]);
   const [delivery, setDelivery] = useState<DeliveryDetails | null>(null);
@@ -171,7 +171,7 @@ export default function ClientTrackingPage() {
               <Popup>
                 {t('clientTracking.currentPosition')}<br />
                 {t('clientTracking.speed')} : {((currentPos.speed ?? 0) * 3.6).toFixed(1)} km/h<br />
-                {new Date(currentPos.timestamp).toLocaleString()}
+                {new Date(currentPos.timestamp).toLocaleString(i18n.language)}
               </Popup>
             </Marker>
           )}

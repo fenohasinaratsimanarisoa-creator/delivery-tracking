@@ -471,13 +471,13 @@ export class DeliveriesService {
       try {
         const delivery = deliveryMap.get(id);
         if (!delivery) {
-          result.failed.push({ id, reason: 'Livraison introuvable' });
+          result.failed.push({ id, reason: 'Delivery not found' });
           continue;
         }
 
         if (dto.action === 'delete') {
           if (delivery.status === DeliveryStatus.in_progress) {
-            result.failed.push({ id, reason: 'Impossible de supprimer une livraison en cours' });
+            result.failed.push({ id, reason: 'Cannot delete a delivery in progress' });
             continue;
           }
           await this.prisma.delivery.update({
@@ -489,7 +489,7 @@ export class DeliveriesService {
           const targetStatus = dto.status as DeliveryStatus;
           const allowed = TRANSITION_MATRIX[delivery.status];
           if (!allowed.includes(targetStatus)) {
-            result.failed.push({ id, reason: `Transition ${delivery.status} → ${targetStatus} interdite` });
+            result.failed.push({ id, reason: `Transition ${delivery.status} → ${targetStatus} not allowed` });
             continue;
           }
           const updateData: any = { status: targetStatus };
@@ -497,10 +497,17 @@ export class DeliveriesService {
             updateData.completedAt = new Date();
           }
           await this.prisma.delivery.update({ where: { id }, data: updateData });
+          this.webhooks.dispatch('delivery.status_changed', {
+            deliveryId: id,
+            companyId,
+            title: delivery.title,
+            status: targetStatus,
+          });
+          this.dataUpdateBus.emitUpdate({ companyId, entity: 'delivery', action: targetStatus, payload: { id } });
           result.succeeded.push(id);
         } else if (dto.action === 'assignDriver') {
           if (!dto.driverId) {
-            result.failed.push({ id, reason: 'Aucun chauffeur fourni' });
+            result.failed.push({ id, reason: 'No driver provided' });
             continue;
           }
           const driver = await this.prisma.driver.findFirst({
@@ -508,7 +515,7 @@ export class DeliveriesService {
             select: { userId: true },
           });
           if (!driver) {
-            result.failed.push({ id, reason: 'Chauffeur introuvable dans votre compagnie' });
+            result.failed.push({ id, reason: 'Driver not found in your company' });
             continue;
           }
           await this.prisma.delivery.update({
@@ -518,16 +525,23 @@ export class DeliveriesService {
               ...(driver.userId ? { assignedDriverId: driver.userId } : {}),
             },
           });
+          this.webhooks.dispatch('delivery.driver_assigned', {
+            deliveryId: id,
+            companyId,
+            title: delivery.title,
+            driverId: dto.driverId,
+          });
+          this.dataUpdateBus.emitUpdate({ companyId, entity: 'delivery', action: 'assigned', payload: { id, driverId: dto.driverId } });
           result.succeeded.push(id);
         } else {
-          result.failed.push({ id, reason: `Action inconnue: ${dto.action}` });
+          result.failed.push({ id, reason: `Unknown action: ${dto.action}` });
         }
       } catch (err: any) {
-        result.failed.push({ id, reason: err.message || 'Erreur interne' });
+        result.failed.push({ id, reason: err.message || 'Internal error' });
       }
     }
 
-    Logger.log(`Bulk action "${dto.action}": ${result.succeeded.length} succès, ${result.failed.length} échecs`, 'DeliveriesService');
+    Logger.log(`Bulk action "${dto.action}": ${result.succeeded.length} succeeded, ${result.failed.length} failed`, 'DeliveriesService');
     return result;
   }
 

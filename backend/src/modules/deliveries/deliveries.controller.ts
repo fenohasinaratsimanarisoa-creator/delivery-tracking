@@ -18,6 +18,7 @@ import { DeliveriesService } from './deliveries.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 import { UpdateDeliveryStatusDto } from './dto/update-delivery-status.dto';
+import { BulkActionDto } from './dto/bulk-action.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -156,7 +157,7 @@ export class DeliveriesController {
   @Post('bulk-action')
   async bulkAction(
     @CurrentUser('companyId') companyId: string,
-    @Body() dto: { ids: string[]; action: string; status?: string; driverId?: string },
+    @Body() dto: BulkActionDto,
   ) {
     return this.deliveriesService.bulkAction(companyId, dto);
   }

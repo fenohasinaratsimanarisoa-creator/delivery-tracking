@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { NotificationType, NotificationPriority } from '@prisma/client';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GeofenceService } from './geofence.service';
@@ -440,10 +441,24 @@ export class TrackingService {
     companyId?: string,
   ) {
     const saved: any[] = [];
+
+    const deliveryIds = [...new Set(positions.map((p) => p.deliveryId).filter((x): x is string => !!x))];
+    const verifiedDeliveries = new Set<string>();
+    if (deliveryIds.length > 0) {
+      const validDeliveries = await this.prisma.delivery.findMany({
+        where: { id: { in: deliveryIds }, assignedDriverId: userId, deletedAt: null },
+        select: { id: true },
+      });
+      validDeliveries.forEach((d) => verifiedDeliveries.add(d.id));
+    }
+
     for (const pos of positions) {
       try {
-        if (pos.deliveryId) {
-          await this.verifyDriverAssignment(pos.deliveryId, userId);
+        if (pos.deliveryId && !verifiedDeliveries.has(pos.deliveryId)) {
+          this.logger.warn(
+            `Batch position rejected (wrong driver): delivery=${pos.deliveryId} driver=${driverId}`,
+          );
+          continue;
         }
       } catch {
         this.logger.warn(
@@ -488,6 +503,7 @@ export class TrackingService {
     return this.prisma.gpsPosition.findMany({
       where: { deliveryId, delivery: { companyId } },
       orderBy: { timestamp: 'asc' },
+      take: 10000,
     });
   }
 
@@ -722,7 +738,13 @@ export class TrackingService {
     return raw[0] ?? null;
   }
 
+  /**
+   * Archives (deletes + moves to archive table) positions OLDER than `date`
+   * across ALL companies. For company-scoped archiving, use
+   * {@link archivePositionsBefore} instead.
+   */
   async archiveAllCompaniesPositionsBefore(date: Date): Promise<number> {
+    this.logger.warn('archiveAllCompaniesPositionsBefore called — this archives positions for ALL companies');
     const cutoff = date.toISOString();
     const result = await this.prisma.$executeRawUnsafe(
       `
@@ -772,8 +794,6 @@ export class TrackingService {
 
   async generateTripReportPdf(deliveryId: string, companyId: string): Promise<Buffer> {
     const report = await this.getTripReport(deliveryId, companyId);
-    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
-
     const doc = await PDFDocument.create();
     const font = await doc.embedFont(StandardFonts.Helvetica);
     const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -27,6 +28,7 @@ interface Position {
 const POLL_INTERVAL_MS = 15000;
 
 export default function PublicTrackingPage() {
+  const { i18n } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const [delivery, setDelivery] = useState<DeliveryInfo | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -40,9 +42,9 @@ export default function PublicTrackingPage() {
       .then((res) => {
         setDelivery(res.data.delivery);
         setPositions(res.data.positions);
-        setLastUpdate(new Date().toLocaleTimeString('fr-FR'));
+        setLastUpdate(new Date().toLocaleTimeString(i18n.language));
       })
-      .catch(() => setError('Invalid or expired tracking link'));
+        .catch(() => setError('Invalid or expired tracking link'));
   };
 
   useEffect(() => {

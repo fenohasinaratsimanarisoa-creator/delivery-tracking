@@ -46,9 +46,15 @@ export class CacheService {
   async invalidate(pattern: string): Promise<void> {
     if (this.redis) {
       try {
-        const keys = await this.redis.keys(pattern);
-        if (keys.length > 0) {
-          await this.redis.del(...keys);
+        let cursor = '0';
+        const keysToDelete: string[] = [];
+        do {
+          const result = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', '200');
+          cursor = result[0];
+          keysToDelete.push(...result[1]);
+        } while (cursor !== '0');
+        if (keysToDelete.length > 0) {
+          await this.redis.del(...keysToDelete);
         }
         return;
       } catch (err) {

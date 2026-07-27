@@ -8,9 +8,9 @@ export default function QueryProvider({ children }: { children: ReactNode }) {
         queries: {
           retry: 3,
           retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-          staleTime: 1000 * 30,
+          staleTime: 1000 * 60 * 2,
           gcTime: 1000 * 60 * 10,
-          refetchOnWindowFocus: true,
+          refetchOnWindowFocus: false,
           refetchOnReconnect: true,
           refetchInterval: 1000 * 60,
         },

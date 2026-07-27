@@ -44,7 +44,7 @@ function ReplayMarker({ position }: { position: [number, number] }) {
 }
 
 export default function TripReplayPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [positions, setPositions] = useState<Position[]>([]);
@@ -202,7 +202,7 @@ export default function TripReplayPage() {
             <div className={styles.positionInfo}>
               Lat: {currentPos.latitude.toFixed(6)}, Lng: {currentPos.longitude.toFixed(6)}
               {currentPos.speed !== undefined && ` | ${(currentPos.speed * 3.6).toFixed(1)} km/h`}
-              {' | '}{new Date(currentPos.timestamp).toLocaleString()}
+              {' | '}{new Date(currentPos.timestamp).toLocaleString(i18n.language)}
             </div>
           )}
         </>

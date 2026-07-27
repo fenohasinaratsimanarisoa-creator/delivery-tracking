@@ -1,4 +1,5 @@
-export function formatAriary(amount?: number): string {
+export function formatAriary(amount?: number, locale?: string): string {
   if (amount === undefined || amount === null) return '';
-  return amount.toLocaleString('fr-FR').replace(/\s/g, '\u202F') + '\u00A0Ar';
+  const l = locale ?? (typeof navigator !== 'undefined' ? navigator.language : 'fr-FR');
+  return amount.toLocaleString(l).replace(/\s/g, '\u202F') + '\u00A0Ar';
 }

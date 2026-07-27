@@ -19,6 +19,7 @@ const mockPrisma = {
   },
   delivery: {
     findFirst: jest.fn(),
+    findMany: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn(),
   },
@@ -646,12 +647,9 @@ describe('TrackingService', () => {
         },
       ];
 
-      mockPrisma.delivery.findUnique
-        .mockResolvedValueOnce({
-          assignedDriverId: 'user-1',
-          driverId: null,
-        })
-        .mockResolvedValueOnce(null);
+      mockPrisma.delivery.findMany.mockResolvedValue([
+        { id: DID1, assignedDriverId: 'user-1', driverId: null },
+      ]);
 
       mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
 

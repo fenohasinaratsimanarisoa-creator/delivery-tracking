@@ -524,8 +524,8 @@ describe('DeliveriesService - State Machine', () => {
 
       expect(result.succeeded).toEqual(['del-ok']);
       expect(result.failed).toHaveLength(2);
-      expect(result.failed[0].reason).toContain('introuvable');
-      expect(result.failed[1].reason).toContain('en cours');
+      expect(result.failed[0].reason).toContain('not found');
+      expect(result.failed[1].reason).toContain('in progress');
     });
 
     it('should update status respecting transition matrix', async () => {
@@ -563,7 +563,7 @@ describe('DeliveriesService - State Machine', () => {
 
       expect(result.succeeded).toEqual(['del-d1']);
       expect(result.failed).toHaveLength(1);
-      expect(result.failed[0].reason).toContain('introuvable');
+      expect(result.failed[0].reason).toContain('not found');
       expect(mockPrisma.delivery.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ driverId: 'drv-1', assignedDriverId: 'user-99' }) }),
       );
