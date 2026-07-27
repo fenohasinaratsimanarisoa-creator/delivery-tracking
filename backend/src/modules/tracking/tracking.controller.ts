@@ -17,6 +17,8 @@ import { JwtService } from '@nestjs/jwt';
 import { TrackingService } from './tracking.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
 import { ApiKeyScope } from '../api-keys/decorators/api-key-scope.decorator';
@@ -69,7 +71,8 @@ export class TrackingController {
     return this.trackingService.calculateDistance(deliveryId, companyId);
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin', 'dispatcher')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Generate a public tracking token (24h expiry)' })
   @Post('public-token')
@@ -93,7 +96,8 @@ export class TrackingController {
     };
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin', 'dispatcher')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get detailed trip report for a delivery' })
   @Get('report/:deliveryId')
@@ -104,7 +108,8 @@ export class TrackingController {
     return this.trackingService.getTripReport(deliveryId, companyId);
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin', 'dispatcher')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Export trip report as PDF' })
   @Header('Content-Type', 'application/pdf')
@@ -119,7 +124,8 @@ export class TrackingController {
     res.end(pdf);
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin', 'dispatcher')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Find nearest vehicle to a point' })
   @Get('nearest-vehicle')
@@ -131,7 +137,8 @@ export class TrackingController {
     return this.trackingService.findNearestVehicle(parseFloat(lat), parseFloat(lng), companyId);
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin', 'dispatcher')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get live positions of all active vehicles in company' })
   @Get('live')
@@ -139,7 +146,8 @@ export class TrackingController {
     return this.trackingService.getLivePositions(companyId);
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Archiver les positions GPS avant une date' })
   @Post('archive')
@@ -148,7 +156,8 @@ export class TrackingController {
     return { archived: count };
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin', 'dispatcher')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Revoke a public tracking link immediately' })
   @Post('revoke-token')
@@ -160,7 +169,8 @@ export class TrackingController {
     return { message: 'Public tracking link revoked' };
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin', 'dispatcher')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get tracking reliability metrics (received/saved/deduped/teleported)' })
   @Get('metrics')
@@ -168,7 +178,8 @@ export class TrackingController {
     return this.trackingService.getMetrics();
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin', 'dispatcher')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List Traccar devices known by the Traccar server' })
   @Get('traccar-devices')
@@ -177,7 +188,8 @@ export class TrackingController {
     return this.trackingService.getStatus();
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin', 'dispatcher')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Test if a Traccar device is receiving positions' })
   @Get('traccar-devices/:deviceId/test')
@@ -194,7 +206,8 @@ export class TrackingController {
     return { status: 'stale', deviceId, lastPosition: lastPos.timestamp, elapsedMin: Math.round(elapsedMin), message: `Dernière position reçue il y a ${Math.round(elapsedMin)} minutes` };
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Link a vehicle to a Traccar device ID' })
   @Post('vehicles/:vehicleId/link-traccar')
@@ -206,7 +219,8 @@ export class TrackingController {
     return this.trackingService.linkVehicleToTraccar(vehicleId, companyId, traccarDeviceId);
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin', 'dispatcher')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List registered tracker devices for this company' })
   @Get('tracker-devices')
@@ -214,7 +228,8 @@ export class TrackingController {
     return this.trackingService.getStatus();
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Register a new tracker device (IMEI)' })
   @Post('tracker-devices')
@@ -226,7 +241,8 @@ export class TrackingController {
     return { imei, protocol, companyId, message: 'Device registration endpoint — implement via admin panel' };
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Link a tracker device to a vehicle' })
   @Post('tracker-devices/:deviceId/link/:vehicleId')
@@ -238,7 +254,8 @@ export class TrackingController {
     return this.trackingService.linkVehicleToTraccar(vehicleId, companyId, deviceId);
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Unlink a tracker device from its vehicle' })
   @Post('tracker-devices/:deviceId/unlink')
@@ -249,7 +266,8 @@ export class TrackingController {
     return { deviceId, companyId, message: 'Device unlinked' };
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Send a command to a tracker device (reboot, set_interval, etc.)' })
   @Post('tracker-devices/:deviceId/command')

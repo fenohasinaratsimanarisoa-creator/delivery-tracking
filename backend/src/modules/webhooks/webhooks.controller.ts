@@ -2,6 +2,8 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@n
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentCompanyId } from '../../common/decorators/current-company-id.decorator';
 import { WebhooksService } from './webhooks.service';
 import { CreateWebhookDto } from './dto/create-webhook.dto';
@@ -9,7 +11,8 @@ import { UpdateWebhookDto } from './dto/update-webhook.dto';
 
 @ApiTags('Webhooks')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, CompanyScopeGuard)
+@UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+@Roles('admin')
 @Controller('webhooks')
 export class WebhooksController {
   constructor(private readonly service: WebhooksService) {}

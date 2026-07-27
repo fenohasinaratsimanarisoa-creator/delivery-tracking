@@ -50,6 +50,8 @@ export class BillingController {
     return this.billingService.updatePlan(id, dto);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Get('subscription')
   getSubscription(@CurrentUser('companyId') companyId: string) {
     return this.billingService.getCompanySubscription(companyId);
@@ -72,6 +74,8 @@ export class BillingController {
     return this.billingService.cancelSubscription(companyId);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Get('invoices')
   getInvoices(
     @CurrentUser('companyId') companyId: string,
@@ -81,11 +85,15 @@ export class BillingController {
     return this.billingService.getCompanyInvoices(companyId, +page, +limit);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Get('invoices/:id')
   getInvoice(@Param('id') id: string, @CurrentUser('companyId') companyId: string) {
     return this.billingService.getInvoice(id, companyId);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Get('invoices/:id/pdf')
   async downloadInvoice(
     @Param('id') id: string,
@@ -101,6 +109,8 @@ export class BillingController {
     res.status(HttpStatus.OK).send(pdf);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @Get('usage')
   getUsage(@CurrentUser('companyId') companyId: string) {
     return this.billingService.getCompanyUsage(companyId);

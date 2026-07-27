@@ -1,5 +1,6 @@
 import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RoutingService } from './routing.service';
 import {
   DirectionsRequestDto,
@@ -9,7 +10,7 @@ import {
 } from './dto/routing.dto';
 
 @Controller('routing')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CompanyScopeGuard)
 export class RoutingController {
   constructor(private routingService: RoutingService) {}
 

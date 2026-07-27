@@ -3,6 +3,8 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Geofences')
@@ -12,6 +14,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class GeofenceController {
   constructor(private prisma: PrismaService) {}
 
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
   @Post()
   @ApiOperation({ summary: 'Create a geofence for a delivery' })
   async create(
@@ -45,6 +49,8 @@ export class GeofenceController {
     });
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'dispatcher')
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a geofence' })
   async delete(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {

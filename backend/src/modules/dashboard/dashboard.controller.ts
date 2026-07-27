@@ -3,10 +3,13 @@ import { Response } from 'express';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @Controller('dashboard')
-@UseGuards(JwtAuthGuard, CompanyScopeGuard)
+@UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+@Roles('admin', 'dispatcher')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 

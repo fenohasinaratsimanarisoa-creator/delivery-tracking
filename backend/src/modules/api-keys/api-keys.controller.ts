@@ -8,6 +8,8 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentCompanyId } from '../../common/decorators/current-company-id.decorator';
 import { ApiKeysService } from './api-keys.service';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
@@ -15,7 +17,8 @@ import { ApiKeyResponseDto, ApiKeyCreatedResponseDto } from './dto/api-key-respo
 
 @ApiTags('API Keys')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, CompanyScopeGuard)
+@UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+@Roles('admin')
 @Controller('api-keys')
 export class ApiKeysController {
   constructor(private readonly service: ApiKeysService) {}
