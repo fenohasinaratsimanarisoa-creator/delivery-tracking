@@ -59,9 +59,10 @@ export default function RegisterPage() {
       const { accessToken, user } = res.data;
       login(user, accessToken);
       navigate('/dashboard', { replace: true });
-    } catch (err: any) {
-      const status = err?.response?.status;
-      const msg = err?.response?.data?.message;
+    } catch (err: unknown) {
+      const apiErr = err as { response?: { status?: number; data?: { message?: string } } };
+      const status = apiErr?.response?.status;
+      const msg = apiErr?.response?.data?.message;
       if (status === 429) {
         setError(t('auth.register.error429'));
       } else if (status === 409) {

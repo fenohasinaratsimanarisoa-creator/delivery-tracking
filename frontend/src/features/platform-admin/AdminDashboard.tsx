@@ -43,13 +43,23 @@ interface Tenant {
   _count: { users: number; vehicles: number; drivers: number; deliveries: number };
 }
 
+interface Admin {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  totpEnabled: boolean;
+  isActive: boolean;
+  createdAt: string;
+}
+
 interface AuditLog {
   id: string; action: string; createdAt: string;
   ip: string | null; userAgent: string | null;
   targetCompany: { id: string; name: string } | null;
   targetUserId: string | null;
   admin: { id: string; email: string; firstName: string; lastName: string };
-  metadata: any;
+  metadata: { impersonatedAs?: string };
 }
 
 function StatCard({ icon: Icon, label, value, sub, color }: {
@@ -109,7 +119,7 @@ export default function AdminDashboard() {
   const [impersonating, setImpersonating] = useState<{ email: string; name: string; token: string } | null>(null);
   const [tenantSearch, setTenantSearch] = useState('');
   const [auditPage, setAuditPage] = useState(1);
-  const [admins, setAdmins] = useState<any[]>([]);
+  const [admins, setAdmins] = useState<Admin[]>([]);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [createForm, setCreateForm] = useState({ email: '', password: '', firstName: '', lastName: '' });
 
@@ -140,8 +150,8 @@ export default function AdminDashboard() {
         const a = await adminApi.get('/admins').then(r => r.data);
         setAdmins(a);
       }
-    } catch (err: any) {
-      if (err?.response?.status === 401) {
+    } catch (err: unknown) {
+      if ((err as { response?: { status?: number } })?.response?.status === 401) {
         setAdminToken(null);
         navigate('/admin/login');
       }
@@ -155,8 +165,8 @@ export default function AdminDashboard() {
       const res = await adminApi.post(`/tenants/${companyId}/impersonate`);
       const u = res.data.user;
       setImpersonating({ email: u.email, name: `${u.firstName} ${u.lastName}`, token: res.data.accessToken });
-    } catch (err: any) {
-      alert(err?.response?.data?.message || t('common.error'));
+    } catch (err: unknown) {
+      alert(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('common.error'));
     }
   };
 
@@ -177,8 +187,8 @@ export default function AdminDashboard() {
       setCreateForm({ email: '', password: '', firstName: '', lastName: '' });
       const a = await adminApi.get('/admins').then(r => r.data);
       setAdmins(a);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || t('common.error'));
+    } catch (err: unknown) {
+      alert(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('common.error'));
     }
   };
 
@@ -528,7 +538,7 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {admins.map((a: any) => (
+                  {admins.map((a: Admin) => (
                     <tr key={a.id} className={styles.tableRow}>
                       <td className={styles.tableCell}>
                         {a.firstName} {a.lastName}

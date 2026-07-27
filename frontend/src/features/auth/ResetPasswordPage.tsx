@@ -42,8 +42,8 @@ export default function ResetPasswordPage() {
     try {
       await api.post('/auth/reset-password', { token, password });
       setSuccess(true);
-    } catch (err: any) {
-      const msg = err?.response?.data?.message;
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg || t('auth.resetPassword.errorInvalid'));
     } finally {
       setLoading(false);

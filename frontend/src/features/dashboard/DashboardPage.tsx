@@ -9,6 +9,12 @@ import { MapPin, Truck, Clock, AlertTriangle, CheckCircle, Fuel, TrendingUp, Spa
 import RealTimeMap from '../map/RealTimeMap';
 import api from '../../services/api/client';
 import type { Kpis, DeliveryStat, FuelChartPoint } from '../../types';
+
+interface RecentDelivery {
+  id: string;
+  title: string;
+  status: string;
+}
 import OnboardingChecklist from './OnboardingChecklist';
 import styles from './DashboardPage.module.css';
 
@@ -117,7 +123,7 @@ function FuelMiniChart({ data, delay = 0 }: { data: FuelChartPoint[]; delay?: nu
 
 function RecentDeliveriesMini({ delay = 0 }: { delay?: number }) {
   const { t } = useTranslation();
-  const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [deliveries, setDeliveries] = useState<RecentDelivery[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -158,7 +164,7 @@ function RecentDeliveriesMini({ delay = 0 }: { delay?: number }) {
         </div>
       ) : (
         <div className={styles.recentDeliveriesList}>
-          {deliveries.map((d: any) => (
+          {deliveries.map((d: RecentDelivery) => (
             <div key={d.id} className={styles.recentDeliveryItem}>
               <div className={styles.recentDeliveryLeft}>
                 <div className={styles.recentDeliveryDot} style={{ background: statusColor[d.status] || 'var(--color-text-tertiary)' }} />

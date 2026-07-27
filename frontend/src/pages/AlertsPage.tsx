@@ -8,6 +8,8 @@ import { useToast } from '../components/Toast';
 import { formatDateTime } from '../services/i18n/formatDate';
 import { io } from 'socket.io-client';
 import { getAccessToken } from '../services/auth/tokenStore';
+
+type ApiError = { response?: { data?: { message?: string } } };
 import styles from './AlertsPage.module.css';
 
 interface AlertItem {
@@ -93,7 +95,7 @@ export default function AlertsPage() {
       setResolveComment('');
       toast(t('alerts.toast.resolved'));
     },
-    onError: (err: any) => {
+    onError: (err: ApiError) => {
       toast(err?.response?.data?.message || 'Erreur', 'error');
     },
   });
@@ -101,7 +103,7 @@ export default function AlertsPage() {
   useEffect(() => {
     const token = getAccessToken();
     if (!token) return;
-    let socket: any;
+    let socket: ReturnType<typeof io>;
     try {
       socket = io('/notifications', {
         auth: (cb: (data: { token: string }) => void) => cb({ token: getAccessToken() || '' }),

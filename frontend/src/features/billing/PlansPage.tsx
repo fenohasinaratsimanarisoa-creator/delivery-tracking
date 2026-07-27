@@ -55,7 +55,7 @@ export default function PlansPage() {
       }
       toast(t('billing.plans.toast.subscriptionUpdated'), 'success');
     },
-    onError: (err: any) => {
+    onError: (err: { response?: { data?: { message?: string } } }) => {
       toast(err?.response?.data?.message || t('billing.plans.toast.subscriptionError'), 'error');
     },
   });
@@ -66,7 +66,7 @@ export default function PlansPage() {
       queryClient.invalidateQueries({ queryKey: ['billing-subscription'] });
       toast(t('billing.plans.toast.subscriptionCanceled'));
     },
-    onError: (err: any) => {
+    onError: (err: { response?: { data?: { message?: string } } }) => {
       toast(err?.response?.data?.message || t('common.error'), 'error');
     },
   });

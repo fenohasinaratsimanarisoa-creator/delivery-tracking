@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { MapContainer, Polyline, useMap } from 'react-leaflet';
+import type { Layer } from 'leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Search, X } from 'lucide-react';
@@ -57,6 +58,22 @@ function createStaticIcon(rotation = 0, focused = false, confidence = 1) {
 }
 
 
+
+interface SearchResult {
+  id: string;
+  type?: string;
+  name?: string;
+  licensePlate?: string;
+  status?: string;
+  driverName?: string;
+  deliveryAddress?: string;
+  coordinates?: [number, number];
+  isOffline?: boolean;
+  accuracy?: number;
+  timestamp?: string;
+  vehiclePlate?: string;
+  licenseNumber?: string;
+}
 
 interface VehicleData {
   id: string;
@@ -384,7 +401,7 @@ function MapFocusHandler({ focusId, focusCenter, vehicles }: { focusId?: string 
     const vehicle = vehicles.find((v) => v.id === focusId);
     if (vehicle) {
       setTimeout(() => {
-        map.eachLayer((layer: any) => {
+        map.eachLayer((layer: Layer) => {
           if (layer instanceof L.Marker && Math.abs(layer.getLatLng().lat - vehicle.lat) < 0.001 && Math.abs(layer.getLatLng().lng - vehicle.lng) < 0.001) {
             layer.openPopup();
           }
@@ -447,13 +464,17 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
 
   const { data: driversData } = useQuery({
     queryKey: ['drivers', 'list'],
-    queryFn: () => api.get('/drivers?limit=100').then((r: any) => r.data?.data ?? r.data ?? []),
+    queryFn: () => api.get('/drivers?limit=100').then((r: { data: unknown }) =>
+      ((r.data as { data?: { id: string; firstName: string; lastName: string; licenseNumber: string; vehicle?: { licensePlate: string } }[] })?.data ?? r.data ?? []) as { id: string; firstName: string; lastName: string; licenseNumber: string; vehicle?: { licensePlate: string } }[]
+    ),
     staleTime: 60_000,
   });
 
   const { data: livePositions } = useQuery({
     queryKey: ['tracking', 'live'],
-    queryFn: () => api.get('/tracking/live').then((r: any) => r.data ?? r ?? []),
+    queryFn: () => api.get('/tracking/live').then((r: { data: unknown }) =>
+      (r.data ?? r ?? []) as (PositionUpdate & { minutesAgo?: number })[]
+    ),
     staleTime: 15_000,
     refetchInterval: 30_000,
   });
@@ -613,7 +634,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
         accuracy: update.accuracy,
         vehicleId: update.vehicleId,
         deliveryId: update.deliveryId,
-        confidence: (update as any).confidence ?? (update.accuracy ? Math.max(0.1, 1 - update.accuracy / 50) : 1),
+        confidence: update.confidence ?? (update.accuracy ? Math.max(0.1, 1 - update.accuracy / 50) : 1),
         timestamp: update.timestamp,
         status: update.speed && update.speed > 0.5 ? 'moving' : 'static',
         eta,
@@ -750,13 +771,13 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                 Aucun résultat
               </div>
             ) : (
-              searchResults.map((v: any) => (
+              searchResults.map((v: SearchResult) => (
                 <div
                   key={v.id}
                   onMouseDown={(e) => {
                     e.preventDefault();
                     if (!v.isOffline) {
-                      setSelectedDriver(v);
+                      setSelectedDriver(v as VehicleData);
                     }
                     setDriverFilter('');
                   }}
@@ -768,7 +789,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                     <div className={styles.searchResultSub}>
                       {v.isOffline || v.status === 'offline'
                         ? 'Hors ligne — aucune position récente'
-                        : `${v.status === 'moving' ? 'En route' : 'À l\'arrêt'} · ${v.accuracy !== undefined ? `±${Math.round(v.accuracy)}m · ` : ''}${formatTime(v.timestamp)}`
+                        : `${v.status === 'moving' ? 'En route' : 'À l\'arrêt'} · ${v.accuracy !== undefined ? `±${Math.round(v.accuracy)}m · ` : ''}${formatTime(v.timestamp ?? '')}`
                       }
                     </div>
                   </div>

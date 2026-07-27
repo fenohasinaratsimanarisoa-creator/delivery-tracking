@@ -57,7 +57,7 @@ export default function MyDeliveriesPage() {
       toast(t('myDeliveries.toast.statusUpdated'));
       setGpsLoading(false);
     },
-    onError: (err: any) => {
+    onError: (err: { response?: { data?: { message?: string } } }) => {
       toast(err?.response?.data?.message || t('myDeliveries.toast.updateError'), 'error');
       setGpsLoading(false);
     },

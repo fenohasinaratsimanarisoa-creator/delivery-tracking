@@ -55,8 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let res;
         try {
           res = await axios.post('/api/auth/refresh', {}, { headers: getCsrfHeaders(), withCredentials: true });
-        } catch (firstErr: any) {
-          if (firstErr?.response?.status === 403) {
+        } catch (firstErr: unknown) {
+          const err = firstErr as { response?: { status?: number } };
+          if (err?.response?.status === 403) {
             await fetchCsrfToken();
             res = await axios.post('/api/auth/refresh', {}, { headers: getCsrfHeaders(), withCredentials: true });
           } else {

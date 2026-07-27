@@ -47,7 +47,16 @@ export default function FuelPage() {
 
   const entries: FuelLog[] = data?.data ?? [];
   const meta = data?.meta ?? { total: 0, page: 1, limit, totalPages: 1 };
-  const reportList: any[] = reports ?? [];
+  interface FuelReport {
+    id: string | number;
+    driverName?: string;
+    vehiclePlate?: string;
+    distanceKm?: number;
+    consumptionLPer100Km?: number;
+    estimatedCost?: number;
+    reportDate?: string;
+  }
+  const reportList: FuelReport[] = reports ?? [];
 
   if (isLoading || reportsLoading) {
     return (
@@ -201,14 +210,14 @@ export default function FuelPage() {
                 </tr>
               </thead>
               <tbody>
-                {reportList.map((r: any, i: number) => (
+                {reportList.map((r: FuelReport, i: number) => (
                   <tr key={r.id || i} className={styles.dataRow}>
                     <td className={styles.td}>{r.driverName}</td>
                     <td className={styles.td}>{r.vehiclePlate}</td>
                     <td className={styles.td}>{r.distanceKm?.toFixed(1)} km</td>
                     <td className={styles.td}>{r.consumptionLPer100Km?.toFixed(1) ?? '-'} L/100km</td>
                     <td className={styles.td}>{r.estimatedCost?.toFixed(2)} Ar</td>
-                    <td className={styles.td}>{new Date(r.reportDate).toLocaleDateString()}</td>
+                    <td className={styles.td}>{r.reportDate ? new Date(r.reportDate).toLocaleDateString() : '-'}</td>
                   </tr>
                 ))}
               </tbody>

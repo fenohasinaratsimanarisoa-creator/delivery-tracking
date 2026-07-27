@@ -37,8 +37,8 @@ export default function AdminLoginPage() {
         setAdminToken(res.data.accessToken);
         navigate('/admin');
       }
-    } catch (err: any) {
-      setError(err?.response?.data?.message || t('admin.login.error'));
+    } catch (err: unknown) {
+      setError(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('admin.login.error'));
     } finally {
       setLoading(false);
     }
@@ -55,8 +55,8 @@ export default function AdminLoginPage() {
       });
       setAdminToken(res.data.accessToken);
       navigate('/admin');
-    } catch (err: any) {
-      setError(err?.response?.data?.message || t('admin.login.twoFactor.invalidCode'));
+    } catch (err: unknown) {
+      setError(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('admin.login.twoFactor.invalidCode'));
     } finally {
       setLoading(false);
     }
@@ -73,8 +73,8 @@ export default function AdminLoginPage() {
       });
       setAdminToken(res.data.accessToken);
       navigate('/admin');
-    } catch (err: any) {
-      setError(err?.response?.data?.message || t('admin.login.twoFactor.setupError'));
+    } catch (err: unknown) {
+      setError(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('admin.login.twoFactor.setupError'));
     } finally {
       setLoading(false);
     }

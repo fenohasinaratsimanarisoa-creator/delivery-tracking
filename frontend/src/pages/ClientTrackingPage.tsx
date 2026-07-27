@@ -82,7 +82,13 @@ export default function ClientTrackingPage() {
     return () => { cancelled = true; clearInterval(interval); };
   }, [deliveryId]);
 
-  const orders: any[] = ordersData?.data ?? [];
+  interface Order {
+    id: string;
+    status: string;
+    title?: string;
+    deliveryAddress?: string;
+  }
+  const orders: Order[] = ordersData?.data ?? [];
 
   if (!deliveryId) {
     return (
@@ -100,8 +106,8 @@ export default function ClientTrackingPage() {
         )}
         <div className={styles.orderList}>
           {orders
-            .filter((o: any) => o.status === 'in_progress' || o.status === 'assigned')
-            .map((o: any) => (
+            .filter((o) => o.status === 'in_progress' || o.status === 'assigned')
+            .map((o) => (
               <div
                 key={o.id}
                 onClick={() => window.location.href = `/tracking?deliveryId=${o.id}`}

@@ -218,7 +218,7 @@ export function DialogField({ label, error, children, required }: {
         if (index === 0) {
           return React.cloneElement(child as React.ReactElement, {
             id,
-            className: `${(child as any).props?.className || ''} ${error ? '--error' : ''}`.trim(),
+            className: `${(child as React.ReactElement).props?.className || ''} ${error ? '--error' : ''}`.trim(),
           });
         }
         return child;

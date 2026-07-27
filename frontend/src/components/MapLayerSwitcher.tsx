@@ -45,7 +45,7 @@ export default function MapLayerSwitcher() {
       collapsed: false,
     }).addTo(map);
 
-    map.on('baselayerchange', (e: any) => {
+    map.on('baselayerchange', (e: { name: string }) => {
       saveLayer(e.name === TILE_PROVIDERS.satellite.name ? 'satellite' : 'plan');
     });
 

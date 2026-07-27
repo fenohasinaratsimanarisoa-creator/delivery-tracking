@@ -1,3 +1,11 @@
+declare const Accelerometer: new (opts: { frequency: number }) => {
+  x: number; y: number; z: number;
+  addEventListener: (event: string, handler: () => void) => void;
+  start: () => void;
+};
+declare const LinearAccelerationSensor: typeof Accelerometer;
+declare const Gyroscope: typeof Accelerometer;
+
 type MotionSensor = 'accelerometer' | 'gyroscope' | 'linear-acceleration';
 
 interface SensorReading {
@@ -39,7 +47,7 @@ export class SensorFusion {
 
       if (hasAccel) {
         try {
-          const sensor = new (window as any).Accelerometer({ frequency: 10 });
+          const sensor = new Accelerometer({ frequency: 10 });
           sensor.addEventListener('reading', () => {
             this.accel = { x: sensor.x, y: sensor.y, z: sensor.z, timestamp: Date.now() };
           });
@@ -49,7 +57,7 @@ export class SensorFusion {
 
       if (hasLinearAccel) {
         try {
-          const sensor = new (window as any).LinearAccelerationSensor({ frequency: 10 });
+          const sensor = new LinearAccelerationSensor({ frequency: 10 });
           sensor.addEventListener('reading', () => {
             this.linearAccel = { x: sensor.x, y: sensor.y, z: sensor.z, timestamp: Date.now() };
           });
@@ -59,7 +67,7 @@ export class SensorFusion {
 
       if (hasGyro) {
         try {
-          const sensor = new (window as any).Gyroscope({ frequency: 10 });
+          const sensor = new Gyroscope({ frequency: 10 });
           sensor.addEventListener('reading', () => {
             this.gyro = { x: sensor.x, y: sensor.y, z: sensor.z, timestamp: Date.now() };
           });
@@ -76,7 +84,8 @@ export class SensorFusion {
   }
 
   private async checkSensor(type: MotionSensor): Promise<boolean> {
-    if (!(window as any)[this.getSensorClass(type)]) {
+    const sensorCtor = this.getSensorConstructor(type);
+    if (!sensorCtor) {
       return false;
     }
     try {
@@ -89,11 +98,11 @@ export class SensorFusion {
     }
   }
 
-  private getSensorClass(type: MotionSensor): string {
+  private getSensorConstructor(type: MotionSensor): typeof Accelerometer | undefined {
     switch (type) {
-      case 'accelerometer': return 'Accelerometer';
-      case 'gyroscope': return 'Gyroscope';
-      case 'linear-acceleration': return 'LinearAccelerationSensor';
+      case 'accelerometer': return Accelerometer;
+      case 'gyroscope': return Gyroscope;
+      case 'linear-acceleration': return LinearAccelerationSensor;
     }
   }
 

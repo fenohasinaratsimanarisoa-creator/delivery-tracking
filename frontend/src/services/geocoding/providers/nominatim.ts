@@ -1,12 +1,20 @@
 import type { GeocodingProvider, GeocodingResult } from '../types'
 
+interface NominatimResult {
+  display_name?: string;
+  address?: Record<string, string>;
+  name?: string;
+  lat?: string;
+  lon?: string;
+}
+
 const BASE = 'https://nominatim.openstreetmap.org'
 const USER_AGENT = 'DeliveryTrack/1.0 (logistics)'
 
 const MG_VIEWBOX = '43,11,51,-26'
 const MG_BOUNDED = 1
 
-function extractLocalLabel(item: any): string {
+function extractLocalLabel(item: NominatimResult): string {
   const addr = item.address || {}
   const name = item.name || ''
   const road = addr.road || addr.street || ''
@@ -48,12 +56,12 @@ export class NominatimProvider implements GeocodingProvider {
     })
     if (!res.ok) return []
 
-    const data: any[] = await res.json()
+    const data: NominatimResult[] = await res.json()
     return data.map((item) => ({
-      lat: parseFloat(item.lat),
-      lng: parseFloat(item.lon),
+      lat: parseFloat(item.lat ?? '0'),
+      lng: parseFloat(item.lon ?? '0'),
       label: extractLocalLabel(item),
-      displayName: item.display_name,
+      displayName: item.display_name ?? '',
     }))
   }
 
@@ -66,7 +74,7 @@ export class NominatimProvider implements GeocodingProvider {
     })
     if (!res.ok) return null
 
-    const data: any = await res.json()
+    const data: NominatimResult = await res.json()
     return data?.display_name || null
   }
 }

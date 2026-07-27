@@ -1,5 +1,10 @@
 import { useMemo } from 'react';
 
+interface NavigatorNetwork extends Navigator {
+  connection?: { effectiveType: string };
+  deviceMemory?: number;
+}
+
 export type DeviceTier = 'low' | 'medium' | 'high';
 
 export function useDevicePerformance(): {
@@ -8,9 +13,10 @@ export function useDevicePerformance(): {
   enableAnimations: boolean;
 } {
   return useMemo(() => {
-    const conn = (navigator as any).connection;
+    const connNav = navigator as NavigatorNetwork;
+    const conn = connNav.connection;
     const isSlowNetwork = conn && (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g');
-    const memory = (navigator as any).deviceMemory;
+    const memory = connNav.deviceMemory;
     const isLowMemory = memory && memory <= 2;
     const cores = navigator.hardwareConcurrency;
     const isLowCPU = cores && cores <= 4;

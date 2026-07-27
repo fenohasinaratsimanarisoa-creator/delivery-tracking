@@ -41,8 +41,8 @@ export class BackendGeocodingProvider implements GeocodingProvider {
       }
       if (merged.length > 0) sessionCache.set(key, merged)
       return merged.slice(0, 15)
-    } catch (err: any) {
-      if (err.name === 'AbortError') return []
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return []
       return []
     }
   }
@@ -66,7 +66,7 @@ export class BackendGeocodingProvider implements GeocodingProvider {
       if (!res.ok) return null
       const data = await res.json()
       const label = data.label || null
-      if (label) sessionCache.set(key, label as any)
+      if (label) sessionCache.set(key, label as unknown as GeocodingResult[])
       return label
     } catch { return null }
   }

@@ -67,8 +67,8 @@ export default function LoginPage() {
       writeSessionCache(user.firstName, user.email);
       const target = ROLE_REDIRECT[user.role] || '/dashboard';
       navigate(target, { replace: true });
-    } catch (err: any) {
-      const status = err?.response?.status;
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 401) {
         setError(t('auth.login.error401'));
       } else if (status === 429) {

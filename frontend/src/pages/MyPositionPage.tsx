@@ -253,7 +253,7 @@ export default function MyPositionPage() {
     const positions = await dequeueAllPositions();
     if (positions.length === 0) return;
     try {
-      socket.emit('batchPosition', { positions }, (ack: any) => {
+      socket.emit('batchPosition', { positions }, (ack: { event?: string }) => {
         if (ack && ack.event === 'positionsSaved') {
           clearQueue().then(() => refreshQueueCount());
         }
