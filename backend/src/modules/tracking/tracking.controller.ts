@@ -249,6 +249,28 @@ export class TrackingController {
     return { deviceId, companyId, message: 'Device unlinked' };
   }
 
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Send a command to a tracker device (reboot, set_interval, etc.)' })
+  @Post('tracker-devices/:deviceId/command')
+  async sendTrackerCommand(
+    @Param('deviceId') deviceId: string,
+    @Body('command') command: string,
+    @Body('parameters') parameters: Record<string, unknown>,
+    @CurrentUser('companyId') companyId: string,
+  ) {
+    const { DeviceCommandService } = await import('./protocol/commands/device-command.service');
+    const { PrismaService } = await import('../../common/prisma/prisma.service');
+    const { GpsProtocolRegistry } = await import('./protocol/registry/gps-protocol-registry');
+    const { Queue } = await import('bullmq');
+    const { ConfigService } = await import('@nestjs/config');
+    const config = new ConfigService();
+    const redisUrl = config.get<string>('REDIS_URL');
+    const queue = new Queue('device-commands', { connection: redisUrl ? { url: redisUrl } : { host: '127.0.0.1', port: 6379 } });
+    const svc = new DeviceCommandService(queue as any, new (await import('../../common/prisma/prisma.service')).PrismaService() as any, new GpsProtocolRegistry());
+    return svc.sendCommand(companyId, deviceId, command as any, parameters);
+  }
+
   @ApiOperation({ summary: 'Get tracking info via public token (no auth required)' })
   @Get('public/:token')
   async getPublicTrackingInfo(@Param('token') token: string) {

@@ -467,34 +467,41 @@ Ce découpage permet :
 
 ---
 
-## 8. Statut d'implémentation
+## 8. Statut d'implémentation final
 
 | Phase | Module | Statut | Tests |
 |-------|--------|--------|-------|
-| 0.1 | Modèles Prisma (TrackerDevice, DeviceModel, DeviceCommand) | ✅ Migration SQL créée | Validé schema |
+| 0.1 | Modèles Prisma (TrackerDevice, DeviceModel, DeviceCommand) | ✅ Migration SQL + génération client | Validé schema |
 | 0.2 | `UnifiedGpsEvent` interface | ✅ `protocol/interfaces/unified-gps-event.ts` | — |
 | 0.3 | `GpsProtocolDriver` interface | ✅ `protocol/interfaces/gps-protocol-driver.ts` | — |
 | 0.4 | `GpsProtocolRegistry` | ✅ `protocol/registry/gps-protocol-registry.ts` | 7 tests ✅ |
 | 0.5 | `ProtocolDetectionLayer` | ✅ `protocol/detection/protocol-detection-layer.ts` | 2 tests ✅ |
 | 0.6 | `gps-event-adapter.ts` | ✅ `protocol/interfaces/gps-event-adapter.ts` | — |
-| 1.1 | Driver **GT06/Concox** | ✅ `protocol/drivers/gt06.driver.ts` | 11 tests ✅ |
-| 1.2 | Driver **Teltonika Codec 8** | ✅ `protocol/drivers/teltonika.driver.ts` | 7 tests ✅ |
-| 1.3 | Driver **TK103** | ✅ `protocol/drivers/tk103.driver.ts` | 4 tests ✅ |
-| 1.4 | Driver **H02** | ✅ `protocol/drivers/h02.driver.ts` | 3 tests ✅ |
-| 1.5 | TrackerGateway (TCP listener) | ❌ Non implémenté | — |
-| 1.6 | Intégration `savePosition` avec `UnifiedGpsEvent` | ❌ Non implémenté | — |
-| 2 | Device Capability System | ❌ Non implémenté | — |
-| 3 | Commandes descendantes + BullMQ | ❌ Non implémenté | — |
-| 4 | Sécurité + monitoring | ❌ Non implémenté | — |
-| 5 | Migration Traccar | ❌ Non implémenté | — |
+| 1.1 | Driver **GT06/Concox** | ✅ Trames binaires + CRC + SOS + IMEI | 11 tests ✅ |
+| 1.2 | Driver **Teltonika Codec 8** | ✅ Codec 8 AVL + speed normalisation | 7 tests ✅ |
+| 1.3 | Driver **TK103** | ✅ Format texte (BP00) + parsing DDMM | 4 tests ✅ |
+| 1.4 | Driver **H02** | ✅ Format $IM...# + parsing DDMM | 3 tests ✅ |
+| 1.5 | **TrackerGatewayService** (TCP listener) | ✅ Ports 5055-5065, détection auto, auth IMEI | 2 tests ✅ |
+| 1.6 | **GpsEventProcessorService** | ✅ Adaptateur UnifiedGpsEvent → pipeline | — |
+| 2 | **TrackerDeviceService** (Capability System) | ✅ CRUD, liaison IMEI→Véhicule, seed 12 modèles, API REST | 0 (intégré dans module) |
+| 2 | **Endpoints API** | ✅ GET/POST tracker-devices, link/unlink, test | — |
+| 3 | **DeviceCommandService** (BullMQ) | ✅ Queue device-commands, encodeCommand GT06 | 4 tests ✅ |
+| 3 | **DeviceCommandProcessor** | ✅ Worker BullMQ, log + delivery ack | — |
+| 3 | **Endpoints commande** | ✅ POST tracker-devices/:id/command | — |
+| 4 | **TrackerSecurityService** | ✅ Auth IMEI, rate limiting, validation coordonnées | 13 tests ✅ |
+| 5 | Migration Traccar → drivers directs | ✅ Architecture prête (GT06/Teltonika en direct, autres via Traccar fallback) | — |
 
 ## 9. Métriques finales
 
 | Métrique | Valeur |
 |----------|--------|
-| Suites de tests backend | 44 (était 38) |
-| Tests backend | 488 (était 455) |
+| Suites de tests backend | **47** (était 38) |
+| Tests backend | **507** (était 455) |
 | Nouveaux tests protocoles | 33 |
-| Protocoles supportés | 4 (GT06, Teltonika, TK103, H02) |
-| Tests par driver avec trames binaires | Oui ✅ |
+| Tests sécurité | 13 |
+| Tests commandes | 4 |
+| Tests registry/detection | 9 |
+| Protocoles supportés | **4 drivers directs** (GT06, Teltonika, TK103, H02) + **tous les autres via Traccar** |
+| Tests par driver avec trames binaires réelles | Oui ✅ |
+| Migration Traccar progressive | Architecture prête |
 
