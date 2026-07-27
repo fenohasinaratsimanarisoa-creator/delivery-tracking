@@ -119,6 +119,8 @@ model TrackerDevice {
   protocol       TrackerProtocol
   deviceModelId  String?        @map("device_model_id") @db.Uuid
   deviceModel    DeviceModel?   @relation(fields: [deviceModelId], references: [id])
+  vehicleId      String?        @unique @map("vehicle_id") @db.Uuid
+  vehicle        Vehicle?       @relation("VehicleTracker", fields: [vehicleId], references: [id])
   companyId      String         @map("company_id") @db.Uuid
   company        Company        @relation(fields: [companyId], references: [id])
   isActive       Boolean        @default(true) @map("is_active")
@@ -127,7 +129,6 @@ model TrackerDevice {
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 
-  vehicle  Vehicle? @relation("VehicleTracker")
   commands DeviceCommand[]
 
   @@index([companyId])
@@ -377,8 +378,7 @@ model Vehicle {
   theoreticalConsumption Float? @map("theoretical_consumption") // L/100km
   positionSource    String  @default("phone") @map("position_source") // phone | physical_tracker
   traccarDeviceId   String? @map("traccar_device_id")
-  trackerDeviceId   String? @unique @map("tracker_device_id") @db.Uuid
-  trackerDevice     TrackerDevice? @relation("VehicleTracker", fields: [trackerDeviceId], references: [id])
+  trackerDevice     TrackerDevice? @relation("VehicleTracker")
   isActive         Boolean @default(true) @map("is_active")
   deletedAt              DateTime? @map("deleted_at")
   createdAt              DateTime  @default(now()) @map("created_at")

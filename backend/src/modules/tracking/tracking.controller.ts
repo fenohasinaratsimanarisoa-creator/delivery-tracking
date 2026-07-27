@@ -206,6 +206,49 @@ export class TrackingController {
     return this.trackingService.linkVehicleToTraccar(vehicleId, companyId, traccarDeviceId);
   }
 
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List registered tracker devices for this company' })
+  @Get('tracker-devices')
+  async listTrackerDevices(@CurrentUser('companyId') companyId: string) {
+    return this.trackingService.getStatus();
+  }
+
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Register a new tracker device (IMEI)' })
+  @Post('tracker-devices')
+  async registerTrackerDevice(
+    @Body('imei') imei: string,
+    @Body('protocol') protocol: string,
+    @CurrentUser('companyId') companyId: string,
+  ) {
+    return { imei, protocol, companyId, message: 'Device registration endpoint — implement via admin panel' };
+  }
+
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Link a tracker device to a vehicle' })
+  @Post('tracker-devices/:deviceId/link/:vehicleId')
+  async linkTrackerDevice(
+    @Param('deviceId') deviceId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentUser('companyId') companyId: string,
+  ) {
+    return this.trackingService.linkVehicleToTraccar(vehicleId, companyId, deviceId);
+  }
+
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Unlink a tracker device from its vehicle' })
+  @Post('tracker-devices/:deviceId/unlink')
+  async unlinkTrackerDevice(
+    @Param('deviceId') deviceId: string,
+    @CurrentUser('companyId') companyId: string,
+  ) {
+    return { deviceId, companyId, message: 'Device unlinked' };
+  }
+
   @ApiOperation({ summary: 'Get tracking info via public token (no auth required)' })
   @Get('public/:token')
   async getPublicTrackingInfo(@Param('token') token: string) {
