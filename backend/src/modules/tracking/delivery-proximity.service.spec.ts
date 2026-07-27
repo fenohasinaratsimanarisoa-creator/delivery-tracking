@@ -203,6 +203,47 @@ describe('DeliveryProximityService', () => {
     expect(mockDataUpdateBus.emitUpdate).not.toHaveBeenCalled();
   });
 
+  it('cleans up the correct delivery key when in_progress becomes delivered', async () => {
+    const firstDeliveryId = 'delivery-1';
+    const secondDeliveryId = 'delivery-2';
+
+    mockPrisma.driver.findUnique.mockResolvedValue({ id: driverId, userId });
+    mockPrisma.driver.findUnique.mockResolvedValue({ id: driverId, userId });
+
+    mockPrisma.delivery.findFirst
+      .mockResolvedValueOnce({
+        id: firstDeliveryId,
+        title: 'First Delivery',
+        deliveryLat,
+        deliveryLng,
+      })
+      .mockResolvedValueOnce(null);
+
+    mockCacheService.get.mockResolvedValue(null);
+
+    await service.checkProximity(
+      driverId,
+      vehicleId,
+      companyId,
+      deliveryLat + 0.001,
+      deliveryLng + 0.001,
+      now,
+    );
+
+    expect(mockCacheService.invalidate).not.toHaveBeenCalled();
+
+    await service.checkProximity(
+      driverId,
+      vehicleId,
+      companyId,
+      deliveryLat + 0.001,
+      deliveryLng + 0.001,
+      now,
+    );
+
+    expect(mockCacheService.invalidate).toHaveBeenCalledWith(`proximity:entered:${firstDeliveryId}:${vehicleId}`);
+  });
+
   it('handles Traccar positions identically to mobile positions', async () => {
     mockPrisma.driver.findUnique.mockResolvedValue({ id: driverId, userId });
     mockPrisma.delivery.findFirst.mockResolvedValue({

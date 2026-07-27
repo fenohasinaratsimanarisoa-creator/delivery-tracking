@@ -120,7 +120,7 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
     };
 
     mockGeofence = {
-      checkGeofences: jest.fn().mockResolvedValue(null),
+      checkGeofences: jest.fn().mockResolvedValue([]),
       findForDelivery: jest.fn(),
     } as any;
 

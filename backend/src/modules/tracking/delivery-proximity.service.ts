@@ -13,6 +13,7 @@ const ESCALATION_SNOOZE_MS = 2 * 60 * 1000;
 @Injectable()
 export class DeliveryProximityService {
   private readonly logger = new Logger(DeliveryProximityService.name);
+  private lastDeliveryId: string | null = null;
 
   constructor(
     private prisma: PrismaService,
@@ -105,9 +106,13 @@ export class DeliveryProximityService {
       });
 
       if (!inProgressDelivery) {
-        await this.removeEnteredTime(`none`, vehicleId);
+        if (this.lastDeliveryId) {
+          await this.removeEnteredTime(this.lastDeliveryId, vehicleId);
+          this.lastDeliveryId = null;
+        }
         return;
       }
+      this.lastDeliveryId = inProgressDelivery.id;
 
       const dist = this.haversineDistance(
         latitude,

@@ -16,15 +16,17 @@ export class GeofenceService {
     vehicleId: string,
     latitude: number,
     longitude: number,
-  ): Promise<{ event: string; geofenceId: string; geofenceName: string } | null> {
+  ): Promise<Array<{ event: string; geofenceId: string; geofenceName: string }>> {
     const geofences = await this.findForDelivery(deliveryId);
-    if (geofences.length === 0) return null;
+    if (geofences.length === 0) return [];
 
     const lastEvent = await this.prisma.geofenceEvent.findFirst({
       where: { vehicleId, deliveryId },
       orderBy: { timestamp: 'desc' },
       select: { geofenceId: true, event: true },
     });
+
+    const events: Array<{ event: string; geofenceId: string; geofenceName: string }> = [];
 
     for (const gf of geofences) {
       const distance = this.haversineDistance(latitude, longitude, gf.lat, gf.lng);
@@ -36,18 +38,18 @@ export class GeofenceService {
         await this.prisma.geofenceEvent.create({
           data: { geofenceId: gf.id, vehicleId, deliveryId, event: 'entry', latitude, longitude },
         });
-        return { event: 'entry', geofenceId: gf.id, geofenceName: gf.name };
+        events.push({ event: 'entry', geofenceId: gf.id, geofenceName: gf.name });
       }
 
       if (!inside && previouslyInside) {
         await this.prisma.geofenceEvent.create({
           data: { geofenceId: gf.id, vehicleId, deliveryId, event: 'exit', latitude, longitude },
         });
-        return { event: 'exit', geofenceId: gf.id, geofenceName: gf.name };
+        events.push({ event: 'exit', geofenceId: gf.id, geofenceName: gf.name });
       }
     }
 
-    return null;
+    return events;
   }
 
   private haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {

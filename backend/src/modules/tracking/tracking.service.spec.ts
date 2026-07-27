@@ -39,7 +39,7 @@ const mockNotifications = {
 };
 
 const mockGeofenceService = {
-  checkGeofences: jest.fn().mockResolvedValue(null),
+  checkGeofences: jest.fn().mockResolvedValue([]),
 };
 
 const mockDeliveryProximityService = {

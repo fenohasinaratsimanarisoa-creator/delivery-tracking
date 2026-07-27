@@ -294,15 +294,15 @@ export class TrackingService {
       }
     }
 
-    const geofenceEvent = dto.deliveryId
+    const geofenceEvents = dto.deliveryId
       ? await this.geofenceService.checkGeofences(
           dto.deliveryId,
           dto.vehicleId,
           dto.latitude,
           dto.longitude,
         )
-      : null;
-    if (geofenceEvent) {
+      : [];
+    for (const geofenceEvent of geofenceEvents) {
       tasks.push(
         this.notifications.create(companyId, {
           type: NotificationType.geofence_event,

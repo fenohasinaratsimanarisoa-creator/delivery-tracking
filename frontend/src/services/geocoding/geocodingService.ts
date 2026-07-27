@@ -1,12 +1,20 @@
 /**
  * Service de géocodage — fournisseur remplaçable.
  *
- * Fournisseur actif : Google Maps Places API (si VITE_GOOGLE_MAPS_API_KEY défini),
- * sinon Nominatim/OpenStreetMap (fallback gratuit).
+ * Fournisseur par défaut : BackendGeocodingProvider (appels API via backend avec cache Redis + Nominatim).
+ * Google Maps Places API est un fallback OPTIONNEL, désactivé par défaut.
  *
- * Google Maps : meilleure couverture adresses exactes, payant (~2.83 $/1000 requêtes).
- * Le debounce à 350ms et le cache limitent les appels.
- * Pour basculer : définir VITE_GOOGLE_MAPS_API_KEY dans .env ou appeler setGeocodingProvider().
+ * ⚠️ SÉCURITÉ : Le provider Google Maps appelle l'API Google directement depuis le navigateur
+ * avec la clé embarquée dans le bundle JS. Quiconque inspecte le réseau peut voler cette clé.
+ * → Ne PAS activer VITE_GOOGLE_MAPS_ENABLED=true sans avoir configuré des restrictions HTTP Referrer
+ *   ET un budget d'alerte sur Google Cloud Console.
+ * → Voir : https://developers.google.com/maps/api-security-best-practices
+ *
+ * Pour activer Google Maps (⚠️ risque sécurité) :
+ *   1. Définir VITE_GOOGLE_MAPS_API_KEY dans .env
+ *   2. Définir VITE_GOOGLE_MAPS_ENABLED=true dans .env
+ *   3. Configurer les restrictions HTTP Referrer dans Google Cloud Console
+ *   4. Configurer une alerte de budget dans Google Cloud Console
  */
 
 import { GoogleMapsProvider } from './providers/googleMaps'
@@ -15,7 +23,8 @@ import type { GeocodingProvider, GeocodingResult } from './types'
 
 function detectProvider(): GeocodingProvider {
   const googleKey = typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_MAPS_API_KEY : undefined
-  if (googleKey) {
+  const googleEnabled = typeof import.meta !== 'undefined' ? import.meta.env.VITE_GOOGLE_MAPS_ENABLED === 'true' : false
+  if (googleKey && googleEnabled) {
     return new GoogleMapsProvider(googleKey)
   }
   return new BackendGeocodingProvider()

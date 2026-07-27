@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom';
+import 'fake-indexeddb/auto';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import fr from './services/i18n/locales/fr.json';
