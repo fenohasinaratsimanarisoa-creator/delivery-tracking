@@ -1,0 +1,83 @@
+.page {
+  padding: var(--space-2xl, 32px);
+  background: var(--color-bg, #0B1220);
+  min-height: 100vh;
+}
+
+.title {
+  color: var(--color-text, #E8ECF3);
+  font-family: var(--font-display, Space Grotesk, sans-serif);
+  font-size: var(--text-2xl, 1.5rem);
+  font-weight: 700;
+  margin-bottom: var(--space-lg, 16px);
+}
+
+.controls {
+  display: flex;
+  gap: var(--space-md, 12px);
+  align-items: center;
+  margin-bottom: var(--space-lg, 16px);
+}
+
+.select {
+  padding: var(--space-sm, 8px) var(--space-md, 12px);
+  flex: 1;
+  max-width: 400px;
+  border: 1px solid var(--color-input-border, rgba(232,236,243,0.15));
+  border-radius: var(--radius-md, 6px);
+  background: var(--color-input-bg, #121B2E);
+  color: var(--color-text, #E8ECF3);
+  font-size: var(--text-sm, 0.875rem);
+  outline: none;
+  font-family: var(--font-body, Inter, sans-serif);
+}
+
+.exportBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-sm, 8px) var(--space-lg, 16px);
+  background: var(--color-accent, #F2A93C);
+  color: var(--color-bg, #0B1220);
+  border: none;
+  border-radius: var(--radius-md, 6px);
+  cursor: pointer;
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  font-family: var(--font-body, Inter, sans-serif);
+}
+
+.loading {
+  color: var(--color-text-secondary, #9BA6B9);
+}
+
+.reportCard {
+  background: var(--color-surface, #121B2E);
+  padding: var(--space-xl, 20px);
+  border-radius: var(--radius-xl, 12px);
+  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  max-width: 600px;
+}
+
+.reportTitle {
+  margin-bottom: var(--space-lg, 16px);
+  color: var(--color-text, #E8ECF3);
+  font-family: var(--font-display, Space Grotesk, sans-serif);
+}
+
+.reportGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.reportItem {
+  color: var(--color-text, #E8ECF3);
+}
+
+.reportFooter {
+  margin-top: var(--space-lg, 16px);
+  font-size: var(--text-sm, 0.85rem);
+  color: var(--color-text-secondary, #9BA6B9);
+}

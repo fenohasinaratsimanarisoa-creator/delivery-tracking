@@ -8,6 +8,7 @@ import { useToast } from '../components/Toast';
 import { formatDateTime } from '../services/i18n/formatDate';
 import { io } from 'socket.io-client';
 import { getAccessToken } from '../services/auth/tokenStore';
+import styles from './AlertsPage.module.css';
 
 interface AlertItem {
   id: string;
@@ -143,26 +144,26 @@ export default function AlertsPage() {
   const allPriorities = ['critical', 'high', 'medium', 'low'];
 
   return (
-    <div className="page-padding" style={{ padding: 24, height: '100%', overflow: 'auto', maxWidth: 1000, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: 10, color: 'var(--color-text)' }}>
-          <Bell size={22} style={{ color: 'var(--color-accent, #F2A93C)' }} />
+    <div className={styles.pageContainer}>
+      <div className={styles.headerRow}>
+        <h1 className={styles.pageTitle}>
+          <Bell size={22} className={styles.titleIcon} />
           {t('alerts.title')}
           {alertStats && alertStats.total > 0 && (
-            <span style={{ fontSize: '0.8rem', background: '#ef444420', color: '#ef4444', padding: '2px 10px', borderRadius: 9999, fontWeight: 600 }}>
+            <span className={styles.unresolvedBadge}>
               {t('alerts.unresolvedCount', { count: alertStats.total })}
             </span>
           )}
         </h1>
         {liveCount > 0 && (
-          <span style={{ fontSize: '0.75rem', color: '#22c55e', fontWeight: 500 }}>
+          <span className={styles.liveCount}>
             {t('alerts.liveNew', { count: liveCount })}
           </span>
         )}
       </div>
 
       {alertStats && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 24 }}>
+        <div className={styles.kpiGrid}>
           <KpiCard label={t('alerts.kpiUnresolved')} value={alertStats.total} color="#ef4444" trend={trendPercent} />
           {allPriorities.map((prio) => {
             const count = alertStats.byPriority.find((p) => p.priority === prio)?._count ?? 0;
@@ -172,12 +173,12 @@ export default function AlertsPage() {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+      <div className={styles.filtersPanel}>
         <div>
-          <div style={{ fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>
+          <div className={styles.filterLabel}>
             {t('alerts.filters.periodLabel')}
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div className={styles.filterChipsRow}>
             {PERIOD_VALUES.map((val) => (
               <FilterChip key={val} active={period === val} onClick={() => { setPeriod(val); setPage(1); }}>{PERIOD_LABELS[val]}</FilterChip>
             ))}
@@ -185,10 +186,10 @@ export default function AlertsPage() {
         </div>
 
         <div>
-          <div style={{ fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>
+          <div className={styles.filterLabel}>
             {t('alerts.filters.typeLabel')}
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div className={styles.filterChipsRow}>
             {allTypes.map((tp) => (
               <FilterChip key={tp} active={selectedTypes.includes(tp)} onClick={() => toggleType(tp)}>
                 {t(`alerts.type.${tp}`, tp)}
@@ -198,10 +199,10 @@ export default function AlertsPage() {
         </div>
 
         <div>
-          <div style={{ fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>
+          <div className={styles.filterLabel}>
             {t('alerts.filters.priorityLabel')}
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div className={styles.filterChipsRow}>
             {allPriorities.map((prio) => (
               <FilterChip key={prio} active={selectedPriorities.includes(prio)} onClick={() => togglePriority(prio)} color={PRIORITY_COLORS[prio]}>
                 {PRIORITY_LABELS[prio]}
@@ -211,10 +212,10 @@ export default function AlertsPage() {
         </div>
 
         <div>
-          <div style={{ fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>
+          <div className={styles.filterLabel}>
             {t('alerts.filters.statusLabel')}
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div className={styles.filterStatusRow}>
             <FilterChip active={resolvedFilter === ''} onClick={() => { setResolvedFilter(''); setPage(1); }}>{t('alerts.filters.all')}</FilterChip>
             <FilterChip active={resolvedFilter === 'false'} onClick={() => { setResolvedFilter('false'); setPage(1); }} color="#ef4444">{t('alerts.filters.unresolved')}</FilterChip>
             <FilterChip active={resolvedFilter === 'true'} onClick={() => { setResolvedFilter('true'); setPage(1); }} color="#22c55e">{t('alerts.filters.resolved')}</FilterChip>
@@ -223,69 +224,67 @@ export default function AlertsPage() {
       </div>
 
       {isLoading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className={styles.loadingContainer}>
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} style={{ height: 72, borderRadius: 10, background: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)', opacity: 0.5, animation: 'dt-shimmer 1.5s infinite linear' }} />
+            <div key={i} className={styles.skeletonItem} />
           ))}
         </div>
       ) : alerts.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 60, color: 'var(--color-text-tertiary)' }}>
-          <Bell size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-          <p style={{ fontSize: '1rem', fontWeight: 500 }}>{t('alerts.emptyTitle')}</p>
-          <p style={{ fontSize: '0.8rem' }}>{t('alerts.emptyDesc')}</p>
+        <div className={styles.emptyState}>
+          <Bell size={40} className={styles.emptyIcon} />
+          <p className={styles.emptyTitle}>{t('alerts.emptyTitle')}</p>
+          <p className={styles.emptyDesc}>{t('alerts.emptyDesc')}</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div className={styles.alertList}>
           {alerts.map((r) => {
             const cfg = typeConfig[r.type as keyof typeof typeConfig] || { icon: <Bell size={16} />, borderColor: '#6b7280' };
             return (
               <div
                 key={r.id}
                 onClick={() => setSelectedAlert(r)}
+                className={styles.alertCard}
                 style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px',
                   background: r.resolved ? 'var(--color-surface)' : 'var(--color-glass, rgba(18,27,46,0.92))',
                   border: '1px solid var(--color-border-subtle)',
                   borderLeft: `3px solid ${r.resolved ? '#22c55e' : PRIORITY_COLORS[r.priority] || '#6b7280'}`,
-                  borderRadius: 10, cursor: 'pointer',
                   opacity: r.resolved ? 0.7 : 1,
-                  transition: 'all 0.15s ease',
                 }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover, #1E2A45)'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = r.resolved ? 'var(--color-surface)' : 'var(--color-glass, rgba(18,27,46,0.92))'; }}
               >
-                <div style={{ color: PRIORITY_COLORS[r.priority] || '#6b7280', marginTop: 2, flexShrink: 0 }}>
+                <div className={styles.alertIcon} style={{ color: PRIORITY_COLORS[r.priority] || '#6b7280' }}>
                   {cfg.icon}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--color-text)' }}>{r.title}</span>
-                    <span style={{ fontSize: '0.65rem', padding: '1px 7px', borderRadius: 9999, fontWeight: 600, background: `${PRIORITY_COLORS[r.priority] || '#6b7280'}15`, color: PRIORITY_COLORS[r.priority] || '#6b7280' }}>
+                <div className={styles.alertContent}>
+                  <div className={styles.alertHeader}>
+                    <span className={styles.alertTitle}>{r.title}</span>
+                    <span className={styles.priorityBadge} style={{ background: `${PRIORITY_COLORS[r.priority] || '#6b7280'}15`, color: PRIORITY_COLORS[r.priority] || '#6b7280' }}>
                       {PRIORITY_LABELS[r.priority] || r.priority}
                     </span>
-                    <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>{t(`alerts.type.${r.type}`, r.type)}</span>
+                    <span className={styles.alertType}>{t(`alerts.type.${r.type}`, r.type)}</span>
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', lineHeight: 1.4, marginBottom: 4 }}>
+                  <div className={styles.alertMessage}>
                     {r.message}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
+                  <div className={styles.alertMeta}>
                     <span>{formatDateTime(r.createdAt)}</span>
                     {r.delivery && (
-                      <Link to={`/deliveries/${r.delivery.id}`} onClick={(e) => e.stopPropagation()} style={{ color: 'var(--color-accent, #F2A93C)', textDecoration: 'none' }}>
+                      <Link to={`/deliveries/${r.delivery.id}`} onClick={(e) => e.stopPropagation()} className={styles.deliveryLink}>
                         📦 {r.delivery.title}
                       </Link>
                     )}
-                    {r.resolved && <span style={{ color: '#22c55e' }}>✓ {t('alerts.detail.resolved')}</span>}
+                    {r.resolved && <span className={styles.resolvedLabel}>✓ {t('alerts.detail.resolved')}</span>}
                   </div>
                 </div>
-                <div style={{ flexShrink: 0, alignSelf: 'center' }}>
+                <div className={styles.alertActions}>
                   {!r.resolved ? (
                     <button onClick={(e) => { e.stopPropagation(); resolveMutation.mutate({ id: r.id }); }}
-                      style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #22c55e40', background: '#22c55e10', color: '#22c55e', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      className={styles.resolveBtn}>
                       {t('alerts.resolveButton')}
                     </button>
                   ) : (
-                    <Check size={16} style={{ color: '#22c55e' }} />
+                    <Check size={16} className={styles.checkIcon} />
                   )}
                 </div>
               </div>
@@ -295,14 +294,14 @@ export default function AlertsPage() {
       )}
 
       {meta.total > 50 && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
+        <div className={styles.pagination}>
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-            style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--color-border-subtle)', background: 'var(--color-surface)', color: 'var(--color-text)', cursor: page === 1 ? 'default' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}>
+            className={styles.pageBtn}>
             {t('alerts.pagination.previous')}
           </button>
-          <span style={{ padding: '6px 14px', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{t('alerts.pagination.page')}</span>
+          <span className={styles.pageInfo}>{t('alerts.pagination.page')}</span>
           <button onClick={() => setPage(p => p + 1)} disabled={alerts.length < 50}
-            style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--color-border-subtle)', background: 'var(--color-surface)', color: 'var(--color-text)', cursor: alerts.length < 50 ? 'default' : 'pointer', opacity: alerts.length < 50 ? 0.5 : 1 }}>
+            className={styles.pageBtn}>
             {t('alerts.pagination.next')}
           </button>
         </div>
@@ -310,19 +309,19 @@ export default function AlertsPage() {
 
       {selectedAlert && (
         <>
-          <div onClick={() => { setSelectedAlert(null); setResolveComment(''); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999 }} />
-          <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 440, maxWidth: '90vw', background: 'var(--color-surface)', borderLeft: '1px solid var(--color-border-subtle)', boxShadow: '-8px 0 32px rgba(0,0,0,0.4)', zIndex: 1000, overflow: 'auto', padding: 28 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div onClick={() => { setSelectedAlert(null); setResolveComment(''); }} className={styles.overlay} />
+          <div className={styles.drawer}>
+            <div className={styles.drawerHeader}>
               <div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: 2 }}>
+                <div className={styles.drawerType}>
                   {t(`alerts.type.${selectedAlert.type}`, selectedAlert.type)}
                 </div>
-                <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--color-text)' }}>{selectedAlert.title}</h2>
+                <h2 className={styles.drawerTitle}>{selectedAlert.title}</h2>
               </div>
-              <button onClick={() => { setSelectedAlert(null); setResolveComment(''); }} style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: 4 }}><X size={20} /></button>
+              <button onClick={() => { setSelectedAlert(null); setResolveComment(''); }} className={styles.closeBtn}><X size={20} /></button>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+            <div className={styles.badgeRow}>
               <Badge color={PRIORITY_COLORS[selectedAlert.priority]}>{PRIORITY_LABELS[selectedAlert.priority]}</Badge>
               <Badge color={selectedAlert.resolved ? '#22c55e' : '#ef4444'}>{selectedAlert.resolved ? t('alerts.detail.resolved') : t('alerts.detail.active')}</Badge>
             </div>
@@ -331,7 +330,7 @@ export default function AlertsPage() {
 
             {selectedAlert.delivery && (
               <Section label={t('alerts.detail.delivery')}>
-                <Link to={`/deliveries/${selectedAlert.delivery.id}`} style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>
+                <Link to={`/deliveries/${selectedAlert.delivery.id}`} className={styles.deliveryLink}>
                   {selectedAlert.delivery.title}
                 </Link>
                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>{selectedAlert.delivery.deliveryAddress}</div>
@@ -344,7 +343,7 @@ export default function AlertsPage() {
 
             {selectedAlert.link && (
               <Section label={t('alerts.detail.link')}>
-                <Link to={selectedAlert.link} style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>{t('alerts.detail.viewDetail')}</Link>
+                <Link to={selectedAlert.link} className={styles.deliveryLink}>{t('alerts.detail.viewDetail')}</Link>
               </Section>
             )}
 
@@ -352,18 +351,18 @@ export default function AlertsPage() {
               <Section label={t('alerts.detail.resolution')}>
                 <div>{t('alerts.detail.resolvedBy', { firstName: selectedAlert.resolvedBy.firstName, lastName: selectedAlert.resolvedBy.lastName, date: formatDateTime(selectedAlert.resolvedAt!) })}</div>
                 {selectedAlert.resolutionComment && (
-                  <div style={{ marginTop: 8, padding: 10, background: 'var(--color-surface-alt)', borderRadius: 6, fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>{selectedAlert.resolutionComment}</div>
+                  <div className={styles.resolutionComment}>{selectedAlert.resolutionComment}</div>
                 )}
               </Section>
             )}
 
             {!selectedAlert.resolved && (
-              <div style={{ marginTop: 20, padding: 16, background: 'var(--color-surface-alt)', borderRadius: 10 }}>
-                <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--color-text)' }}>{t('alerts.detail.markResolved')}</div>
+              <div className={styles.resolveSection}>
+                <div className={styles.resolveSectionTitle}>{t('alerts.detail.markResolved')}</div>
                 <textarea placeholder={t('alerts.detail.commentPlaceholder')} value={resolveComment} onChange={(e) => setResolveComment(e.target.value)} rows={3}
-                  style={{ width: '100%', padding: 8, background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', borderRadius: 6, color: 'var(--color-text)', fontSize: '0.85rem', fontFamily: 'inherit', resize: 'vertical', marginBottom: 10 }} />
+                  className={styles.textarea} />
                 <button onClick={() => resolveMutation.mutate({ id: selectedAlert.id, comment: resolveComment })} disabled={resolveMutation.isPending}
-                  style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#22c55e', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                  className={styles.confirmBtn}>
                   {resolveMutation.isPending ? t('alerts.detail.resolving') : t('alerts.detail.confirmResolve')}
                 </button>
               </div>
@@ -377,11 +376,11 @@ export default function AlertsPage() {
 
 function KpiCard({ label, value, color, trend }: { label: string; value: number; color: string; trend?: number | null }) {
   return (
-    <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)', borderRadius: 10, padding: 14 }}>
-      <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 500, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: '1.75rem', fontWeight: 700, color }}>{value}</div>
+    <div className={styles.kpiCard}>
+      <div className={styles.kpiLabel}>{label}</div>
+      <div className={styles.kpiValue} style={{ color }}>{value}</div>
       {trend !== null && trend !== undefined && (
-        <div style={{ fontSize: '0.65rem', color: trend > 0 ? '#ef4444' : trend < 0 ? '#22c55e' : 'var(--color-text-tertiary)', marginTop: 2 }}>
+        <div className={styles.kpiTrend} style={{ color: trend > 0 ? '#ef4444' : trend < 0 ? '#22c55e' : 'var(--color-text-tertiary)' }}>
           {trend > 0 ? `+${trend}%` : trend < 0 ? `${trend}%` : '='}
         </div>
       )}
@@ -391,27 +390,25 @@ function KpiCard({ label, value, color, trend }: { label: string; value: number;
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>{children}</div>
+    <div className={styles.section}>
+      <div className={styles.sectionLabel}>{label}</div>
+      <div className={styles.sectionContent}>{children}</div>
     </div>
   );
 }
 
 function Badge({ color, children }: { color: string; children: React.ReactNode }) {
   return (
-    <span style={{ padding: '3px 10px', borderRadius: 9999, fontSize: '0.7rem', fontWeight: 600, background: `${color}15`, color }}>{children}</span>
+    <span className={styles.badge} style={{ background: `${color}15`, color }}>{children}</span>
   );
 }
 
 function FilterChip({ active, onClick, children, color }: { active: boolean; onClick: () => void; children: React.ReactNode; color?: string }) {
   return (
-    <button onClick={onClick} style={{
-      padding: '4px 12px', borderRadius: 9999, fontSize: '0.75rem', fontWeight: 500,
+    <button onClick={onClick} className={styles.filterChip} style={{
       border: active ? `1px solid ${color || 'var(--color-accent, #F2A93C)'}` : '1px solid var(--color-border-subtle)',
       background: active ? `${color || 'var(--color-accent, #F2A93C)'}15` : 'transparent',
       color: active ? (color || 'var(--color-accent, #F2A93C)') : 'var(--color-text-secondary)',
-      cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s ease',
     }}>{children}</button>
   );
 }

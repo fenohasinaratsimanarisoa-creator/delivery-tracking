@@ -1,0 +1,52 @@
+.errorContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+.errorCard {
+  text-align: center;
+}
+.loadingContainer {
+  text-align: center;
+  padding: 40px;
+}
+.page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.header {
+  padding: 20px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+}
+.headerRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.headerTitle {
+  margin: 0;
+}
+.liveDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #28a745;
+  animation: dt-pulse-moving 2s ease-out infinite;
+}
+.liveLabel {
+  font-size: 0.8rem;
+  color: #28a745;
+  font-weight: 600;
+}
+.lastUpdate {
+  font-size: 0.75rem;
+  color: #999;
+}
+.mapContainer {
+  flex: 1;
+}

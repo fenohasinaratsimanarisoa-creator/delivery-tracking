@@ -14,6 +14,7 @@ import {
 import Button from '../../components/Button';
 import adminApi from '../../services/api/adminClient';
 import { getAdminToken, setAdminToken } from '../../services/auth/adminTokenStore';
+import styles from './AdminDashboard.module.css';
 
 interface Metrics {
   mrr: number;
@@ -56,34 +57,20 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
   sub?: string; color: string;
 }) {
   return (
-    <div style={{
-      background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-      border: '1px solid var(--color-border)',
-      padding: 'var(--space-lg)', flex: 1, minWidth: 180,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 'var(--radius-md)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: `${color}15`, color,
-        }}>
+    <div className={styles.statCard}>
+      <div className={styles.statCardHeader}>
+        <div className={styles.statCardIconBox} style={{ background: `${color}15`, color }}>
           <Icon size={18} />
         </div>
-        <span style={{
-          fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)',
-          fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em',
-        }}>
+        <span className={styles.statCardLabel}>
           {label}
         </span>
       </div>
-      <div style={{
-        fontSize: 'var(--text-xl)', fontWeight: 700,
-        color: 'var(--color-text)', fontFamily: 'var(--font-display)',
-      }}>
+      <div className={styles.statCardValue}>
         {typeof value === 'number' && label.includes('MRR') ? `${value} €` : value}
       </div>
       {sub && (
-        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+        <div className={styles.statCardSub}>
           {sub}
         </div>
       )}
@@ -94,13 +81,8 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
 function ImpersonationBanner({ user, onStop }: { user: { email: string; name: string }; onStop: () => void }) {
   const { t } = useTranslation();
   return (
-    <div style={{
-      background: 'var(--color-warning-muted, #fef3c7)', color: 'var(--color-warning, #d97706)',
-      padding: '8px 16px', display: 'flex', alignItems: 'center',
-      justifyContent: 'space-between', fontSize: 'var(--text-sm)',
-      borderBottom: '1px solid var(--color-warning-subtle, #fde68a)',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div className={styles.impersonationBanner}>
+      <div className={styles.impersonationInfo}>
         <Eye size={16} />
         <span>
           {t('admin.dashboard.impersonation', { name: user.name, email: user.email })}
@@ -108,12 +90,7 @@ function ImpersonationBanner({ user, onStop }: { user: { email: string; name: st
       </div>
       <button
         onClick={onStop}
-        style={{
-          background: 'transparent', border: '1px solid currentColor',
-          color: 'inherit', borderRadius: 'var(--radius-sm)',
-          padding: '4px 12px', cursor: 'pointer', fontSize: 'var(--text-xs)',
-          fontWeight: 600,
-        }}
+        className={styles.impersonationBtn}
       >
         {t('admin.dashboard.impersonationLeave')}
       </button>
@@ -223,85 +200,44 @@ export default function AdminDashboard() {
         <ImpersonationBanner user={impersonating} onStop={stopImpersonating} />
         <iframe
           src={`/dashboard?token=${impersonating.token}`}
-          style={{ width: '100%', height: 'calc(100vh - 45px)', border: 'none' }}
+          className={styles.iframeStyle}
         />
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 'var(--space-xl)', maxWidth: 1200, margin: '0 auto' }}>
+    <div className={styles.container}>
       {/* Header */}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: 'var(--space-xl)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: 'var(--radius-md)',
-            background: 'var(--color-accent-muted)', color: 'var(--color-accent)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
+      <div className={styles.headerRow}>
+        <div className={styles.headerLeft}>
+          <div className={styles.headerIconBox}>
             <Shield size={22} />
           </div>
           <div>
-            <h1 style={{
-              fontFamily: 'var(--font-display)', fontSize: 'var(--text-lg)',
-              fontWeight: 700, color: 'var(--color-text)', margin: 0,
-            }}>
+            <h1 className={styles.headerTitle}>
               {t('admin.dashboard.title')}
             </h1>
-            <p style={{
-              fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)',
-              margin: 0,
-            }}>
+            <p className={styles.headerSubtitle}>
               {t('admin.dashboard.subtitle')}
             </p>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setTab('dashboard')} style={{
-            padding: '6px 14px', borderRadius: 'var(--radius-md)',
-            border: tab === 'dashboard' ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
-            background: tab === 'dashboard' ? 'var(--color-accent-muted)' : 'transparent',
-            color: tab === 'dashboard' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-            cursor: 'pointer', fontWeight: 500, fontSize: 'var(--text-sm)',
-            fontFamily: 'var(--font-body)',
-          }}>
-            <Activity size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+        <div className={styles.headerActions}>
+          <button onClick={() => setTab('dashboard')} className={`${styles.tabBtn} ${tab === 'dashboard' ? styles.tabBtnActive : ''}`}>
+            <Activity size={14} className={styles.tabBtnIcon} />
             {t('admin.dashboard.tabs.overview')}
           </button>
-          <button onClick={() => setTab('tenants')} style={{
-            padding: '6px 14px', borderRadius: 'var(--radius-md)',
-            border: tab === 'tenants' ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
-            background: tab === 'tenants' ? 'var(--color-accent-muted)' : 'transparent',
-            color: tab === 'tenants' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-            cursor: 'pointer', fontWeight: 500, fontSize: 'var(--text-sm)',
-            fontFamily: 'var(--font-body)',
-          }}>
-            <Building2 size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+          <button onClick={() => setTab('tenants')} className={`${styles.tabBtn} ${tab === 'tenants' ? styles.tabBtnActive : ''}`}>
+            <Building2 size={14} className={styles.tabBtnIcon} />
             {t('admin.dashboard.tabs.tenants')}
           </button>
-          <button onClick={() => setTab('audit')} style={{
-            padding: '6px 14px', borderRadius: 'var(--radius-md)',
-            border: tab === 'audit' ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
-            background: tab === 'audit' ? 'var(--color-accent-muted)' : 'transparent',
-            color: tab === 'audit' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-            cursor: 'pointer', fontWeight: 500, fontSize: 'var(--text-sm)',
-            fontFamily: 'var(--font-body)',
-          }}>
-            <EyeOff size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+          <button onClick={() => setTab('audit')} className={`${styles.tabBtn} ${tab === 'audit' ? styles.tabBtnActive : ''}`}>
+            <EyeOff size={14} className={styles.tabBtnIcon} />
             {t('admin.dashboard.tabs.audit')}
           </button>
-          <button onClick={() => setTab('admins')} style={{
-            padding: '6px 14px', borderRadius: 'var(--radius-md)',
-            border: tab === 'admins' ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
-            background: tab === 'admins' ? 'var(--color-accent-muted)' : 'transparent',
-            color: tab === 'admins' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-            cursor: 'pointer', fontWeight: 500, fontSize: 'var(--text-sm)',
-            fontFamily: 'var(--font-body)',
-          }}>
-            <Users size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+          <button onClick={() => setTab('admins')} className={`${styles.tabBtn} ${tab === 'admins' ? styles.tabBtnActive : ''}`}>
+            <Users size={14} className={styles.tabBtnIcon} />
             {t('admin.dashboard.tabs.admins')}
           </button>
           <Button variant="danger" size="sm" icon={<LogOut size={14} />} onClick={handleLogout}>
@@ -311,7 +247,7 @@ export default function AdminDashboard() {
       </div>
 
       {loading && (
-        <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--color-text-secondary)' }}>
+        <div className={styles.loadingState}>
           {t('common.loading')}
         </div>
       )}
@@ -319,10 +255,7 @@ export default function AdminDashboard() {
       {!loading && tab === 'dashboard' && metrics && (
         <>
           {/* Stats Grid */}
-          <div style={{
-            display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap',
-            marginBottom: 'var(--space-xl)',
-          }}>
+          <div className={styles.statsGrid}>
             <StatCard icon={DollarSign} label="MRR" value={metrics.mrr} sub={t('admin.dashboard.stats.mrrSub')} color="var(--color-teal)" />
             <StatCard icon={CreditCard} label={t('admin.dashboard.stats.monthlyRevenue')} value={metrics.monthlyRevenue} sub={t('admin.dashboard.stats.paidInvoicesSub')} color="var(--color-accent)" />
             <StatCard icon={Building2} label={t('admin.dashboard.stats.activeTenants')} value={metrics.activeCompanies} sub={t('admin.dashboard.stats.newTenantsSub', { count: metrics.newCompaniesThisMonth })} color="var(--color-blue)" />
@@ -337,16 +270,9 @@ export default function AdminDashboard() {
           </div>
 
           {/* Charts */}
-          <div style={{ display: 'flex', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)', flexWrap: 'wrap' }}>
-            <div style={{
-              flex: 2, minWidth: 400,
-              background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-              border: '1px solid var(--color-border)', padding: 'var(--space-lg)',
-            }}>
-              <h3 style={{
-                fontSize: 'var(--text-sm)', fontWeight: 600,
-                color: 'var(--color-text)', margin: '0 0 var(--space-md) 0',
-              }}>
+          <div className={styles.chartsRow}>
+            <div className={styles.chartCard} style={{ flex: 2, minWidth: 400 }}>
+              <h3 className={styles.chartCardTitle}>
                 {t('admin.dashboard.charts.tenantGrowth')}
               </h3>
               <ResponsiveContainer width="100%" height={220}>
@@ -362,15 +288,8 @@ export default function AdminDashboard() {
               </ResponsiveContainer>
             </div>
 
-            <div style={{
-              flex: 3, minWidth: 400,
-              background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-              border: '1px solid var(--color-border)', padding: 'var(--space-lg)',
-            }}>
-              <h3 style={{
-                fontSize: 'var(--text-sm)', fontWeight: 600,
-                color: 'var(--color-text)', margin: '0 0 var(--space-md) 0',
-              }}>
+            <div className={styles.chartCard} style={{ flex: 3, minWidth: 400 }}>
+              <h3 className={styles.chartCardTitle}>
                 {t('admin.dashboard.charts.monthlyDeliveries')}
               </h3>
               <ResponsiveContainer width="100%" height={220}>
@@ -388,49 +307,38 @@ export default function AdminDashboard() {
           </div>
 
           {/* Top Companies */}
-          <div style={{
-            background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-border)', overflow: 'hidden',
-          }}>
-            <div style={{
-              padding: 'var(--space-lg)', borderBottom: '1px solid var(--color-border-subtle)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}>
-              <h3 style={{
-                fontSize: 'var(--text-sm)', fontWeight: 600,
-                color: 'var(--color-text)', margin: 0,
-              }}>
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionCardHeader}>
+              <h3 className={styles.sectionTitle}>
                 {t('admin.dashboard.topCompanies')}
               </h3>
             </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+            <div className={styles.scrollTable}>
+              <table className={styles.table}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                    <th style={{ textAlign: 'left', padding: '10px var(--space-lg)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.companyTable.company')}</th>
-                    <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.companyTable.plan')}</th>
-                    <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.companyTable.users')}</th>
-                    <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.companyTable.vehicles')}</th>
-                    <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.companyTable.deliveries')}</th>
+                  <tr className={styles.tableHeadRow}>
+                    <th className={styles.tableHeadCell}>{t('admin.dashboard.companyTable.company')}</th>
+                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.companyTable.plan')}</th>
+                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.companyTable.users')}</th>
+                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.companyTable.vehicles')}</th>
+                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.companyTable.deliveries')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {metrics.topCompanies.map((c) => (
-                    <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                      <td style={{ padding: '10px var(--space-lg)', fontWeight: 500, color: 'var(--color-text)' }}>{c.name}</td>
-                      <td style={{ textAlign: 'center', padding: '10px var(--space-md)' }}>
-                        <span style={{
-                          display: 'inline-block', padding: '2px 8px', borderRadius: 'var(--radius-sm)',
-                          fontSize: 'var(--text-xs)', fontWeight: 600,
+                    <tr key={c.id} className={styles.tableRow}>
+                      <td className={styles.tableCell}>{c.name}</td>
+                      <td className={styles.tableCellCenter}>
+                        <span className={styles.badge} style={{
                           background: c.tier === 'enterprise' ? 'var(--color-accent-muted)' : c.tier === 'pro' ? 'var(--color-teal-muted, rgba(45,212,191,0.1))' : 'transparent',
                           color: c.tier === 'enterprise' ? 'var(--color-accent)' : c.tier === 'pro' ? 'var(--color-teal)' : 'var(--color-text-secondary)',
                         }}>
                           {c.tier === 'free' ? t('admin.dashboard.companyTable.freeTier') : c.plan}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)' }}>{c.users}</td>
-                      <td style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)' }}>{c.vehicles}</td>
-                      <td style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)' }}>{c.deliveries}</td>
+                      <td className={styles.tableCellSecondaryCenter}>{c.users}</td>
+                      <td className={styles.tableCellSecondaryCenter}>{c.vehicles}</td>
+                      <td className={styles.tableCellSecondaryCenter}>{c.deliveries}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -441,65 +349,45 @@ export default function AdminDashboard() {
       )}
 
       {!loading && tab === 'tenants' && (
-        <div style={{
-          background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--color-border)', overflow: 'hidden',
-        }}>
-          <div style={{
-            padding: 'var(--space-lg)', borderBottom: '1px solid var(--color-border-subtle)',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
-          }}>
-            <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+        <div className={styles.sectionCard}>
+          <div className={styles.sectionCardHeaderNoBorder}>
+            <h3 className={styles.sectionTitle}>
               {t('admin.dashboard.tenantsTab.title', { count: filteredTenants.length })}
             </h3>
-            <div style={{ position: 'relative', width: 280 }}>
-              <Search size={14} style={{
-                position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-                color: 'var(--color-text-tertiary)',
-              }} />
+            <div className={styles.searchWrapper}>
+              <Search size={14} className={styles.searchIcon} />
               <input
                 type="text"
                 value={tenantSearch}
                 onChange={(e) => setTenantSearch(e.target.value)}
                 placeholder={t('admin.dashboard.tenantsTab.search')}
-                style={{
-                  width: '100%', padding: '6px 10px 6px 30px',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'var(--color-bg)',
-                  color: 'var(--color-text)',
-                  fontSize: 'var(--text-sm)',
-                  fontFamily: 'var(--font-body)',
-                  outline: 'none', boxSizing: 'border-box',
-                }}
+                className={styles.searchInput}
               />
             </div>
           </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+          <div className={styles.scrollTable}>
+            <table className={styles.table}>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                  <th style={{ textAlign: 'left', padding: '10px var(--space-lg)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.companyTable.company')}</th>
-                  <th style={{ textAlign: 'left', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.tenantsTab.contact')}</th>
-                  <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.tenantsTab.plan')}</th>
-                  <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.tenantsTab.users')}</th>
-                  <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.tenantsTab.vehicles')}</th>
-                  <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.tenantsTab.deliveries')}</th>
-                  <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.tenantsTab.createdDate')}</th>
-                  <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.tenantsTab.actions')}</th>
+                <tr className={styles.tableHeadRow}>
+                  <th className={styles.tableHeadCell}>{t('admin.dashboard.companyTable.company')}</th>
+                  <th className={styles.tableHeadCell}>{t('admin.dashboard.tenantsTab.contact')}</th>
+                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.tenantsTab.plan')}</th>
+                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.tenantsTab.users')}</th>
+                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.tenantsTab.vehicles')}</th>
+                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.tenantsTab.deliveries')}</th>
+                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.tenantsTab.createdDate')}</th>
+                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.tenantsTab.actions')}</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredTenants.map((tenant) => (
-                  <tr key={tenant.id} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                    <td style={{ padding: '10px var(--space-lg)', fontWeight: 500, color: 'var(--color-text)' }}>{tenant.name}</td>
-                    <td style={{ padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <tr key={tenant.id} className={styles.tableRow}>
+                    <td className={styles.tableCell}>{tenant.name}</td>
+                    <td className={`${styles.tableCellSecondary} ${styles.tableEllipsis}`}>
                       {tenant.email || tenant.users[0]?.email || '—'}
                     </td>
-                    <td style={{ textAlign: 'center', padding: '10px var(--space-md)' }}>
-                      <span style={{
-                        display: 'inline-block', padding: '2px 8px', borderRadius: 'var(--radius-sm)',
-                        fontSize: 'var(--text-xs)', fontWeight: 600,
+                    <td className={styles.tableCellCenter}>
+                      <span className={styles.badge} style={{
                         background: tenant.subscription?.plan.tier === 'enterprise' ? 'var(--color-accent-muted)' :
                           tenant.subscription?.plan.tier === 'pro' ? 'rgba(45,212,191,0.1)' : 'transparent',
                         color: tenant.subscription?.plan.tier === 'enterprise' ? 'var(--color-accent)' :
@@ -508,35 +396,27 @@ export default function AdminDashboard() {
                         {tenant.subscription ? tenant.subscription.plan.name : '—'}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)' }}>{tenant._count.users}</td>
-                    <td style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)' }}>{tenant._count.vehicles}</td>
-                    <td style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)' }}>{tenant._count.deliveries}</td>
-                    <td style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
+                    <td className={styles.tableCellSecondaryCenter}>{tenant._count.users}</td>
+                    <td className={styles.tableCellSecondaryCenter}>{tenant._count.vehicles}</td>
+                    <td className={styles.tableCellSecondaryCenter}>{tenant._count.deliveries}</td>
+                    <td className={styles.tableCellTiny}>
                       {formatDate(tenant.createdAt)}
                     </td>
-                    <td style={{ textAlign: 'center', padding: '10px var(--space-md)' }}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                    <td className={styles.actionsCell}>
+                      <div className={styles.actionsRow}>
                         <button
                           onClick={() => handleImpersonate(tenant.id)}
                           title={t('admin.dashboard.tenantsTab.impersonate')}
-                          style={{
-                            padding: '4px 8px', borderRadius: 'var(--radius-sm)',
-                            border: '1px solid var(--color-border)',
-                            background: 'transparent', color: 'var(--color-accent)',
-                            cursor: 'pointer', fontSize: 'var(--text-xs)',
-                          }}
+                          className={styles.iconBtn}
+                          style={{ color: 'var(--color-accent)' }}
                         >
                           <Eye size={14} />
                         </button>
                         <button
                           onClick={() => handleToggleTenant(tenant.id)}
                           title={t('admin.dashboard.tenantsTab.toggle')}
-                          style={{
-                            padding: '4px 8px', borderRadius: 'var(--radius-sm)',
-                            border: '1px solid var(--color-border)',
-                            background: 'transparent', color: 'var(--color-red)',
-                            cursor: 'pointer', fontSize: 'var(--text-xs)',
-                          }}
+                          className={styles.iconBtn}
+                          style={{ color: 'var(--color-red)' }}
                         >
                           <X size={14} />
                         </button>
@@ -551,39 +431,31 @@ export default function AdminDashboard() {
       )}
 
       {!loading && tab === 'audit' && auditLogs && (
-        <div style={{
-          background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--color-border)', overflow: 'hidden',
-        }}>
-          <div style={{
-            padding: 'var(--space-lg)', borderBottom: '1px solid var(--color-border-subtle)',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          }}>
-            <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+        <div className={styles.sectionCard}>
+          <div className={styles.sectionCardHeader}>
+            <h3 className={styles.sectionTitle}>
               {t('admin.dashboard.auditTab.title', { count: auditLogs.total })}
             </h3>
           </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+          <div className={styles.scrollTable}>
+            <table className={styles.table}>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                  <th style={{ textAlign: 'left', padding: '10px var(--space-lg)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.auditTab.admin')}</th>
-                  <th style={{ textAlign: 'left', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.auditTab.action')}</th>
-                  <th style={{ textAlign: 'left', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.auditTab.target')}</th>
-                  <th style={{ textAlign: 'left', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.auditTab.ip')}</th>
-                  <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.auditTab.date')}</th>
+                <tr className={styles.tableHeadRow}>
+                  <th className={styles.tableHeadCell}>{t('admin.dashboard.auditTab.admin')}</th>
+                  <th className={styles.tableHeadCell}>{t('admin.dashboard.auditTab.action')}</th>
+                  <th className={styles.tableHeadCell}>{t('admin.dashboard.auditTab.target')}</th>
+                  <th className={styles.tableHeadCell}>{t('admin.dashboard.auditTab.ip')}</th>
+                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.auditTab.date')}</th>
                 </tr>
               </thead>
               <tbody>
                 {auditLogs.data.map((log) => (
-                  <tr key={log.id} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+                  <tr key={log.id} className={styles.tableRow}>
                     <td style={{ padding: '10px var(--space-lg)', color: 'var(--color-text)' }}>
                       {log.admin.firstName} {log.admin.lastName}
                     </td>
                     <td style={{ padding: '10px var(--space-md)' }}>
-                      <span style={{
-                        display: 'inline-block', padding: '2px 8px', borderRadius: 'var(--radius-sm)',
-                        fontSize: 'var(--text-xs)', fontWeight: 600,
+                      <span className={styles.badge} style={{
                         background: log.action === 'impersonate' ? 'var(--color-accent-muted)' :
                           log.action === 'login' || log.action === 'login_success' ? 'rgba(45,212,191,0.1)' :
                           log.action === 'tenant_toggle' ? 'rgba(251,146,60,0.1)' : 'transparent',
@@ -602,10 +474,10 @@ export default function AdminDashboard() {
                     <td style={{ padding: '10px var(--space-md)', color: 'var(--color-text-secondary)' }}>
                       {log.targetCompany?.name || (log.metadata?.impersonatedAs ? `→ ${log.metadata.impersonatedAs}` : '—')}
                     </td>
-                    <td style={{ padding: '10px var(--space-md)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
+                    <td className={styles.tableCellTiny}>
                       {log.ip || '—'}
                     </td>
-                    <td style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
+                    <td className={styles.tableCellTiny}>
                       {formatDateTime(log.createdAt)}
                     </td>
                   </tr>
@@ -614,22 +486,12 @@ export default function AdminDashboard() {
             </table>
           </div>
           {auditLogs.totalPages > 1 && (
-            <div style={{
-              padding: 'var(--space-md) var(--space-lg)',
-              borderTop: '1px solid var(--color-border-subtle)',
-              display: 'flex', justifyContent: 'center', gap: 8,
-            }}>
+            <div className={styles.paginationBar}>
               {Array.from({ length: auditLogs.totalPages }, (_, i) => i + 1).map(p => (
                 <button
                   key={p}
                   onClick={() => { setAuditPage(p); }}
-                  style={{
-                    padding: '4px 10px', borderRadius: 'var(--radius-sm)',
-                    border: `1px solid ${p === auditPage ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                    background: p === auditPage ? 'var(--color-accent-muted)' : 'transparent',
-                    color: p === auditPage ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-                    cursor: 'pointer', fontSize: 'var(--text-xs)', fontWeight: 600,
-                  }}
+                  className={`${styles.pageBtn} ${p === auditPage ? styles.pageBtnActive : ''}`}
                 >
                   {p}
                 </button>
@@ -641,74 +503,56 @@ export default function AdminDashboard() {
 
       {!loading && tab === 'admins' && (
         <div>
-          <div style={{
-            background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-border)', overflow: 'hidden',
-          }}>
-            <div style={{
-              padding: 'var(--space-lg)', borderBottom: '1px solid var(--color-border-subtle)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}>
-              <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionCardHeader}>
+              <h3 className={styles.sectionTitle}>
                 {t('admin.dashboard.adminsTab.title', { count: admins.length })}
               </h3>
               <button
                 onClick={() => setShowCreateAdmin(true)}
-                style={{
-                  padding: '6px 14px', borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-accent)',
-                  background: 'var(--color-accent-muted)',
-                  color: 'var(--color-accent)',
-                  cursor: 'pointer', fontWeight: 600, fontSize: 'var(--text-sm)',
-                  fontFamily: 'var(--font-body)',
-                  display: 'flex', alignItems: 'center', gap: 6,
-                }}
+                className={styles.addBtn}
               >
                 <UserPlus size={14} />
                 {t('admin.dashboard.adminsTab.add')}
               </button>
             </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+            <div className={styles.scrollTable}>
+              <table className={styles.table}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                    <th style={{ textAlign: 'left', padding: '10px var(--space-lg)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.adminsTab.name')}</th>
-                    <th style={{ textAlign: 'left', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.adminsTab.email')}</th>
-                    <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.adminsTab.tfa')}</th>
-                    <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.adminsTab.active')}</th>
-                    <th style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{t('admin.dashboard.adminsTab.createdDate')}</th>
+                  <tr className={styles.tableHeadRow}>
+                    <th className={styles.tableHeadCell}>{t('admin.dashboard.adminsTab.name')}</th>
+                    <th className={styles.tableHeadCell}>{t('admin.dashboard.adminsTab.email')}</th>
+                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.adminsTab.tfa')}</th>
+                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.adminsTab.active')}</th>
+                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.adminsTab.createdDate')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {admins.map((a: any) => (
-                    <tr key={a.id} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                      <td style={{ padding: '10px var(--space-lg)', fontWeight: 500, color: 'var(--color-text)' }}>
+                    <tr key={a.id} className={styles.tableRow}>
+                      <td className={styles.tableCell}>
                         {a.firstName} {a.lastName}
                       </td>
-                      <td style={{ padding: '10px var(--space-md)', color: 'var(--color-text-secondary)' }}>
+                      <td className={styles.tableCellSecondary}>
                         {a.email}
                       </td>
-                      <td style={{ textAlign: 'center', padding: '10px var(--space-md)' }}>
-                        <span style={{
-                          display: 'inline-block', padding: '2px 8px', borderRadius: 'var(--radius-sm)',
-                          fontSize: 'var(--text-xs)', fontWeight: 600,
+                      <td className={styles.tableCellCenter}>
+                        <span className={styles.badge} style={{
                           background: a.totpEnabled ? 'rgba(45,212,191,0.1)' : 'rgba(251,146,60,0.1)',
                           color: a.totpEnabled ? 'var(--color-teal)' : 'var(--color-orange)',
                         }}>
                           {a.totpEnabled ? t('admin.dashboard.adminsTab.tfaEnabled') : t('admin.dashboard.adminsTab.tfaDisabled')}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'center', padding: '10px var(--space-md)' }}>
-                        <span style={{
-                          display: 'inline-block', padding: '2px 8px', borderRadius: 'var(--radius-sm)',
-                          fontSize: 'var(--text-xs)', fontWeight: 600,
+                      <td className={styles.tableCellCenter}>
+                        <span className={styles.badge} style={{
                           background: a.isActive ? 'rgba(45,212,191,0.1)' : 'rgba(239,68,68,0.1)',
                           color: a.isActive ? 'var(--color-teal)' : 'var(--color-red)',
                         }}>
                           {a.isActive ? t('admin.dashboard.adminsTab.isActiveYes') : t('admin.dashboard.adminsTab.isActiveNo')}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'center', padding: '10px var(--space-md)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
+                      <td className={styles.tableCellTiny}>
                         {formatDate(a.createdAt)}
                       </td>
                     </tr>
@@ -719,54 +563,36 @@ export default function AdminDashboard() {
           </div>
 
           {showCreateAdmin && (
-            <div style={{
-              position: 'fixed', inset: 0, zIndex: 2000,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(0,0,0,0.4)',
-            }} onClick={() => setShowCreateAdmin(false)}>
-              <div style={{
-                background: 'var(--color-surface)', borderRadius: 'var(--radius-xl)',
-                border: '1px solid var(--color-border)',
-                padding: 'var(--space-xl)', width: 400, maxWidth: '90vw',
-              }} onClick={e => e.stopPropagation()}>
-                <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 var(--space-lg) 0' }}>
+            <div className={styles.modalOverlay} onClick={() => setShowCreateAdmin(false)}>
+              <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+                <h3 className={styles.modalTitle}>
                   {t('admin.dashboard.createAdmin.title')}
                 </h3>
                 <form onSubmit={handleCreateAdmin}>
-                  <div style={{ marginBottom: 'var(--space-md)' }}>
-                    <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+                  <div className={styles.formField}>
+                    <label className={styles.formLabel}>
                       {t('admin.dashboard.createAdmin.firstName')}
                     </label>
                     <input
                       value={createForm.firstName}
                       onChange={e => setCreateForm({ ...createForm, firstName: e.target.value })}
                       required
-                      style={{
-                        width: '100%', padding: '8px 10px', boxSizing: 'border-box',
-                        border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-                        background: 'var(--color-bg)', color: 'var(--color-text)',
-                        fontSize: 'var(--text-sm)', fontFamily: 'var(--font-body)', outline: 'none',
-                      }}
+                      className={styles.formInput}
                     />
                   </div>
-                  <div style={{ marginBottom: 'var(--space-md)' }}>
-                    <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+                  <div className={styles.formField}>
+                    <label className={styles.formLabel}>
                       {t('admin.dashboard.createAdmin.lastName')}
                     </label>
                     <input
                       value={createForm.lastName}
                       onChange={e => setCreateForm({ ...createForm, lastName: e.target.value })}
                       required
-                      style={{
-                        width: '100%', padding: '8px 10px', boxSizing: 'border-box',
-                        border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-                        background: 'var(--color-bg)', color: 'var(--color-text)',
-                        fontSize: 'var(--text-sm)', fontFamily: 'var(--font-body)', outline: 'none',
-                      }}
+                      className={styles.formInput}
                     />
                   </div>
-                  <div style={{ marginBottom: 'var(--space-md)' }}>
-                    <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+                  <div className={styles.formField}>
+                    <label className={styles.formLabel}>
                       {t('admin.dashboard.createAdmin.email')}
                     </label>
                     <input
@@ -774,16 +600,11 @@ export default function AdminDashboard() {
                       value={createForm.email}
                       onChange={e => setCreateForm({ ...createForm, email: e.target.value })}
                       required
-                      style={{
-                        width: '100%', padding: '8px 10px', boxSizing: 'border-box',
-                        border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-                        background: 'var(--color-bg)', color: 'var(--color-text)',
-                        fontSize: 'var(--text-sm)', fontFamily: 'var(--font-body)', outline: 'none',
-                      }}
+                      className={styles.formInput}
                     />
                   </div>
-                  <div style={{ marginBottom: 'var(--space-lg)' }}>
-                    <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+                  <div className={styles.lastFormField}>
+                    <label className={styles.formLabel}>
                       {t('admin.dashboard.createAdmin.password')}
                     </label>
                     <input
@@ -792,36 +613,20 @@ export default function AdminDashboard() {
                       onChange={e => setCreateForm({ ...createForm, password: e.target.value })}
                       required
                       minLength={6}
-                      style={{
-                        width: '100%', padding: '8px 10px', boxSizing: 'border-box',
-                        border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-                        background: 'var(--color-bg)', color: 'var(--color-text)',
-                        fontSize: 'var(--text-sm)', fontFamily: 'var(--font-body)', outline: 'none',
-                      }}
+                      className={styles.formInput}
                     />
                   </div>
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <div className={styles.formActions}>
                     <button
                       type="button"
                       onClick={() => setShowCreateAdmin(false)}
-                      style={{
-                        padding: '8px 16px', borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--color-border)',
-                        background: 'transparent', color: 'var(--color-text-secondary)',
-                        cursor: 'pointer', fontWeight: 500, fontSize: 'var(--text-sm)',
-                        fontFamily: 'var(--font-body)',
-                      }}
+                      className={styles.cancelBtn}
                     >
                       {t('admin.dashboard.createAdmin.cancel')}
                     </button>
                     <button
                       type="submit"
-                      style={{
-                        padding: '8px 16px', borderRadius: 'var(--radius-md)',
-                        border: 'none', background: 'var(--color-accent)',
-                        color: '#fff', cursor: 'pointer', fontWeight: 600,
-                        fontSize: 'var(--text-sm)', fontFamily: 'var(--font-body)',
-                      }}
+                      className={styles.submitBtn}
                     >
                       {t('admin.dashboard.createAdmin.create')}
                     </button>

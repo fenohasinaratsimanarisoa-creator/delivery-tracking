@@ -1,4 +1,5 @@
 import { type ButtonHTMLAttributes, type ReactNode } from 'react';
+import styles from './Button.module.css';
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline';
@@ -58,21 +59,11 @@ export default function Button({
   return (
     <button
       disabled={disabled || loading}
+      className={styles.root}
       style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        fontWeight: 600,
-        borderRadius: 'var(--radius-md, 6px)',
         cursor: disabled || loading ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
-        fontFamily: 'var(--font-body, Inter, sans-serif)',
-        transition: `background var(--duration-base, 200ms) var(--ease-smooth, ease), color var(--duration-base, 200ms) var(--ease-smooth, ease), border-color var(--duration-base, 200ms) var(--ease-smooth, ease), box-shadow var(--duration-base, 200ms) var(--ease-smooth, ease), transform var(--duration-fast, 120ms) var(--ease-snappy, ease)`,
         width: fullWidth ? '100%' : undefined,
-        whiteSpace: 'nowrap',
-        position: 'relative',
-        overflow: 'hidden',
         ...sizeMap[size],
         ...variantMap[variant],
         ...style,
@@ -116,18 +107,9 @@ export default function Button({
       {...rest}
     >
       {loading ? (
-        <span style={{
-          width: size === 'sm' ? 12 : 16,
-          height: size === 'sm' ? 12 : 16,
-          borderRadius: '50%',
-          border: '2px solid currentColor',
-          borderTopColor: 'transparent',
-          animation: 'dt-spin 0.6s linear infinite',
-          display: 'inline-block',
-          flexShrink: 0,
-        }} />
+        <span className={`${styles.loading}${size === 'sm' ? ` ${styles.loadingSm}` : ''}`} />
       ) : icon ? (
-        <span style={{ display: 'inline-flex', flexShrink: 0 }}>{icon}</span>
+        <span className={styles.iconWrap}>{icon}</span>
       ) : null}
       {children}
     </button>

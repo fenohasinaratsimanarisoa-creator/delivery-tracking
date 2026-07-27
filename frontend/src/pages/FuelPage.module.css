@@ -1,0 +1,121 @@
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pageContainer {
+  padding: 20px;
+}
+
+.tabsRow {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+}
+
+.skeleton {
+  height: 300px;
+  background: #eee;
+  border-radius: 8px;
+  animation: pulse 1.5s infinite;
+}
+
+.errorText {
+  color: #c00;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.headerRow {
+  background: #f5f5f5;
+  text-align: left;
+}
+
+.dataRow {
+  border-bottom: 1px solid #eee;
+}
+
+.th {
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.td {
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.emptyText {
+  color: #888;
+  text-align: center;
+  padding: 40px;
+}
+
+.anomalyBadge {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.normalBadge {
+  color: #28a745;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.helpText {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.dateRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.label {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.dateInput {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.successText {
+  color: #28a745;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.errorTextMsg {
+  color: #dc3545;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.helpBox {
+  margin-top: 24px;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  font-size: 0.8rem;
+  color: #666;
+  line-height: 1.5;
+}

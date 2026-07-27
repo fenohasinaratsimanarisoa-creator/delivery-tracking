@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import type { RouteStep } from '../../services/routing/types';
 import i18n from '../../services/i18n/i18n';
 import { getLanguage } from '../../services/i18n/i18n';
+import styles from './NavigationOverlay.module.css';
 
 const DEVIATION_THRESHOLD_M = 50;
 const ARRIVAL_THRESHOLD_M = 100;
@@ -257,41 +258,18 @@ export default function NavigationOverlay({
 
   if (arrived) {
     return (
-      <div style={{
-        position: 'absolute', inset: 0, zIndex: 2000,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'var(--color-overlay, rgba(11,18,32,0.7))',
-        backdropFilter: 'blur(12px)',
-      }}>
-        <div style={{
-          textAlign: 'center', color: '#E8ECF3', padding: 40,
-          animation: 'dt-fade-in-up 0.4s ease-out',
-        }}>
-          <div style={{ fontSize: '3rem', marginBottom: 'var(--space-lg, 16px)' }}>📍</div>
-          <h2 style={{
-            fontSize: 'var(--text-2xl, 2rem)', marginBottom: 'var(--space-sm, 8px)',
-            color: 'var(--color-teal, #3FA796)',
-          }}>
+      <div className={styles.arrivedOverlay}>
+        <div className={styles.arrivedCard}>
+          <div className={styles.arrivedEmoji}>📍</div>
+          <h2 className={styles.arrivedTitle}>
 {i18n.t('navigation.arrived')}
           </h2>
-          <p style={{
-            color: 'var(--color-text-secondary, #9BA6B9)',
-            marginBottom: 'var(--space-xl, 24px)',
-            fontSize: 'var(--text-md, 1rem)',
-          }}>
+          <p className={styles.arrivedDest}>
             {destination.label}
           </p>
           <button
             onClick={onExitNavigation}
-            style={{
-              padding: '14px 40px',
-              background: 'var(--color-teal, #3FA796)',
-              color: '#fff', border: 'none',
-              borderRadius: 'var(--radius-lg, 8px)',
-              cursor: 'pointer',
-              fontSize: 'var(--text-md, 1rem)', fontWeight: 600,
-              transition: 'background var(--transition-fast, 150ms) ease, transform var(--transition-fast, 150ms) ease',
-            }}
+            className={styles.finishBtn}
           >
             {i18n.t('navigation.finishNavigation')}
           </button>
@@ -303,75 +281,36 @@ export default function NavigationOverlay({
   return (
     <>
       {!networkOk && (
-        <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2001,
-          background: 'var(--color-red, #E8544C)', color: '#fff', textAlign: 'center',
-          padding: '6px', fontSize: 'var(--text-xs, 0.625rem)', fontWeight: 700,
-        }}>
+        <div className={styles.networkBanner}>
           {i18n.t('navigation.networkOffline')}
         </div>
       )}
 
       {lastRecalcNotification && (
-        <div style={{
-          position: 'absolute', top: networkOk ? 0 : 22, left: 0, right: 0, zIndex: 2001,
-          background: 'var(--color-teal, #3FA796)', color: '#fff', textAlign: 'center',
-          padding: '8px 12px', fontSize: 'var(--text-sm, 0.75rem)', fontWeight: 700,
-          animation: 'dt-fade-in-up 0.3s ease-out',
-        }}>
+        <div className={styles.recalcBanner} style={{ top: networkOk ? 0 : 22 }}>
           🔄 {lastRecalcNotification}
         </div>
       )}
 
-      <div style={{
-        position: 'absolute', top: 8, left: 8, right: 8, zIndex: 1000,
-        display: 'flex', flexDirection: 'column', gap: 6,
-        pointerEvents: 'none',
-      }}>
-        <div style={{
-          background: 'var(--color-glass, rgba(18,27,46,0.92))',
-          border: '1px solid var(--color-glass-border, rgba(242,169,60,0.15))',
-          borderRadius: 'var(--radius-xl, 12px)',
-          padding: 'var(--space-lg, 16px)',
-          backdropFilter: 'blur(12px)',
-          boxShadow: 'var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5))',
-          pointerEvents: 'auto',
-        }}>
-          <div style={{
-            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-            marginBottom: 6,
-          }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div key={currentStepIdx} style={{
-                fontSize: 'var(--text-lg)', fontWeight: 700, color: '#FFFFFF',
-                lineHeight: 1.3, marginBottom: 4,
-                animation: 'dt-fade-in-up 0.3s ease-out',
-              }}>
+      <div className={styles.instructionPanel}>
+        <div className={styles.instructionCard}>
+          <div className={styles.instructionTopRow}>
+            <div className={styles.instructionTextWrap}>
+              <div key={currentStepIdx} className={styles.instructionText}>
                 {isRecalculating ? (
-                  <span style={{ color: 'var(--color-teal, #3FA796)' }}>{i18n.t('navigation.recalculating')}</span>
+                  <span className={styles.recalculatingText}>{i18n.t('navigation.recalculating')}</span>
                 ) : instructionText}
               </div>
               {currentStep && currentStep.streetName && (
-                <div style={{ fontSize: 'var(--text-sm, 0.75rem)', color: 'var(--color-text-secondary, #9BA6B9)' }}>
+                <div className={styles.streetName}>
                   {i18n.t('navigation.via', { street: currentStep.streetName })}
                 </div>
               )}
             </div>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 12,
-            }}>
+            <div className={styles.controls}>
               <button
                 onClick={() => setMuted(!muted)}
-                style={{
-                  background: 'var(--color-surface-alt, #182339)',
-                  border: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
-                  borderRadius: 'var(--radius-md, 6px)',
-                  padding: '8px 10px', cursor: 'pointer',
-                  fontSize: 'var(--text-md, 1rem)',
-                  color: muted ? 'var(--color-red, #E8544C)' : 'var(--color-teal, #3FA796)',
-                  pointerEvents: 'auto',
-                  transition: 'background var(--transition-fast, 150ms) ease, color var(--transition-fast, 150ms) ease',
-                }}
+                className={`${styles.muteBtn} ${muted ? styles.muteBtnMuted : styles.muteBtnUnmuted}`}
                 title={muted ? i18n.t('navigation.unmuteTooltip') : i18n.t('navigation.muteTooltip')}
               >
                 {muted ? '🔇' : '🔊'}
@@ -380,59 +319,34 @@ export default function NavigationOverlay({
           </div>
 
           {distToNextManeuver > 0 && currentStepIdx < routeSteps.length - 1 && !isRecalculating && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2,
-            }}>
-              <div style={{
-                height: 4, flex: 1, background: 'var(--color-surface-alt, #182339)',
-                borderRadius: 2, overflow: 'hidden',
-              }}>
-                <div style={{
-                  height: '100%', width: `${Math.min(100, (routingDistance - distToDest) / routingDistance * 100)}%`,
-                  background: 'var(--color-teal, #3FA796)',
-                  borderRadius: 2, transition: 'width 0.5s ease',
+            <div className={styles.progressRow}>
+              <div className={styles.progressTrack}>
+                <div className={styles.progressFill} style={{
+                  width: `${Math.min(100, (routingDistance - distToDest) / routingDistance * 100)}%`,
                 }} />
               </div>
-              <span style={{ fontSize: 'var(--text-xs, 0.625rem)', color: 'var(--color-text-secondary, #9BA6B9)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+              <span className={styles.distanceLabel}>
                 {distToNextManeuver < 1000 ? `${Math.round(distToNextManeuver)} m` : `${(distToNextManeuver / 1000).toFixed(1)} km`}
               </span>
             </div>
           )}
         </div>
 
-        <div style={{
-          display: 'flex', gap: 6, pointerEvents: 'auto',
-        }}>
-          <div style={{
-            flex: 1,
-            background: 'var(--color-glass, rgba(18,27,46,0.92))',
-            border: '1px solid var(--color-glass-border, rgba(242,169,60,0.15))',
-            borderRadius: 'var(--radius-lg, 8px)',
-            padding: '8px 12px',
-            backdropFilter: 'blur(12px)',
-            display: 'flex', alignItems: 'center', gap: 8,
-            fontSize: 'var(--text-xs, 0.625rem)',
-          }}>
-            <span style={{ color: 'var(--color-teal, #3FA796)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+        <div className={styles.bottomRow}>
+          <div className={styles.infoBar}>
+            <span className={styles.infoItem}>
               🕐 {remainingTime}
             </span>
-            <span style={{ color: 'var(--color-text-secondary, #9BA6B9)' }}>
+            <span className={styles.infoItemSecondary}>
               🛣️ {routingDistance >= 1000 ? `${(routingDistance / 1000).toFixed(1)} km` : `${Math.round(routingDistance)} m`}
             </span>
-            <span style={{ color: 'var(--color-text-secondary, #9BA6B9)' }}>
+            <span className={styles.infoItemSecondary}>
               📍 {distToDest < 1000 ? `${Math.round(distToDest)} m` : `${(distToDest / 1000).toFixed(1)} km`}
             </span>
             {onToggleDataSaver && (
               <button
                 onClick={onToggleDataSaver}
-                style={{
-                  background: 'transparent',
-                  border: 'none', cursor: 'pointer',
-                  fontSize: 'var(--text-xs, 0.625rem)',
-                  color: dataSaver ? 'var(--color-teal, #3FA796)' : 'var(--color-text-secondary, #9BA6B9)',
-                  padding: 0, marginLeft: 'auto',
-                  fontWeight: dataSaver ? 600 : 400,
-                }}
+                className={`${styles.dataSaverBtn} ${dataSaver ? styles.dataSaverBtnOn : styles.dataSaverBtnOff}`}
                 title={dataSaver ? i18n.t('navigation.dataSaverTooltipOn') : i18n.t('navigation.dataSaverTooltipOff')}
               >
                 📶 {dataSaver ? i18n.t('navigation.dataSaverOn') : i18n.t('navigation.dataSaverOff')}
@@ -441,16 +355,7 @@ export default function NavigationOverlay({
           </div>
           <button
             onClick={onExitNavigation}
-            style={{
-              background: 'var(--color-red-muted, rgba(232,84,76,0.15))',
-              border: '1px solid var(--color-red-muted, rgba(232,84,76,0.15))',
-              borderRadius: 'var(--radius-lg, 8px)',
-              padding: '8px 14px', cursor: 'pointer',
-              color: 'var(--color-red, #E8544C)',
-              fontSize: 'var(--text-xs, 0.625rem)', fontWeight: 700,
-              whiteSpace: 'nowrap',
-              transition: 'background var(--transition-fast, 150ms) ease',
-            }}
+            className={styles.exitBtn}
           >
             {i18n.t('navigation.exitNavigation')}
           </button>
@@ -458,17 +363,8 @@ export default function NavigationOverlay({
       </div>
 
       {deviationDetected && (
-        <div style={{
-          position: 'absolute', top: '45%', left: '50%', transform: 'translate(-50%, -50%)',
-          zIndex: 1001, pointerEvents: 'none',
-          animation: 'dt-fade-in-up 0.4s ease-out',
-        }}>
-          <div style={{
-            background: 'var(--color-red-muted, rgba(232,84,76,0.15))', color: '#fff',
-            padding: '10px 24px', borderRadius: 'var(--radius-full, 9999px)',
-            fontSize: 'var(--text-sm, 0.75rem)', fontWeight: 700,
-            boxShadow: '0 4px 20px rgba(232,84,76,0.4)',
-          }}>
+        <div className={styles.deviationBadge}>
+          <div className={styles.deviationBadgeInner}>
             {i18n.t('navigation.deviationDetected')}
           </div>
         </div>

@@ -1,0 +1,11 @@
+.loadingContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: var(--color-bg, #0B1220);
+}
+.loadingText {
+  color: var(--color-text-tertiary, #7A8BA3);
+  font-size: var(--text-base, 0.875rem);
+}

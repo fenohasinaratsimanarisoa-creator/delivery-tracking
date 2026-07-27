@@ -1,0 +1,124 @@
+.container {
+  position: absolute;
+  bottom: var(--space-xl);
+  right: var(--space-xl);
+  z-index: 100;
+  pointer-events: auto;
+  max-width: 300px;
+}
+
+.panel {
+  background: var(--color-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+}
+
+.panelMinimized {
+  padding: var(--space-sm) var(--space-lg);
+}
+
+.panelExpanded {
+  padding: var(--space-lg);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.headerWithMargin {
+  margin-bottom: var(--space-md);
+}
+
+.welcomeTitle {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  margin-bottom: 2px;
+}
+
+.welcomeSubtitle {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.headerButtons {
+  display: flex;
+  gap: 4px;
+}
+
+.iconButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  padding: 2px;
+  display: flex;
+}
+
+.stepsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.stepButton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  text-align: left;
+  transition: background 0.1s;
+  width: 100%;
+}
+
+.stepButtonDone {
+  background: var(--color-teal-muted);
+  color: var(--color-teal);
+  cursor: default;
+  opacity: 0.7;
+}
+
+.stepButtonPending {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+.stepIconBox {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stepIconBoxDone {
+  background: var(--color-teal);
+}
+
+.stepIconBoxPending {
+  background: var(--color-border);
+}
+
+.stepLabel {
+  flex: 1;
+}
+
+.stepChevron {
+  color: var(--color-text-tertiary);
+}
+
+.collapseIcon {
+  font-size: 14px;
+}

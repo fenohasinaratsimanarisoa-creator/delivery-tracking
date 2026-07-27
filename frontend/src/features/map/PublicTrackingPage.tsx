@@ -5,6 +5,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../../services/api/client';
 import type { DeliveryInfo } from '../../types';
+import styles from './PublicTrackingPage.module.css';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -54,8 +55,8 @@ export default function PublicTrackingPage() {
 
   if (error) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <div style={{ textAlign: 'center' }}>
+      <div className={styles.errorContainer}>
+        <div className={styles.errorCard}>
           <h2>Tracking Unavailable</h2>
           <p>{error}</p>
         </div>
@@ -64,7 +65,7 @@ export default function PublicTrackingPage() {
   }
 
   if (!delivery) {
-    return <div style={{ textAlign: 'center', padding: '40px' }}>Loading...</div>;
+    return <div className={styles.loadingContainer}>Loading...</div>;
   }
 
   const path: [number, number][] = positions.map((p) => [p.latitude, p.longitude]);
@@ -74,23 +75,20 @@ export default function PublicTrackingPage() {
     : [delivery.pickupLat || -18.8792, delivery.pickupLng || 47.5079];
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '20px', background: '#fff', borderBottom: '1px solid #ddd' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-          <h2 style={{ margin: 0 }}>{delivery.title}</h2>
-          <span style={{
-            display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
-            background: '#28a745', animation: 'dt-pulse-moving 2s ease-out infinite',
-          }} />
-          <span style={{ fontSize: '0.8rem', color: '#28a745', fontWeight: 600 }}>LIVE</span>
-          {lastUpdate && <span style={{ fontSize: '0.75rem', color: '#999' }}>Updated: {lastUpdate}</span>}
+    <div className={styles.page}>
+      <div className={styles.header}>
+        <div className={styles.headerRow}>
+          <h2 className={styles.headerTitle}>{delivery.title}</h2>
+          <span className={styles.liveDot} />
+          <span className={styles.liveLabel}>LIVE</span>
+          {lastUpdate && <span className={styles.lastUpdate}>Updated: {lastUpdate}</span>}
         </div>
         <p>Status: <strong>{delivery.status}</strong></p>
         <p>Pickup: {delivery.pickupAddress}</p>
         <p>Delivery: {delivery.deliveryAddress}</p>
         {currentPos?.speed !== undefined && currentPos?.speed !== null && <p>Current speed: {(currentPos.speed * 3.6).toFixed(1)} km/h</p>}
       </div>
-      <div style={{ flex: 1 }}>
+      <div className={styles.mapContainer}>
         <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

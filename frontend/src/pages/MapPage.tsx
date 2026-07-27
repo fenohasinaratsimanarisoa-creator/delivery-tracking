@@ -5,6 +5,7 @@ import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import RealTimeMap from '../features/map/RealTimeMap';
 import Button from '../components/Button';
+import styles from './MapPage.module.css';
 
 interface SearchResult {
   type: 'driver' | 'vehicle' | 'delivery';
@@ -112,25 +113,12 @@ export default function MapPage() {
   const typeLabels: Record<string, string> = { driver: 'Chauffeur', vehicle: 'Véhicule', delivery: 'Livraison' };
 
   return (
-    <div style={{ position: 'absolute', inset: 0 }}>
+    <div className={styles.pageWrap}>
       <RealTimeMap focusId={focusId} focusCenter={focusCenter} onVehiclesUpdate={setVehicles} />
 
-      <div style={{
-        position: 'absolute', top: 'var(--space-lg)', left: 'var(--space-lg)',
-        right: 'var(--space-lg)', maxWidth: 480,
-        zIndex: 1000,
-      }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-          padding: 'var(--space-sm) var(--space-md)',
-          background: 'var(--color-glass)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid var(--color-glass-border)',
-          borderRadius: 'var(--radius-xl)',
-          boxShadow: 'var(--shadow-sm)',
-        }}>
-          <Search size={16} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
+      <div className={styles.searchContainer}>
+        <div className={styles.searchBar}>
+          <Search size={16} className={styles.searchIcon} />
           <input
             ref={inputRef}
             value={search}
@@ -138,16 +126,7 @@ export default function MapPage() {
             onFocus={() => { if (results.length > 0) setOpen(true); }}
             onKeyDown={handleKeyDown}
             placeholder={t('map.searchPlaceholder')}
-            style={{
-              flex: 1,
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--color-text)',
-              fontSize: 'var(--text-sm)',
-              fontFamily: 'var(--font-body)',
-              outline: 'none',
-              padding: 'var(--space-xs) 0',
-            }}
+            className={styles.searchInput}
             aria-label={t('map.searchAria')}
           />
           {search && (
@@ -155,28 +134,14 @@ export default function MapPage() {
           )}
           <button
             onClick={() => setShowFilters(!showFilters)}
-            style={{
-              background: 'var(--color-surface-alt)',
-              border: '1px solid var(--color-border-subtle)',
-              borderRadius: 'var(--radius-md)',
-              cursor: 'pointer', padding: 6,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: showFilters ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
-            }}
+            className={`${styles.iconButton} ${showFilters ? styles.iconButtonActive : styles.iconButtonInactive}`}
             aria-label={t('map.filterAria')}
             aria-pressed={showFilters}
           >
             <Filter size={14} />
           </button>
           <button
-            style={{
-              background: 'var(--color-surface-alt)',
-              border: '1px solid var(--color-border-subtle)',
-              borderRadius: 'var(--radius-md)',
-              cursor: 'pointer', padding: 6,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--color-text-tertiary)',
-            }}
+            className={`${styles.iconButton} ${styles.iconButtonInactive}`}
             aria-label={t('map.layersAria')}
           >
             <Layers size={14} />
@@ -184,15 +149,7 @@ export default function MapPage() {
         </div>
 
         {open && results.length > 0 && (
-          <div ref={dropdownRef} style={{
-            marginTop: 4, maxHeight: 320, overflow: 'auto',
-            background: 'var(--color-glass)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            border: '1px solid var(--color-glass-border)',
-            borderRadius: 'var(--radius-lg)',
-            boxShadow: 'var(--shadow-lg)',
-          }}>
+          <div ref={dropdownRef} className={styles.dropdown}>
             {results.map((r, i) => {
               const Icon = typeIcons[r.type];
               return (
@@ -200,35 +157,20 @@ export default function MapPage() {
                   key={`${r.type}-${r.id}`}
                   onClick={() => selectResult(r)}
                   onMouseEnter={() => setSelectedIdx(i)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    width: '100%', padding: '10px 14px',
-                    border: 'none', borderBottom: i < results.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
-                    background: i === selectedIdx ? 'var(--color-accent-muted)' : 'transparent',
-                    cursor: 'pointer', textAlign: 'left',
-                    color: 'var(--color-text)',
-                    fontSize: '0.8rem',
-                    fontFamily: 'var(--font-body)',
-                  }}
+                  className={`${styles.resultItem} ${i === selectedIdx ? styles.resultItemSelected : styles.resultItemDefault} ${i < results.length - 1 ? styles.resultItemBorder : ''}`}
                 >
-                  <Icon size={14} style={{ flexShrink: 0, color: 'var(--color-text-tertiary)' }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <Icon size={14} className={styles.resultIcon} />
+                  <div className={styles.resultContent}>
+                    <div className={styles.resultLabel}>
                       {r.label}
                     </div>
                     {r.subLabel && (
-                      <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 1 }}>
+                      <div className={styles.resultSubLabel}>
                         {r.subLabel}
                       </div>
                     )}
                   </div>
-                  <span style={{
-                    fontSize: '0.6rem', fontWeight: 600, textTransform: 'uppercase',
-                    padding: '2px 6px', borderRadius: 4,
-                    background: 'var(--color-surface-alt)',
-                    color: 'var(--color-text-tertiary)',
-                    flexShrink: 0,
-                  }}>
+                  <span className={styles.resultType}>
                     {typeLabels[r.type]}
                   </span>
                 </button>
@@ -238,36 +180,16 @@ export default function MapPage() {
         )}
 
         {open && results.length === 0 && (
-          <div style={{
-            marginTop: 4, padding: '12px 16px',
-            background: 'var(--color-glass)', backdropFilter: 'blur(12px)',
-            border: '1px solid var(--color-glass-border)',
-            borderRadius: 'var(--radius-lg)',
-            fontSize: '0.8rem', color: 'var(--color-text-tertiary)',
-            textAlign: 'center',
-          }}>
+          <div className={styles.noResults}>
             Aucun résultat — essayez un nom, une plaque ou une adresse
           </div>
         )}
       </div>
 
-      <div style={{
-        position: 'absolute', bottom: 'var(--space-lg)',
-        left: '50%', transform: 'translateX(-50%)',
-        padding: 'var(--space-sm) var(--space-lg)',
-        background: 'var(--color-glass)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        border: '1px solid var(--color-glass-border)',
-        borderRadius: 'var(--radius-full)',
-        zIndex: 1000,
-        display: 'flex', alignItems: 'center', gap: 'var(--space-lg)',
-        fontSize: 'var(--text-xs)',
-        color: 'var(--color-text-secondary)',
-      }}>
-        <span>🟡 <span style={{ fontFamily: 'var(--font-body)' }}>{t('map.legend.moving')}</span></span>
-        <span>🟢 <span style={{ fontFamily: 'var(--font-body)' }}>{t('map.legend.stopped')}</span></span>
-        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-tertiary)' }}>
+      <div className={styles.legend}>
+        <span>🟡 <span className={styles.legendFontBody}>{t('map.legend.moving')}</span></span>
+        <span>🟢 <span className={styles.legendFontBody}>{t('map.legend.stopped')}</span></span>
+        <span className={styles.legendFontMono}>
           {t('map.legend.doubleClick')}
         </span>
       </div>

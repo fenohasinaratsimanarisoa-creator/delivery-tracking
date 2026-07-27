@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/AuthContext';
 import LoginLayout from './components/LoginLayout';
 import VisualPanel from './components/VisualPanel';
 import LoginForm from './components/LoginForm';
+import styles from './LoginPage.module.css';
 
 const ROLE_REDIRECT: Record<string, string> = {
   admin: '/dashboard',
@@ -82,14 +83,8 @@ export default function LoginPage() {
 
   if (isInitializing) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        background: 'var(--color-bg, #0B1220)',
-      }}>
-        <div style={{ color: 'var(--color-text-tertiary, #7A8BA3)', fontSize: 'var(--text-base, 0.875rem)' }}>{t('common.loading')}</div>
+      <div className={styles.loadingContainer}>
+        <div className={styles.loadingText}>{t('common.loading')}</div>
       </div>
     );
   }

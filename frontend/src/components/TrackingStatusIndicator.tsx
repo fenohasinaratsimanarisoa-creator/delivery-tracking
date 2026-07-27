@@ -1,17 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Navigation, WifiOff, AlertTriangle, Radio, Cpu } from 'lucide-react';
 import type { TrackingStatus } from '../hooks/useDriverTracking';
-
-const containerStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  padding: '4px 10px',
-  borderRadius: 'var(--radius-full)',
-  fontSize: 'var(--text-xs)',
-  fontWeight: 500,
-  fontFamily: 'var(--font-mono)',
-};
+import styles from './TrackingStatusIndicator.module.css';
 
 export default function TrackingStatusIndicator({ status }: { status: TrackingStatus }) {
   const { t } = useTranslation();
@@ -20,12 +10,7 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
 
   if (isPhysicalTracker) {
     return (
-      <div style={{
-        ...containerStyle,
-        background: 'var(--color-teal-muted)',
-        color: 'var(--color-teal)',
-        cursor: 'help',
-      }} title="Suivi par traceur GPS physique installé sur le véhicule">
+      <div className={`${styles.container} ${styles.physicalTracker}`} title="Suivi par traceur GPS physique installé sur le véhicule">
         <Cpu size={12} />
         Traceur GPS
       </div>
@@ -34,12 +19,7 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
 
   if (status.geolocationDenied) {
     return (
-      <div style={{
-        ...containerStyle,
-        background: 'var(--color-red-muted)',
-        color: 'var(--color-red)',
-        cursor: 'help',
-      }} title={t('tracking.geolocationDeniedHint') || 'Autorisez la geolocalisation dans les parametres du navigateur'}>
+      <div className={`${styles.container} ${styles.denied}`} title={t('tracking.geolocationDeniedHint') || 'Autorisez la geolocalisation dans les parametres du navigateur'}>
         <AlertTriangle size={12} />
         GPS bloqué
       </div>
@@ -48,11 +28,7 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
 
   if (!status.active) {
     return (
-      <div style={{
-        ...containerStyle,
-        background: 'var(--color-surface-alt)',
-        color: 'var(--color-text-tertiary)',
-      }}>
+      <div className={`${styles.container} ${styles.inactive}`}>
         <Radio size={12} />
         GPS en attente
       </div>
@@ -61,11 +37,7 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
 
   if (!status.position) {
     return (
-      <div style={{
-        ...containerStyle,
-        background: 'var(--color-accent-muted)',
-        color: 'var(--color-accent)',
-      }}>
+      <div className={`${styles.container} ${styles.searching}`}>
         <Radio size={12} />
         Recherche signal...
       </div>
@@ -74,11 +46,7 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
 
   if (status.poorAccuracy) {
     return (
-      <div style={{
-        ...containerStyle,
-        background: 'var(--color-accent-muted)',
-        color: 'var(--color-accent)',
-      }}>
+      <div className={`${styles.container} ${styles.poorAccuracy}`}>
         <WifiOff size={12} />
         GPS faible
       </div>
@@ -86,11 +54,7 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
   }
 
   return (
-    <div style={{
-      ...containerStyle,
-      background: 'var(--color-teal-muted)',
-      color: 'var(--color-teal)',
-    }}>
+    <div className={`${styles.container} ${styles.active}`}>
       <Navigation size={12} />
       {status.isStationary ? 'Arrêté' : 'En route'}
       {status.queueCount > 0 ? ` (${status.queueCount})` : ''}

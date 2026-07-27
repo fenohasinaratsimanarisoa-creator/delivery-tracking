@@ -18,6 +18,7 @@ import Button from '../components/Button';
 import type { RouteStep, RouteData } from '../services/routing/types';
 import { KalmanFilter } from '../services/tracking/KalmanFilter';
 import { sensorFusion, simulateStationaryFromSpeed } from '../services/tracking/sensorFusion';
+import styles from './MyPositionPage.module.css';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -75,22 +76,6 @@ function MapFollowPosition({ lat, lng, enabled }: { lat: number; lng: number; en
   }, [lat, lng, enabled, map]);
   return null;
 }
-
-const cardStyle: React.CSSProperties = {
-  background: 'var(--color-surface, #121B2E)',
-  padding: 'var(--space-lg, 16px)',
-  borderRadius: 'var(--radius-lg, 8px)',
-  border: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
-  transition: 'background var(--transition-fast, 150ms) ease, border-color var(--transition-fast, 150ms) ease',
-};
-
-const labelStyle: React.CSSProperties = {
-  fontWeight: 600,
-  fontSize: 'var(--text-sm, 0.75rem)',
-  display: 'block',
-  marginBottom: 'var(--space-sm, 8px)',
-  color: 'var(--color-text-secondary, #9BA6B9)',
-};
 
 export default function MyPositionPage() {
   const { t } = useTranslation();
@@ -500,22 +485,20 @@ export default function MyPositionPage() {
   const navPosition = position ? { lat: position.lat, lng: position.lng, heading: position.heading, speed: position.speed } : null;
 
   return (
-    <div style={{ padding: navigationMode ? 0 : 'var(--space-xl, 24px)' }}>
-      {!navigationMode && <h1 style={{ marginBottom: 'var(--space-xl, 24px)', fontSize: 'var(--text-xl, 1.5rem)' }}>{t('myPosition.title')}</h1>}
+    <div className={navigationMode ? styles.pageNav : styles.page}>
+      {!navigationMode && <h1 className={styles.title}>{t('myPosition.title')}</h1>}
 
       {!driver && (
-        <div style={{ padding: 'var(--space-xl, 24px)', textAlign: 'center', color: 'var(--color-text-tertiary, #7A8BA3)' }}>
+        <div className={styles.noDriver}>
           {t('myPosition.noDriverProfile')}
         </div>
       )}
 
       {driver && (
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: navigationMode ? 0 : 'var(--space-lg, 16px)',
-        }}>
+        <div className={navigationMode ? styles.contentNav : styles.content}>
           {driver.vehicle && !navigationMode && (
-            <div style={cardStyle}>
-              <span style={{ color: 'var(--color-text-secondary, #9BA6B9)', fontSize: 'var(--text-sm, 0.75rem)' }}>
+            <div className={styles.card}>
+              <span className={styles.vehicleInfo}>
                 🚛 {driver.vehicle.brand} {driver.vehicle.model} — {driver.vehicle.licensePlate}
               </span>
             </div>
@@ -523,8 +506,8 @@ export default function MyPositionPage() {
 
           {!navigationMode && (
             <>
-              <div style={cardStyle}>
-                <label style={labelStyle}>
+              <div className={styles.card}>
+                <label className={styles.label}>
                   📍 {t('myPosition.destination') || 'Destination'}
                 </label>
                 <LocationSearchInput
@@ -542,7 +525,7 @@ export default function MyPositionPage() {
                 />
 
                 {destinationHistory.length > 0 && (
-                  <div style={{ marginTop: 'var(--space-sm, 8px)' }}>
+                  <div className={styles.historySection}>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -552,10 +535,7 @@ export default function MyPositionPage() {
                       🕐 {t(showHistory ? 'myPosition.historyToggleHide' : 'myPosition.historyToggleShow', { count: destinationHistory.length })}
                     </Button>
                     {showHistory && (
-                      <div style={{
-                        marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4,
-                        maxHeight: 200, overflowY: 'auto',
-                      }}>
+                      <div className={styles.historyList}>
                         {destinationHistory.map((h, i) => (
                           <Button
                             key={i}
@@ -569,8 +549,8 @@ export default function MyPositionPage() {
                             }}
                             style={{ textAlign: 'left', justifyContent: 'flex-start', padding: '8px 12px' }}
                           >
-                            <span style={{ fontWeight: 500 }}>📍 {h.label}</span>
-                            <span style={{ fontSize: 'var(--text-xs, 0.625rem)', color: 'var(--color-text-tertiary, #7A8BA3)', marginLeft: 8 }}>
+                            <span className={styles.historyLabel}>📍 {h.label}</span>
+                            <span className={styles.historyDate}>
                               {formatDate(new Date(h.lastUsed))}
                             </span>
                           </Button>
@@ -581,32 +561,20 @@ export default function MyPositionPage() {
                 )}
 
                 {destination.label && destination.lat && destination.lng && position && (
-                  <div style={{
-                    marginTop: 6, fontSize: 'var(--text-xs, 0.625rem)',
-                    color: 'var(--color-text-tertiary, #7A8BA3)',
-                    fontFamily: 'var(--font-mono)',
-                  }}>
+                  <div className={styles.crowDistance}>
                     {t('myPosition.distanceAsCrowFlies', { label: destination.label, distance: haversineKm(position.lat, position.lng, destination.lat, destination.lng).toFixed(1) })}
                   </div>
                 )}
               </div>
 
-              <div style={cardStyle}>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <label style={labelStyle}>{t('myPosition.deliveryToTrack')} :</label>
+              <div className={styles.card}>
+                <div className={styles.deliverySelectRow}>
+                  <label className={styles.label}>{t('myPosition.deliveryToTrack')} :</label>
                   <select
                     value={selectedDelivery}
                     onChange={(e) => setSelectedDelivery(e.target.value)}
                     disabled={tracking}
-                    style={{
-                      padding: '10px 12px',
-                      border: '1px solid var(--color-border-subtle, rgba(232,236,243,0.08))',
-                      borderRadius: 'var(--radius-md, 6px)',
-                      fontSize: 'var(--text-sm, 0.75rem)',
-                      flex: 1, maxWidth: 400,
-                      background: 'var(--color-input-bg, #0D1525)',
-                      color: 'var(--color-text, #E8ECF3)',
-                    }}
+                    className={styles.deliverySelect}
                   >
                     <option value="">{t('myPosition.selectDefault')}</option>
                     {deliveries.filter((d) => d.status === 'assigned' || d.status === 'in_progress').map((d) => (
@@ -617,52 +585,43 @@ export default function MyPositionPage() {
                   </select>
                 </div>
                 {deliveries.filter((d) => d.status === 'assigned' || d.status === 'in_progress').length === 0 && !tracking && (
-                  <div style={{ marginTop: 8, fontSize: 'var(--text-xs, 0.625rem)', color: 'var(--color-text-tertiary, #7A8BA3)' }}>
+                  <div className={styles.noDeliveries}>
                     {t('myPosition.noDeliveriesAvailable')}
                   </div>
                 )}
               </div>
 
               {hasDestination && routingETA && (
-                <div style={{
-                  ...cardStyle,
-                  border: '1px solid var(--color-teal, #3FA796)',
-                  position: 'relative', overflow: 'hidden',
-                }}>
-                  <div style={{
-                    position: 'absolute', left: 0, top: 0, bottom: 0, width: 4,
-                    background: 'var(--color-teal, #3FA796)',
-                    borderTopLeftRadius: 'var(--radius-lg, 8px)',
-                    borderBottomLeftRadius: 'var(--radius-lg, 8px)',
-                  }} />
-                  <div style={{ paddingLeft: 12 }}>
-                    <div style={{ fontWeight: 600, fontSize: 'var(--text-sm, 0.75rem)', marginBottom: 10, color: 'var(--color-teal, #3FA796)' }}>
+                <div className={`${styles.card} ${styles.routeCard}`}>
+                  <div className={styles.routeAccent} />
+                  <div className={styles.routeContent}>
+                    <div className={styles.routeTitle}>
                       {t('myPosition.routeCalculated')}
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                    <div className={styles.routeStats}>
                       <div>
-                        <div style={{ fontSize: 'var(--text-xs, 0.625rem)', color: 'var(--color-text-tertiary, #7A8BA3)', marginBottom: 2 }}>{t('myPosition.routeTime')}</div>
-                        <div style={{ fontSize: 'var(--text-lg, 1.125rem)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--color-teal, #3FA796)' }}>
+                        <div className={styles.routeStatLabel}>{t('myPosition.routeTime')}</div>
+                        <div className={styles.routeStatValuePrimary}>
                           🕐 {routingETA}
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 'var(--text-xs, 0.625rem)', color: 'var(--color-text-tertiary, #7A8BA3)', marginBottom: 2 }}>{t('myPosition.routeDistance')}</div>
-                        <div style={{ fontSize: 'var(--text-md, 1rem)', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-text, #E8ECF3)' }}>
+                        <div className={styles.routeStatLabel}>{t('myPosition.routeDistance')}</div>
+                        <div className={styles.routeStatValueSecondary}>
                           🛣️ {formatDistance(routingDistance)}
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 'var(--text-xs, 0.625rem)', color: 'var(--color-text-tertiary, #7A8BA3)', marginBottom: 2 }}>{t('myPosition.routeAverage')}</div>
-                        <div style={{ fontSize: 'var(--text-md, 1rem)', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-text, #E8ECF3)' }}>
+                        <div className={styles.routeStatLabel}>{t('myPosition.routeAverage')}</div>
+                        <div className={styles.routeStatValueSecondary}>
                           ⚡ {routingDuration > 0 ? `${(routingDistance / routingDuration * 3.6).toFixed(0)} km/h` : '—'}
                         </div>
                       </div>
                     </div>
 
                     {routeAlternatives && routeAlternatives.length > 0 && (
-                      <div style={{ marginTop: 12 }}>
-                        <div style={{ fontSize: 'var(--text-xs, 0.625rem)', color: 'var(--color-text-tertiary, #7A8BA3)', marginBottom: 6, fontWeight: 600 }}>
+                      <div className={styles.routeAlternatives}>
+                        <div className={styles.routeAlternativesTitle}>
                           {t('myPosition.routeAlternatives')}
                         </div>
                         {routeAlternatives.map((alt, i) => (
@@ -674,14 +633,14 @@ export default function MyPositionPage() {
                             onClick={() => selectRoute(i + 1, alt)}
                             style={{ textAlign: 'left', justifyContent: 'flex-start', padding: '10px 12px', marginBottom: 4 }}
                           >
-                            <div style={{ fontWeight: 600, color: 'var(--color-text, #E8ECF3)' }}>
+                            <div className={styles.altBtnTitle}>
                               {t('myPosition.routeOption', { number: i + 2 })}
                             </div>
-                            <div style={{ display: 'flex', gap: 12, marginTop: 2, color: 'var(--color-text-secondary, #9BA6B9)' }}>
+                            <div className={styles.altBtnDetails}>
                               <span>🛣️ {formatDistance(alt.distance)}</span>
                               <span>🕐 {formatDuration(alt.duration)}</span>
                               {alt.duration < routingDuration && (
-                                <span style={{ color: 'var(--color-teal, #3FA796)' }}>{t('myPosition.routeFaster')}</span>
+                                <span className={styles.altFaster}>{t('myPosition.routeFaster')}</span>
                               )}
                             </div>
                           </Button>
@@ -690,7 +649,7 @@ export default function MyPositionPage() {
                     )}
 
                     {routingLoading && (
-                      <div style={{ fontSize: 'var(--text-xs, 0.625rem)', color: 'var(--color-text-tertiary, #7A8BA3)', marginTop: 8, fontStyle: 'italic' }}>
+                      <div className={styles.routeCalcLoading}>
                         {t('myPosition.routeCalcLoading')}
                       </div>
                     )}
@@ -698,22 +657,18 @@ export default function MyPositionPage() {
                 </div>
               )}
 
-              <div style={cardStyle}>
-                <div style={{
-                  marginBottom: 'var(--space-sm, 8px)',
-                  fontSize: 'var(--text-sm, 0.75rem)',
-                  color: statusMsg.includes('Arrivé') ? 'var(--color-teal, #3FA796)' : 'var(--color-text-secondary, #9BA6B9)',
-                  fontWeight: statusMsg.includes('Arrivé') ? 600 : 400,
-                }}>
+              <div className={styles.card}>
+                <div
+                  className={styles.statusMsg}
+                  style={{
+                    color: statusMsg.includes('Arrivé') ? 'var(--color-teal, #3FA796)' : 'var(--color-text-secondary, #9BA6B9)',
+                    fontWeight: statusMsg.includes('Arrivé') ? 600 : 400,
+                  }}
+                >
                   {statusMsg || (tracking ? t('myPosition.awaitingData') : t('myPosition.sharingDisabled'))}
                 </div>
                 {position && (
-                  <div style={{
-                    fontSize: 'var(--text-xs, 0.625rem)',
-                    color: 'var(--color-text-tertiary, #7A8BA3)',
-                    marginBottom: 'var(--space-sm, 8px)',
-                    fontFamily: 'var(--font-mono)',
-                  }}>
+                  <div className={styles.coords}>
                     Lat: {position.lat.toFixed(6)}, Lng: {position.lng.toFixed(6)}
                     {position.accuracy !== undefined && ` ±${Math.round(position.accuracy)}m`}
                     {position.speed !== undefined && ` | ${(position.speed * 3.6).toFixed(1)} km/h`}
@@ -723,25 +678,16 @@ export default function MyPositionPage() {
                   </div>
                 )}
                 {poorAccuracy && tracking && (
-                  <div style={{
-                    color: 'var(--color-red, #E8544C)',
-                    fontSize: 'var(--text-sm, 0.75rem)',
-                    marginBottom: 'var(--space-sm, 8px)',
-                    fontWeight: 500,
-                  }}>
+                  <div className={styles.poorAccuracy}>
                     {t('myPosition.poorAccuracyWarning')}
                   </div>
                 )}
                 {queueCount > 0 && (
-                  <div style={{
-                    color: 'var(--color-accent, #F2A93C)',
-                    fontSize: 'var(--text-sm, 0.75rem)',
-                    marginBottom: 'var(--space-sm, 8px)',
-                  }}>
+                  <div className={styles.offlineQueue}>
                     {t('myPosition.offlineQueue', { count: queueCount })}
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div className={styles.actions}>
                   {!tracking ? (
                     <Button
                       variant="primary"
@@ -794,11 +740,13 @@ export default function MyPositionPage() {
             </>
           )}
 
-          <div style={{
-            height: navigationMode ? '100dvh' : 400,
-            borderRadius: navigationMode ? 0 : 'var(--radius-lg, 8px)',
-            overflow: 'hidden', position: 'relative',
-          }}>
+          <div
+            className={styles.mapWrap}
+            style={{
+              height: navigationMode ? '100dvh' : 400,
+              borderRadius: navigationMode ? 0 : 'var(--radius-lg, 8px)',
+            }}
+          >
             <MapContainer
               center={position ? [position.lat, position.lng] : [-18.8792, 47.5079]}
               zoom={navigationMode ? 16 : (position ? 15 : 13)}

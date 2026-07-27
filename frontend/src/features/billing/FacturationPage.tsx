@@ -5,6 +5,7 @@ import { Download, FileText, Loader2 } from 'lucide-react';
 import api from '../../services/api/client';
 import { formatDate } from '../../services/i18n/formatDate';
 import type { Invoice, CompanyUsage } from '../../types';
+import styles from './FacturationPage.module.css';
 
 const STATUS_COLORS: Record<string, string> = {
   draft: 'var(--color-text-tertiary)',
@@ -54,25 +55,18 @@ export default function FacturationPage() {
   };
 
   return (
-    <div style={{ padding: 'var(--space-xl)', maxWidth: 960, margin: '0 auto' }}>
-      <div style={{ marginBottom: 'var(--space-xl)' }}>
-        <h1 style={{
-          fontFamily: 'var(--font-display)', fontSize: 'var(--text-xl)', fontWeight: 700,
-          color: 'var(--color-text)', letterSpacing: '-0.02em', margin: 0,
-        }}>
+    <div className={styles.container}>
+      <div className={styles.header}>
+        <h1 className={styles.title}>
           {t('billing.invoices.title')}
         </h1>
-        <p style={{ margin: 'var(--space-xs) 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+        <p className={styles.subtitle}>
           {t('billing.invoices.subtitle')}
         </p>
       </div>
 
       {companyUsage && (
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: 'var(--space-md)',
-          marginBottom: 'var(--space-xl)',
-        }}>
+        <div className={styles.usageGrid}>
           {[
             { label: t('billing.invoices.deliveries'), used: companyUsage.deliveriesUsed, limit: companyUsage.deliveriesLimit },
             { label: t('billing.invoices.vehicles'), used: companyUsage.vehiclesUsed, limit: companyUsage.vehiclesLimit },
@@ -82,25 +76,17 @@ export default function FacturationPage() {
             const isWarning = pct >= 80;
             const isCritical = pct >= 100;
             return (
-              <div key={item.label} style={{
-                background: 'var(--color-surface)',
-                borderRadius: 'var(--radius-lg)',
-                border: '1px solid var(--color-border-subtle)',
-                padding: 'var(--space-lg)',
-              }}>
-                <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <div key={item.label} className={styles.usageCard}>
+                <p className={styles.usageLabel}>
                   {item.label}
                 </p>
-                <p style={{ margin: 'var(--space-xs) 0', fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text)' }}>
+                <p className={styles.usageValue}>
                   {item.used}
-                  <span style={{ fontSize: 'var(--text-sm)', fontWeight: 400, color: 'var(--color-text-tertiary)' }}>
+                  <span className={styles.usageLimit}>
                     /{item.limit}
                   </span>
                 </p>
-                <div style={{
-                  height: 4, background: 'var(--color-border-subtle)',
-                  borderRadius: 2, overflow: 'hidden',
-                }}>
+                <div className={styles.progressTrack}>
                   <div style={{
                     width: `${Math.min(pct, 100)}%`, height: '100%',
                     background: isCritical ? 'var(--color-red)' : isWarning ? 'var(--color-accent)' : 'var(--color-teal)',
@@ -115,38 +101,26 @@ export default function FacturationPage() {
       )}
 
       {isLoading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-4xl)' }}>
-          <Loader2 size={24} style={{ animation: 'dt-spin 0.6s linear infinite' }} />
+        <div className={styles.loadingContainer}>
+          <Loader2 size={24} className={styles.spinner} />
         </div>
       ) : invoices.length === 0 ? (
-        <div style={{
-          textAlign: 'center', padding: 'var(--space-4xl)',
-          background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--color-border-subtle)',
-        }}>
-          <FileText size={32} style={{ color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-md)' }} />
-          <p style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)', margin: 0 }}>
+        <div className={styles.emptyState}>
+          <FileText size={32} className={styles.emptyIcon} />
+          <p className={styles.emptyText}>
             {t('billing.invoices.empty')}
           </p>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 'var(--space-xs)' }}>
+          <p className={styles.emptyDesc}>
             {t('billing.invoices.emptyDesc')}
           </p>
         </div>
       ) : (
-        <div style={{
-          background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--color-border-subtle)', overflow: 'hidden',
-        }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+        <div className={styles.tableContainer}>
+          <table className={styles.table}>
             <thead>
-              <tr style={{ background: 'var(--color-surface-alt)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+              <tr className={styles.tableHeadRow}>
                 {[t('billing.invoices.table.invoice'), t('billing.invoices.table.date'), t('billing.invoices.table.amount'), t('billing.invoices.table.status'), ''].map((l) => (
-                  <th key={l} style={{
-                    padding: 'var(--space-md) var(--space-lg)', fontWeight: 600,
-                    fontSize: 'var(--text-xs)', textTransform: 'uppercase',
-                    letterSpacing: '0.05em', color: 'var(--color-text-secondary)',
-                    textAlign: l === '' ? 'right' : 'left',
-                  }}>
+                  <th key={l} className={`${styles.tableHeadCell} ${l === '' ? styles.tableHeadCellRight : styles.tableHeadCellLeft}`}>
                     {l}
                   </th>
                 ))}
@@ -154,39 +128,31 @@ export default function FacturationPage() {
             </thead>
             <tbody>
               {invoices.map((inv) => (
-                <tr key={inv.id} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                  <td style={{ padding: 'var(--space-md) var(--space-lg)' }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
+                <tr key={inv.id} className={styles.tableRow}>
+                  <td className={styles.tableCell}>
+                    <span className={styles.tableCellMono}>
                       {inv.invoiceNumber}
                     </span>
                   </td>
-                  <td style={{ padding: 'var(--space-md) var(--space-lg)', color: 'var(--color-text-secondary)' }}>
+                  <td className={`${styles.tableCell} ${styles.tableCellSecondary}`}>
                     {formatDate(inv.createdAt)}
                   </td>
-                  <td style={{ padding: 'var(--space-md) var(--space-lg)', fontWeight: 600 }}>
+                  <td className={`${styles.tableCell} ${styles.tableCellBold}`}>
                     {(inv.amount / 100).toFixed(2)} {inv.currency}
                   </td>
-                  <td style={{ padding: 'var(--space-md) var(--space-lg)' }}>
-                    <span style={{
-                      display: 'inline-block', padding: '2px 8px',
-                      borderRadius: 'var(--radius-full)',
-                      fontSize: 'var(--text-xs)', fontWeight: 500,
-                      fontFamily: 'var(--font-mono)',
+                  <td className={styles.tableCell}>
+                    <span className={styles.statusBadge} style={{
                       background: `${STATUS_COLORS[inv.status] || '#6b7280'}20`,
                       color: STATUS_COLORS[inv.status] || '#6b7280',
                     }}>
                       {STATUS_LABELS[inv.status] || inv.status}
                     </span>
                   </td>
-                  <td style={{ padding: 'var(--space-md) var(--space-lg)', textAlign: 'right' }}>
+                  <td className={styles.tableCell} style={{ textAlign: 'right' }}>
                     <button
                       onClick={() => handleDownload(inv.id)}
                       title={t('billing.invoices.download')}
-                      style={{
-                        background: 'transparent', border: 'none',
-                        cursor: 'pointer', color: 'var(--color-text-tertiary)',
-                        padding: 'var(--space-xs)',
-                      }}
+                      className={styles.downloadBtn}
                     >
                       <Download size={16} />
                     </button>
@@ -196,16 +162,11 @@ export default function FacturationPage() {
             </tbody>
           </table>
           {meta.totalPages > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, padding: 'var(--space-lg)' }}>
+            <div className={styles.pagination}>
               <button
                 disabled={page <= 1}
                 onClick={() => setPage(page - 1)}
-                style={{
-                  padding: '6px 12px', border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)', background: 'transparent',
-                  color: 'var(--color-text)', cursor: page <= 1 ? 'default' : 'pointer',
-                  opacity: page <= 1 ? 0.5 : 1,
-                }}
+                className={styles.pageBtn}
               >
                 ←
               </button>
@@ -213,13 +174,7 @@ export default function FacturationPage() {
                 <button
                   key={p}
                   onClick={() => setPage(p)}
-                  style={{
-                    padding: '6px 12px', border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-md)',
-                    background: p === page ? 'var(--color-accent)' : 'transparent',
-                    color: p === page ? 'var(--color-bg)' : 'var(--color-text)',
-                    cursor: 'pointer', fontWeight: p === page ? 700 : 400,
-                  }}
+                  className={`${styles.pageBtn} ${p === page ? styles.pageBtnActive : ''}`}
                 >
                   {p}
                 </button>
@@ -227,12 +182,7 @@ export default function FacturationPage() {
               <button
                 disabled={page >= meta.totalPages}
                 onClick={() => setPage(page + 1)}
-                style={{
-                  padding: '6px 12px', border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)', background: 'transparent',
-                  color: 'var(--color-text)', cursor: page >= meta.totalPages ? 'default' : 'pointer',
-                  opacity: page >= meta.totalPages ? 0.5 : 1,
-                }}
+                className={styles.pageBtn}
               >
                 →
               </button>

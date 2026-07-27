@@ -1,0 +1,41 @@
+.container {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  background: radial-gradient(ellipse at 20% 50%, rgba(242,169,60,0.06) 0%, transparent 60%), radial-gradient(ellipse at 80% 10%, rgba(59,130,246,0.04) 0%, transparent 50%), var(--color-bg, #0B1220);
+}
+
+.formPanel {
+  flex: 1 1 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  position: relative;
+}
+
+.glassCard {
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-lg);
+  padding: 40px 36px;
+  position: relative;
+  z-index: 1;
+}
+
+.visualPanel {
+  flex: 1 1 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  content-visibility: auto;
+}

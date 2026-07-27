@@ -7,6 +7,7 @@ import { reverseGeocode } from '../services/geocoding/geocodingService'
 import { useGpsPreload } from '../hooks/useGpsPreload'
 import type { GeocodingResult } from '../services/geocoding/types'
 import { MG_COMMUNES } from '../services/geocoding/mg-communes'
+import styles from './LocationSearchInput.module.css'
 
 import icon from 'leaflet/dist/images/marker-icon.png'
 import iconShadow from 'leaflet/dist/images/marker-shadow.png'
@@ -150,46 +151,46 @@ export default memo(function LocationSearchInput({
   const showDropdown = open && allResults.length > 0
 
   return (
-    <div style={{ position: 'relative' }}>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1 }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', pointerEvents: 'none', zIndex: 1 }} />
-          <input ref={inputRef} type="text" placeholder={placeholder} className="dialog-input" value={inputValue} onChange={onInputChange}
+    <div className={styles.wrapper}>
+      <div className={styles.inputRow}>
+        <div className={styles.inputWrap}>
+          <Search size={14} className={styles.searchIcon} />
+          <input ref={inputRef} type="text" placeholder={placeholder} className={`dialog-input ${styles.input}`} value={inputValue} onChange={onInputChange}
             onFocus={() => { if (!gpsPreloaded.current) { gpsPreloaded.current = true; preload() } }}
             onBlur={() => {
               if (inputValue.trim() && !value.label) {
                 onChange({ lat: null, lng: null, label: inputValue.trim() });
               }
               onBlur?.();
-            }} onKeyDown={handleKeyDown} autoComplete="off" style={{ paddingLeft: 32, paddingRight: 32 }} />
-          {netLoading && <Loader2 size={14} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', animation: 'dt-spin 0.6s linear infinite' }} />}
+            }} onKeyDown={handleKeyDown} autoComplete="off" />
+          {netLoading && <Loader2 size={14} className={styles.loaderIcon} />}
         </div>
-        {showCopyButton && <button type="button" onClick={onCopyFromOther} title={copyTooltip || 'Copier'} style={{ padding: 6, border: '1px solid var(--color-input-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-input-bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', flexShrink: 0 }}><ArrowRightFromLine size={14} /></button>}
-        <button type="button" onClick={() => setShowMap(!showMap)} title="Ajuster sur la carte" style={{ padding: 6, border: '1px solid var(--color-input-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-input-bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', flexShrink: 0 }}><Crosshair size={14} /></button>
+        {showCopyButton && <button type="button" onClick={onCopyFromOther} title={copyTooltip || 'Copier'} className={styles.copyBtn}><ArrowRightFromLine size={14} /></button>}
+        <button type="button" onClick={() => setShowMap(!showMap)} title="Ajuster sur la carte" className={styles.mapBtn}><Crosshair size={14} /></button>
       </div>
-      {error && <div style={{ fontSize: '0.75rem', color: '#dc3545', marginTop: 4 }}>{error}</div>}
+      {error && <div className={styles.errorText}>{error}</div>}
       {showDropdown && (
-        <div ref={dropdownRef} style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9999, marginTop: 4, background: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.2)', maxHeight: 320, overflow: 'auto' }}>
+        <div ref={dropdownRef} className={styles.dropdown}>
           {allResults.map((r, i) => (
             <button key={r.placeId || `${r.lat}-${r.lng}-${i}`} type="button" onClick={() => selectResult(r)} onMouseEnter={() => setSelectedIdx(i)}
-              style={{ display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: i === selectedIdx ? 'var(--color-accent-muted)' : 'transparent', cursor: 'pointer', textAlign: 'left', fontSize: '0.8rem', color: 'var(--color-text)', fontFamily: 'var(--font-body)', borderBottom: i < allResults.length - 1 ? '1px solid var(--color-border-subtle)' : 'none' }}>
-              <MapPin size={14} style={{ marginTop: 2, flexShrink: 0, color: 'var(--color-accent)' }} />
-              <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</div><div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.displayName}</div></div>
-              {distanceFrom && <span style={{ fontSize: '0.6rem', fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', padding: '2px 5px', borderRadius: 4, flexShrink: 0, marginTop: 2, background: 'var(--color-surface-alt, #182339)', color: 'var(--color-text-tertiary, #7A8BA3)' }}>{haversineKm(distanceFrom.lat, distanceFrom.lng, r.lat, r.lng).toFixed(1)} km</span>}
+              className={`${styles.dropdownItem}${i === selectedIdx ? ` ${styles.dropdownItemActive}` : ''}${i < allResults.length - 1 ? ` ${styles.dropdownItemBorder}` : ''}`}>
+              <MapPin size={14} className={styles.mapIcon} />
+              <div className={styles.resultContent}><div className={styles.resultLabel}>{r.label}</div><div className={styles.resultSub}>{r.displayName}</div></div>
+              {distanceFrom && <span className={styles.distanceBadge}>{haversineKm(distanceFrom.lat, distanceFrom.lng, r.lat, r.lng).toFixed(1)} km</span>}
             </button>
           ))}
         </div>
       )}
       {open && !netLoading && allResults.length === 0 && inputValue.trim().length >= 2 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9999, marginTop: 4, padding: '12px 16px', background: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.2)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', textAlign: 'center' }}>Aucun résultat trouvé — précisez votre recherche ou utilisez la carte</div>
+        <div className={styles.noResults}>Aucun résultat trouvé — précisez votre recherche ou utilisez la carte</div>
       )}
       {showMap && (
-        <div style={{ marginTop: 8, height: 250, borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--color-border-subtle)' }}>
+        <div className={styles.mapContainer}>
           <MapContainer center={mapPos} zoom={16} style={{ height: '100%', width: '100%' }} zoomControl={true}>
             <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             <DraggableMarker position={mapPos} onChange={handleMapConfirm} /><MapUpdater center={mapPos} />
           </MapContainer>
-          <div style={{ padding: '4px 8px', fontSize: '0.7rem', color: 'var(--color-text-tertiary)', textAlign: 'center', background: 'var(--color-surface)', borderTop: '1px solid var(--color-border-subtle)' }}>Cliquez sur la carte ou glissez le marqueur pour ajuster</div>
+          <div className={styles.mapHint}>Cliquez sur la carte ou glissez le marqueur pour ajuster</div>
         </div>
       )}
     </div>

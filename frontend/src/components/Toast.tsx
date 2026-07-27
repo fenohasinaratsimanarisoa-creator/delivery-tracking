@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import styles from './Toast.module.css';
 
 interface ToastMessage {
   id: number;
@@ -29,14 +30,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div style={{
-        position: 'fixed', bottom: 24, right: 24,
-        zIndex: 10000,
-        display: 'flex', flexDirection: 'column',
-        gap: 'var(--space-sm)',
-        pointerEvents: 'none',
-        maxWidth: 380,
-      }}>
+      <div className={styles.container}>
         {messages.map((m) => {
           const bgColor = m.type === 'success' ? 'var(--color-teal)'
             : m.type === 'error' ? 'var(--color-red)'
@@ -44,21 +38,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <div
               key={m.id}
+              className={styles.toast}
               style={{
-                padding: 'var(--space-md) var(--space-lg)',
-                borderRadius: 'var(--radius-lg)',
                 color: m.type === 'info' ? 'var(--color-bg)' : '#fff',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 500,
                 background: bgColor,
-                boxShadow: 'var(--shadow-lg)',
-                pointerEvents: 'auto',
-                animation: 'dt-slide-in-right 0.25s ease-out',
-                fontFamily: 'var(--font-body)',
-                lineHeight: 1.4,
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                border: '1px solid var(--color-glass-border)',
               }}
             >
               {m.text}

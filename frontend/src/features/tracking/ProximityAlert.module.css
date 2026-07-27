@@ -1,0 +1,83 @@
+.alertBanner {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  max-width: 420px;
+  width: calc(100% - 32px);
+  border-radius: var(--radius-lg, 12px);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: dt-fade-in-up 0.3s ease-out;
+}
+.alertHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.alertTitle {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.alertActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.iconBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+}
+.soundOn {
+  color: var(--color-text-tertiary);
+}
+.soundOff {
+  color: var(--color-red);
+}
+.dismissBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  padding: 4px;
+  font-size: 0.8rem;
+}
+.alertMessage {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+.alertActionsRow {
+  display: flex;
+  gap: 8px;
+}
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  flex: 1;
+  color: var(--color-bg, #0B1220);
+  border: none;
+  border-radius: var(--radius-md, 6px);
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.actionBtnLight {
+  color: #fff;
+}
+.alertWrapper {
+  position: relative;
+}
+.alertSpacer {
+  height: 8px;
+}

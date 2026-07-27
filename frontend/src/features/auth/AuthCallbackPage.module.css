@@ -1,0 +1,54 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: linear-gradient(180deg, #f8fafc, #ffffff);
+  gap: 16px;
+  padding: 24px;
+  text-align: center;
+}
+.loadingIcon {
+  animation: dt-spin 0.8s linear infinite;
+  color: #1a56db;
+}
+.loadingText {
+  color: #6b7280;
+  font-size: 15px;
+}
+.successText {
+  font-size: 14px;
+  color: #6b7280;
+}
+.errorCard {
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.errorIconCircle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fef2f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.errorIcon {
+  color: #dc2626;
+}
+.errorMessage {
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+.backLink {
+  color: #1a56db;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 14px;
+}

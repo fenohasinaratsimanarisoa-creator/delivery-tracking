@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import styles from './ErrorBoundary.module.css';
 
 interface Props { children: ReactNode; }
 interface State { error: Error | null; info: ErrorInfo | null; }
@@ -18,21 +19,12 @@ export default class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.error) {
       return (
-        <div style={{
-          padding: 40, fontFamily: 'monospace', background: '#0B1220',
-          color: '#E8ECF3', minHeight: '100vh',
-        }}>
-          <h1 style={{ color: 'var(--color-red, #E8544C)', marginBottom: 16 }}>Erreur</h1>
-          <pre style={{
-            whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.5,
-            color: 'var(--color-red, #E8544C)', marginBottom: 20,
-          }}>
+        <div className={styles.container}>
+          <h1 className={styles.heading}>Erreur</h1>
+          <pre className={styles.errorMessage}>
             {this.state.error.message}
           </pre>
-          <pre style={{
-            whiteSpace: 'pre-wrap', fontSize: 11, lineHeight: 1.4,
-            color: 'var(--color-text-secondary, #9BA6B9)', opacity: 0.8,
-          }}>
+          <pre className={styles.stackTrace}>
             {this.state.info?.componentStack || ''}
           </pre>
         </div>

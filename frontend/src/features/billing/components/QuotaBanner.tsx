@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../../services/api/client';
 import { Link } from 'react-router-dom';
+import styles from './QuotaBanner.module.css';
 
 export default function QuotaBanner() {
   const { t } = useTranslation();
@@ -35,29 +36,17 @@ export default function QuotaBanner() {
   if (warnings.length === 0) return null;
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
-      padding: 'var(--space-sm) var(--space-lg)',
-      background: 'var(--color-accent-muted)',
-      borderBottom: '1px solid var(--color-accent)',
-      fontSize: 'var(--text-sm)',
-      color: 'var(--color-text)',
-      fontFamily: 'var(--font-body)',
-    }}>
-      <AlertTriangle size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
-      <span style={{ flex: 1 }}>
+    <div className={styles.banner}>
+      <AlertTriangle size={16} className={styles.alertIcon} />
+      <span className={styles.message}>
         {warnings.map((w) => t(w.i18nKey, { used: w.used, limit: w.limit })).join(' · ')} —{' '}
-        <Link to="/billing" style={{ fontWeight: 600, textDecoration: 'underline' }}>
+        <Link to="/billing" className={styles.upgradeLink}>
           {t('components.quotaBanner.upgrade')}
         </Link>
       </span>
       <button
         onClick={() => setDismissed(true)}
-        style={{
-          background: 'transparent', border: 'none', cursor: 'pointer',
-          color: 'var(--color-text-tertiary)', padding: 2,
-          display: 'flex', alignItems: 'center',
-        }}
+        className={styles.dismissButton}
       >
         <X size={14} />
       </button>

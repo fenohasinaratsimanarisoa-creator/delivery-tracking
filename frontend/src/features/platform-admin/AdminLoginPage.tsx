@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Shield, Loader2, Key, Smartphone } from 'lucide-react';
 import axios from 'axios';
 import { setAdminToken } from '../../services/auth/adminTokenStore';
+import styles from './AdminLoginPage.module.css';
 
 export default function AdminLoginPage() {
   const navigate = useNavigate();
@@ -80,31 +81,16 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'var(--color-bg)', fontFamily: 'var(--font-body)',
-    }}>
-      <div style={{
-        width: 420, maxWidth: '90vw', padding: 'var(--space-2xl)',
-        background: 'var(--color-surface)', borderRadius: 'var(--radius-xl)',
-        border: '1px solid var(--color-border)',
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: 'var(--space-xl)' }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: 'var(--radius-full)',
-            background: 'var(--color-accent-muted)', color: 'var(--color-accent)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 12px',
-          }}>
+    <div className={styles.container}>
+      <div className={styles.card}>
+        <div className={styles.cardHeader}>
+          <div className={styles.logoBox}>
             <Shield size={28} />
           </div>
-          <h1 style={{
-            fontFamily: 'var(--font-display)', fontSize: 'var(--text-lg)', fontWeight: 700,
-            color: 'var(--color-text)', margin: 0,
-          }}>
+          <h1 className={styles.cardTitle}>
             {t('admin.login.title')}
           </h1>
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', marginTop: 4 }}>
+          <p className={styles.cardSubtitle}>
             {step === 'setup-2fa' ? t('admin.login.twoFactor.setupTitle') :
              step === '2fa' ? t('admin.login.twoFactor.verifyTitle') :
              t('admin.login.subtitle')}
@@ -112,61 +98,37 @@ export default function AdminLoginPage() {
         </div>
 
         {error && (
-          <div style={{
-            padding: 'var(--space-sm) var(--space-md)', borderRadius: 'var(--radius-md)',
-            background: 'var(--color-red-muted)', color: 'var(--color-red)',
-            fontSize: 'var(--text-sm)', marginBottom: 'var(--space-md)',
-          }}>
+          <div className={styles.errorBanner}>
             {error}
           </div>
         )}
 
         {step === 'setup-2fa' && (
           <div>
-            <div style={{
-              padding: 'var(--space-md)', borderRadius: 'var(--radius-md)',
-              background: 'var(--color-accent-muted)', color: 'var(--color-accent)',
-              fontSize: 'var(--text-sm)', marginBottom: 'var(--space-lg)',
-              textAlign: 'center',
-            }}>
-              <Smartphone size={18} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+            <div className={styles.infoBanner}>
+              <Smartphone size={18} className={styles.infoBannerIcon} />
               {t('admin.login.twoFactor.setupDesc')}
             </div>
 
             {qrCode && (
-              <div style={{ textAlign: 'center', marginBottom: 'var(--space-lg)' }}>
-                <img src={qrCode} alt="QR Code 2FA" style={{
-                  width: 180, height: 180, borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border)',
-                }} />
+              <div className={styles.qrContainer}>
+                <img src={qrCode} alt="QR Code 2FA" className={styles.qrImage} />
               </div>
             )}
 
             {otpauthUrl && !qrCode && (
-              <div style={{
-                marginBottom: 'var(--space-lg)', padding: 'var(--space-sm) var(--space-md)',
-                background: 'var(--color-bg)', borderRadius: 'var(--radius-md)',
-                fontSize: 'var(--text-xs)', wordBreak: 'break-all',
-                color: 'var(--color-text-secondary)',
-                border: '1px solid var(--color-border)',
-              }}>
+              <div className={styles.otpUrlBox}>
                 {otpauthUrl}
               </div>
             )}
 
             <form onSubmit={handleSetup2fa}>
-              <div style={{ marginBottom: 'var(--space-md)' }}>
-                <label style={{
-                  display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600,
-                  color: 'var(--color-text-secondary)', marginBottom: 6,
-                }}>
+              <div className={styles.formField}>
+                <label className={styles.formLabel}>
                   {t('admin.login.twoFactor.codeLabel')}
                 </label>
-                <div style={{ position: 'relative' }}>
-                  <Key size={16} style={{
-                    position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-                    color: 'var(--color-text-tertiary)',
-                  }} />
+                <div className={styles.inputWrapper}>
+                  <Key size={16} className={styles.inputIcon} />
                   <input
                     type="text"
                     inputMode="numeric"
@@ -175,34 +137,14 @@ export default function AdminLoginPage() {
                     placeholder={t('admin.login.twoFactor.codePlaceholder')}
                     value={twoFactorCode}
                     onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
-                    style={{
-                      width: '100%', padding: '10px 12px 10px 36px',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 'var(--radius-md)',
-                      background: 'var(--color-bg)',
-                      color: 'var(--color-text)',
-                      fontSize: 'var(--text-md)',
-                      fontFamily: 'var(--font-body)',
-                      outline: 'none', boxSizing: 'border-box',
-                      textAlign: 'center', letterSpacing: 8,
-                    }}
+                    className={`${styles.inputField} ${styles.inputFieldWithIcon} ${styles.inputFieldCenter}`}
                   />
                 </div>
               </div>
               <button
                 type="submit"
                 disabled={loading || twoFactorCode.length !== 6}
-                style={{
-                  width: '100%', padding: '10px',
-                  background: 'var(--color-accent)',
-                  color: '#fff', border: 'none',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontWeight: 600, fontSize: 'var(--text-sm)',
-                  fontFamily: 'var(--font-body)',
-                  opacity: loading ? 0.7 : 1,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                }}
+                className={styles.submitBtn}
               >
                 {loading && <Loader2 size={16} className="spin" />}
                 {t('admin.login.twoFactor.enableAndContinue')}
@@ -213,68 +155,39 @@ export default function AdminLoginPage() {
 
         {step === '2fa' && (
           <form onSubmit={handleVerify2fa}>
-            <div style={{ marginBottom: 'var(--space-md)' }}>
-              <label style={{
-                display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600,
-                color: 'var(--color-text-secondary)', marginBottom: 6,
-              }}>
+            <div className={styles.formField}>
+              <label className={styles.formLabel}>
                 {t('admin.login.twoFactor.codeLabel')}
               </label>
-              <div style={{ position: 'relative' }}>
-                <Key size={16} style={{
-                  position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-                  color: 'var(--color-text-tertiary)',
-                }} />
+              <div className={styles.inputWrapper}>
+                <Key size={16} className={styles.inputIcon} />
                 <input
                   type="text"
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   maxLength={6}
-                    placeholder={t('admin.login.twoFactor.verifyPlaceholder')}
-                    value={twoFactorCode}
-                    onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
-                    style={{
-                      width: '100%', padding: '10px 12px 10px 36px',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 'var(--radius-md)',
-                      background: 'var(--color-bg)',
-                      color: 'var(--color-text)',
-                      fontSize: 'var(--text-md)',
-                      fontFamily: 'var(--font-body)',
-                      outline: 'none', boxSizing: 'border-box',
-                      textAlign: 'center', letterSpacing: 8,
-                    }}
-                  />
-                </div>
+                  placeholder={t('admin.login.twoFactor.verifyPlaceholder')}
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
+                  className={`${styles.inputField} ${styles.inputFieldWithIcon} ${styles.inputFieldCenter}`}
+                />
               </div>
-              <button
-                type="submit"
-                disabled={loading || twoFactorCode.length !== 6}
-                style={{
-                  width: '100%', padding: '10px',
-                  background: 'var(--color-accent)',
-                  color: '#fff', border: 'none',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontWeight: 600, fontSize: 'var(--text-sm)',
-                  fontFamily: 'var(--font-body)',
-                  opacity: loading ? 0.7 : 1,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                }}
-              >
-                {loading && <Loader2 size={16} className="spin" />}
-                {t('admin.login.twoFactor.verify')}
+            </div>
+            <button
+              type="submit"
+              disabled={loading || twoFactorCode.length !== 6}
+              className={styles.submitBtn}
+            >
+              {loading && <Loader2 size={16} className="spin" />}
+              {t('admin.login.twoFactor.verify')}
             </button>
           </form>
         )}
 
         {step === 'login' && (
           <form onSubmit={handleLogin}>
-            <div style={{ marginBottom: 'var(--space-md)' }}>
-              <label style={{
-                display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600,
-                color: 'var(--color-text-secondary)', marginBottom: 6,
-              }}>
+            <div className={styles.formField}>
+              <label className={styles.formLabel}>
                 {t('admin.login.email')}
               </label>
               <input
@@ -283,23 +196,11 @@ export default function AdminLoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t('admin.login.emailPlaceholder')}
                 required
-                style={{
-                  width: '100%', padding: '10px 12px',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'var(--color-bg)',
-                  color: 'var(--color-text)',
-                  fontSize: 'var(--text-sm)',
-                  fontFamily: 'var(--font-body)',
-                  outline: 'none', boxSizing: 'border-box',
-                }}
+                className={styles.inputField}
               />
             </div>
-            <div style={{ marginBottom: 'var(--space-lg)' }}>
-              <label style={{
-                display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600,
-                color: 'var(--color-text-secondary)', marginBottom: 6,
-              }}>
+            <div className={styles.formFieldLast}>
+              <label className={styles.formLabel}>
                 {t('admin.login.password')}
               </label>
               <input
@@ -309,32 +210,13 @@ export default function AdminLoginPage() {
                 placeholder={t('admin.login.passwordPlaceholder')}
                 required
                 minLength={6}
-                style={{
-                  width: '100%', padding: '10px 12px',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'var(--color-bg)',
-                  color: 'var(--color-text)',
-                  fontSize: 'var(--text-sm)',
-                  fontFamily: 'var(--font-body)',
-                  outline: 'none', boxSizing: 'border-box',
-                }}
+                className={styles.inputField}
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              style={{
-                width: '100%', padding: '10px',
-                background: 'var(--color-accent)',
-                color: '#fff', border: 'none',
-                borderRadius: 'var(--radius-md)',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontWeight: 600, fontSize: 'var(--text-sm)',
-                fontFamily: 'var(--font-body)',
-                opacity: loading ? 0.7 : 1,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              }}
+              className={styles.submitBtn}
             >
               {loading && <Loader2 size={16} className="spin" />}
               {t('admin.login.submit')}

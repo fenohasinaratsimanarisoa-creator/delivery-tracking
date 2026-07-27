@@ -6,6 +6,7 @@ import { setAccessToken } from '../../services/auth/tokenStore';
 import { parseToken } from '../../services/jwt';
 import type { User } from '../../types';
 import { Loader2, AlertCircle } from 'lucide-react';
+import styles from './AuthCallbackPage.module.css';
 
 const ERROR_MESSAGES: Record<string, string> = {
   access_denied: 'auth.callback.googleRefused',
@@ -88,63 +89,32 @@ export default function AuthCallbackPage() {
     }
   }, [isInitializing, isAuthenticated, user, searchParams, t]);
 
-  const containerStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    background: 'linear-gradient(180deg, #f8fafc, #ffffff)',
-    gap: 16,
-    padding: 24,
-    textAlign: 'center',
-  };
-
   return (
-    <div style={containerStyle}>
+    <div className={styles.container}>
       {status === 'loading' && (
         <>
-          <Loader2 size={32} style={{ animation: 'dt-spin 0.8s linear infinite', color: '#1a56db' }} />
-          <div style={{ color: '#6b7280', fontSize: 15 }}>{t('auth.callback.connecting')}</div>
+          <Loader2 size={32} className={styles.loadingIcon} />
+          <div className={styles.loadingText}>{t('auth.callback.connecting')}</div>
         </>
       )}
 
       {status === 'success' && (
         <>
-          <div style={{ fontSize: 14, color: '#6b7280' }}>{t('auth.callback.loginSuccess')}</div>
+          <div className={styles.successText}>{t('auth.callback.loginSuccess')}</div>
         </>
       )}
 
       {status === 'error' && (
-        <div style={{
-          maxWidth: 400,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 16,
-        }}>
-          <div style={{
-            width: 48,
-            height: 48,
-            borderRadius: '50%',
-            background: '#fef2f2',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <AlertCircle size={24} style={{ color: '#dc2626' }} />
+        <div className={styles.errorCard}>
+          <div className={styles.errorIconCircle}>
+            <AlertCircle size={24} className={styles.errorIcon} />
           </div>
-          <p style={{ color: '#4b5563', fontSize: 14, lineHeight: 1.5, margin: 0 }}>
+          <p className={styles.errorMessage}>
             {errorMessage}
           </p>
           <Link
             to="/login"
-            style={{
-              color: '#1a56db',
-              fontWeight: 600,
-              textDecoration: 'none',
-              fontSize: 14,
-            }}
+            className={styles.backLink}
           >
             {t('auth.callback.backToLogin')}
           </Link>

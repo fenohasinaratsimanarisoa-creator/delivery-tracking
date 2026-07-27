@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pencil, Trash2, CheckSquare, Square } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
+import styles from './DataTable.module.css';
 
 interface Column<T> {
   key: string;
@@ -85,19 +86,8 @@ export default function DataTable<T>({
 
   if (loading) {
     return (
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 'var(--space-4xl)',
-        color: 'var(--color-text-secondary)',
-        fontSize: 'var(--text-base)',
-      }}>
-        <div style={{
-          width: 20, height: 20, borderRadius: 'var(--radius-full)',
-          border: '2px solid var(--color-border)',
-          borderTopColor: 'var(--color-accent)',
-          animation: 'dt-spin 0.6s linear infinite',
-          marginRight: 'var(--space-sm)',
-        }} />
+      <div className={styles.loadingContainer}>
+        <div className={styles.spinner} />
         {t('components.dataTable.loading')}
       </div>
     );
@@ -105,20 +95,11 @@ export default function DataTable<T>({
 
   if (data.length === 0) {
     return (
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 'var(--space-4xl)',
-        flexDirection: 'column', gap: 'var(--space-md)',
-      }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: 'var(--radius-full)',
-          background: 'var(--color-accent-muted)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--color-accent)', fontSize: 20, opacity: 0.6,
-        }}>
+      <div className={styles.emptyContainer}>
+        <div className={styles.emptyIcon}>
           <Pencil size={20} />
         </div>
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-base)', margin: 0, textAlign: 'center' }}>
+        <p className={styles.emptyMessage}>
           {emptyMessage ?? t('components.dataTable.emptyData')}
         </p>
       </div>
@@ -127,23 +108,16 @@ export default function DataTable<T>({
 
   if (isMobile) {
     return (
-      <div style={{
-        display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)',
-      }}>
+      <div className={styles.mobileCardContainer}>
         {sorted.map((row) => {
           const rowId = keyExtractor(row);
           return (
-          <div key={rowId} style={{
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border-subtle)',
-            borderRadius: 'var(--radius-lg)',
-            padding: 'var(--space-md)',
-          }}>
+          <div key={rowId} className={styles.mobileCard}>
             {selectable && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div className={styles.mobileSelectRow}>
                 <button
                   onClick={() => handleRowSelect(rowId)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--color-accent)' }}
+                  className={styles.iconButton}
                   aria-label="Sélectionner"
                 >
                   {selectedIds?.has(rowId) ? <CheckSquare size={18} /> : <Square size={18} />}
@@ -151,46 +125,22 @@ export default function DataTable<T>({
               </div>
             )}
             {columns.map((col) => (
-              <div key={col.key} style={{
-                display: 'flex', justifyContent: 'space-between',
-                padding: 'var(--space-xs) 0',
-                fontSize: 'var(--text-sm)',
-                borderBottom: '1px solid var(--color-border-subtle)',
-                gap: 'var(--space-sm)',
-              }}>
-                <span style={{
-                  fontWeight: 600,
-                  fontSize: 'var(--text-xs)',
-                  color: 'var(--color-text-secondary)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                  flexShrink: 0,
-                  minWidth: 80,
-                }}>
+              <div key={col.key} className={styles.mobileColumnRow}>
+                <span className={styles.mobileLabel}>
                   {col.label}
                 </span>
-                <span style={{
-                  textAlign: 'right',
-                  color: 'var(--color-text)',
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
-                  hyphens: 'auto',
-                }}>
+                <span className={styles.mobileValue}>
                   {col.render ? col.render(row) : (row as any)[col.key] ?? '-'}
                 </span>
               </div>
             ))}
             {(onEdit || onDelete) && (
-              <div style={{
-                display: 'flex', gap: 'var(--space-sm)',
-                justifyContent: 'flex-end',
-                paddingTop: 'var(--space-sm)',
-                marginTop: 'var(--space-xs)',
-              }}>
+              <div className={styles.mobileActions}>
                 {onEdit && (
                   <button
                     onClick={() => onEdit(row)}
-                    style={{ ...actionBtn, minWidth: 44, minHeight: 44 }}
+                    className={styles.actionBtn}
+                    style={{ minWidth: 44, minHeight: 44 }}
                     aria-label={t('components.dataTable.editAria')}
                   >
                     <Pencil size={16} />
@@ -199,7 +149,8 @@ export default function DataTable<T>({
                 {onDelete && (
                   <button
                     onClick={() => onDelete(row)}
-                    style={{ ...actionBtn, minWidth: 44, minHeight: 44 }}
+                    className={styles.actionBtn}
+                    style={{ minWidth: 44, minHeight: 44 }}
                     aria-label={t('components.dataTable.deleteAria')}
                   >
                     <Trash2 size={16} />
@@ -211,11 +162,7 @@ export default function DataTable<T>({
           );
         })}
         {totalPages > 1 && (
-          <div style={{
-            display: 'flex', justifyContent: 'center', alignItems: 'center',
-            gap: 'var(--space-xs)',
-            padding: 'var(--space-md) 0',
-          }}>
+          <div className={styles.mobilePagination}>
             <button
               disabled={page <= 1}
               onClick={() => onPageChange(page - 1)}
@@ -224,12 +171,7 @@ export default function DataTable<T>({
             >
               ←
             </button>
-            <span style={{
-              fontSize: 'var(--text-sm)',
-              color: 'var(--color-text-secondary)',
-              fontFamily: 'var(--font-mono)',
-              padding: '0 var(--space-sm)',
-            }}>
+            <span className={styles.pageNumber}>
               {page} / {totalPages}
             </span>
             <button
@@ -247,32 +189,18 @@ export default function DataTable<T>({
   }
 
   return (
-    <div style={{
-      background: 'var(--color-surface)',
-      borderRadius: 'var(--radius-lg)',
-      border: '1px solid var(--color-border-subtle)',
-      overflow: 'hidden',
-    }}>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{
-          width: '100%', borderCollapse: 'collapse',
-          fontSize: 'var(--text-sm)',
-        }}>
+    <div className={styles.tableContainer}>
+      <div className={styles.scrollWrapper}>
+        <table className={styles.table}>
           <thead>
-            <tr style={{
-              background: 'var(--color-surface-alt)',
-              borderBottom: '1px solid var(--color-border-subtle)',
-            }}>
+            <tr className={styles.headerRow}>
               {selectable && (
-                <th style={{
-                  padding: 'var(--space-md) var(--space-lg)',
-                  width: 48, textAlign: 'center',
-                  position: 'sticky', left: 0, zIndex: 3,
-                  background: 'var(--color-surface-alt)',
-                }}>
+                <th className={styles.headerCellSelect}
+                  style={{ position: 'sticky', left: 0, zIndex: 3, background: 'var(--color-surface-alt)' }}
+                >
                   <button
                     onClick={handleSelectAll}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--color-accent)' }}
+                    className={styles.iconButton}
                     aria-label={allSelectedOnPage ? 'Tout désélectionner' : 'Tout sélectionner'}
                   >
                     {allSelectedOnPage ? <CheckSquare size={16} /> : someSelectedOnPage ? <Square size={16} opacity={0.5} /> : <Square size={16} />}
@@ -283,15 +211,8 @@ export default function DataTable<T>({
                 <th
                   key={col.key}
                   onClick={() => handleSort(col)}
-                  style={{
-                    padding: 'var(--space-md) var(--space-lg)',
-                    fontWeight: 600, fontSize: 'var(--text-xs)',
-                    textTransform: 'uppercase', letterSpacing: '0.05em',
-                    color: 'var(--color-text-secondary)',
-                    cursor: col.sortable ? 'pointer' : 'default',
-                    userSelect: 'none', textAlign: 'left',
-                    whiteSpace: 'nowrap',
-                  }}
+                  className={`${styles.headerCell}${col.sortable ? ` ${styles.sortableCell}` : ''}`}
+                  style={{ cursor: col.sortable ? 'pointer' : 'default' }}
                 >
                   {col.label}
                   {col.sortable && (
@@ -307,16 +228,9 @@ export default function DataTable<T>({
                 </th>
               ))}
               {(onEdit || onDelete) && (
-                <th style={{
-                  padding: 'var(--space-md) var(--space-lg)',
-                  fontWeight: 600, fontSize: 'var(--text-xs)',
-                  textTransform: 'uppercase', letterSpacing: '0.05em',
-                  color: 'var(--color-text-secondary)',
-                  width: 100, textAlign: 'right',
-                  position: 'sticky', right: 0, zIndex: 2,
-                  background: 'var(--color-surface-alt)',
-                  boxShadow: '-4px 0 8px -4px rgba(0,0,0,0.15)',
-                }}>
+                <th className={styles.headerActionsCell}
+                  style={{ position: 'sticky', right: 0, zIndex: 2, background: 'var(--color-surface-alt)' }}
+                >
                   {t('common.actions')}
                 </th>
               )}
@@ -329,25 +243,24 @@ export default function DataTable<T>({
                 return (
                 <tr
                   key={rowId}
+                  className={styles.dataRow}
                   style={{
                     borderBottom: ri < sorted.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
-                    transition: 'background 0.15s ease',
-                    cursor: 'default',
                     ...(isSelected ? { background: 'var(--color-accent-muted)' } : {}),
                   }}
                   onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
                   onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                 >
                   {selectable && (
-                    <td style={{
-                      padding: 'var(--space-md) var(--space-lg)',
-                      width: 48, textAlign: 'center',
-                      position: 'sticky', left: 0, zIndex: 1,
-                      background: isSelected ? 'var(--color-accent-muted)' : 'var(--color-surface)',
-                    }}>
+                    <td className={styles.dataCellSelect}
+                      style={{
+                        position: 'sticky', left: 0, zIndex: 1,
+                        background: isSelected ? 'var(--color-accent-muted)' : 'var(--color-surface)',
+                      }}
+                    >
                       <button
                         onClick={() => handleRowSelect(rowId)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--color-accent)' }}
+                        className={styles.iconButton}
                         aria-label="Sélectionner"
                       >
                         {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
@@ -355,28 +268,22 @@ export default function DataTable<T>({
                     </td>
                   )}
                   {columns.map((col) => (
-                    <td key={col.key} style={{
-                      padding: 'var(--space-md) var(--space-lg)',
-                      fontSize: 'var(--text-sm)',
-                      color: 'var(--color-text)',
-                      whiteSpace: 'nowrap',
-                    }}>
+                    <td key={col.key} className={styles.dataCell}>
                     {col.render ? col.render(row) : (row as any)[col.key] ?? '-'}
                   </td>
                 ))}
                 {(onEdit || onDelete) && (
-                  <td style={{
-                    padding: 'var(--space-md) var(--space-lg)',
-                    textAlign: 'right',
-                    position: 'sticky', right: 0, zIndex: 1,
-                    background: isSelected ? 'var(--color-accent-muted)' : 'var(--color-surface)',
-                    boxShadow: '-4px 0 8px -4px rgba(0,0,0,0.15)',
-                  }}>
-                    <div style={{ display: 'flex', gap: 'var(--space-xs)', justifyContent: 'flex-end' }}>
+                  <td className={styles.actionsCell}
+                    style={{
+                      position: 'sticky', right: 0, zIndex: 1,
+                      background: isSelected ? 'var(--color-accent-muted)' : 'var(--color-surface)',
+                    }}
+                  >
+                    <div className={styles.actionsRow}>
                       {onEdit && (
                         <button
                           onClick={() => onEdit(row)}
-                          style={actionBtn}
+                          className={styles.actionBtn}
                           aria-label={t('components.dataTable.editAria')}
                         >
                           <Pencil size={14} />
@@ -385,7 +292,7 @@ export default function DataTable<T>({
                       {onDelete && (
                         <button
                           onClick={() => onDelete(row)}
-                          style={actionBtn}
+                          className={styles.actionBtn}
                           aria-label={t('components.dataTable.deleteAria')}
                         >
                           <Trash2 size={14} />
@@ -402,12 +309,7 @@ export default function DataTable<T>({
       </div>
 
       {totalPages > 1 && (
-        <div style={{
-          display: 'flex', justifyContent: 'center', alignItems: 'center',
-          gap: 'var(--space-xs)',
-          padding: 'var(--space-md) var(--space-lg)',
-          borderTop: '1px solid var(--color-border-subtle)',
-        }}>
+        <div className={styles.pagination}>
           <button
             disabled={page <= 1}
             onClick={() => onPageChange(page - 1)}
@@ -416,12 +318,7 @@ export default function DataTable<T>({
           >
             ←
           </button>
-          <span style={{
-            fontSize: 'var(--text-sm)',
-            color: 'var(--color-text-secondary)',
-            fontFamily: 'var(--font-mono)',
-            padding: '0 var(--space-sm)',
-          }}>
+          <span className={styles.pageNumber}>
             {page} / {totalPages}
           </span>
           <button
@@ -437,14 +334,6 @@ export default function DataTable<T>({
     </div>
   );
 }
-
-const actionBtn: React.CSSProperties = {
-  background: 'transparent', border: 'none', cursor: 'pointer',
-  padding: 6, borderRadius: 'var(--radius-md)',
-  color: 'var(--color-text-tertiary)',
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  transition: 'background 0.15s ease, color 0.15s ease',
-};
 
 const pageBtnStyle = (disabled: boolean): React.CSSProperties => ({
   padding: 'var(--space-sm) var(--space-md)',

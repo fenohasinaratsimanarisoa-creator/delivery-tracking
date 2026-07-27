@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Loader2 } from 'lucide-react';
+import styles from './EntityDialog.module.css';
 
 interface EntityDialogProps {
   open: boolean;
@@ -148,61 +149,30 @@ export default function EntityDialog({ open, onClose, title, subtitle, children,
     >
       <div
         onClick={handleClose}
-        style={{
-          position: 'absolute', inset: 0,
-          background: 'var(--color-overlay)',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
-        }}
+        className={styles.backdrop}
       />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="dt-dialog-card"
+        className={`dt-dialog-card ${styles.dialogCard}`}
         style={{
-          position: 'relative',
-          width, maxWidth: 'calc(100vw - 32px)',
-          maxHeight: 'calc(100vh - 64px)',
-          background: 'var(--color-surface)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-xl)',
-          boxShadow: 'var(--shadow-dialog)',
-          display: 'flex', flexDirection: 'column',
+          width,
           animation: closing
             ? 'dt-dialog-out 0.2s ease-in forwards'
             : 'dt-dialog-in 0.25s ease-out',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{
-          position: 'sticky', top: 0, zIndex: 10,
-          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-          gap: 'var(--space-md)',
-          padding: 'var(--space-xl) var(--space-xl) var(--space-lg)',
-          borderBottom: '1px solid var(--color-border-subtle)',
-          background: 'var(--color-surface)',
-          borderTopLeftRadius: 'var(--radius-xl)',
-          borderTopRightRadius: 'var(--radius-xl)',
-        }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <h2 style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 'var(--text-lg)',
-              fontWeight: 700,
-              color: 'var(--color-text)',
-              margin: 0,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
+        <div className={styles.header}
+          style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+          <div className={styles.titleWrap}>
+            <h2 className={styles.title}>
               {title}
             </h2>
             {subtitle && (
-              <p style={{
-                margin: 'var(--space-xs) 0 0',
-                fontSize: 'var(--text-sm)',
-                color: 'var(--color-text-secondary)',
-              }}>
+              <p className={styles.subtitle}>
                 {subtitle}
               </p>
             )}
@@ -210,37 +180,19 @@ export default function EntityDialog({ open, onClose, title, subtitle, children,
           <button
             onClick={handleClose}
             aria-label={t('components.entityDialog.closeAria')}
-            style={{
-              background: 'var(--color-surface-alt)',
-              border: '1px solid var(--color-border-subtle)',
-              borderRadius: 'var(--radius-md)',
-              cursor: 'pointer',
-              padding: 'var(--space-sm)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--color-text-secondary)',
-              transition: 'background 0.1s, color 0.1s',
-              flexShrink: 0,
-            }}
+            className={styles.closeBtn}
           >
             <X size={16} />
           </button>
         </div>
 
-        <div style={{
-          flex: 1, overflow: 'auto',
-          padding: 'var(--space-xl)',
-        }}>
+        <div className={styles.body}>
           {children}
         </div>
 
         {footer && (
-          <div style={{
-            position: 'sticky', bottom: 0, zIndex: 10,
-            background: 'var(--color-surface)',
-            borderTop: '1px solid var(--color-border-subtle)',
-            borderBottomLeftRadius: 'var(--radius-xl)',
-            borderBottomRightRadius: 'var(--radius-xl)',
-          }}>
+          <div className={styles.footer}
+            style={{ position: 'sticky', bottom: 0, zIndex: 10 }}>
             {footer}
           </div>
         )}
@@ -254,22 +206,13 @@ export function DialogField({ label, error, children, required }: {
 }) {
   const id = `df-${label.replace(/\s+/g, '-').toLowerCase()}`;
   return (
-    <div style={{ marginBottom: 'var(--space-lg)' }}>
+    <div className={styles.field}>
       <label
         htmlFor={id}
-        style={{
-          display: 'block',
-          fontSize: 'var(--text-xs)',
-          fontWeight: 600,
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-          color: error ? 'var(--color-red)' : 'var(--color-text-secondary)',
-          marginBottom: 'var(--space-sm)',
-          fontFamily: 'var(--font-body)',
-          transition: 'color 0.1s',
-        }}
+        className={styles.label}
+        style={{ color: error ? 'var(--color-red)' : 'var(--color-text-secondary)' }}
       >
-        {label}{required && <span style={{ color: 'var(--color-red)', marginLeft: 2 }}>*</span>}
+        {label}{required && <span className={styles.requiredStar}>*</span>}
       </label>
       {React.Children.map(children, (child, index) => {
         if (index === 0) {
@@ -281,13 +224,7 @@ export function DialogField({ label, error, children, required }: {
         return child;
       })}
       {error && (
-        <p style={{
-          margin: 'var(--space-xs) 0 0',
-          fontSize: 'var(--text-xs)',
-          color: 'var(--color-red)',
-          fontFamily: 'var(--font-body)',
-          lineHeight: 1.3,
-        }}>
+        <p className={styles.errorText}>
           {error}
         </p>
       )}
@@ -297,17 +234,8 @@ export function DialogField({ label, error, children, required }: {
 
 export function DialogSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div style={{ marginBottom: 'var(--space-xl)' }}>
-      <h3 style={{
-        fontFamily: 'var(--font-display)',
-        fontSize: 'var(--text-sm)',
-        fontWeight: 600,
-        color: 'var(--color-accent)',
-        margin: '0 0 var(--space-md)',
-        paddingBottom: 'var(--space-sm)',
-        borderBottom: '1px solid var(--color-border-subtle)',
-        letterSpacing: '-0.01em',
-      }}>
+    <div className={styles.section}>
+      <h3 className={styles.sectionTitle}>
         {title}
       </h3>
       {children}
@@ -320,43 +248,19 @@ export function DialogSubmitBar({ loading, onCancel, submitLabel, error, form }:
 }) {
   const { t } = useTranslation();
   return (
-    <div style={{
-      padding: 'var(--space-lg) var(--space-xl)',
-      display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)',
-    }}>
+    <div className={styles.submitBar}>
       {error && (
-        <p style={{
-          margin: 0,
-          fontSize: 'var(--text-sm)',
-          color: 'var(--color-red)',
-          fontFamily: 'var(--font-body)',
-          lineHeight: 1.4,
-          padding: 'var(--space-sm) var(--space-md)',
-          background: 'var(--color-red-muted)',
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--color-red)',
-        }}>
+        <p className={styles.submitError}>
           {error}
         </p>
       )}
-      <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'flex-end' }}>
+      <div className={styles.submitActions}>
         <button
           type="button"
           onClick={onCancel}
           disabled={loading}
-          style={{
-            padding: 'var(--space-sm) var(--space-lg)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-md)',
-            background: 'transparent',
-            color: 'var(--color-text)',
-            cursor: loading ? 'default' : 'pointer',
-            fontSize: 'var(--text-sm)',
-            fontWeight: 500,
-            fontFamily: 'var(--font-body)',
-            opacity: loading ? 0.5 : 1,
-            transition: 'background 0.1s',
-          }}
+          className={styles.cancelBtn}
+          style={{ cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.5 : 1 }}
         >
           {t('common.cancel')}
         </button>
@@ -364,20 +268,8 @@ export function DialogSubmitBar({ loading, onCancel, submitLabel, error, form }:
           type="submit"
           form={form}
           disabled={loading}
-          style={{
-            padding: 'var(--space-sm) var(--space-lg)',
-            border: 'none',
-            borderRadius: 'var(--radius-md)',
-            background: 'var(--color-accent)',
-            color: 'var(--color-bg)',
-            cursor: loading ? 'default' : 'pointer',
-            fontSize: 'var(--text-sm)',
-            fontWeight: 600,
-            fontFamily: 'var(--font-body)',
-            display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-            opacity: loading ? 0.7 : 1,
-            transition: 'opacity 0.1s',
-          }}
+          className={styles.submitBtn}
+          style={{ cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.7 : 1 }}
         >
           {loading && <Loader2 size={14} style={{ animation: 'dt-spin 0.6s linear infinite' }} />}
           {loading ? t('common.saving') : submitLabel}

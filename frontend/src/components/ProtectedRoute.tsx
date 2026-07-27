@@ -2,6 +2,7 @@ import { Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/AuthContext';
 import type { Role } from '../types';
+import styles from './ProtectedRoute.module.css';
 
 interface Props {
   children: React.ReactNode;
@@ -14,8 +15,8 @@ export default function ProtectedRoute({ children, roles }: Props) {
 
   if (isInitializing) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <div style={{ color: 'var(--color-text-tertiary, #7A8BA3)', fontSize: 'var(--text-sm, 0.875rem)' }}>{t('components.protectedRoute.loading')}</div>
+      <div className={styles.loadingContainer}>
+        <div className={styles.loadingText}>{t('components.protectedRoute.loading')}</div>
       </div>
     );
   }

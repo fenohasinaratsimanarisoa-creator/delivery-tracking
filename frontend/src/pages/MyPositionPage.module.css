@@ -1,0 +1,227 @@
+.page {
+  padding: var(--space-xl, 24px);
+}
+
+.pageNav {
+  padding: 0;
+}
+
+.title {
+  margin-bottom: var(--space-xl, 24px);
+  font-size: var(--text-xl, 1.5rem);
+}
+
+.noDriver {
+  padding: var(--space-xl, 24px);
+  text-align: center;
+  color: var(--color-text-tertiary, #7A8BA3);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg, 16px);
+}
+
+.contentNav {
+  gap: 0;
+}
+
+.card {
+  background: var(--color-surface, #121B2E);
+  padding: var(--space-lg, 16px);
+  border-radius: var(--radius-lg, 8px);
+  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  transition: background var(--transition-fast, 150ms) ease, border-color var(--transition-fast, 150ms) ease;
+}
+
+.vehicleInfo {
+  color: var(--color-text-secondary, #9BA6B9);
+  font-size: var(--text-sm, 0.75rem);
+}
+
+.label {
+  font-weight: 600;
+  font-size: var(--text-sm, 0.75rem);
+  display: block;
+  margin-bottom: var(--space-sm, 8px);
+  color: var(--color-text-secondary, #9BA6B9);
+}
+
+.historySection {
+  margin-top: var(--space-sm, 8px);
+}
+
+.historyList {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.historyLabel {
+  font-weight: 500;
+}
+
+.historyDate {
+  font-size: var(--text-xs, 0.625rem);
+  color: var(--color-text-tertiary, #7A8BA3);
+  margin-left: 8px;
+}
+
+.crowDistance {
+  margin-top: 6px;
+  font-size: var(--text-xs, 0.625rem);
+  color: var(--color-text-tertiary, #7A8BA3);
+  font-family: var(--font-mono);
+}
+
+.deliverySelectRow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.deliverySelect {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border-radius: var(--radius-md, 6px);
+  font-size: var(--text-sm, 0.75rem);
+  flex: 1;
+  max-width: 400px;
+  background: var(--color-input-bg, #0D1525);
+  color: var(--color-text, #E8ECF3);
+}
+
+.noDeliveries {
+  margin-top: 8px;
+  font-size: var(--text-xs, 0.625rem);
+  color: var(--color-text-tertiary, #7A8BA3);
+}
+
+.routeCard {
+  border: 1px solid var(--color-teal, #3FA796);
+  position: relative;
+  overflow: hidden;
+}
+
+.routeAccent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--color-teal, #3FA796);
+  border-top-left-radius: var(--radius-lg, 8px);
+  border-bottom-left-radius: var(--radius-lg, 8px);
+}
+
+.routeContent {
+  padding-left: 12px;
+}
+
+.routeTitle {
+  font-weight: 600;
+  font-size: var(--text-sm, 0.75rem);
+  margin-bottom: 10px;
+  color: var(--color-teal, #3FA796);
+}
+
+.routeStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.routeStatLabel {
+  font-size: var(--text-xs, 0.625rem);
+  color: var(--color-text-tertiary, #7A8BA3);
+  margin-bottom: 2px;
+}
+
+.routeStatValuePrimary {
+  font-size: var(--text-lg, 1.125rem);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-teal, #3FA796);
+}
+
+.routeStatValueSecondary {
+  font-size: var(--text-md, 1rem);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--color-text, #E8ECF3);
+}
+
+.routeAlternatives {
+  margin-top: 12px;
+}
+
+.routeAlternativesTitle {
+  font-size: var(--text-xs, 0.625rem);
+  color: var(--color-text-tertiary, #7A8BA3);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.altBtnTitle {
+  font-weight: 600;
+  color: var(--color-text, #E8ECF3);
+}
+
+.altBtnDetails {
+  display: flex;
+  gap: 12px;
+  margin-top: 2px;
+  color: var(--color-text-secondary, #9BA6B9);
+}
+
+.altFaster {
+  color: var(--color-teal, #3FA796);
+}
+
+.routeCalcLoading {
+  font-size: var(--text-xs, 0.625rem);
+  color: var(--color-text-tertiary, #7A8BA3);
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.statusMsg {
+  margin-bottom: var(--space-sm, 8px);
+  font-size: var(--text-sm, 0.75rem);
+}
+
+.coords {
+  font-size: var(--text-xs, 0.625rem);
+  color: var(--color-text-tertiary, #7A8BA3);
+  margin-bottom: var(--space-sm, 8px);
+  font-family: var(--font-mono);
+}
+
+.poorAccuracy {
+  color: var(--color-red, #E8544C);
+  font-size: var(--text-sm, 0.75rem);
+  margin-bottom: var(--space-sm, 8px);
+  font-weight: 500;
+}
+
+.offlineQueue {
+  color: var(--color-accent, #F2A93C);
+  font-size: var(--text-sm, 0.75rem);
+  margin-bottom: var(--space-sm, 8px);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.mapWrap {
+  overflow: hidden;
+  position: relative;
+}

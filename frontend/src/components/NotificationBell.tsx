@@ -7,6 +7,7 @@ import { formatDateTime } from '../services/i18n/formatDate';
 import api from '../services/api/client';
 import { getAccessToken } from '../services/auth/tokenStore';
 import type { Notification } from '../types';
+import styles from './NotificationBell.module.css';
 
 function getPriorityColor(priority: string) {
   switch (priority) {
@@ -143,70 +144,37 @@ export default function NotificationBell() {
   const panelWidth = isMobile ? Math.min(window.innerWidth - 16, 400) : Math.min(PANEL_WIDTH, window.innerWidth - 32);
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
+    <div ref={containerRef} className={styles.container}>
       <button
         ref={buttonRef}
         onClick={() => setOpen(!open)}
-        style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          position: 'relative', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', padding: 6,
-          color: 'var(--color-text-secondary)',
-          borderRadius: 'var(--radius-md)',
-          transition: 'background 0.12s, color 0.12s',
-        }}
+        className={styles.bellBtn}
         aria-label={unreadCount > 0 ? t('components.notificationBell.unreadCount', { count: unreadCount }) : t('components.notificationBell.title')}
       >
         <Bell size={18} />
         {unreadCount > 0 && (
-          <span style={{
-            position: 'absolute', top: 1, right: 1,
-            background: 'var(--color-red)',
-            color: '#fff',
-            borderRadius: 'var(--radius-full)',
-            padding: '1px 5px',
-            fontSize: '0.6rem',
-            fontWeight: 700,
-            lineHeight: '14px',
-            minWidth: 16,
-            textAlign: 'center',
-            fontFamily: 'var(--font-mono)',
-          }}>
+          <span className={styles.badge}>
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="notif-panel" style={{
+        <div className={`notif-panel ${styles.panel}`} style={{
           position: 'fixed',
           top: 'var(--space-lg, 16px)',
           right: isMobile ? 8 : 'var(--space-lg, 16px)',
           width: panelWidth,
           maxHeight: Math.min(PANEL_MAX_HEIGHT, viewportHeight - 32),
-          overflowY: 'auto', overflowX: 'hidden',
-          background: 'var(--color-surface)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-lg)',
-          boxShadow: 'var(--shadow-lg)',
           zIndex: 1300,
           animation: 'dt-fade-in-up 0.15s ease-out',
         }}>
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: 'var(--space-md) var(--space-lg)',
-            borderBottom: '1px solid var(--color-border-subtle)',
-            position: 'sticky', top: 0,
-            background: 'var(--color-surface)',
-          }}>
-            <span style={{
-              fontWeight: 600, fontSize: 'var(--text-sm)',
-              color: 'var(--color-text)',
-              fontFamily: 'var(--font-display)',
-            }}>
+          <div className={styles.panelHeader}
+            style={{ position: 'sticky', top: 0, background: 'var(--color-surface)' }}>
+            <span className={styles.panelTitle}>
               {t('components.notificationBell.title')}
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm, 8px)' }}>
+            <div className={styles.panelHeaderActions}>
               {notifications.length > 0 && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleDeleteAll(); }}
@@ -250,14 +218,9 @@ export default function NotificationBell() {
             </div>
           </div>
 
-          <div style={{ padding: 'var(--space-xs) 0' }}>
+          <div className={styles.list}>
             {notifications.length === 0 && (
-              <div style={{
-                padding: 'var(--space-xl)',
-                textAlign: 'center',
-                color: 'var(--color-text-tertiary)',
-                fontSize: 'var(--text-sm)',
-              }}>
+              <div className={styles.emptyState}>
                 {t('components.notificationBell.empty')}
               </div>
             )}
@@ -268,13 +231,10 @@ export default function NotificationBell() {
                 <div
                   key={n.id}
                   onClick={() => { if (isUnread) handleMarkRead(n.id); }}
+                  className={styles.notifItem}
                   style={{
-                    padding: 'var(--space-md) var(--space-lg)',
-                    paddingRight: 'var(--space-sm)',
-                    borderBottom: '1px solid var(--color-border-subtle)',
                     cursor: isUnread ? 'pointer' : 'default',
                     background: isUnread ? 'var(--color-accent-muted)' : 'transparent',
-                    transition: 'background 0.1s',
                     opacity: isUnread ? 1 : 0.6,
                   }}
                   onMouseEnter={(e) => {
@@ -286,56 +246,24 @@ export default function NotificationBell() {
                     if (del) del.style.opacity = '0';
                   }}
                 >
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    gap: 'var(--space-sm)',
-                  }}>
-                    <div style={{
-                      width: 8, height: 8,
-                      borderRadius: 'var(--radius-full)',
-                      background: pColor,
-                      marginTop: 5,
-                      flexShrink: 0,
-                    }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontWeight: isUnread ? 600 : 400,
-                        fontSize: 'var(--text-sm)',
-                        color: 'var(--color-text)',
-                        marginBottom: 2,
-                      }}>
+                  <div className={styles.notifContentRow}>
+                    <div className={styles.priorityDot} style={{ background: pColor }} />
+                    <div className={styles.notifTextWrap}>
+                      <div className={styles.notifTitle}
+                        style={{ fontWeight: isUnread ? 600 : 400 }}>
                         {n.title}
                       </div>
-                      <div style={{
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--color-text-secondary)',
-                        lineHeight: 1.4,
-                      }}>
+                      <div className={styles.notifMessage}>
                         {n.message}
                       </div>
-                      <div style={{
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--color-text-tertiary)',
-                        fontFamily: 'var(--font-mono)',
-                        marginTop: 'var(--space-xs)',
-                      }}>
+                      <div className={styles.notifTime}>
                         {formatDateTime(n.createdAt)}
                       </div>
                     </div>
                     <button
                       data-del
                       onClick={(e) => { e.stopPropagation(); handleDelete(n.id); }}
-                      style={{
-                        background: 'none', border: 'none',
-                        cursor: 'pointer', padding: 4,
-                        color: 'var(--color-text-tertiary)',
-                        borderRadius: 'var(--radius-sm)',
-                        opacity: 0, flexShrink: 0,
-                        transition: 'opacity 0.15s ease, color 0.15s ease, background 0.15s ease',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}
+                      className={styles.deleteBtn}
                       onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-red)'; e.currentTarget.style.background = 'var(--color-red-muted)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)'; e.currentTarget.style.background = 'transparent'; }}
                       title={t('notificationBell.deleteTitle')}

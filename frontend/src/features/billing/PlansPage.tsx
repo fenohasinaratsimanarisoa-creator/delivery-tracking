@@ -8,6 +8,7 @@ import api from '../../services/api/client';
 import { useToast } from '../../components/Toast';
 import EntityDialog, { DialogSubmitBar } from '../../components/EntityDialog';
 import type { BillingPlan, Subscription } from '../../types';
+import styles from './PlansPage.module.css';
 
 const PLAN_ICONS: Record<string, string> = {
   free: '🟢',
@@ -74,53 +75,33 @@ export default function PlansPage() {
   const currentSub: Subscription | null = subscription ?? null;
 
   return (
-    <div style={{ padding: 'var(--space-xl)', maxWidth: 960, margin: '0 auto' }}>
-      <div style={{ marginBottom: 'var(--space-xl)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+    <div className={styles.container}>
+      <div className={styles.headerRow}>
         <div>
-          <h1 style={{
-            fontFamily: 'var(--font-display)', fontSize: 'var(--text-xl)', fontWeight: 700,
-            color: 'var(--color-text)', letterSpacing: '-0.02em', margin: 0,
-          }}>
+          <h1 className={styles.title}>
             {t('billing.plans.title')}
           </h1>
-          <p style={{ margin: 'var(--space-xs) 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+          <p className={styles.subtitle}>
             {t('billing.plans.subtitle')}
           </p>
         </div>
-        <Link to="/billing/invoices" style={{
-          display: 'flex', alignItems: 'center', gap: 'var(--space-xs)',
-          padding: 'var(--space-sm) var(--space-lg)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-md)',
-          background: 'var(--color-surface)',
-          color: 'var(--color-text)',
-          textDecoration: 'none',
-          fontSize: 'var(--text-sm)', fontWeight: 500,
-          fontFamily: 'var(--font-body)',
-          cursor: 'pointer',
-        }}>
+        <Link to="/billing/invoices" className={styles.invoicesLink}>
           <FileText size={14} />
           {t('billing.plans.invoices')}
         </Link>
       </div>
 
       {currentSub && (
-        <div style={{
-          marginBottom: 'var(--space-xl)',
-          padding: 'var(--space-lg) var(--space-xl)',
-          background: 'var(--color-surface)',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--color-border)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
+        <div className={styles.currentSubCard}>
+          <div className={styles.currentSubInner}>
             <div>
-              <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <p className={styles.currentSubLabel}>
                 {t('billing.plans.currentPlan')}
               </p>
-              <p style={{ margin: 'var(--space-xs) 0 0', fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text)' }}>
+              <p className={styles.currentSubName}>
                 {currentSub.plan?.name || t('billing.plans.free')}
               </p>
-              <p style={{ margin: 'var(--space-xs) 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              <p className={styles.currentSubInfo}>
                 {currentSub.status === 'active' ? t('billing.plans.active') :
                  currentSub.status === 'past_due' ? t('billing.plans.pastDue') :
                  currentSub.status === 'canceled' ? t('billing.plans.canceled') :
@@ -131,15 +112,7 @@ export default function PlansPage() {
             {currentSub.status !== 'canceled' && currentSub.status !== 'unpaid' && (
               <button
                 onClick={() => cancelMutation.mutate()}
-                style={{
-                  padding: 'var(--space-sm) var(--space-lg)',
-                  border: '1px solid var(--color-red)',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'transparent',
-                  color: 'var(--color-red)',
-                  cursor: 'pointer', fontSize: 'var(--text-sm)', fontWeight: 500,
-                  fontFamily: 'var(--font-body)',
-                }}
+                className={styles.cancelBtn}
               >
                 {t('billing.plans.cancel')}
               </button>
@@ -149,103 +122,63 @@ export default function PlansPage() {
       )}
 
       {isLoading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-4xl)' }}>
-          <Loader2 size={24} style={{ animation: 'dt-spin 0.6s linear infinite' }} />
+        <div className={styles.loadingContainer}>
+          <Loader2 size={24} className={styles.spinner} />
         </div>
       ) : (
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-          gap: 'var(--space-lg)',
-        }}>
+        <div className={styles.planGrid}>
           {planList.map((plan) => {
             const isCurrent = currentSub?.planId === plan.id;
             const priceDisplay = plan.price === 0 ? t('billing.plans.free') : `${(plan.price / 100).toFixed(2)} ${plan.currency}${plan.interval === 'year' ? t('billing.plans.perYear') : t('billing.plans.perMonth')}`;
 
             return (
-              <div key={plan.id} style={{
-                background: 'var(--color-surface)',
-                borderRadius: 'var(--radius-lg)',
-                border: `1px solid ${isCurrent ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                padding: 'var(--space-xl)',
-                display: 'flex', flexDirection: 'column',
-                position: 'relative',
-                transition: 'border-color 0.15s',
-              }}>
+              <div key={plan.id} className={`${styles.planCard} ${isCurrent ? styles.planCardCurrent : ''}`}>
                 {isCurrent && (
-                  <div style={{
-                    position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)',
-                    padding: '2px 12px',
-                    background: 'var(--color-accent)',
-                    color: 'var(--color-bg)',
-                    borderRadius: 'var(--radius-full)',
-                    fontSize: 'var(--text-xs)',
-                    fontWeight: 600,
-                    fontFamily: 'var(--font-mono)',
-                  }}>
+                  <div className={styles.currentBadge}>
                     {t('billing.plans.current')}
                   </div>
                 )}
-                <div style={{ fontSize: 32, marginBottom: 'var(--space-sm)' }}>
+                <div className={styles.planIcon}>
                   {PLAN_ICONS[plan.tier] || '📦'}
                 </div>
-                <h3 style={{
-                  fontFamily: 'var(--font-display)', fontSize: 'var(--text-lg)',
-                  fontWeight: 700, color: 'var(--color-text)', margin: 0,
-                }}>
+                <h3 className={styles.planName}>
                   {plan.name}
                 </h3>
-                <p style={{
-                  margin: 'var(--space-xs) 0 var(--space-md)',
-                  fontSize: 'var(--text-2xl)', fontWeight: 700,
-                  color: getPlanHighlight(plan.tier),
-                  fontFamily: 'var(--font-display)',
-                }}>
+                <p className={styles.planPrice} style={{ color: getPlanHighlight(plan.tier) }}>
                   {priceDisplay}
                 </p>
                 {plan.description && (
-                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: '0 0 var(--space-md)' }}>
+                  <p className={styles.planDesc}>
                     {plan.description}
                   </p>
                 )}
-                <div style={{ flex: 1 }}>
-                  <div style={{ marginBottom: 'var(--space-sm)' }}>
-                    <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+                <div className={styles.planFeatures}>
+                  <div className={styles.planFeatureItem}>
+                    <p className={styles.planFeatureLabel}>
                       {t('billing.plans.features.maxVehicles', { maxVehicles: plan.maxVehicles })}
                     </p>
                   </div>
-                  <div style={{ marginBottom: 'var(--space-sm)' }}>
-                    <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+                  <div className={styles.planFeatureItem}>
+                    <p className={styles.planFeatureLabel}>
                       {t('billing.plans.features.maxDeliveries', { maxDeliveriesPerMonth: plan.maxDeliveriesPerMonth })}
                     </p>
                   </div>
-                  <div style={{ marginBottom: 'var(--space-lg)' }}>
-                    <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+                  <div className={styles.planFeatureItem}>
+                    <p className={styles.planFeatureLabel}>
                       {t('billing.plans.features.maxUsers', { maxUsers: plan.maxUsers })}
                     </p>
                   </div>
                   {(plan.features as string[])?.map((f, i) => (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-                      marginBottom: 'var(--space-xs)',
-                    }}>
-                      <Check size={14} style={{ color: 'var(--color-teal)', flexShrink: 0 }} />
-                      <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{f}</span>
+                    <div key={i} className={styles.planFeatureRow}>
+                      <Check size={14} className={styles.planFeatureIcon} />
+                      <span className={styles.planFeatureText}>{f}</span>
                     </div>
                   ))}
                 </div>
                 {!isCurrent && plan.price > 0 && (
                   <button
                     onClick={() => setUpgradeDialog({ plan, provider: 'stripe', phone: '' })}
-                    style={{
-                      marginTop: 'var(--space-lg)',
-                      padding: 'var(--space-sm) var(--space-lg)',
-                      border: 'none',
-                      borderRadius: 'var(--radius-md)',
-                      background: 'var(--color-accent)',
-                      color: 'var(--color-bg)',
-                      cursor: 'pointer', fontSize: 'var(--text-sm)', fontWeight: 600,
-                      fontFamily: 'var(--font-body)',
-                    }}
+                    className={styles.subscribeBtn}
                   >
                     {plan.tier === 'starter' ? t('billing.plans.chooseStarter') :
                      plan.tier === 'pro' ? t('billing.plans.upgradePro') :
@@ -272,29 +205,20 @@ export default function PlansPage() {
           />
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+        <div className={styles.paymentMethodList}>
           <button
             onClick={() => {
               if (!upgradeDialog) return;
               upgradeMutation.mutate({ planId: upgradeDialog.plan.id, provider: 'stripe' });
             }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
-              padding: 'var(--space-lg)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--color-surface)',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-body)',
-              textAlign: 'left',
-            }}
+            className={styles.paymentMethodBtn}
           >
-            <span style={{ fontSize: 24 }}>💳</span>
+            <span className={styles.paymentMethodIcon}>💳</span>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, color: 'var(--color-text)', fontSize: 'var(--text-sm)' }}>
+              <p className={styles.paymentMethodTitle}>
                 {t('billing.plans.creditCard')}
               </p>
-              <p style={{ margin: 'var(--space-xs) 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+              <p className={styles.paymentMethodDesc}>
                 {t('billing.plans.creditCardDesc')}
               </p>
             </div>
@@ -304,23 +228,14 @@ export default function PlansPage() {
               if (!upgradeDialog) return;
               upgradeMutation.mutate({ planId: upgradeDialog.plan.id, provider: 'mvola', mobileMoneyPhone: upgradeDialog.phone || undefined });
             }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
-              padding: 'var(--space-lg)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--color-surface)',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-body)',
-              textAlign: 'left',
-            }}
+            className={styles.paymentMethodBtn}
           >
-            <span style={{ fontSize: 24 }}>📱</span>
+            <span className={styles.paymentMethodIcon}>📱</span>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, color: 'var(--color-text)', fontSize: 'var(--text-sm)' }}>
+              <p className={styles.paymentMethodTitle}>
                 {t('billing.plans.mvola')}
               </p>
-              <p style={{ margin: 'var(--space-xs) 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+              <p className={styles.paymentMethodDesc}>
                 {t('billing.plans.mvolaDesc')}
               </p>
             </div>
@@ -330,23 +245,14 @@ export default function PlansPage() {
               if (!upgradeDialog) return;
               upgradeMutation.mutate({ planId: upgradeDialog.plan.id, provider: 'orange_money', mobileMoneyPhone: upgradeDialog.phone || undefined });
             }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
-              padding: 'var(--space-lg)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--color-surface)',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-body)',
-              textAlign: 'left',
-            }}
+            className={styles.paymentMethodBtn}
           >
-            <span style={{ fontSize: 24 }}>📱</span>
+            <span className={styles.paymentMethodIcon}>📱</span>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, color: 'var(--color-text)', fontSize: 'var(--text-sm)' }}>
+              <p className={styles.paymentMethodTitle}>
                 {t('billing.plans.orangeMoney')}
               </p>
-              <p style={{ margin: 'var(--space-xs) 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+              <p className={styles.paymentMethodDesc}>
                 {t('billing.plans.orangeMoneyDesc')}
               </p>
             </div>

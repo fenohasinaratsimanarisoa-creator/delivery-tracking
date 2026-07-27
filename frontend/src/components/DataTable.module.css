@@ -1,0 +1,231 @@
+.loadingContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4xl);
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  animation: dt-spin 0.6s linear infinite;
+  margin-right: var(--space-sm);
+}
+
+.emptyContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4xl);
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.emptyIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent);
+  font-size: 20px;
+  opacity: 0.6;
+}
+
+.emptyMessage {
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+  margin: 0;
+  text-align: center;
+}
+
+.mobileCardContainer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.mobileCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+}
+
+.mobileSelectRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.iconButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: var(--color-accent);
+}
+
+.mobileColumnRow {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-xs) 0;
+  font-size: var(--text-sm);
+  border-bottom: 1px solid var(--color-border-subtle);
+  gap: var(--space-sm);
+}
+
+.mobileLabel {
+  font-weight: 600;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.mobileValue {
+  text-align: right;
+  color: var(--color-text);
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.mobileActions {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+  padding-top: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.actionBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  color: var(--color-text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.mobilePagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-md) 0;
+}
+
+.pageNumber {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  padding: 0 var(--space-sm);
+}
+
+.tableContainer {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+}
+
+.scrollWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.headerRow {
+  background: var(--color-surface-alt);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.headerCell {
+  padding: var(--space-md) var(--space-lg);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  user-select: none;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sortableCell {
+  cursor: pointer;
+}
+
+.headerCellSelect {
+  padding: var(--space-md) var(--space-lg);
+  width: 48px;
+  text-align: center;
+}
+
+.headerActionsCell {
+  padding: var(--space-md) var(--space-lg);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  width: 100px;
+  text-align: right;
+}
+
+.dataRow {
+  transition: background 0.15s ease;
+  cursor: default;
+}
+
+.dataCell {
+  padding: var(--space-md) var(--space-lg);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.dataCellSelect {
+  padding: var(--space-md) var(--space-lg);
+  width: 48px;
+  text-align: center;
+}
+
+.actionsCell {
+  padding: var(--space-md) var(--space-lg);
+  text-align: right;
+}
+
+.actionsRow {
+  display: flex;
+  gap: var(--space-xs);
+  justify-content: flex-end;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border-subtle);
+}

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, BellOff, ArrowRight, X } from 'lucide-react';
 import type { TrackingStatus, DriverAlert } from '../../hooks/useDriverTracking';
+import styles from './ProximityAlert.module.css';
 
 const URGENCY_CONFIG = {
   normal: { border: 'var(--color-accent, #F2A93C)', bg: 'var(--color-surface, #121B2E)' },
@@ -32,20 +33,14 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
   }, [alert.type]);
 
   return (
-    <div style={{
-      position: 'fixed', top: 60, left: '50%', transform: 'translateX(-50%)',
+    <div className={styles.alertBanner} style={{
       zIndex: 2000 + (urgency === 'critical' ? 10 : urgency === 'high' ? 5 : 0),
-      maxWidth: 420, width: 'calc(100% - 32px)',
       background: colors.bg,
       border: `2px solid ${colors.border}`,
-      borderRadius: 'var(--radius-lg, 12px)',
-      padding: '14px 18px',
       boxShadow: urgency === 'critical' ? '0 0 20px rgba(232,84,76,0.4)' : 'var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5))',
-      display: 'flex', flexDirection: 'column', gap: 10,
-      animation: 'dt-fade-in-up 0.3s ease-out',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontWeight: 700, fontSize: '0.85rem', color: colors.border }}>
+      <div className={styles.alertHeader}>
+        <div className={styles.alertTitle} style={{ color: colors.border }}>
           {alert.type === 'proximity' && '📍 '}
           {alert.type === 'cascade' && '⚠️ '}
           {alert.type === 'geofence' && '🚧 '}
@@ -55,58 +50,41 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
           {alert.title}
           {urgency === 'critical' ? ' ⚠️' : ''}
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className={styles.alertActions}>
           <button onClick={() => { soundEnabledRef.current = !soundEnabledRef.current; }}
-            style={{ background:'none', border:'none', cursor:'pointer',
-              color: soundEnabledRef.current ? 'var(--color-text-tertiary)' : 'var(--color-red)',
-              padding: 4, display:'flex' }}>
+            className={`${styles.iconBtn} ${soundEnabledRef.current ? styles.soundOn : styles.soundOff}`}>
             {soundEnabledRef.current ? <Bell size={16} /> : <BellOff size={16} />}
           </button>
           <button onClick={() => status.dismissAlert(alert.type, alert.deliveryId)}
-            style={{ background:'none', border:'none', cursor:'pointer',
-              color: 'var(--color-text-tertiary)', padding: 4, fontSize:'0.8rem' }}>
+            className={styles.dismissBtn}>
             <X size={16} />
           </button>
         </div>
       </div>
 
-      <p style={{ margin:0, fontSize:'0.8rem', color:'var(--color-text-secondary)', lineHeight:1.4 }}>
+      <p className={styles.alertMessage}>
         {alert.message}
       </p>
 
       {(alert.type === 'proximity' || alert.type === 'cascade') && (
-        <div style={{ display:'flex', gap: 8 }}>
-          {(alert.type === 'proximity' || alert.type === 'cascade') && (
-            <button onClick={() => {
-              status.dismissAlert(alert.type, alert.deliveryId);
-              navigate('/my-deliveries');
-            }} style={{
-              display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-              padding:'8px 16px', flex: 1,
-              background: colors.border,
-              color: 'var(--color-bg, #0B1220)',
-              border:'none', borderRadius:'var(--radius-md, 6px)',
-              fontWeight: 600, fontSize:'0.8rem', cursor:'pointer',
-            }}>
-              <ArrowRight size={16} />
-              Voir mes livraisons
-            </button>
-          )}
+        <div className={styles.alertActionsRow}>
+          <button onClick={() => {
+            status.dismissAlert(alert.type, alert.deliveryId);
+            navigate('/my-deliveries');
+          }} className={styles.actionBtn} style={{ background: colors.border }}>
+            <ArrowRight size={16} />
+            Voir mes livraisons
+          </button>
         </div>
       )}
 
       {alert.type === 'geo_denied' && (
-        <div style={{ display:'flex', gap: 8 }}>
+        <div className={styles.alertActionsRow}>
           <button onClick={() => {
             status.dismissAlert('geo_denied');
             // eslint-disable-next-line no-restricted-globals
             location.reload();
-          }} style={{
-            padding:'8px 16px', flex: 1,
-            background: colors.border, color: '#fff',
-            border:'none', borderRadius:'var(--radius-md, 6px)',
-            fontWeight: 600, fontSize:'0.8rem', cursor:'pointer',
-          }}>
+          }} className={`${styles.actionBtn} ${styles.actionBtnLight}`} style={{ background: colors.border }}>
             Réessayer
           </button>
         </div>
@@ -126,9 +104,9 @@ export default function ProximityAlert({ status }: { status: TrackingStatus }) {
   return (
     <>
       {shownAlerts.map((alert, i) => (
-        <div key={`${alert.type}:${alert.deliveryId || ''}`} style={{ position: 'relative', zIndex: 2000 - i }}>
+        <div key={`${alert.type}:${alert.deliveryId || ''}`} className={styles.alertWrapper} style={{ zIndex: 2000 - i }}>
           <AlertBanner alert={alert} status={status} />
-          <div style={{ height: i < shownAlerts.length - 1 ? 8 : 0 }} />
+          <div className={styles.alertSpacer} style={{ height: i < shownAlerts.length - 1 ? 8 : 0 }} />
         </div>
       ))}
     </>

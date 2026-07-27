@@ -1,0 +1,28 @@
+.container {
+  padding: 40px;
+  font-family: monospace;
+  background: #0B1220;
+  color: #E8ECF3;
+  min-height: 100vh;
+}
+
+.heading {
+  color: var(--color-red, #E8544C);
+  margin-bottom: 16px;
+}
+
+.errorMessage {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-red, #E8544C);
+  margin-bottom: 20px;
+}
+
+.stackTrace {
+  white-space: pre-wrap;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-text-secondary, #9BA6B9);
+  opacity: 0.8;
+}
