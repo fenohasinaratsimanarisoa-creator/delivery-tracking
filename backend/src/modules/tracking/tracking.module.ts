@@ -15,6 +15,12 @@ import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
 import { CacheModule } from '../../common/cache/cache.module';
 import { RedisModule } from '../../common/redis/redis.module';
 
+// Protocol drivers (architecture universelle)
+import { GpsProtocolRegistry } from './protocol/registry/gps-protocol-registry';
+import { ProtocolDetectionLayer } from './protocol/detection/protocol-detection-layer';
+import { TrackerGatewayService } from './protocol/tracker-gateway.service';
+import { GpsEventProcessorService } from './protocol/gps-event-processor.service';
+
 @Module({
   imports: [
     JwtModule.registerAsync({
@@ -39,6 +45,10 @@ import { RedisModule } from '../../common/redis/redis.module';
     WsJwtGuard,
     WsAuthService,
     ApiKeyOrJwtGuard,
+    GpsProtocolRegistry,
+    ProtocolDetectionLayer,
+    TrackerGatewayService,
+    GpsEventProcessorService,
   ],
   exports: [TrackingService, GeofenceService, DeliveryProximityService, TraccarBridgeService],
 })
