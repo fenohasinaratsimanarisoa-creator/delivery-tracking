@@ -8,6 +8,10 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { NotificationType, NotificationPriority } from '@prisma/client';
 
+// Sentinel UUID for platform-level notifications (no specific company)
+const PLATFORM_COMPANY_ID = '00000000-0000-0000-0000-000000000000';
+const PLATFORM_ADMIN_USER_ID = '00000000-0000-4000-0000-000000000010';
+
 interface TraccarPosition {
   id: number;
   deviceId: number;
@@ -96,7 +100,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     if (this.inactiveNotified) return;
     this.inactiveNotified = true;
     try {
-      await this.notifications.create('platform', {
+      await this.notifications.create(PLATFORM_COMPANY_ID, {
         type: NotificationType.system,
         priority: NotificationPriority.high,
         title: 'Pont Traccar non configuré',
@@ -111,7 +115,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         const elapsedMin = (Date.now() - this.disconnectStartTime) / 60000;
         if (elapsedMin > 15) {
           try {
-            await this.notifications.create('platform', {
+            await this.notifications.create(PLATFORM_COMPANY_ID, {
               type: NotificationType.system,
               priority: NotificationPriority.critical,
               title: 'Pont Traccar hors ligne prolongé',
