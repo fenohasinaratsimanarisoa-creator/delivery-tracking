@@ -55,11 +55,18 @@ services:
     container_name: traccar
     restart: unless-stopped
     ports:
-      - "5055:5055"   # GT06
-      - "5056:5056"   # Teltonika
-      - "5057:5057"   # H02
-      - "5058:5058"   # TK103
       - "8082:8082"   # Interface web + API REST
+      - "5055:5055"   # GT06 / Concox / JM-VL03
+      - "5056:5056"   # Teltonika FMB / FM / TAVL / GH
+      - "5057:5057"   # H02 (boîtiers chinois économiques)
+      - "5058:5058"   # TK103 / TK102 / Coban / ST-901
+      - "5059:5059"   # Meitrack (MVT-380 / MVT-600 / T1 / P99)
+      - "5060:5060"   # OsmAnd (test smartphone)
+      - "5061:5061"   # Lézard (EZ90 / EZ21 / EZ630 / Delta)
+      - "5062:5062"   # WristWatch (montres / balises GPS)
+      - "5063:5063"   # Naviset / Navtelecom
+      - "5064:5064"   # Xexun / Sanav / GStar / GlobalSat
+      - "5065:5065"   # AST (Falcom / AST)
     volumes:
       - traccar_data:/opt/traccar/data
       - ./traccar.xml:/opt/traccar/conf/traccar.xml:ro
