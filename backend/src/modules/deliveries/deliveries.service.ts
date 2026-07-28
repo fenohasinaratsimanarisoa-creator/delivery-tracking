@@ -424,6 +424,8 @@ export class DeliveriesService {
         proofData.mismatchResolved = false;
       }
     } else {
+      proofData.locationMismatch = true;
+      proofData.mismatchResolved = false;
       await this.notifications.create(companyId, {
         type: NotificationType.location_mismatch,
         priority: NotificationPriority.high,

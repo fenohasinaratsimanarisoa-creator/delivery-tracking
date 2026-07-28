@@ -146,6 +146,9 @@ export default function DeliveryProofsPage() {
               {
                 key: 'distance', label: 'Écart',
                 render: (r: DeliveryProof) => {
+                  if (r.deliveryProofDistance == null && r.locationMismatch) {
+                    return <span style={{ color: '#f59e0b', fontWeight: 600 }}>Non vérifiable ⚠️</span>;
+                  }
                   if (r.deliveryProofDistance == null) return '-';
                   const km = (r.deliveryProofDistance / 1000).toFixed(1);
                   return (
