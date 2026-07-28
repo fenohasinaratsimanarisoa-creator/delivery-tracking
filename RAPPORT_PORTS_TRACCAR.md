@@ -1,5 +1,8 @@
 # RAPPORT PORTS TRACCAR — Alignement protocole ↔ exposition Docker
 
+> ⚠️ **Ce rapport documente les ports du docker-compose local (développement uniquement).**
+> En production, DelivTrack utilise **Traccar Cloud** (`server.traccar.org`) qui a ses propres ports. Voir la section "Traccar Cloud (production)" plus bas.
+
 ## 1. Ports extraits de `traccar/traccar.xml`
 
 Grep : `<entry key='.*port'>` → 11 protocoles GPS + web UI.

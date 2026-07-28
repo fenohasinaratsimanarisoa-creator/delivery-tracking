@@ -1,5 +1,7 @@
 # RAPPORT DE DÉPLOIEMENT — Pont Traccar
 
+> ⚠️ **Note :** Ce rapport est historique. La production utilise désormais **Traccar Cloud** (`server.traccar.org`), pas un VPS auto-hébergé. Les variables `TRACCAR_URL=https://server.traccar.org` est versionnée dans `render.yaml` ; `TRACCAR_USER` et `TRACCAR_PASSWORD` sont en `sync: false` dans le Dashboard Render. Voir `TRACCAR_SETUP.md` pour la configuration actuelle.
+
 ## 1. Diagnostic render.yaml — Variables manquantes
 
 **Constat :** `render.yaml` ne contenait aucune variable `TRACCAR_URL`, `TRACCAR_USER`, ou `TRACCAR_PASSWORD`. Le `TraccarBridgeService` utilisait donc les valeurs par défaut `http://traccar:8082` / `admin` / `admin` — inactif en production sans alerte visible.
