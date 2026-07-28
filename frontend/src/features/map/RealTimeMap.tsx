@@ -674,6 +674,9 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
     }
 
     socket.on('positionUpdate', addPosition);
+    socket.on('batchPositionUpdate', (updates: PositionUpdate[]) => {
+      updates.forEach((u) => addPosition(u));
+    });
 
     return () => {
       if (deliveryId) {
@@ -682,6 +685,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
         socket.emit('unsubscribeFromCompany');
       }
       socket.off('positionUpdate', addPosition);
+      socket.off('batchPositionUpdate');
     };
   }, [addPosition, deliveryId, readOnly]);
 
