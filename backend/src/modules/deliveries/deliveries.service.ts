@@ -238,6 +238,15 @@ export class DeliveriesService {
     if (dto.scheduledDate) {
       updateData.scheduledDate = new Date(dto.scheduledDate);
     }
+    if (dto.deliveryLat === undefined && dto.deliveryLng === undefined && dto.deliveryAddress && dto.deliveryAddress !== delivery.deliveryAddress) {
+      try {
+        const results = await this.geocoding.search(dto.deliveryAddress);
+        if (results.length > 0) {
+          updateData.deliveryLat = results[0].lat;
+          updateData.deliveryLng = results[0].lng;
+        }
+      } catch {}
+    }
     if (dto.vehicleId) {
       const vehicle = await this.prisma.vehicle.findFirst({
         where: { id: dto.vehicleId, companyId, deletedAt: null },
@@ -371,9 +380,25 @@ export class DeliveriesService {
       proofData.deliveryProofAccuracy = dto.accuracy;
     }
 
-    if (delivery.deliveryLat != null && delivery.deliveryLng != null) {
+    let destLat = delivery.deliveryLat;
+    let destLng = delivery.deliveryLng;
+    if (destLat == null && destLng == null && delivery.deliveryAddress) {
+      try {
+        const results = await this.geocoding.search(delivery.deliveryAddress);
+        if (results.length > 0) {
+          destLat = results[0].lat;
+          destLng = results[0].lng;
+          await this.prisma.delivery.update({
+            where: { id: delivery.id },
+            data: { deliveryLat: destLat, deliveryLng: destLng },
+          });
+        }
+      } catch {}
+    }
+
+    if (destLat != null && destLng != null) {
       const distance = Math.round(
-        haversineDistance(dto.latitude, dto.longitude, delivery.deliveryLat, delivery.deliveryLng),
+        haversineDistance(dto.latitude, dto.longitude, destLat, destLng),
       );
       proofData.deliveryProofDistance = distance;
 
@@ -399,7 +424,6 @@ export class DeliveriesService {
         proofData.mismatchResolved = false;
       }
     } else {
-      // No destination coordinates — create proof record without distance comparison
       await this.notifications.create(companyId, {
         type: NotificationType.location_mismatch,
         priority: NotificationPriority.high,
