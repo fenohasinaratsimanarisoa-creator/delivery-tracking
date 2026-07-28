@@ -16,13 +16,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   google_auth_failed: 'auth.callback.googleAuthFailed',
 };
 
-const ROLE_REDIRECT: Record<string, string> = {
-  admin: '/dashboard',
-  dispatcher: '/dashboard',
-  driver: '/my-deliveries',
-  client: '/my-orders',
-};
-
 export default function AuthCallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -66,8 +59,7 @@ export default function AuthCallbackPage() {
         setAccessToken(tokenFromHash);
         loginRef.current(u, tokenFromHash);
         setStatus('success');
-        const target = ROLE_REDIRECT[u.role] || '/dashboard';
-        navigateRef.current(target, { replace: true });
+        navigateRef.current('/', { replace: true });
         return;
       }
     }
@@ -77,8 +69,7 @@ export default function AuthCallbackPage() {
     if (isAuthenticated && user) {
       processedRef.current = true;
       setStatus('success');
-      const target = ROLE_REDIRECT[user.role] || '/dashboard';
-      navigateRef.current(target, { replace: true });
+      navigateRef.current('/', { replace: true });
       return;
     }
 
