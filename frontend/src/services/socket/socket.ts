@@ -43,8 +43,9 @@ export interface PositionUpdate {
   heading?: number;
   altitude?: number;
   accuracy?: number;
+  suspect?: boolean;
   confidence?: number;
   timestamp: string;
-  deliveryId: string;
+  deliveryId?: string;
   vehicleId: string;
 }

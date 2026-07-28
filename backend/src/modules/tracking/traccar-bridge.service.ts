@@ -562,8 +562,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           altitude: updateDto.altitude,
           accuracy: updateDto.accuracy,
           suspect: position.suspect,
+          confidence: updateDto.accuracy ? Math.max(0.1, 1 - updateDto.accuracy / 50) : 1,
           timestamp: updateDto.timestamp,
-          deliveryId: null,
+          deliveryId: updateDto.deliveryId ?? undefined,
           vehicleId: vehicleMapping.id,
         };
 

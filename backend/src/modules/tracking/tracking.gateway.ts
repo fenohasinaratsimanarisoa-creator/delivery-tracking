@@ -164,6 +164,8 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
       `[POSITION] driver=${driver.id} lat=${dto.latitude.toFixed(6)} lng=${dto.longitude.toFixed(6)} speed=${speed?.toFixed(2)} heading=${dto.heading} delivery=${dto.deliveryId || 'none'} company=${user.companyId}`,
     );
 
+    const confidence = dto.accuracy ? Math.max(0.1, 1 - dto.accuracy / 50) : 1;
+
     const broadcast = {
       driverId: driver.id,
       driverName: `${user.firstName} ${user.lastName}`,
@@ -174,6 +176,7 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
       altitude: dto.altitude,
       accuracy: dto.accuracy,
       suspect: position.suspect,
+      confidence,
       timestamp: dto.timestamp,
       deliveryId: dto.deliveryId,
       vehicleId: dto.vehicleId,
@@ -218,6 +221,7 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
       altitude: pos.altitude,
       accuracy: pos.accuracy,
       suspect: pos.suspect,
+      confidence: pos.accuracy ? Math.max(0.1, 1 - pos.accuracy / 50) : 1,
       timestamp: pos.timestamp instanceof Date ? pos.timestamp.toISOString() : pos.timestamp,
       deliveryId: pos.deliveryId ?? undefined,
       vehicleId: pos.vehicleId,
