@@ -20,13 +20,18 @@ const MG_VIEWBOX = '43,11,51,-26';
 function extractLocalLabel(item: any): string {
   const addr = item.address || {};
   const name = item.name || '';
-  const road = addr.road || addr.street || '';
-  const suburb = addr.suburb || addr.neighbourhood || addr.quarter || addr.hamlet || '';
-  const city = addr.city || addr.town || addr.village || addr.county || '';
+  const road = addr.road || addr.street || addr.highway || '';
+  const houseNum = addr.house_number || '';
+  const suburb = addr.suburb || addr.neighbourhood || addr.quarter || addr.hamlet || addr.village || '';
+  const city = addr.city || addr.town || addr.municipality || addr.county || '';
   const district = addr.state_district || addr.region || '';
   const fallback = item.display_name?.split(',')[0] || '';
 
-  const parts = [name || road || fallback, suburb, city || district].filter(Boolean);
+  const parts = [
+    road ? `${houseNum ? houseNum + ' ' : ''}${road}` : (name || fallback),
+    suburb,
+    city || district,
+  ].filter(Boolean);
   const seen = new Set<string>();
   return parts
     .filter((p) => {
@@ -35,7 +40,7 @@ function extractLocalLabel(item: any): string {
       seen.add(lower);
       return true;
     })
-    .slice(0, 3)
+    .slice(0, 4)
     .join(' — ');
 }
 
@@ -170,27 +175,29 @@ export class GeocodingService {
     const seen = new Set<string>();
 
     const queries = [query];
-    const isSpecific = query.split(/\s+/).length >= 2 || query.length > 6;
-    if (!isSpecific) {
-      queries.push(`${query} Antananarivo`);
+    if (!query.includes('Madagascar') && !query.includes('Madagasikara')) {
+      queries.push(`${query}, Madagascar`);
+    }
+    const words = query.split(/\s+/);
+    if (words.length >= 3) {
+      queries.push(words.slice(0, 2).join(' '));
     }
 
     for (const q of queries) {
       const params = new URLSearchParams({
         q,
         format: 'json',
-        limit: '15',
+        limit: '20',
         'accept-language': 'fr',
-        countrycodes: 'mg',
-        viewbox: MG_VIEWBOX,
         addressdetails: '1',
         namedetails: '1',
       });
+      params.set('viewbox', MG_VIEWBOX);
 
       const url = `${NOMINATIM_BASE}/search?${params}`;
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 6000);
+      const timeout = setTimeout(() => controller.abort(), 8000);
 
       try {
         const res = await fetch(url, {
@@ -218,10 +225,46 @@ export class GeocodingService {
         clearTimeout(timeout);
       }
 
-      if (results.length >= 5) break;
+      if (results.length >= 10) break;
     }
 
-    const final = results.slice(0, 15);
+    if (results.length === 0 && query.length > 3) {
+      const fallbackQueries = [
+        query.split(',').pop()?.trim() || query,
+        query.replace(/\b(Lot|N°|No|Bis|Ter|Bât)\s*\w*\s*/gi, '').trim(),
+      ];
+      for (const fq of [...new Set(fallbackQueries)]) {
+        if (fq && fq !== query) {
+          const params = new URLSearchParams({
+            q: fq,
+            format: 'json',
+            limit: '10',
+            'accept-language': 'fr',
+            addressdetails: '1',
+            namedetails: '1',
+          });
+          try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 6000);
+            const res = await fetch(`${NOMINATIM_BASE}/search?${params}`, {
+              headers: { 'User-Agent': USER_AGENT },
+              signal: controller.signal,
+            });
+            clearTimeout(timeout);
+            if (res.ok) {
+              const data: any[] = await res.json();
+              for (const item of data) {
+                const key = `${parseFloat(item.lat).toFixed(4)},${parseFloat(item.lon).toFixed(4)}`;
+                if (!seen.has(key)) { seen.add(key); results.push({ lat: parseFloat(item.lat), lng: parseFloat(item.lon), label: extractLocalLabel(item), displayName: item.display_name }); }
+              }
+            }
+          } catch { /* continue */ }
+          if (results.length >= 5) break;
+        }
+      }
+    }
+
+    const final = results.slice(0, 20);
     if (this.redis && final.length > 0) {
       try {
         await this.redis.set(cacheKey, JSON.stringify(final), 'EX', CACHE_TTL_SEC);
