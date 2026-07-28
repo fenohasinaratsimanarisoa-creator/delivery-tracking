@@ -22,6 +22,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
 import { ApiKeyScope } from '../api-keys/decorators/api-key-scope.decorator';
+import { TraccarBridgeService } from './traccar-bridge.service';
 
 @ApiTags('Tracking')
 @Controller('tracking')
@@ -30,6 +31,7 @@ export class TrackingController {
     private readonly trackingService: TrackingService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly traccarBridgeService: TraccarBridgeService,
   ) {}
 
   @UseGuards(ApiKeyOrJwtGuard)
@@ -181,11 +183,10 @@ export class TrackingController {
   @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
   @Roles('admin', 'dispatcher')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List Traccar devices known by the Traccar server' })
+  @ApiOperation({ summary: 'Get Traccar bridge connection status' })
   @Get('traccar-devices')
   async listTraccarDevices() {
-    const { TraccarBridgeService } = await import('./traccar-bridge.service');
-    return this.trackingService.getStatus();
+    return this.traccarBridgeService.getStatus();
   }
 
   @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)

@@ -69,10 +69,12 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
   private disconnectStartTime: number | null = null;
   private disconnectionMonitorTimer: ReturnType<typeof setInterval> | null = null;
+  private inactiveNotified = false;
 
   async onModuleInit() {
     if (this.traccarUrl === 'http://traccar:8082' || this.traccarUrl === 'disabled') {
       this.logger.warn('Traccar bridge: TRACCAR_URL not configured — bridge inactive');
+      await this.notifyInactiveOnce();
       return;
     }
 
@@ -88,6 +90,19 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     this.startNeverConnectedCheck();
     this.startDisconnectionMonitor();
     await this.connect();
+  }
+
+  private async notifyInactiveOnce(): Promise<void> {
+    if (this.inactiveNotified) return;
+    this.inactiveNotified = true;
+    try {
+      await this.notifications.create('platform', {
+        type: NotificationType.system,
+        priority: NotificationPriority.high,
+        title: 'Pont Traccar non configuré',
+        message: 'TRACCAR_URL n\'est pas défini — le pont Traccar est inactif. Les traceurs GPS physiques ne transmettront aucune position. Configurez TRACCAR_URL, TRACCAR_USER et TRACCAR_PASSWORD dans render.yaml ou le Dashboard Render.',
+      });
+    } catch {}
   }
 
   private startDisconnectionMonitor() {

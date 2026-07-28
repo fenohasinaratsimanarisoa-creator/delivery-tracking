@@ -148,3 +148,15 @@ envVarGroups:
         sync: false
       - key: ALERT_ON_ERROR
         value: 'true'
+
+      # ── Traccar GPS bridge (set via Render Dashboard) ──
+      # TRACCAR_URL must point to a Traccar server reachable from this service
+      # (HTTP/WebSocket outbound). Render does NOT expose raw TCP ports to the
+      # internet, so Traccar itself must run on a separate VPS with ports 5055-5058
+      # open for GPS tracker protocols. See TRACCAR_SETUP.md for VPS deployment.
+      - key: TRACCAR_URL
+        sync: false
+      - key: TRACCAR_USER
+        sync: false
+      - key: TRACCAR_PASSWORD
+        sync: false
