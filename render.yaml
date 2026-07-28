@@ -153,6 +153,6 @@ envVarGroups:
       - key: TRACCAR_URL
         value: https://server.traccar.org
       - key: TRACCAR_USER
-        value: fenohasinaratsimanarisoa@gmail.com
+        sync: false
       - key: TRACCAR_PASSWORD
-        value: ntrzubdk
+        sync: false
