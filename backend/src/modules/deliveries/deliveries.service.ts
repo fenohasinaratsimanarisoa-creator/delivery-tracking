@@ -396,46 +396,31 @@ export class DeliveriesService {
       } catch {}
     }
 
-    if (destLat != null && destLng != null) {
-      const distance = Math.round(
-        haversineDistance(dto.latitude, dto.longitude, destLat, destLng),
-      );
-      proofData.deliveryProofDistance = distance;
+    const distance = destLat != null && destLng != null
+      ? Math.round(haversineDistance(dto.latitude, dto.longitude, destLat, destLng))
+      : 0;
+    proofData.deliveryProofDistance = distance;
 
-      const threshold = this.configService.get<number>('LOCATION_MISMATCH_THRESHOLD_M', 200);
-      if (distance > threshold) {
-        proofData.locationMismatch = true;
-        proofData.mismatchResolved = false;
-
-        await this.notifications.create(companyId, {
-          type: NotificationType.location_mismatch,
-          priority: NotificationPriority.high,
-          title: t('delivery.notification.mismatchTitle', lang),
-          message: t('delivery.notification.mismatchMessage', lang, {
-            title: delivery.title,
-            distance: (distance / 1000).toFixed(1),
-            meters: distance,
-          }),
-          link: `/deliveries/${delivery.id}`,
-          deliveryId: delivery.id,
-        });
-      } else {
-        proofData.locationMismatch = false;
-        proofData.mismatchResolved = false;
-      }
-    } else {
+    const threshold = this.configService.get<number>('LOCATION_MISMATCH_THRESHOLD_M', 200);
+    if (distance > threshold) {
       proofData.locationMismatch = true;
       proofData.mismatchResolved = false;
+
       await this.notifications.create(companyId, {
         type: NotificationType.location_mismatch,
         priority: NotificationPriority.high,
         title: t('delivery.notification.mismatchTitle', lang),
-        message: t('delivery.notification.noCoordsMessage', lang, {
+        message: t('delivery.notification.mismatchMessage', lang, {
           title: delivery.title,
+          distance: (distance / 1000).toFixed(1),
+          meters: distance,
         }),
         link: `/deliveries/${delivery.id}`,
         deliveryId: delivery.id,
       });
+    } else {
+      proofData.locationMismatch = false;
+      proofData.mismatchResolved = false;
     }
 
     return proofData;
