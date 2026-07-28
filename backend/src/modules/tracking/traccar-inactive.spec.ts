@@ -63,7 +63,7 @@ describe('TraccarBridgeService — notification inactive', () => {
     const bridge = createBridge('http://traccar:8082');
     await bridge.onModuleInit();
     expect(mockNotifications.create).toHaveBeenCalledTimes(1);
-    expect(mockNotifications.create).toHaveBeenCalledWith('platform', {
+    expect(mockNotifications.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000000', {
       type: NotificationType.system,
       priority: NotificationPriority.high,
       title: 'Pont Traccar non configuré',
@@ -75,7 +75,7 @@ describe('TraccarBridgeService — notification inactive', () => {
     const bridge = createBridge('disabled');
     await bridge.onModuleInit();
     expect(mockNotifications.create).toHaveBeenCalledTimes(1);
-    expect(mockNotifications.create).toHaveBeenCalledWith('platform', {
+    expect(mockNotifications.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000000', {
       type: NotificationType.system,
       priority: NotificationPriority.high,
       title: 'Pont Traccar non configuré',

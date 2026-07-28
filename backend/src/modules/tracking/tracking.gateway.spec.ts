@@ -14,7 +14,16 @@ const mockSocket = () => {
 
 describe('TrackingGateway — cross-tenant security', () => {
   let gateway: TrackingGateway;
-  let trackingService: { getDeliveryInfo: jest.Mock; saveBatch: jest.Mock; findDriverByUserId: jest.Mock };
+  let trackingService: {
+    getDeliveryInfo: jest.Mock;
+    saveBatch: jest.Mock;
+    findDriverByUserId: jest.Mock;
+    assertVehicleOwnership: jest.Mock;
+    isRateLimited: jest.Mock;
+    verifyDriverAssignment: jest.Mock;
+    getLastPosition: jest.Mock;
+    savePosition: jest.Mock;
+  };
   let mockServer: { to: jest.Mock; emit: jest.Mock };
 
   beforeEach(async () => {
@@ -22,6 +31,11 @@ describe('TrackingGateway — cross-tenant security', () => {
       getDeliveryInfo: jest.fn(),
       saveBatch: jest.fn(),
       findDriverByUserId: jest.fn(),
+      assertVehicleOwnership: jest.fn(),
+      isRateLimited: jest.fn().mockResolvedValue(false),
+      verifyDriverAssignment: jest.fn(),
+      getLastPosition: jest.fn().mockResolvedValue(null),
+      savePosition: jest.fn().mockResolvedValue({ id: 'pos-1', suspect: false }),
     };
 
     const mockEventEmitter = { on: jest.fn(), emit: jest.fn() };
@@ -209,6 +223,84 @@ describe('TrackingGateway — cross-tenant security', () => {
       // Should broadcast to company room, NOT to delivery:undefined
       expect(mockServer.to).not.toHaveBeenCalledWith('delivery:undefined');
       expect(mockServer.to).toHaveBeenCalledWith('company:company-a');
+    });
+  });
+
+  describe('handlePosition — cross-tenant vehicle ownership', () => {
+    const positionDto = (overrides: Record<string, unknown> = {}) => ({
+      latitude: -18.8792,
+      longitude: 47.5079,
+      speed: 10,
+      heading: 90,
+      altitude: 100,
+      accuracy: 10,
+      timestamp: new Date().toISOString(),
+      vehicleId: 'vehicle-b-1',
+      ...overrides,
+    });
+
+    function setupDriverClient(companyId = 'company-a') {
+      const client = mockSocket();
+      client.data.user = { id: 'driver-1', role: 'driver', companyId };
+      trackingService.findDriverByUserId.mockResolvedValue({ id: 'driver-1' });
+      return client;
+    }
+
+    it('rejects position when vehicle belongs to a DIFFERENT company', async () => {
+      const client = setupDriverClient('company-a');
+      trackingService.assertVehicleOwnership.mockRejectedValueOnce(
+        new NotFoundException('Vehicle not found or access denied'),
+      );
+
+      await gateway.handlePosition(client, positionDto());
+
+      // getLastPosition should NOT be called (ownership check happens first)
+      expect(trackingService.getLastPosition).not.toHaveBeenCalled();
+      // savePosition should NOT be called either
+      expect(trackingService.savePosition).not.toHaveBeenCalled();
+      // assertVehicleOwnership was called with the right params
+      expect(trackingService.assertVehicleOwnership).toHaveBeenCalledWith(
+        'vehicle-b-1',
+        'company-a',
+      );
+    });
+
+    it('allows position when vehicle belongs to the SAME company', async () => {
+      const client = setupDriverClient('company-a');
+      trackingService.assertVehicleOwnership.mockResolvedValueOnce(undefined);
+      trackingService.savePosition.mockResolvedValueOnce({
+        id: 'pos-ok',
+        speed: 10,
+        latitude: -18.8792,
+        longitude: 47.5079,
+        heading: 90,
+        altitude: 100,
+        accuracy: 10,
+        suspect: false,
+        timestamp: new Date(),
+        deliveryId: null,
+        vehicleId: 'vehicle-a-1',
+      });
+
+      await gateway.handlePosition(client, positionDto({ vehicleId: 'vehicle-a-1' }));
+
+      expect(trackingService.assertVehicleOwnership).toHaveBeenCalledWith(
+        'vehicle-a-1',
+        'company-a',
+      );
+      expect(trackingService.savePosition).toHaveBeenCalled();
+    });
+
+    it('does not call getLastPosition when assertVehicleOwnership fails', async () => {
+      const client = setupDriverClient('company-a');
+      trackingService.assertVehicleOwnership.mockRejectedValueOnce(
+        new NotFoundException('Vehicle not found or access denied'),
+      );
+
+      // getLastPosition has a spy but should never be called
+      await gateway.handlePosition(client, positionDto({ vehicleId: 'vehicle-b-1' }));
+
+      expect(trackingService.getLastPosition).not.toHaveBeenCalled();
     });
   });
 });

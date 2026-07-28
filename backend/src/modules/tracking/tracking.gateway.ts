@@ -130,6 +130,16 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     const driver = await this.trackingService.findDriverByUserId(user.id);
     if (!driver) return;
 
+    // Cross-tenant check: ensure the vehicle belongs to the user's company
+    try {
+      await this.trackingService.assertVehicleOwnership(dto.vehicleId, user.companyId);
+    } catch {
+      this.logger.warn(
+        `Position rejected: vehicle ${dto.vehicleId} not owned by company ${user.companyId}`,
+      );
+      return;
+    }
+
     let speed = dto.speed;
     if (!speed || speed <= 0) {
       const last = await this.trackingService.getLastPosition(dto.vehicleId);

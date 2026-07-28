@@ -78,6 +78,16 @@ export class TrackingService {
     return this.prisma.driver.findUnique({ where: { userId } });
   }
 
+  async assertVehicleOwnership(vehicleId: string, companyId: string): Promise<void> {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, companyId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found or access denied');
+    }
+  }
+
   async verifyDriverAssignment(deliveryId: string, userId: string): Promise<void> {
     const delivery = await this.prisma.delivery.findUnique({
       where: { id: deliveryId },
