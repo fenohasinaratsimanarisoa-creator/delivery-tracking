@@ -206,9 +206,30 @@ Le statut est également visible sur `/platform-admin/traccar/status` (admin).
 
 ## 7. Sécurité
 
-- **Ne pas exposer** le port 8082 du VPS à tout Internet — limitez par pare-feu aux IPs Render et à votre bureau.
-- Render ne peut pas garantir une IP fixe de sortie. Utilisez l'authentification REST de Traccar (session cookie) comme mécanisme de sécurité.
-- Activez HTTPS sur le VPS (Caddy reverse proxy) si vous accédez à l'interface Traccar depuis le web.
+### 7.1 Interface web Traccar (port 8082)
+
+L'interface web Traccar donne accès à **TOUS les devices GPS de TOUS les clients** (un seul Traccar pour tout le parc). Elle ne doit **JAMAIS** être exposée directement sur Internet sans protection :
+
+- **Option A (recommandée)** : ne pas ouvrir le port 8082 dans le pare-feu du VPS. L'administration se fait exclusivement via l'API DelivTrack (création des devices via l'interface admin de DelivTrack).
+- **Option B** : restreindre le port 8082 aux IPs du bureau de l'équipe uniquement (pare-feu VPS).
+- **Option C** : mettre l'interface Traccar derrière un reverse proxy (Caddy/Nginx) avec authentification HTTP + HTTPS et IP allowlist strict.
+
+⚠️ L'API REST de Traccar sur le port 8082 nécessite une session utilisateur (`POST /api/session`). Si le port 8082 est exposé publiquement, les identifiants admin/admin deviennent une cible. **Toujours changer le mot de passe admin après la première connexion.**
+
+### 7.2 Isolation multi-tenant DelivTrack
+
+Un même `traccarDeviceId` ne peut pas être associé à deux véhicules de deux entreprises différentes — **vérifié par 3 mécanismes :**
+
+1. **Contrainte base de données** : `@unique` sur `Vehicle.traccarDeviceId` (migration `add_traccar_device_id_unique`).
+2. **Contrainte applicative** : `checkTraccarDeviceIdUniqueness()` dans `vehicles.service.ts` vérifie sur tous les tenants avant chaque liaison.
+3. **Contrainte pont Traccar** : `linkVehicleToTraccar()` dans `tracking.service.ts` vérifie également l'unicité globale.
+
+Test de preuve : `traccar-multitenant.spec.ts` confirme qu'une tentative de lier le même ID Traccar à deux véhicules de deux companyId différents échoue avec `ConflictException`.
+
+### 7.3 Transport
+
+- La connexion entre Render et Traccar (pont HTTP/WebSocket) passe par le réseau public. Si le VPS le permet, activez HTTPS (Caddy reverse proxy) sur le port 8082 et renseignez `TRACCAR_URL=https://...`.
+- Les mots de passe Traccar sont stockés dans `render.yaml` (versionnés). En environnement sensible, utilisez `sync: false` et configurez-les via le Dashboard Render.
 
 ---
 

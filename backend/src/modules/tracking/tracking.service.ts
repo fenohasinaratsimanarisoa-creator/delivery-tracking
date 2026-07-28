@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { NotificationType, NotificationPriority } from '@prisma/client';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -575,6 +575,20 @@ export class TrackingService {
       where: { id: vehicleId, companyId, deletedAt: null },
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    const otherVehicle = await this.prisma.vehicle.findFirst({
+      where: {
+        traccarDeviceId,
+        isActive: true,
+        deletedAt: null,
+        id: { not: vehicleId },
+      },
+    });
+    if (otherVehicle) {
+      throw new ConflictException(
+        `traccarDeviceId "${traccarDeviceId}" is already assigned to another active vehicle`,
+      );
+    }
 
     return this.prisma.vehicle.update({
       where: { id: vehicleId },
