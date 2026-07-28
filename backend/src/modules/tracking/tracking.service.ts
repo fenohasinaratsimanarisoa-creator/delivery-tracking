@@ -572,9 +572,9 @@ export class TrackingService {
     });
   }
 
-  async getLastPositionByTraccarId(traccarDeviceId: string) {
+  async getLastPositionByTraccarId(traccarDeviceId: string, companyId: string) {
     return this.prisma.gpsPosition.findFirst({
-      where: { vehicle: { traccarDeviceId } },
+      where: { vehicle: { traccarDeviceId, companyId } },
       orderBy: { timestamp: 'desc' },
       select: { timestamp: true, latitude: true, longitude: true },
     });

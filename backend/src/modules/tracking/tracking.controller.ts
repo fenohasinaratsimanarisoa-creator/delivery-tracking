@@ -194,8 +194,11 @@ export class TrackingController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Test if a Traccar device is receiving positions' })
   @Get('traccar-devices/:deviceId/test')
-  async testTraccarDevice(@Param('deviceId') deviceId: string) {
-    const lastPos = await this.trackingService.getLastPositionByTraccarId(deviceId);
+  async testTraccarDevice(
+    @Param('deviceId') deviceId: string,
+    @CurrentUser('companyId') companyId: string,
+  ) {
+    const lastPos = await this.trackingService.getLastPositionByTraccarId(deviceId, companyId);
     const now = Date.now();
     if (!lastPos) {
       return { status: 'never_connected', deviceId, message: 'No position received for this device' };
