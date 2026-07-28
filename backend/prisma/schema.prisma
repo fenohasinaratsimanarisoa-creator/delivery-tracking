@@ -82,78 +82,6 @@ enum PlatformAdminAction {
   settings_update
 }
 
-enum TrackerProtocol {
-  GT06
-  TELTONIKA
-  TK103
-  H02
-  MEITRACK
-  QUECLINK
-  JIMI
-  COBAN
-  NAVTELECOM
-  SINOTRACK
-  RUPTELA
-  CALAMP
-  GALILEOSKY
-  TRACCAR_BRIDGE
-}
-
-model DeviceModel {
-  id           String           @id @default(uuid()) @db.Uuid
-  manufacturer String
-  modelName    String
-  protocol     TrackerProtocol
-  capabilities String[]
-  createdAt    DateTime         @default(now()) @map("created_at")
-
-  devices TrackerDevice[]
-
-  @@unique([manufacturer, modelName])
-  @@map("device_models")
-}
-
-model TrackerDevice {
-  id             String         @id @default(uuid()) @db.Uuid
-  imei           String         @unique
-  protocol       TrackerProtocol
-  deviceModelId  String?        @map("device_model_id") @db.Uuid
-  deviceModel    DeviceModel?   @relation(fields: [deviceModelId], references: [id])
-  vehicleId      String?        @unique @map("vehicle_id") @db.Uuid
-  vehicle        Vehicle?       @relation("VehicleTracker", fields: [vehicleId], references: [id])
-  companyId      String         @map("company_id") @db.Uuid
-  company        Company        @relation(fields: [companyId], references: [id])
-  isActive       Boolean        @default(true) @map("is_active")
-  lastPositionAt DateTime?      @map("last_position_at")
-  firmwareVersion String?       @map("firmware_version")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
-
-  commands DeviceCommand[]
-
-  @@index([companyId])
-  @@index([protocol])
-  @@map("tracker_devices")
-}
-
-model DeviceCommand {
-  id          String        @id @default(uuid()) @db.Uuid
-  trackerId   String        @map("tracker_id") @db.Uuid
-  tracker     TrackerDevice @relation(fields: [trackerId], references: [id])
-  command     String
-  parameters  Json?
-  status      String        @default("pending")
-  result      Json?
-  sentAt      DateTime?     @map("sent_at")
-  deliveredAt DateTime?     @map("delivered_at")
-  failedAt    DateTime?     @map("failed_at")
-  errorMsg    String?       @map("error_msg")
-  createdAt   DateTime      @default(now()) @map("created_at")
-
-  @@index([trackerId, status])
-  @@map("device_commands")
-}
-
 model Company {
   id        String    @id @default(uuid()) @db.Uuid
   name      String
@@ -185,7 +113,6 @@ model Company {
   webhooks           Webhook[]
   geofences          Geofence[]
   fuelPriceHistory   FuelPriceHistory[]
-  trackerDevices     TrackerDevice[]
 
   @@map("companies")
 }
@@ -228,17 +155,17 @@ model Geofence {
 }
 
 model GeofenceEvent {
-  id          String   @id @default(uuid()) @db.Uuid
-  geofenceId  String   @map("geofence_id") @db.Uuid
-  geofence    Geofence @relation(fields: [geofenceId], references: [id])
-  vehicleId   String   @map("vehicle_id") @db.Uuid
-  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
-  deliveryId  String   @map("delivery_id") @db.Uuid
-  delivery    Delivery @relation(fields: [deliveryId], references: [id])
-  event       String
-  latitude    Float?
-  longitude   Float?
-  timestamp   DateTime @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  geofenceId String   @map("geofence_id") @db.Uuid
+  geofence   Geofence @relation(fields: [geofenceId], references: [id])
+  vehicleId  String   @map("vehicle_id") @db.Uuid
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
+  deliveryId String   @map("delivery_id") @db.Uuid
+  delivery   Delivery @relation(fields: [deliveryId], references: [id])
+  event      String
+  latitude   Float?
+  longitude  Float?
+  timestamp  DateTime @default(now())
 
   @@index([geofenceId])
   @@index([vehicleId])
@@ -377,11 +304,10 @@ model Vehicle {
   licensePlate           String    @unique @map("license_plate")
   vin                    String?   @unique
   fuelType               String    @map("fuel_type")
-  theoreticalConsumption Float? @map("theoretical_consumption") // L/100km
-  positionSource    String  @default("phone") @map("position_source") // phone | physical_tracker
-  traccarDeviceId   String? @map("traccar_device_id")
-  trackerDevice     TrackerDevice? @relation("VehicleTracker")
-  isActive         Boolean @default(true) @map("is_active")
+  theoreticalConsumption Float?    @map("theoretical_consumption") // L/100km
+  positionSource         String    @default("phone") @map("position_source") // phone | physical_tracker
+  traccarDeviceId        String?   @map("traccar_device_id")
+  isActive               Boolean   @default(true) @map("is_active")
   deletedAt              DateTime? @map("deleted_at")
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
@@ -611,14 +537,14 @@ model DailyFuelReport {
 }
 
 model FuelPriceHistory {
-  id             String   @id @default(uuid()) @db.Uuid
-  companyId      String   @map("company_id") @db.Uuid
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  fuelType       String   @map("fuel_type")
-  pricePerLiter  Float    @map("price_per_liter")
-  effectiveFrom  DateTime @map("effective_from")
+  id             String    @id @default(uuid()) @db.Uuid
+  companyId      String    @map("company_id") @db.Uuid
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fuelType       String    @map("fuel_type")
+  pricePerLiter  Float     @map("price_per_liter")
+  effectiveFrom  DateTime  @map("effective_from")
   effectiveUntil DateTime? @map("effective_until")
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   @@index([companyId, fuelType, effectiveFrom])
   @@index([companyId, fuelType, effectiveUntil])

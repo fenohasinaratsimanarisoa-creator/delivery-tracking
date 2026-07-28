@@ -22,7 +22,6 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
 import { ApiKeyScope } from '../api-keys/decorators/api-key-scope.decorator';
-import { DeviceCommandService } from './protocol/commands/device-command.service';
 
 @ApiTags('Tracking')
 @Controller('tracking')
@@ -31,7 +30,6 @@ export class TrackingController {
     private readonly trackingService: TrackingService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly deviceCommandService: DeviceCommandService,
   ) {}
 
   @UseGuards(ApiKeyOrJwtGuard)
@@ -221,65 +219,34 @@ export class TrackingController {
     return this.trackingService.linkVehicleToTraccar(vehicleId, companyId, traccarDeviceId);
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
-  @Roles('admin', 'dispatcher')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'List registered tracker devices for this company' })
+  @ApiOperation({ summary: 'List registered tracker devices for this company — REMOVED' })
   @Get('tracker-devices')
-  async listTrackerDevices(@CurrentUser('companyId') companyId: string) {
-    return this.trackingService.getStatus();
+  async listTrackerDevices() {
+    return { status: 501, message: 'Chaîne (B) supprimée — utiliser /vehicles/available-traccar-devices' };
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
-  @Roles('admin')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Register a new tracker device (IMEI)' })
+  @ApiOperation({ summary: 'Register a new tracker device (IMEI) — REMOVED' })
   @Post('tracker-devices')
-  async registerTrackerDevice(
-    @Body('imei') imei: string,
-    @Body('protocol') protocol: string,
-    @CurrentUser('companyId') companyId: string,
-  ) {
-    return { imei, protocol, companyId, message: 'Device registration endpoint — implement via admin panel' };
+  async registerTrackerDevice() {
+    return { status: 501, message: 'Chaîne (B) supprimée — utiliser /vehicles/traccar-devices' };
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
-  @Roles('admin')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Link a tracker device to a vehicle' })
+  @ApiOperation({ summary: 'Link a tracker device to a vehicle — REMOVED' })
   @Post('tracker-devices/:deviceId/link/:vehicleId')
-  async linkTrackerDevice(
-    @Param('deviceId') deviceId: string,
-    @Param('vehicleId') vehicleId: string,
-    @CurrentUser('companyId') companyId: string,
-  ) {
-    return this.trackingService.linkVehicleToTraccar(vehicleId, companyId, deviceId);
+  async linkTrackerDevice() {
+    return { status: 501, message: 'Chaîne (B) supprimée — utiliser /vehicles/:vehicleId/link-traccar' };
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
-  @Roles('admin')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Unlink a tracker device from its vehicle' })
+  @ApiOperation({ summary: 'Unlink a tracker device from its vehicle — REMOVED' })
   @Post('tracker-devices/:deviceId/unlink')
-  async unlinkTrackerDevice(
-    @Param('deviceId') deviceId: string,
-    @CurrentUser('companyId') companyId: string,
-  ) {
-    return { deviceId, companyId, message: 'Device unlinked' };
+  async unlinkTrackerDevice() {
+    return { status: 501, message: 'Chaîne (B) supprimée' };
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
-  @Roles('admin')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Send a command to a tracker device (reboot, set_interval, etc.)' })
+  @ApiOperation({ summary: 'Send a command to a tracker device — REMOVED' })
   @Post('tracker-devices/:deviceId/command')
-  async sendTrackerCommand(
-    @Param('deviceId') deviceId: string,
-    @Body('command') command: string,
-    @Body('parameters') parameters: Record<string, unknown>,
-    @CurrentUser('companyId') companyId: string,
-  ) {
-    return this.deviceCommandService.sendCommand(companyId, deviceId, command as any, parameters);
+  async sendTrackerCommand() {
+    return { status: 501, message: 'Chaîne (B) supprimée — les commandes passeront par l\'API Traccar' };
   }
 
   @ApiOperation({ summary: 'Get tracking info via public token (no auth required)' })
