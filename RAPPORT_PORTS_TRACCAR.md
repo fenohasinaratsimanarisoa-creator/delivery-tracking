@@ -80,21 +80,48 @@ docker logs → "Liquibase: Update has been successful. Rows affected: 1"
 curl http://localhost:8082/ → HTTP 200
 ```
 
-## 6. Tableau final
+## 6. Tableau final — Ports par environnement
 
-| Protocole | Port | Exposé | Testé (TCP) | Testé (trame réelle) |
-|---|---|---|---|---|
-| Web UI | 8082 | ✅ | ✅ | ✅ HTTP 200 |
-| GT06 | 5055 | ✅ | ✅ | ✅ login accepté |
-| Teltonika | 5056 | ✅ | ✅ | ✅ IMEI accepté |
-| H02 | 5057 | ✅ | ✅ | ❌ (connexion OK) |
-| TK103 | 5058 | ✅ | ✅ | ❌ (connexion OK) |
-| Meitrack | 5059 | ✅ | ✅ | ❌ (connexion OK) |
-| OsmAnd | 5060 | ✅ | ✅ | ❌ (connexion OK) |
-| Lézard | 5061 | ✅ | ✅ | ❌ (connexion OK) |
-| WristWatch | 5062 | ✅ | ✅ | ❌ (connexion OK) |
-| Navtelecom | 5063 | ✅ | ✅ | ❌ (connexion OK) |
-| Xexun | 5064 | ✅ | ✅ | ❌ (connexion OK) |
-| AST | 5065 | ✅ | ✅ | ❌ (connexion OK) |
+### Docker local (développement)
+Hôte : `localhost`, ports définis dans `traccar/traccar.xml` et `docker-compose.yml`.
 
-Les 11 protocoles sont exposés et joignables. GT06 et Teltonika ont été testés avec une trame protocolaire réelle. Les 9 autres sont vérifiés par connexion TCP (le protocole étant spécifique, seuls les drivers Traccar peuvent interpréter la conversation complète).
+| Protocole | Port local | Testé (TCP) | Testé (trame réelle) |
+|---|---|---|---|
+| Web UI | 8082 | ✅ | ✅ HTTP 200 |
+| GT06 | 5055 | ✅ | ✅ login accepté |
+| Teltonika | 5056 | ✅ | ✅ IMEI accepté |
+| H02 | 5057 | ✅ | ❌ (connexion OK) |
+| TK103 | 5058 | ✅ | ❌ (connexion OK) |
+| Meitrack | 5059 | ✅ | ❌ (connexion OK) |
+| OsmAnd | 5060 | ✅ | ❌ (connexion OK) |
+| Lézard | 5061 | ✅ | ❌ (connexion OK) |
+| WristWatch | 5062 | ✅ | ❌ (connexion OK) |
+| Navtelecom | 5063 | ✅ | ❌ (connexion OK) |
+| Xexun | 5064 | ✅ | ❌ (connexion OK) |
+| AST | 5065 | ✅ | ❌ (connexion OK) |
+
+### Traccar Cloud (production — server.traccar.org)
+Hôte : **45.55.84.20** (IP du serveur Traccar Cloud, confirmée par email de bienvenue).
+
+Les ports ci-dessous sont les **ports par défaut de Traccar**, issus de la documentation officielle
+(https://www.traccar.org/protocols/). **Contrairement aux ports du docker-compose local (5055-5065),
+Traccar Cloud peut utiliser des ports différents** par protocole. Le port exact pour le protocole
+du traceur acheté doit être confirmé depuis l'interface web Traccar → Ajouter un device →
+la configuration affichée inclut le port.
+
+| Protocole | Port probable (Traccar Cloud) | IP |
+|---|---|---|
+| GT06 / Concox / JM-VL03 | **5023** | 45.55.84.20 |
+| Teltonika FMB / FM / TAVL / GH | **5027** | 45.55.84.20 |
+| H02 | **5013** | 45.55.84.20 |
+| TK103 / TK102 / Coban / ST-901 | **5002** | 45.55.84.20 |
+| Meitrack | **5020** | 45.55.84.20 |
+
+⚠️ **Ces ports ne sont pas garantis** — Traccar Cloud peut les avoir reconfigurés.
+**Action requise :** lors de l'achat d'un traceur, se connecter à `https://server.traccar.org`,
+aller dans **Configuration → Devices**, créer un device, et noter le port affiché dans les
+instructions de configuration du device.
+
+Les 11 protocoles sont exposés et joignables en docker local. GT06 et Teltonika ont été testés
+avec une trame protocolaire réelle. Les 9 autres sont vérifiés par connexion TCP (le protocole
+étant spécifique, seuls les drivers Traccar peuvent interpréter la conversation complète).

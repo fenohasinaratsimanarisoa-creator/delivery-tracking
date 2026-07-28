@@ -10,16 +10,18 @@
 │        │        │                         │  TraccarBridgeService│
 │        ▼        │                         │  (WebSocket client)  │
 │  ┌──────────┐   │                         │                      │
-│  │  VPS      │   │                         │  POST /tracking/...  │
-│  │  Traccar  │   │                         │  └→ savePosition()  │
-│  │  Server   │   │                         └──────────────────────┘
-│  │  :5055-58 │   │
-│  │  :8082    │   │
+│  │  Traccar  │   │                         │  POST /tracking/...  │
+│  │  Cloud    │   │                         │  └→ savePosition()  │
+│  │  (HTTPS)  │   │                         └──────────────────────┘
+│  │  :443     │   │
+│  │  API REST │   │
 │  └──────────┘   │
 └─────────────────┘
 ```
 
-**Principe :** Render expose uniquement des ports HTTP(S) vers l'Internet. Les protocoles GPS binaires (GT06 sur TCP 5055, Teltonika sur TCP 5056, etc.) nécessitent du TCP brut, que Render ne supporte pas pour les web services. La solution est donc **un VPS dédié** qui héberge Traccar et reçoit les connexions des traceurs. Le `TraccarBridgeService` sur Render se connecte **en outbound** (HTTP/WebSocket) vers ce VPS pour récupérer les positions et les injecter dans `savePosition()`.
+**Principe :** Render expose uniquement des ports HTTP(S) vers l'Internet. Les protocoles GPS binaires nécessitent du TCP brut, que Render ne supporte pas. En production, DelivTrack utilise **Traccar Cloud** (`server.traccar.org`) — Traccar s'occupe de la réception des trames TCP des traceurs. Le `TraccarBridgeService` sur Render se connecte **en outbound** (HTTPS/WebSocket) vers Traccar Cloud pour récupérer les positions et les injecter dans `savePosition()`.
+
+**Important :** Les ports des traceurs (pour configurer le matériel) sont fournis par Traccar Cloud lors de la création du device dans l'interface web. Ils ne sont PAS les ports 5055-5065 du docker-compose local (qui ne sert qu'au développement). Voir section 3 pour la procédure.
 
 ---
 
@@ -121,14 +123,24 @@ ss -tlnp | grep -E '5055|5056|5057|5058|8082'
 
 ## 3. Configurer Traccar
 
-1. Accédez à `http://<IP_DU_VPS>:8082`
-2. Créez un compte administrateur
-3. Allez dans **Configuration → Defaults** et paramétrez :
+1. Connectez-vous à `https://server.traccar.org` (Traccar Cloud)
+2. Allez dans **Configuration → Defaults** et paramétrez :
    - `deviceManager.updateDevicesState`: `true`
    - `event.ignoreDuplicatePositions`: `true` (la déduplication est déjà gérée par DelivTrack)
-4. Créez des **devices** dans Traccar avec les IMEI des traceurs physiques
-5. Associez chaque device à un **driver** :
-   - Notez le `deviceId` Traccar (entier) — il servira pour `Vehicle.traccarDeviceId` dans DelivTrack
+3. Créez un **device** avec l'IMEI du traceur physique.
+   **⚠️ Au moment de la création, l'interface affiche les informations de connexion du device :**
+   - **Host** : `45.55.84.20` (IP du serveur Traccar Cloud)
+   - **Port** : dépend du protocole. Exemples (ports par défaut Traccar) :
+     | Protocole | Port par défaut |
+     |---|---|
+     | GT06 | 5023 |
+     | Teltonika | 5027 |
+     | H02 | 5013 |
+     | TK103 | 5002 |
+     | Meitrack | 5020 |
+   - **Ces ports sont ceux à configurer sur le traceur** (pas les ports 5055-5065 du docker local).
+4. Notez le `deviceId` Traccar (entier) — il servira pour `Vehicle.traccarDeviceId` dans DelivTrack
+5. Associez chaque device à un véhicule via DelivTrack : `POST /tracking/vehicles/:vehicleId/link-traccar`
 
 ---
 
