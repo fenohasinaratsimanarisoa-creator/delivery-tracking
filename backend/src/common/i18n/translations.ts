@@ -253,6 +253,10 @@ const translations: Record<string, Record<Language, string>> = {
     fr: 'Livraison "{title}" marquée à {distance} km du lieu prévu ({meters} m)',
     en: 'Delivery "{title}" marked at {distance} km from the planned location ({meters} m)',
   },
+  'delivery.notification.noCoordsMessage': {
+    fr: 'Livraison "{title}" marquée sans coordonnées de destination — écart non vérifiable',
+    en: 'Delivery "{title}" marked without destination coordinates — mismatch not verifiable',
+  },
   'billing.paymentDescription': {
     fr: 'Abonnement {planName} — {interval}',
     en: '{planName} subscription — {interval}',

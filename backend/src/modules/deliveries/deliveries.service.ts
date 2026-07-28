@@ -6,6 +6,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
+import { GeocodingService } from '../geocoding/geocoding.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 import { UpdateDeliveryStatusDto } from './dto/update-delivery-status.dto';
@@ -34,6 +35,7 @@ export class DeliveriesService {
     private webhooks: WebhooksService,
     private configService: ConfigService,
     private dataUpdateBus: DataUpdateBus,
+    private geocoding: GeocodingService,
   ) {}
 
   async create(companyId: string, dto: CreateDeliveryDto) {
@@ -52,9 +54,24 @@ export class DeliveriesService {
       if (!driver) throw new NotFoundException('Driver not found in your company');
       if (driver.userId) assignedDriverId = driver.userId;
     }
+    // Auto-geocode delivery address if coordinates are not provided
+    let deliveryLat = dto.deliveryLat;
+    let deliveryLng = dto.deliveryLng;
+    if (deliveryLat === undefined && deliveryLng === undefined && dto.deliveryAddress) {
+      try {
+        const results = await this.geocoding.search(dto.deliveryAddress);
+        if (results.length > 0) {
+          deliveryLat = results[0].lat;
+          deliveryLng = results[0].lng;
+        }
+      } catch {}
+    }
+
     const delivery = await this.prisma.delivery.create({
       data: {
         ...dto,
+        deliveryLat,
+        deliveryLng,
         status: dto.status ?? DeliveryStatus.pending,
         assignedDriverId,
         scheduledDate: dto.scheduledDate ? new Date(dto.scheduledDate) : undefined,
@@ -354,7 +371,7 @@ export class DeliveriesService {
       proofData.deliveryProofAccuracy = dto.accuracy;
     }
 
-    if (delivery.deliveryLat !== null && delivery.deliveryLng !== null) {
+    if (delivery.deliveryLat != null && delivery.deliveryLng != null) {
       const distance = Math.round(
         haversineDistance(dto.latitude, dto.longitude, delivery.deliveryLat, delivery.deliveryLng),
       );
@@ -381,6 +398,18 @@ export class DeliveriesService {
         proofData.locationMismatch = false;
         proofData.mismatchResolved = false;
       }
+    } else {
+      // No destination coordinates — create proof record without distance comparison
+      await this.notifications.create(companyId, {
+        type: NotificationType.location_mismatch,
+        priority: NotificationPriority.high,
+        title: t('delivery.notification.mismatchTitle', lang),
+        message: t('delivery.notification.noCoordsMessage', lang, {
+          title: delivery.title,
+        }),
+        link: `/deliveries/${delivery.id}`,
+        deliveryId: delivery.id,
+      });
     }
 
     return proofData;

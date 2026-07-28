@@ -14,6 +14,7 @@ class MockPrismaClientKnownRequestError extends Error {
   }
 }
 import * as ExcelJS from 'exceljs';
+import { GeocodingService } from '../geocoding/geocoding.service';
 import { DeliveriesService } from './deliveries.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -65,6 +66,7 @@ describe('DeliveriesService - State Machine', () => {
         { provide: WebhooksService, useValue: mockWebhooks },
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('false') } },
         { provide: DataUpdateBus, useValue: { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() } },
+        { provide: GeocodingService, useValue: { search: jest.fn().mockResolvedValue([]) } },
       ],
     }).compile();
 
