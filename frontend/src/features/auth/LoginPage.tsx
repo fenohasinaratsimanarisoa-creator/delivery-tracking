@@ -37,7 +37,7 @@ function writeSessionCache(name: string, email: string) {
 export default function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { login, isAuthenticated, isInitializing } = useAuth();
+  const { login, isAuthenticated, isInitializing, user } = useAuth();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -52,10 +52,11 @@ export default function LoginPage() {
   }, [t]);
 
   useEffect(() => {
-    if (!isInitializing && isAuthenticated) {
-      navigate('/dashboard', { replace: true });
+    if (!isInitializing && isAuthenticated && user) {
+      const target = ROLE_REDIRECT[user.role] || '/dashboard';
+      navigate(target, { replace: true });
     }
-  }, [isInitializing, isAuthenticated, navigate]);
+  }, [isInitializing, isAuthenticated, navigate, user]);
 
   const handleLogin = async (email: string, password: string) => {
     setLoading(true);

@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AuthProvider } from './hooks/AuthContext';
+import { AuthProvider, useAuth } from './hooks/AuthContext';
 import QueryProvider from './components/QueryProvider';
 import { ToastProvider } from './components/Toast';
 import { ThemeProvider } from './styles/ThemeContext';
@@ -61,6 +61,21 @@ function SuspenseWrapper({ children }: { children: React.ReactNode }) {
       {children}
     </Suspense>
   );
+}
+
+const ROLE_HOME: Record<string, string> = {
+  admin: '/dashboard',
+  dispatcher: '/dashboard',
+  driver: '/my-deliveries',
+  client: '/my-orders',
+};
+
+function HomeRedirect() {
+  const { user, isInitializing, isAuthenticated } = useAuth();
+  if (isInitializing) return null;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  const target = ROLE_HOME[user!.role] || '/dashboard';
+  return <Navigate to={target} replace />;
 }
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -198,7 +213,7 @@ export default function App() {
                 </ProtectedRoute>
               } />
 
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/" element={<HomeRedirect />} />
               <Route path="*" element={<SuspenseWrapper><NotFoundPage /></SuspenseWrapper>} />
           </Routes>
         </ToastProvider>
