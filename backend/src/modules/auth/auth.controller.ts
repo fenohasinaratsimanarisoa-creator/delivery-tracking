@@ -127,6 +127,7 @@ export class AuthController {
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Public()
+  @SkipCsrf()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
