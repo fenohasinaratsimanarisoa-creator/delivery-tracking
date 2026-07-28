@@ -274,8 +274,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private async authenticate(): Promise<string> {
     const loginResponse = await fetch(`${this.traccarUrl}/api/session`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: this.traccarUser, password: this.traccarPassword }),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `email=${encodeURIComponent(this.traccarUser)}&password=${encodeURIComponent(this.traccarPassword)}`,
     });
 
     if (!loginResponse.ok) {
