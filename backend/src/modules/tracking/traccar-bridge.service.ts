@@ -315,7 +315,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private async connect() {
     try {
       const cookie = await this.authenticate();
-      const WebSocket = (await import('ws')).default;
+      const { WebSocket } = require('ws');
       const wsUrl = this.traccarUrl.replace(/^http/, 'ws') + '/api/socket';
 
       this.socket = new WebSocket(wsUrl, {
