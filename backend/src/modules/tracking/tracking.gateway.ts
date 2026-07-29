@@ -19,6 +19,7 @@ import { DataUpdateBus, DataUpdateEvent } from '../../common/events/data-update.
 import { WsTrackingExceptionFilter } from '../../common/filters/ws-tracking-exception.filter';
 import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
 import { haversineDistance } from '../../common/geo/geo.utils';
+import { computeConfidence } from '../../common/geo/gps-quality';
 
 @WebSocketGateway({
   cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:5173' },
@@ -165,7 +166,9 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
       `[POSITION] driver=${driver.id} lat=${dto.latitude.toFixed(6)} lng=${dto.longitude.toFixed(6)} speed=${speed?.toFixed(2)} heading=${dto.heading} delivery=${dto.deliveryId || 'none'} company=${user.companyId}`,
     );
 
-    const confidence = dto.accuracy ? Math.max(0.1, 1 - dto.accuracy / 50) : 1;
+    const confidence = dto.accuracy && dto.accuracy > 0
+      ? computeConfidence(dto.accuracy, false, speed, dto.heading)
+      : computeConfidence(undefined, false, speed, dto.heading);
 
     const broadcast = {
       driverId: driver.id,
@@ -222,7 +225,7 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
       altitude: pos.altitude,
       accuracy: pos.accuracy,
       suspect: pos.suspect,
-      confidence: pos.accuracy ? Math.max(0.1, 1 - pos.accuracy / 50) : 1,
+      confidence: pos.accuracy ? computeConfidence(pos.accuracy, pos.suspect ?? false, pos.speed ?? undefined) : computeConfidence(undefined, pos.suspect ?? false, pos.speed ?? undefined),
       timestamp: pos.timestamp instanceof Date ? pos.timestamp.toISOString() : pos.timestamp,
       deliveryId: pos.deliveryId ?? undefined,
       vehicleId: pos.vehicleId,

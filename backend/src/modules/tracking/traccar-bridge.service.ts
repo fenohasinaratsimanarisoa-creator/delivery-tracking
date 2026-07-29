@@ -27,6 +27,10 @@ interface TraccarPosition {
   attributes?: Record<string, unknown>;
 }
 
+// UERE pour récepteur GPS grand public : ~5m (combinaison erreurs satellite + atmosphère + récepteur)
+// HDOP * UERE = accuracy estimée ; on prend la plus prudente (max) entre accuracy du device et HDOP dérivé
+import { computeConfidence, computeCombinedAccuracy } from '../../common/geo/gps-quality';
+
 const BACKFILL_MAX_HOURS = 24;
 const BATCH_INTERVAL_MS = 5000;
 const MAX_RECONNECT_DELAY_MS = 120000;
@@ -573,7 +577,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             if (!this.isValidCoordinates(pos.latitude, pos.longitude)) continue;
 
             const speedMs = (pos.speed || 0) * 0.514444;
-            const accuracy = pos.accuracy !== undefined ? (pos.accuracy === 0 ? 50 : pos.accuracy) : 50;
+            const { accuracy } = computeCombinedAccuracy(pos.accuracy, pos.attributes);
 
             let suspect = false;
             if (lastBackfillPos) {
@@ -676,7 +680,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         select: { id: true },
       });
 
-      const rawAccuracy = pos.accuracy !== undefined ? (pos.accuracy === 0 ? 50 : pos.accuracy) : 50;
+      const { accuracy: derivedAccuracy, hdopInfo } = computeCombinedAccuracy(pos.accuracy, pos.attributes);
+      this.logger.debug(`Traccar device ${pos.deviceId}: ${hdopInfo}`);
 
       const updateDto = {
         latitude: pos.latitude,
@@ -684,7 +689,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         speed: (pos.speed || 0) * 0.514444,
         heading: pos.course || 0,
         altitude: pos.altitude || 0,
-        accuracy: rawAccuracy,
+        accuracy: derivedAccuracy,
         timestamp: timestamp.toISOString(),
         vehicleId: vehicleMapping.id,
         deliveryId: currentDelivery?.id,
@@ -738,7 +743,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           altitude: updateDto.altitude,
           accuracy: updateDto.accuracy,
           suspect: position.suspect,
-          confidence: updateDto.accuracy ? Math.max(0.1, 1 - updateDto.accuracy / 50) : 1,
+          confidence: computeConfidence(updateDto.accuracy, position.suspect, updateDto.speed, updateDto.heading),
           timestamp: updateDto.timestamp,
           deliveryId: updateDto.deliveryId ?? undefined,
           vehicleId: vehicleMapping.id,
