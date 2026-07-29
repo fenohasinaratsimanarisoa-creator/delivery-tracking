@@ -76,6 +76,25 @@ describe('GeocodingService', () => {
       expect(result[0].placeId).toBe('abc');
       expect(mockRedis.set).toHaveBeenCalled();
     });
+
+    it('logs error and returns empty on 403/PERMISSION_DENIED', async () => {
+      mockRedis.get.mockResolvedValueOnce(null);
+      const errorSpy = jest.spyOn(service['logger'], 'error').mockImplementation(() => {});
+      jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        text: async () => JSON.stringify({ error: { message: 'PERMISSION_DENIED' } }),
+      } as any);
+
+      const result = await service.placesAutocomplete('test');
+
+      expect(result).toEqual([]);
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Google Places API HTTP 403'),
+      );
+      expect(mockRedis.set).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
   });
 
   describe('placeDetails', () => {

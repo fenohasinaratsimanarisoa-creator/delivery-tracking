@@ -1,11 +1,12 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { GeocodingService } from './geocoding.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
+import { Public } from '../../common/decorators/public.decorator';
+import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
 import type { GeocodingResult } from './geocoding.service';
 
 @Controller('geocoding')
-@UseGuards(JwtAuthGuard, CompanyScopeGuard)
+@Public()
+@SkipCsrf()
 export class GeocodingController {
   constructor(private readonly geocodingService: GeocodingService) {}
 
