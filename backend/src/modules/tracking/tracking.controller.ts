@@ -223,35 +223,8 @@ export class TrackingController {
     return this.trackingService.linkVehicleToTraccar(vehicleId, companyId, traccarDeviceId);
   }
 
-  @ApiOperation({ summary: 'List registered tracker devices for this company — REMOVED' })
-  @Get('tracker-devices')
-  async listTrackerDevices() {
-    return { status: 501, message: 'Chaîne (B) supprimée — utiliser /vehicles/available-traccar-devices' };
-  }
-
-  @ApiOperation({ summary: 'Register a new tracker device (IMEI) — REMOVED' })
-  @Post('tracker-devices')
-  async registerTrackerDevice() {
-    return { status: 501, message: 'Chaîne (B) supprimée — utiliser /vehicles/traccar-devices' };
-  }
-
-  @ApiOperation({ summary: 'Link a tracker device to a vehicle — REMOVED' })
-  @Post('tracker-devices/:deviceId/link/:vehicleId')
-  async linkTrackerDevice() {
-    return { status: 501, message: 'Chaîne (B) supprimée — utiliser /vehicles/:vehicleId/link-traccar' };
-  }
-
-  @ApiOperation({ summary: 'Unlink a tracker device from its vehicle — REMOVED' })
-  @Post('tracker-devices/:deviceId/unlink')
-  async unlinkTrackerDevice() {
-    return { status: 501, message: 'Chaîne (B) supprimée' };
-  }
-
-  @ApiOperation({ summary: 'Send a command to a tracker device — REMOVED' })
-  @Post('tracker-devices/:deviceId/command')
-  async sendTrackerCommand() {
-    return { status: 501, message: 'Chaîne (B) supprimée — les commandes passeront par l\'API Traccar' };
-  }
+  // Les endpoints tracker-devices (chaîne B) ont été supprimés.
+  // Le lien entre véhicule et traceur se fait via POST /vehicles/:vehicleId/link-traccar.
 
   @ApiOperation({ summary: 'Get tracking info via public token (no auth required)' })
   @Get('public/:token')

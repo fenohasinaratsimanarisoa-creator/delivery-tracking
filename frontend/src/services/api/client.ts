@@ -57,8 +57,24 @@ api.interceptors.response.use(
       error.userMessage = i18n.t('api.error.network');
       return Promise.reject(error);
     }
+    const status = error.response?.status;
+    const errMsg = error.response?.data?.message || '';
+
+    if (status === 403 && errMsg.toLowerCase().includes('csrf') && !error.config._csrfRetry) {
+      error.config._csrfRetry = true;
+      try {
+        await fetchCsrfToken();
+        if (csrfToken && error.config.headers) {
+          error.config.headers['X-CSRF-Token'] = csrfToken;
+          error.config.headers['X-CSRF-HMAC'] = csrfHmac;
+        }
+        return api(error.config);
+      } catch {
+        return Promise.reject(error);
+      }
+    }
+
     if (error.response?.status !== 401 || error.config._retry) {
-      const status = error.response?.status;
       if (status === 429) error.userMessage = i18n.t('api.error.rateLimit');
       else if (status >= 500) error.userMessage = i18n.t('api.error.server');
       return Promise.reject(error);
