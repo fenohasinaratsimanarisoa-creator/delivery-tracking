@@ -1,9 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
+import Redis from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { CreateWebhookDto } from './dto/create-webhook.dto';
 import { UpdateWebhookDto } from './dto/update-webhook.dto';
+import { assertSafeWebhookUrl } from './webhook-url-validator';
 import * as crypto from 'crypto';
 
 function generateSecret(): string {
@@ -16,9 +19,17 @@ function signPayload(payload: string, secret: string): string {
 
 @Injectable()
 export class WebhooksService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(WebhooksService.name);
+  private readonly LOCK_KEY = 'webhook:retry:lock';
+  private readonly LOCK_TTL = 240;
+
+  constructor(
+    private prisma: PrismaService,
+    @Inject(REDIS_CLIENT) private redis: Redis | null,
+  ) {}
 
   async create(companyId: string, dto: CreateWebhookDto) {
+    await assertSafeWebhookUrl(dto.url);
     const secret = dto.secret || generateSecret();
 
     const webhook = await this.prisma.webhook.create({
@@ -79,7 +90,10 @@ export class WebhooksService {
     if (!existing) throw new NotFoundException('Webhook not found');
 
     const data: Record<string, unknown> = {};
-    if (dto.url !== undefined) data.url = dto.url;
+    if (dto.url !== undefined) {
+      await assertSafeWebhookUrl(dto.url);
+      data.url = dto.url;
+    }
     if (dto.events !== undefined) data.events = dto.events;
     if (dto.secret !== undefined) data.secret = dto.secret;
 
@@ -153,6 +167,12 @@ export class WebhooksService {
     });
     if (!webhook) return;
 
+    try {
+      await assertSafeWebhookUrl(webhook.url);
+    } catch {
+      return;
+    }
+
     const body = JSON.stringify(payload);
     const signature = signPayload(body, webhook.secret);
 
@@ -174,16 +194,24 @@ export class WebhooksService {
         },
         body,
         signal: controller.signal,
+        redirect: 'manual',
       });
 
       clearTimeout(timeout);
       statusCode = response.status;
-      responseBody = await response.text();
-      successful = statusCode >= 200 && statusCode < 300;
+
+      if (statusCode >= 300 && statusCode < 400) {
+        statusCode = 422;
+        responseBody = 'Webhook delivery does not follow redirects';
+        successful = false;
+      } else {
+        responseBody = (await response.text()).slice(0, 5000);
+        successful = statusCode >= 200 && statusCode < 300;
+      }
     } catch (err: unknown) {
       const e = err as { name?: string; message?: string };
       statusCode = e.name === 'AbortError' ? 408 : 0;
-      responseBody = e.message || 'Unknown error';
+      responseBody = (e.message || 'Unknown error').slice(0, 5000);
     }
 
     const attempts = successful ? 1 : 1;
@@ -211,6 +239,24 @@ export class WebhooksService {
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async retryFailedDeliveries() {
+    if (this.redis) {
+      const acquired = (await this.redis.call('SET', this.LOCK_KEY, '1', 'NX', 'EX', String(this.LOCK_TTL))) as string | null;
+      if (!acquired) {
+        this.logger.debug('Distributed lock not acquired — skipping retry cycle');
+        return;
+      }
+    }
+
+    try {
+      await this.doRetryFailedDeliveries();
+    } finally {
+      if (this.redis) {
+        await this.redis.del(this.LOCK_KEY).catch(() => {});
+      }
+    }
+  }
+
+  private async doRetryFailedDeliveries() {
     const now = new Date();
 
     const failedDeliveries = await this.prisma.webhookDelivery.findMany({
@@ -223,6 +269,12 @@ export class WebhooksService {
     });
 
     for (const delivery of failedDeliveries) {
+      try {
+        await assertSafeWebhookUrl(delivery.webhook.url);
+      } catch {
+        continue;
+      }
+
       const body = JSON.stringify(delivery.payload);
       const signature = signPayload(body, delivery.webhook.secret);
 
@@ -244,16 +296,24 @@ export class WebhooksService {
           },
           body,
           signal: controller.signal,
+          redirect: 'manual',
         });
 
         clearTimeout(timeout);
         statusCode = response.status;
-        responseBody = await response.text();
-        successful = statusCode >= 200 && statusCode < 300;
+
+        if (statusCode >= 300 && statusCode < 400) {
+          statusCode = 422;
+          responseBody = 'Webhook delivery does not follow redirects';
+          successful = false;
+        } else {
+          responseBody = (await response.text()).slice(0, 5000);
+          successful = statusCode >= 200 && statusCode < 300;
+        }
       } catch (err: unknown) {
         const e = err as { name?: string; message?: string };
         statusCode = e.name === 'AbortError' ? 408 : 0;
-        responseBody = e.message || 'Unknown error';
+        responseBody = (e.message || 'Unknown error').slice(0, 5000);
       }
 
       const newAttempts = delivery.attempts + 1;

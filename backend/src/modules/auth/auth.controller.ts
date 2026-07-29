@@ -12,12 +12,14 @@ import {
   Delete,
   Param,
   BadRequestException,
+  Inject,
   Logger,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { Response, Request } from 'express';
 import * as passport from 'passport';
+import Redis from 'ioredis';
 import { AuthService } from './auth.service';
 import { TotpService } from './totp.service';
 import { RegisterDto } from './dto/register.dto';
@@ -32,6 +34,7 @@ import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const isSecure = isProduction || (process.env.CORS_ORIGIN || '').startsWith('https');
@@ -62,6 +65,7 @@ export class AuthController {
     private readonly totpService: TotpService,
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis | null,
   ) {}
 
   private getRefreshCookieOpts() {
@@ -190,6 +194,10 @@ export class AuthController {
       throw new UnauthorizedException('Session not found');
     }
     await this.prisma.userSession.delete({ where: { id: sessionId } });
+    if (this.redis) {
+      const now = Math.floor(Date.now() / 1000);
+      await this.redis.set(`revoked:user:${userId}`, String(now), 'EX', 900);
+    }
   }
 
   @UseGuards(JwtAuthGuard)
@@ -201,6 +209,10 @@ export class AuthController {
     @Req() req: any,
   ) {
     await this.prisma.userSession.deleteMany({ where: { userId } });
+    if (this.redis) {
+      const now = Math.floor(Date.now() / 1000);
+      await this.redis.set(`revoked:user:${userId}`, String(now), 'EX', 900);
+    }
   }
 
   @Throttle({ default: { limit: 3, ttl: 60000 } })

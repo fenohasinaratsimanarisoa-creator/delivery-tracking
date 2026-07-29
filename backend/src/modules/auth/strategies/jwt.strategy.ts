@@ -1,8 +1,10 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import Redis from 'ioredis';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { REDIS_CLIENT } from '../../../common/redis/redis.module';
 import { JwtPayload } from '../interfaces/jwt-payload.interface';
 
 @Injectable()
@@ -10,6 +12,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     configService: ConfigService,
     private prisma: PrismaService,
+    @Inject(REDIS_CLIENT) private redis: Redis | null,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -19,6 +22,20 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
+    if (payload.scope && payload.scope !== 'access') {
+      throw new UnauthorizedException('Invalid token scope');
+    }
+
+    if (payload.iat && this.redis) {
+      const revokedAt = await this.redis.get(`revoked:user:${payload.sub}`);
+      if (revokedAt) {
+        const revokedTimestamp = parseInt(revokedAt, 10);
+        if (payload.iat < revokedTimestamp) {
+          throw new UnauthorizedException('Token has been revoked');
+        }
+      }
+    }
+
     if (payload.type === 'platform_admin') {
       const admin = await this.prisma.platformAdmin.findUnique({
         where: { id: payload.sub },

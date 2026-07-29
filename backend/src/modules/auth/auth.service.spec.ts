@@ -12,12 +12,17 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Verify2faDto } from './dto/two-factor.dto';
 
-jest.mock('bcrypt');
+jest.mock('bcrypt', () => ({
+  hash: jest.fn(),
+  hashSync: jest.fn().mockReturnValue('$2b$10$dummyHashForTimingAttackMitigation'),
+  compare: jest.fn(),
+}));
 
 const mockTx = {
   company: { create: jest.fn() },
   user: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
   userSession: { deleteMany: jest.fn() },
+  invitation: { update: jest.fn() },
 };
 
 const mockPrisma = {
@@ -35,6 +40,10 @@ const mockPrisma = {
   userSession: {
     create: jest.fn(),
     deleteMany: jest.fn(),
+  },
+  invitation: {
+    findFirst: jest.fn(),
+    update: jest.fn(),
   },
   $transaction: jest.fn().mockImplementation((cb: (tx: typeof mockTx) => unknown) => cb(mockTx)),
 };
@@ -74,6 +83,7 @@ describe('AuthService', () => {
       const config: Record<string, string> = {
         JWT_ACCESS_SECRET: 'access-secret',
         JWT_REFRESH_SECRET: 'refresh-secret',
+        JWT_2FA_TEMP_SECRET: 'temp-token-secret',
         JWT_ACCESS_EXPIRATION: '15m',
         JWT_REFRESH_EXPIRATION: '7d',
       };
@@ -194,7 +204,8 @@ describe('AuthService', () => {
 
     it('should return tokens when credentials are valid (no 2FA)', async () => {
       mockPrisma.user.findFirst.mockResolvedValueOnce(baseUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // timing dummy
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // actual validation
       mockPrisma.userSession.create.mockResolvedValueOnce({ id: 'session-1' });
       mockPrisma.user.findUnique
         .mockResolvedValueOnce({ firstName: 'John', lastName: 'Doe' })
@@ -237,24 +248,26 @@ describe('AuthService', () => {
       });
     });
 
-    it('should throw UnauthorizedException when user is not found', async () => {
+    it('should throw UnauthorizedException when user is not found (timing-safe)', async () => {
       mockPrisma.user.findFirst.mockResolvedValueOnce(null);
 
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
+      expect(bcrypt.compare).toHaveBeenCalledWith('ValidPass123!', expect.any(String));
     });
 
-    it('should throw UnauthorizedException when user is inactive', async () => {
+    it('should throw UnauthorizedException when user is inactive (timing-safe)', async () => {
       mockPrisma.user.findFirst.mockResolvedValueOnce({
         ...baseUser,
         isActive: false,
       });
 
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
-      expect(bcrypt.compare).not.toHaveBeenCalled();
+      expect(bcrypt.compare).toHaveBeenCalledWith('ValidPass123!', expect.any(String));
     });
 
     it('should throw UnauthorizedException when password is invalid', async () => {
       mockPrisma.user.findFirst.mockResolvedValueOnce(baseUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
 
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
@@ -266,7 +279,8 @@ describe('AuthService', () => {
         totpEnabled: true,
       };
       mockPrisma.user.findFirst.mockResolvedValueOnce(userWith2fa);
-      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // timing dummy
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // actual validation
       mockPrisma.userSession.create.mockResolvedValueOnce({ id: 'session-1' });
       mockJwtService.sign.mockReturnValueOnce('temp_token_value');
 
@@ -275,7 +289,7 @@ describe('AuthService', () => {
       expect(mockJwtService.sign).toHaveBeenCalledWith(
         { sub: 'user-1', scope: '2fa_pending' },
         {
-          secret: 'access-secret',
+          secret: 'temp-token-secret',
           expiresIn: '5m',
         },
       );
@@ -337,7 +351,7 @@ describe('AuthService', () => {
       const result = await service.verify2faToken(dto);
 
       expect(mockJwtService.verify).toHaveBeenCalledWith('valid_temp_token', {
-        secret: 'access-secret',
+        secret: 'temp-token-secret',
       });
       expect(mockTotpService.verifyToken).toHaveBeenCalledWith('base32secret', '123456');
       expect(result).toEqual({
@@ -512,7 +526,7 @@ describe('AuthService', () => {
   });
 
   describe('forgotPassword', () => {
-    it('should send reset email when user exists', async () => {
+    it('should send reset email with combined token when user exists', async () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce({
         id: 'user-1',
         email: 'test@test.com',
@@ -520,6 +534,8 @@ describe('AuthService', () => {
       (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_reset_token');
       mockPrisma.user.update.mockResolvedValueOnce({ id: 'user-1' });
       mockEmailService.sendPasswordReset.mockResolvedValueOnce(undefined);
+
+      jest.spyOn(crypto, 'randomUUID').mockReturnValueOnce('00000000-0000-4000-8000-000000000001');
 
       await service.forgotPassword('test@test.com');
 
@@ -534,13 +550,14 @@ describe('AuthService', () => {
       expect(mockPrisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
         data: {
+          resetTokenId: '00000000-0000-4000-8000-000000000001',
           resetTokenHash: 'hashed_reset_token',
           resetTokenExpiry: expect.any(Date),
         },
       });
       expect(mockEmailService.sendPasswordReset).toHaveBeenCalledWith(
         'test@test.com',
-        '6d6f636b5f746f6b656e5f70616464696e675f686572655f',
+        '00000000-0000-4000-8000-000000000001:6d6f636b5f746f6b656e5f70616464696e675f686572655f',
       );
     });
 
@@ -556,35 +573,35 @@ describe('AuthService', () => {
   });
 
   describe('resetPassword', () => {
-    const token = 'reset_token';
+    const resetTokenId = '00000000-0000-4000-8000-000000000001';
+    const rawSecret = 'raw-secret-456';
+    const combinedToken = `${resetTokenId}:${rawSecret}`;
     const newPassword = 'NewStrongPass123!';
 
-    it('should reset password when token is valid', async () => {
-      const users = [
-        { id: 'user-1', resetTokenHash: 'hash1' },
-        { id: 'user-2', resetTokenHash: 'hash2' },
-      ];
-      mockPrisma.user.findMany.mockResolvedValueOnce(users);
-      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    it('should reset password via indexed resetTokenId lookup (O(1))', async () => {
+      const user = {
+        id: 'user-1',
+        resetTokenHash: 'hashed_secret',
+        resetTokenExpiry: new Date(Date.now() + 3600000),
+      };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
       (bcrypt.hash as jest.Mock).mockResolvedValueOnce('new_hashed_password');
-      mockPrisma.user.update.mockResolvedValueOnce({ id: 'user-2' });
+      mockPrisma.user.update.mockResolvedValueOnce({ id: 'user-1' });
 
-      await service.resetPassword(token, newPassword);
+      await service.resetPassword(combinedToken, newPassword);
 
-      expect(mockPrisma.user.findMany).toHaveBeenCalledWith({
-        where: {
-          resetTokenHash: { not: null },
-          resetTokenExpiry: { gte: expect.any(Date) },
-        },
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+        where: { resetTokenId },
       });
-      expect(bcrypt.compare).toHaveBeenCalledTimes(2);
-      expect(bcrypt.compare).toHaveBeenNthCalledWith(1, token, 'hash1');
-      expect(bcrypt.compare).toHaveBeenNthCalledWith(2, token, 'hash2');
-      expect(bcrypt.hash).toHaveBeenCalledWith(newPassword, 12);
+      expect(mockPrisma.user.findMany).not.toHaveBeenCalled();
+      expect(bcrypt.compare).toHaveBeenCalledTimes(1);
+      expect(bcrypt.compare).toHaveBeenCalledWith(rawSecret, 'hashed_secret');
       expect(mockPrisma.user.update).toHaveBeenCalledWith({
-        where: { id: 'user-2' },
+        where: { id: 'user-1' },
         data: {
           passwordHash: 'new_hashed_password',
+          resetTokenId: null,
           resetTokenHash: null,
           resetTokenExpiry: null,
           refreshTokenHash: null,
@@ -592,11 +609,38 @@ describe('AuthService', () => {
       });
     });
 
-    it('should throw BadRequestException when token is invalid', async () => {
-      mockPrisma.user.findMany.mockResolvedValueOnce([{ id: 'user-1', resetTokenHash: 'hash1' }]);
+    it('should throw BadRequestException when combined token has no colon separator', async () => {
+      await expect(service.resetPassword('no-colon', newPassword)).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException when resetTokenId not found', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.resetPassword(combinedToken, newPassword)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException when token is expired', async () => {
+      const user = {
+        id: 'user-1',
+        resetTokenHash: 'hashed_secret',
+        resetTokenExpiry: new Date(Date.now() - 3600000),
+      };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+
+      await expect(service.resetPassword(combinedToken, newPassword)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException when secret is invalid', async () => {
+      const user = {
+        id: 'user-1',
+        resetTokenHash: 'hashed_secret',
+        resetTokenExpiry: new Date(Date.now() + 3600000),
+      };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
 
-      await expect(service.resetPassword(token, newPassword)).rejects.toThrow(BadRequestException);
+      await expect(service.resetPassword(combinedToken, newPassword)).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -666,61 +710,6 @@ describe('AuthService', () => {
       });
     });
 
-    it('should create new user for valid domain and return tokens', async () => {
-      mockPrisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
-      mockPrisma.company.findFirst.mockResolvedValueOnce({ id: 'comp-1' });
-      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_random_password');
-      mockPrisma.user.create.mockResolvedValueOnce({
-        id: 'user-1',
-        email: 'user@example.com',
-        role: 'dispatcher',
-        companyId: 'comp-1',
-        firstName: 'Jane',
-        lastName: 'Smith',
-      });
-      mockPrisma.user.findUnique
-        .mockResolvedValueOnce({ firstName: 'Jane', lastName: 'Smith' })
-        .mockResolvedValueOnce({
-          id: 'user-1',
-          email: 'user@example.com',
-          firstName: 'Jane',
-          lastName: 'Smith',
-          role: 'dispatcher',
-          companyId: 'comp-1',
-        });
-      mockJwtService.sign.mockReturnValueOnce('access_token').mockReturnValueOnce('refresh_token');
-      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_refresh');
-
-      const result = await service.validateGoogleUser(profile);
-
-      expect(mockPrisma.company.findFirst).toHaveBeenCalledWith({
-        where: { email: { not: null, endsWith: '@example.com' } },
-      });
-      expect(mockPrisma.user.create).toHaveBeenCalledWith({
-        data: {
-          email: 'user@example.com',
-          passwordHash: 'hashed_random_password',
-          firstName: 'Jane',
-          lastName: 'Smith',
-          role: 'admin',
-          companyId: 'comp-1',
-          googleId: 'google-123',
-        },
-      });
-      expect(result).toEqual({
-        accessToken: 'access_token',
-        refreshToken: 'refresh_token',
-        user: {
-          id: 'user-1',
-          email: 'user@example.com',
-          firstName: 'Jane',
-          lastName: 'Smith',
-          role: 'dispatcher',
-          companyId: 'comp-1',
-        },
-      });
-    });
-
     it('should throw UnauthorizedException when googleId user is inactive', async () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce({
         ...baseUser,
@@ -738,20 +727,33 @@ describe('AuthService', () => {
       await expect(service.validateGoogleUser(profile)).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should auto-create company when no company matches the domain', async () => {
+    it('should create OWN new company when no pending invitation exists', async () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
-      mockPrisma.company.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.invitation.findFirst.mockResolvedValueOnce(null);
       const newCompany = { id: 'new-company-id', name: 'Jane Smith', email: 'user@example.com' };
       mockPrisma.company.create.mockResolvedValueOnce(newCompany);
-      mockPrisma.user.create.mockResolvedValueOnce({ ...baseUser, companyId: 'new-company-id', googleId: 'google-123', role: 'dispatcher' });
+      const createdUser = {
+        id: 'user-2',
+        email: 'user@example.com',
+        role: 'admin',
+        companyId: 'new-company-id',
+        firstName: 'Jane',
+        lastName: 'Smith',
+      };
+      mockPrisma.user.create.mockResolvedValueOnce(createdUser);
       mockPrisma.user.findUnique
         .mockResolvedValueOnce({ firstName: 'Jane', lastName: 'Smith' })
-        .mockResolvedValueOnce(baseUser);
+        .mockResolvedValueOnce(createdUser);
       mockJwtService.sign.mockReturnValueOnce('access_token').mockReturnValueOnce('refresh_token');
       (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_refresh');
 
       const result = await service.validateGoogleUser(profile);
 
+      expect(mockPrisma.company.findFirst).not.toHaveBeenCalled();
+      expect(mockPrisma.invitation.findFirst).toHaveBeenCalledWith({
+        where: { email: 'user@example.com', status: 'pending', expiresAt: { gte: expect.any(Date) } },
+        include: { company: true },
+      });
       expect(mockPrisma.company.create).toHaveBeenCalledWith({
         data: { name: 'Jane Smith', email: 'user@example.com' },
       });
@@ -766,8 +768,84 @@ describe('AuthService', () => {
       expect(result).toEqual({
         accessToken: 'access_token',
         refreshToken: 'refresh_token',
-        user: baseUser,
+        user: createdUser,
       });
+    });
+
+    it('should NOT attach to company A (same domain) when no invitation exists', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      mockPrisma.invitation.findFirst.mockResolvedValueOnce(null);
+      const newCompany = { id: 'new-company-id', name: 'Jane Smith', email: 'user@example.com' };
+      mockPrisma.company.create.mockResolvedValueOnce(newCompany);
+      const createdUser = {
+        id: 'user-new',
+        email: 'user@example.com',
+        role: 'admin',
+        companyId: 'new-company-id',
+      };
+      mockPrisma.user.create.mockResolvedValueOnce(createdUser);
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ firstName: 'Jane', lastName: 'Smith' })
+        .mockResolvedValueOnce(createdUser);
+      mockJwtService.sign.mockReturnValueOnce('access_token').mockReturnValueOnce('refresh_token');
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_refresh');
+
+      const result = await service.validateGoogleUser(profile);
+
+      expect(mockPrisma.company.findFirst).not.toHaveBeenCalled();
+      expect(mockPrisma.company.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ name: 'Jane Smith' }) }),
+      );
+      expect(result.user.companyId).toBe('new-company-id');
+    });
+
+    it('should join existing company via invitation when pending invitation exists', async () => {
+      const companyA = { id: 'comp-a', name: 'Acme Inc', email: 'alice@acme.com' };
+      const pendingInvitation = {
+        id: 'inv-1',
+        email: 'user@example.com',
+        role: 'dispatcher',
+        companyId: 'comp-a',
+        company: companyA,
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 86400000),
+      };
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      mockPrisma.invitation.findFirst.mockResolvedValueOnce(pendingInvitation);
+      const createdUser = {
+        id: 'user-invited',
+        email: 'user@example.com',
+        role: 'dispatcher',
+        companyId: 'comp-a',
+      };
+      mockPrisma.user.create.mockResolvedValueOnce(createdUser);
+      mockPrisma.invitation.update.mockResolvedValueOnce({ ...pendingInvitation, status: 'accepted' });
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ firstName: 'Jane', lastName: 'Smith' })
+        .mockResolvedValueOnce(createdUser);
+      mockJwtService.sign.mockReturnValueOnce('access_token').mockReturnValueOnce('refresh_token');
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_refresh');
+
+      const result = await service.validateGoogleUser(profile);
+
+      expect(mockPrisma.invitation.findFirst).toHaveBeenCalledWith({
+        where: { email: 'user@example.com', status: 'pending', expiresAt: { gte: expect.any(Date) } },
+        include: { company: true },
+      });
+      expect(mockPrisma.company.create).not.toHaveBeenCalled();
+      expect(mockPrisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            companyId: 'comp-a',
+            role: 'dispatcher',
+          }),
+        }),
+      );
+      expect(mockPrisma.invitation.update).toHaveBeenCalledWith({
+        where: { id: 'inv-1' },
+        data: { status: 'accepted', acceptedAt: expect.any(Date) },
+      });
+      expect(result.user.companyId).toBe('comp-a');
     });
   });
 });

@@ -8,4 +8,7 @@ export interface JwtPayload {
   firstName: string;
   lastName: string;
   type?: 'user' | 'platform_admin';
+  scope?: 'access' | '2fa_pending';
+  iat?: number;
+  exp?: number;
 }

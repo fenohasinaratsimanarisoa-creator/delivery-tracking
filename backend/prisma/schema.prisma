@@ -197,6 +197,7 @@ model User {
   role             UserRole
   isActive         Boolean   @default(true) @map("is_active")
   refreshTokenHash String?   @map("refresh_token_hash")
+  resetTokenId     String?   @unique @map("reset_token_id")
   resetTokenHash   String?   @map("reset_token_hash")
   resetTokenExpiry DateTime? @map("reset_token_expiry")
   googleId         String?   @unique @map("google_id")

@@ -1,6 +1,17 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { WebhooksService } from './webhooks.service';
+
+jest.mock('./webhook-url-validator', () => ({
+  assertSafeWebhookUrl: jest.fn().mockResolvedValue(undefined),
+}));
+
+const { assertSafeWebhookUrl } = jest.requireMock('./webhook-url-validator');
+
+const mockRedis = {
+  call: jest.fn(),
+  del: jest.fn().mockResolvedValue(1),
+};
 
 const mockPrisma = {
   webhook: {
@@ -23,7 +34,7 @@ describe('WebhooksService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new WebhooksService(mockPrisma as unknown as PrismaService);
+    service = new WebhooksService(mockPrisma as unknown as PrismaService, mockRedis as any);
   });
 
   it('should be defined', () => {
@@ -46,6 +57,7 @@ describe('WebhooksService', () => {
         events: ['delivery.status_changed'],
       });
 
+      expect(assertSafeWebhookUrl).toHaveBeenCalledWith('https://example.com/webhook');
       expect(result).toMatchObject({
         id: 'webhook-1',
         url: 'https://example.com/webhook',
@@ -58,6 +70,32 @@ describe('WebhooksService', () => {
           url: 'https://example.com/webhook',
         }),
       });
+    });
+
+    it('rejects SSRF URLs like http://169.254.169.254', async () => {
+      assertSafeWebhookUrl.mockRejectedValueOnce(new BadRequestException('Webhook URL must use HTTPS protocol'));
+
+      await expect(
+        service.create('company-1', {
+          url: 'http://169.254.169.254/latest/meta-data/',
+          events: ['delivery.status_changed'],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockPrisma.webhook.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects SSRF URLs like http://127.0.0.1:6379', async () => {
+      assertSafeWebhookUrl.mockRejectedValueOnce(new BadRequestException('Webhook URL must use HTTPS protocol'));
+
+      await expect(
+        service.create('company-1', {
+          url: 'http://127.0.0.1:6379',
+          events: ['delivery.status_changed'],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockPrisma.webhook.create).not.toHaveBeenCalled();
     });
   });
 
@@ -97,7 +135,7 @@ describe('WebhooksService', () => {
   });
 
   describe('update', () => {
-    it('updates a webhook owned by the company', async () => {
+    it('updates a webhook owned by the company with URL validation', async () => {
       mockPrisma.webhook.findFirst.mockResolvedValueOnce({ id: 'webhook-1', companyId: 'company-1' });
       mockPrisma.webhook.update.mockResolvedValueOnce({
         id: 'webhook-1',
@@ -113,6 +151,7 @@ describe('WebhooksService', () => {
         events: ['delivery.delivered'],
       });
 
+      expect(assertSafeWebhookUrl).toHaveBeenCalledWith('https://example.com/updated');
       expect(result.url).toBe('https://example.com/updated');
       expect(mockPrisma.webhook.update).toHaveBeenCalledWith({
         where: { id: 'webhook-1' },
@@ -144,6 +183,38 @@ describe('WebhooksService', () => {
       mockPrisma.webhook.findFirst.mockResolvedValueOnce(null);
 
       await expect(service.remove('company-1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('retryFailedDeliveries (distributed lock)', () => {
+    it('should acquire lock and process when no other instance holds it', async () => {
+      mockRedis.call.mockResolvedValueOnce('OK');
+      mockPrisma.webhookDelivery.findMany.mockResolvedValueOnce([]);
+
+      await service.retryFailedDeliveries();
+
+      expect(mockRedis.call).toHaveBeenCalledWith(
+        'SET', 'webhook:retry:lock', '1', 'NX', 'EX', '240',
+      );
+      expect(mockRedis.del).toHaveBeenCalledWith('webhook:retry:lock');
+    });
+
+    it('should skip processing when lock is already held (another instance)', async () => {
+      mockRedis.call.mockResolvedValueOnce(null);
+
+      await service.retryFailedDeliveries();
+
+      expect(mockRedis.call).toHaveBeenCalled();
+      expect(mockPrisma.webhookDelivery.findMany).not.toHaveBeenCalled();
+      expect(mockRedis.del).not.toHaveBeenCalled();
+    });
+
+    it('should release lock in finally even on error', async () => {
+      mockRedis.call.mockResolvedValueOnce('OK');
+      mockPrisma.webhookDelivery.findMany.mockRejectedValueOnce(new Error('db error'));
+
+      await expect(service.retryFailedDeliveries()).rejects.toThrow('db error');
+      expect(mockRedis.del).toHaveBeenCalledWith('webhook:retry:lock');
     });
   });
 

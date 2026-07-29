@@ -9,11 +9,13 @@ interface EncryptedField {
 
 const SENSITIVE_FIELDS: EncryptedField[] = [
   { model: 'User', field: 'phone' },
+  { model: 'User', field: 'totpSecret' },
   { model: 'Company', field: 'phone' },
   { model: 'Company', field: 'address' },
   { model: 'Driver', field: 'phone' },
   { model: 'Delivery', field: 'pickupAddress' },
   { model: 'Delivery', field: 'deliveryAddress' },
+  { model: 'PlatformAdmin', field: 'totpSecret' },
 ];
 
 @Injectable()

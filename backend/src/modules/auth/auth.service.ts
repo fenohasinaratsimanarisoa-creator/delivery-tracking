@@ -24,6 +24,7 @@ export class AuthService {
   private readonly accessExpiration: string;
   private readonly refreshExpiration: string;
   private readonly tempTokenExpiration = '5m';
+  private dummyHash: string | null = null;
 
   constructor(
     private prisma: PrismaService,
@@ -34,6 +35,13 @@ export class AuthService {
   ) {
     this.accessExpiration = this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m');
     this.refreshExpiration = this.configService.get<string>('JWT_REFRESH_EXPIRATION', '7d');
+  }
+
+  private getDummyHash(): string {
+    if (!this.dummyHash) {
+      this.dummyHash = bcrypt.hashSync('dummy-timing-attack-mitigation', 10);
+    }
+    return this.dummyHash;
   }
 
   async register(dto: RegisterDto): Promise<TokenResponse> {
@@ -83,6 +91,11 @@ export class AuthService {
       where: { email: dto.email, deletedAt: null },
     });
 
+    await bcrypt.compare(
+      dto.password,
+      user?.passwordHash || this.getDummyHash(),
+    );
+
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -105,7 +118,7 @@ export class AuthService {
       const tempToken = this.jwtService.sign(
         { sub: user.id, scope: '2fa_pending' },
         {
-          secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
+          secret: this.configService.get<string>('JWT_2FA_TEMP_SECRET', this.configService.get<string>('JWT_ACCESS_SECRET')!),
           expiresIn: this.tempTokenExpiration,
         },
       );
@@ -132,7 +145,7 @@ export class AuthService {
     let payload: { sub: string; scope: string };
     try {
       payload = this.jwtService.verify<{ sub: string; scope: string }>(dto.tempToken, {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
+        secret: this.configService.get<string>('JWT_2FA_TEMP_SECRET', this.configService.get<string>('JWT_ACCESS_SECRET')!),
       });
     } catch {
       throw new UnauthorizedException('Invalid or expired temporary token');
@@ -218,49 +231,59 @@ export class AuthService {
       return;
     }
 
-    const rawToken = crypto.randomBytes(48).toString('hex');
-    const hashedToken = await bcrypt.hash(rawToken, 10);
+    const resetTokenId = crypto.randomUUID();
+    const rawSecret = crypto.randomBytes(48).toString('hex');
+    const hashedSecret = await bcrypt.hash(rawSecret, 10);
     const expiry = new Date(Date.now() + 30 * 60 * 1000);
 
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
-        resetTokenHash: hashedToken,
+        resetTokenId,
+        resetTokenHash: hashedSecret,
         resetTokenExpiry: expiry,
       },
     });
 
-    this.emailService.sendPasswordReset(email, rawToken).catch((err) => {
+    const combinedToken = `${resetTokenId}:${rawSecret}`;
+    this.emailService.sendPasswordReset(email, combinedToken).catch((err) => {
       this.logger.error('Password reset email failed', err);
     });
   }
 
-  async resetPassword(token: string, newPassword: string): Promise<void> {
-    const users = await this.prisma.user.findMany({
-      where: {
-        resetTokenHash: { not: null },
-        resetTokenExpiry: { gte: new Date() },
-      },
-    });
-
-    let matchedUser: (typeof users)[number] | null = null;
-    for (const u of users) {
-      if (u.resetTokenHash && (await bcrypt.compare(token, u.resetTokenHash))) {
-        matchedUser = u;
-        break;
-      }
+  async resetPassword(combinedToken: string, newPassword: string): Promise<void> {
+    const colonIndex = combinedToken.indexOf(':');
+    if (colonIndex === -1) {
+      throw new BadRequestException('The reset link is invalid or has expired.');
     }
 
-    if (!matchedUser) {
+    const resetTokenId = combinedToken.slice(0, colonIndex);
+    const rawSecret = combinedToken.slice(colonIndex + 1);
+
+    const user = await this.prisma.user.findUnique({
+      where: { resetTokenId },
+    });
+
+    if (!user || !user.resetTokenHash || !user.resetTokenExpiry) {
+      throw new BadRequestException('The reset link is invalid or has expired.');
+    }
+
+    if (user.resetTokenExpiry < new Date()) {
+      throw new BadRequestException('The reset link is invalid or has expired.');
+    }
+
+    const isSecretValid = await bcrypt.compare(rawSecret, user.resetTokenHash);
+    if (!isSecretValid) {
       throw new BadRequestException('The reset link is invalid or has expired.');
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
 
     await this.prisma.user.update({
-      where: { id: matchedUser.id },
+      where: { id: user.id },
       data: {
         passwordHash,
+        resetTokenId: null,
         resetTokenHash: null,
         resetTokenExpiry: null,
         refreshTokenHash: null,
@@ -297,15 +320,22 @@ export class AuthService {
       return this.generateTokens(user.id, user.email, user.role, user.companyId);
     }
 
-    const domain = email.split('@')[1];
-    let company = await this.prisma.company.findFirst({
-      where: { email: { not: null, endsWith: '@' + domain } },
+    const pendingInvitation = await this.prisma.invitation.findFirst({
+      where: { email, status: 'pending', expiresAt: { gte: new Date() } },
+      include: { company: true },
     });
 
-    if (!company) {
-      company = await this.prisma.company.create({
+    let companyId: string;
+    let role = 'admin' as string;
+
+    if (pendingInvitation) {
+      companyId = pendingInvitation.companyId;
+      role = pendingInvitation.role;
+    } else {
+      const company = await this.prisma.company.create({
         data: { name: `${firstName} ${lastName}`, email },
       });
+      companyId = company.id;
     }
 
     const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
@@ -315,11 +345,18 @@ export class AuthService {
         passwordHash,
         firstName,
         lastName,
-        role: 'admin',
-        companyId: company.id,
+        role: role as any,
+        companyId,
         googleId,
       },
     });
+
+    if (pendingInvitation) {
+      await this.prisma.invitation.update({
+        where: { id: pendingInvitation.id },
+        data: { status: 'accepted', acceptedAt: new Date() },
+      });
+    }
 
     return this.generateTokens(user.id, user.email, user.role, user.companyId);
   }
