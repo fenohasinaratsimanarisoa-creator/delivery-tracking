@@ -89,9 +89,16 @@ export class GeocodingService {
       });
       clearTimeout(timeout);
 
-      if (!res.ok) return [];
+      if (!res.ok) {
+        const errorBody = await res.text().catch(() => '(no body)');
+        this.logger.error(`Google Places API HTTP ${res.status} for input="${input}": ${errorBody.slice(0, 2000)}`);
+        return [];
+      }
       const data: any = await res.json();
-      if (!data.suggestions) return [];
+      if (!data.suggestions) {
+        this.logger.warn(`Google Places API returned no suggestions for input="${input}": ${JSON.stringify(data).slice(0, 1000)}`);
+        return [];
+      }
 
       const results = data.suggestions.slice(0, 8).map((s: any) => ({
         placeId: s.placePrediction?.placeId || s.placePrediction?.place_id || '',
@@ -107,7 +114,8 @@ export class GeocodingService {
       }
 
       return results;
-    } catch {
+    } catch (err: unknown) {
+      this.logger.error(`Google Places API fetch/parse error for input="${input}": ${(err as Error).message}`);
       return [];
     }
   }
@@ -137,9 +145,16 @@ export class GeocodingService {
       );
       clearTimeout(timeout);
 
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const errorBody = await res.text().catch(() => '(no body)');
+        this.logger.error(`Google Places Details API HTTP ${res.status} for placeId="${placeId}": ${errorBody.slice(0, 2000)}`);
+        return null;
+      }
       const data: any = await res.json();
-      if (!data?.location) return null;
+      if (!data?.location) {
+        this.logger.warn(`Google Places Details API no location for placeId="${placeId}": ${JSON.stringify(data).slice(0, 1000)}`);
+        return null;
+      }
 
       const result = {
         lat: data.location.latitude,
@@ -155,7 +170,8 @@ export class GeocodingService {
       }
 
       return result;
-    } catch {
+    } catch (err: unknown) {
+      this.logger.error(`Google Places Details API fetch/parse error for placeId="${placeId}": ${(err as Error).message}`);
       return null;
     }
   }
@@ -192,7 +208,9 @@ export class GeocodingService {
         addressdetails: '1',
         namedetails: '1',
       });
-      params.set('viewbox', MG_VIEWBOX);
+      if (results.length < 3) {
+        params.set('viewbox', MG_VIEWBOX);
+      }
 
       const url = `${NOMINATIM_BASE}/search?${params}`;
 
@@ -221,8 +239,9 @@ export class GeocodingService {
             }
           }
         }
-      } catch {
+      } catch (err: unknown) {
         clearTimeout(timeout);
+        this.logger.warn(`Nominatim search failed for query="${q}": ${(err as Error).message}`);
       }
 
       if (results.length >= 10) break;
@@ -233,34 +252,37 @@ export class GeocodingService {
         query.split(',').pop()?.trim() || query,
         query.replace(/\b(Lot|N°|No|Bis|Ter|Bât)\s*\w*\s*/gi, '').trim(),
       ];
+      const firstWord = query.split(/\s+/)[0];
+      if (firstWord && firstWord !== query) {
+        fallbackQueries.push(firstWord);
+      }
       for (const fq of [...new Set(fallbackQueries)]) {
-        if (fq && fq !== query) {
-          const params = new URLSearchParams({
-            q: fq,
-            format: 'json',
-            limit: '10',
-            'accept-language': 'fr',
-            addressdetails: '1',
-            namedetails: '1',
+        if (!fq) continue;
+        const params = new URLSearchParams({
+          q: fq,
+          format: 'json',
+          limit: '10',
+          'accept-language': 'fr',
+          addressdetails: '1',
+          namedetails: '1',
+        });
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 6000);
+          const res = await fetch(`${NOMINATIM_BASE}/search?${params}`, {
+            headers: { 'User-Agent': USER_AGENT },
+            signal: controller.signal,
           });
-          try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 6000);
-            const res = await fetch(`${NOMINATIM_BASE}/search?${params}`, {
-              headers: { 'User-Agent': USER_AGENT },
-              signal: controller.signal,
-            });
-            clearTimeout(timeout);
-            if (res.ok) {
-              const data: any[] = await res.json();
-              for (const item of data) {
-                const key = `${parseFloat(item.lat).toFixed(4)},${parseFloat(item.lon).toFixed(4)}`;
-                if (!seen.has(key)) { seen.add(key); results.push({ lat: parseFloat(item.lat), lng: parseFloat(item.lon), label: extractLocalLabel(item), displayName: item.display_name }); }
-              }
+          clearTimeout(timeout);
+          if (res.ok) {
+            const data: any[] = await res.json();
+            for (const item of data) {
+              const key = `${parseFloat(item.lat).toFixed(4)},${parseFloat(item.lon).toFixed(4)}`;
+              if (!seen.has(key)) { seen.add(key); results.push({ lat: parseFloat(item.lat), lng: parseFloat(item.lon), label: extractLocalLabel(item), displayName: item.display_name }); }
             }
-          } catch { /* continue */ }
-          if (results.length >= 5) break;
-        }
+          }
+        } catch { /* continue */ }
+        if (results.length >= 5) break;
       }
     }
 
