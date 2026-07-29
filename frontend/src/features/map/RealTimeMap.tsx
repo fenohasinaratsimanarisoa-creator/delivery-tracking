@@ -91,6 +91,7 @@ interface VehicleData {
   confidence?: number;
   vehicleId?: string;
   deliveryId?: string;
+  suspect?: boolean;
 }
 
 function buildIcon(vehicle: VehicleData, focused: boolean) {
@@ -206,7 +207,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     }
 
     animRef.current = requestAnimationFrame(animate);
-  }, [vehicle.lat, vehicle.lng, vehicle.id, disableAnimation, vehicle.status, vehicle.heading]);
+  }, [vehicle.lat, vehicle.lng, vehicle.id, disableAnimation, vehicle.status, vehicle.heading, vehicle.suspect]);
 
   // Dead reckoning: extrapolate position when GPS update is delayed
   useEffect(() => {
@@ -311,6 +312,23 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     timeRow.innerHTML = `📡 ${formatDate(ts)} ${formatTime(ts)}`;
     container.appendChild(timeRow);
 
+    if (vehicle.suspect) {
+      const suspectBadge = document.createElement('div');
+      suspectBadge.style.display = 'inline-block';
+      suspectBadge.style.padding = '2px 10px';
+      suspectBadge.style.borderRadius = '12px';
+      suspectBadge.style.fontSize = '0.65rem';
+      suspectBadge.style.fontWeight = '700';
+      suspectBadge.style.textTransform = 'uppercase';
+      suspectBadge.style.letterSpacing = '0.04em';
+      suspectBadge.style.background = 'rgba(231,76,60,0.15)';
+      suspectBadge.style.color = '#e74c3c';
+      suspectBadge.style.border = '1px solid rgba(231,76,60,0.3)';
+      suspectBadge.style.marginBottom = '4px';
+      suspectBadge.textContent = '⚠️ SIGNAL GPS INSTABLE';
+      container.appendChild(suspectBadge);
+    }
+
     const badge = document.createElement('div');
     badge.style.display = 'inline-block';
     badge.style.padding = '2px 10px';
@@ -319,7 +337,12 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     badge.style.fontWeight = '700';
     badge.style.textTransform = 'uppercase';
     badge.style.letterSpacing = '0.04em';
-    if (vehicle.status === 'moving') {
+    if (vehicle.suspect) {
+      badge.style.background = 'rgba(155,89,182,0.12)';
+      badge.style.color = '#9B59B6';
+      badge.style.border = '1px solid rgba(155,89,182,0.25)';
+      badge.textContent = vehicle.status === 'moving' ? '🟡 DÉPLACEMENT (NON CONFIRMÉ)' : '🟢 ARRÊT (NON CONFIRMÉ)';
+    } else if (vehicle.status === 'moving') {
       badge.style.background = 'rgba(242,169,60,0.15)';
       badge.style.color = 'var(--color-status-moving, #F2A93C)';
       badge.style.border = '1px solid rgba(242,169,60,0.3)';
@@ -624,21 +647,35 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
 
     setVehicles((prev) => {
       const next = new Map(prev);
-      next.set(update.driverId, {
-        id: update.driverId,
-        lat: update.latitude,
-        lng: update.longitude,
-        name: update.driverName,
-        speed: update.speed,
-        heading: update.heading,
-        accuracy: update.accuracy,
-        vehicleId: update.vehicleId,
-        deliveryId: update.deliveryId,
-        confidence: update.confidence ?? (update.accuracy ? Math.max(0.1, 1 - update.accuracy / 50) : 1),
-        timestamp: update.timestamp,
-        status: update.speed && update.speed > 0.5 ? 'moving' : 'static',
-        eta,
-      });
+      const existing = prev.get(update.driverId);
+
+      if (update.suspect && existing) {
+        next.set(update.driverId, {
+          ...existing,
+          speed: update.speed,
+          heading: update.heading,
+          accuracy: update.accuracy,
+          timestamp: update.timestamp,
+          suspect: true,
+        });
+      } else {
+        next.set(update.driverId, {
+          id: update.driverId,
+          lat: update.latitude,
+          lng: update.longitude,
+          name: update.driverName,
+          speed: update.speed,
+          heading: update.heading,
+          accuracy: update.accuracy,
+          vehicleId: update.vehicleId,
+          deliveryId: update.deliveryId,
+          confidence: update.confidence ?? (update.accuracy ? Math.max(0.1, 1 - update.accuracy / 50) : 1),
+          timestamp: update.timestamp,
+          status: update.speed && update.speed > 0.5 ? 'moving' : 'static',
+          eta,
+          suspect: false,
+        });
+      }
       return next;
     });
 

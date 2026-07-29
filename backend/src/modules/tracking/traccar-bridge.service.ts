@@ -1,6 +1,8 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TrackingService } from '../tracking/tracking.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
@@ -8,6 +10,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AlertService } from '../../common/alerting/alert.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { NotificationType, NotificationPriority } from '@prisma/client';
+import { UpdatePositionDto } from '../tracking/dto/update-position.dto';
+import { haversineDistance } from '../../common/geo/geo.utils';
 
 interface TraccarPosition {
   id: number;
@@ -553,18 +557,49 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             vehicleId: string; driverId: string;
           }> = [];
 
+          let lastBackfillPos: { latitude: number; longitude: number; timestamp: Date } | null = null;
+          if (this.redis) {
+            const stored = await this.redis.get(`traccar:last_position:${vehicle.traccarDeviceId}`);
+            if (stored) {
+              const lastDbPos = await this.trackingService.getLastPosition(vehicle.id);
+              if (lastDbPos) {
+                lastBackfillPos = { latitude: lastDbPos.latitude, longitude: lastDbPos.longitude, timestamp: lastDbPos.timestamp };
+              }
+            }
+          }
+
           for (const pos of positions) {
             const timestamp = this.parseTimestamp(pos);
             if (!this.isValidCoordinates(pos.latitude, pos.longitude)) continue;
 
+            const speedMs = (pos.speed || 0) * 0.514444;
+            const accuracy = pos.accuracy !== undefined ? (pos.accuracy === 0 ? 50 : pos.accuracy) : 50;
+
+            let suspect = false;
+            if (lastBackfillPos) {
+              const timeDiffSec = (timestamp.getTime() - lastBackfillPos.timestamp.getTime()) / 1000;
+              if (timeDiffSec > 0) {
+                const distance = haversineDistance(
+                  lastBackfillPos.latitude, lastBackfillPos.longitude,
+                  pos.latitude, pos.longitude,
+                );
+                const detectedSpeedMs = distance / timeDiffSec;
+                const accuracyScale = accuracy ? Math.max(1, accuracy / 10) : 1;
+                if (detectedSpeedMs > 55.56 * accuracyScale) {
+                  suspect = true;
+                }
+              }
+            }
+            lastBackfillPos = { latitude: pos.latitude, longitude: pos.longitude, timestamp };
+
             toInsert.push({
               latitude: pos.latitude,
               longitude: pos.longitude,
-              speed: (pos.speed || 0) * 0.514444,
+              speed: speedMs,
               heading: pos.course || 0,
               altitude: pos.altitude || 0,
-              accuracy: pos.accuracy || 10,
-              suspect: false,
+              accuracy,
+              suspect,
               location: `POINT(${pos.longitude} ${pos.latitude})`,
               timestamp,
               companyId: vehicle.companyId,
@@ -641,23 +676,34 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         select: { id: true },
       });
 
+      const rawAccuracy = pos.accuracy !== undefined ? (pos.accuracy === 0 ? 50 : pos.accuracy) : 50;
+
       const updateDto = {
         latitude: pos.latitude,
         longitude: pos.longitude,
         speed: (pos.speed || 0) * 0.514444,
         heading: pos.course || 0,
         altitude: pos.altitude || 0,
-        accuracy: pos.accuracy || 10,
+        accuracy: rawAccuracy,
         timestamp: timestamp.toISOString(),
         vehicleId: vehicleMapping.id,
         deliveryId: currentDelivery?.id,
       };
 
+      const validated = plainToInstance(UpdatePositionDto, updateDto);
+      const errors = validateSync(validated, { whitelist: true, forbidNonWhitelisted: false });
+      if (errors.length > 0) {
+        this.logger.warn(
+          `Traccar position validation failed for device ${pos.deviceId}: ${errors.map((e) => e.toString()).join(', ')}`,
+        );
+        return;
+      }
+
       let position;
       try {
         position = await this.trackingService.savePosition(
           driver.id,
-          updateDto as any,
+          validated,
           vehicleMapping.companyId,
         );
 
@@ -720,6 +766,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   }
 
   private isValidCoordinates(lat: number, lng: number): boolean {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
     if (lat < -90 || lat > 90) return false;
     if (lng < -180 || lng > 180) return false;
     if (lat === 0 && lng === 0) return false;

@@ -19,6 +19,7 @@ export class UpdatePositionDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(360)
   heading?: number;
 
   @IsOptional()
@@ -28,6 +29,7 @@ export class UpdatePositionDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(1000) // 1000m = seuil maximal d'une précision GPS exploitable ; au-delà c'est un fix invalide
   accuracy?: number;
 
   @IsDateString()
