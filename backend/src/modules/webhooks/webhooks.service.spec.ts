@@ -8,11 +8,6 @@ jest.mock('./webhook-url-validator', () => ({
 
 const { assertSafeWebhookUrl } = jest.requireMock('./webhook-url-validator');
 
-const mockRedis = {
-  call: jest.fn(),
-  del: jest.fn().mockResolvedValue(1),
-};
-
 const mockPrisma = {
   webhook: {
     create: jest.fn(),
@@ -34,7 +29,7 @@ describe('WebhooksService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new WebhooksService(mockPrisma as unknown as PrismaService, mockRedis as any);
+    service = new WebhooksService(mockPrisma as unknown as PrismaService);
   });
 
   it('should be defined', () => {
@@ -183,38 +178,6 @@ describe('WebhooksService', () => {
       mockPrisma.webhook.findFirst.mockResolvedValueOnce(null);
 
       await expect(service.remove('company-1', 'missing')).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('retryFailedDeliveries (distributed lock)', () => {
-    it('should acquire lock and process when no other instance holds it', async () => {
-      mockRedis.call.mockResolvedValueOnce('OK');
-      mockPrisma.webhookDelivery.findMany.mockResolvedValueOnce([]);
-
-      await service.retryFailedDeliveries();
-
-      expect(mockRedis.call).toHaveBeenCalledWith(
-        'SET', 'webhook:retry:lock', '1', 'NX', 'EX', '240',
-      );
-      expect(mockRedis.del).toHaveBeenCalledWith('webhook:retry:lock');
-    });
-
-    it('should skip processing when lock is already held (another instance)', async () => {
-      mockRedis.call.mockResolvedValueOnce(null);
-
-      await service.retryFailedDeliveries();
-
-      expect(mockRedis.call).toHaveBeenCalled();
-      expect(mockPrisma.webhookDelivery.findMany).not.toHaveBeenCalled();
-      expect(mockRedis.del).not.toHaveBeenCalled();
-    });
-
-    it('should release lock in finally even on error', async () => {
-      mockRedis.call.mockResolvedValueOnce('OK');
-      mockPrisma.webhookDelivery.findMany.mockRejectedValueOnce(new Error('db error'));
-
-      await expect(service.retryFailedDeliveries()).rejects.toThrow('db error');
-      expect(mockRedis.del).toHaveBeenCalledWith('webhook:retry:lock');
     });
   });
 

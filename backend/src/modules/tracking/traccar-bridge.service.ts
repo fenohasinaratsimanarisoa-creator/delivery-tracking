@@ -5,12 +5,9 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { TrackingService } from '../tracking/tracking.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AlertService } from '../../common/alerting/alert.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { NotificationType, NotificationPriority } from '@prisma/client';
-
-// Sentinel UUID for platform-level notifications (no specific company)
-const PLATFORM_COMPANY_ID = '00000000-0000-0000-0000-000000000000';
-const PLATFORM_ADMIN_USER_ID = '00000000-0000-4000-0000-000000000010';
 
 interface TraccarPosition {
   id: number;
@@ -35,6 +32,10 @@ const PENDING_POSITIONS_RETENTION_MS = 3600000;
 const SILENT_DEVICE_CHECK_INTERVAL_MS = 60000;
 const TRACCAR_HEALTH_CHECK_INTERVAL_MS = 300000;
 const NEVER_CONNECTED_GRACE_PERIOD_MS = 30 * 60 * 1000;
+const LEADER_KEY = 'traccar:bridge:leader';
+const LEADER_TTL_S = 30;
+const LEADER_RENEW_INTERVAL_MS = 20000;
+const LEADER_RETRY_INTERVAL_MS = 20000;
 
 @Injectable()
 export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
@@ -60,6 +61,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     private trackingService: TrackingService,
     private trackingGateway: TrackingGateway,
     private notifications: NotificationsService,
+    @Optional() private alertService: AlertService | null,
     @Optional() @Inject(REDIS_CLIENT) private redis: Redis | null,
   ) {
     this.traccarUrl = this.configService.get<string>('TRACCAR_URL', 'http://traccar:8082');
@@ -74,6 +76,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private disconnectStartTime: number | null = null;
   private disconnectionMonitorTimer: ReturnType<typeof setInterval> | null = null;
   private inactiveNotified = false;
+  private isLeader = false;
+  private leaderRenewTimer: ReturnType<typeof setInterval> | null = null;
+  private leaderRetryTimer: ReturnType<typeof setInterval> | null = null;
 
   async onModuleInit() {
     if (this.traccarUrl === 'http://traccar:8082' || this.traccarUrl === 'disabled') {
@@ -93,42 +98,127 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     this.startHealthCheck();
     this.startNeverConnectedCheck();
     this.startDisconnectionMonitor();
-    await this.connect();
+
+    if (this.redis) {
+      await this.tryBecomeLeader();
+      this.leaderRetryTimer = setInterval(() => this.tryBecomeLeader(), LEADER_RETRY_INTERVAL_MS);
+    } else {
+      this.logger.warn('Traccar bridge: Redis not available — running without leader election (single instance mode)');
+      await this.connect();
+    }
   }
 
   private async notifyInactiveOnce(): Promise<void> {
     if (this.inactiveNotified) return;
     this.inactiveNotified = true;
     try {
-      await this.notifications.create(PLATFORM_COMPANY_ID, {
-        type: NotificationType.system,
-        priority: NotificationPriority.high,
-        title: 'Pont Traccar non configuré',
-        message: 'TRACCAR_URL n\'est pas défini — le pont Traccar est inactif. Les traceurs GPS physiques ne transmettront aucune position. Configurez TRACCAR_URL, TRACCAR_USER et TRACCAR_PASSWORD dans render.yaml ou le Dashboard Render.',
-      });
-    } catch {}
+      if (this.alertService) {
+        await this.alertService.send({
+          level: 'warning',
+          title: 'Pont Traccar non configuré',
+          message: 'TRACCAR_URL n\'est pas défini — le pont Traccar est inactif. Les traceurs GPS physiques ne transmettront aucune position.',
+          metadata: { service: 'traccar-bridge' },
+        });
+      } else {
+        this.logger.warn('[PLATFORM ALERT] Pont Traccar non configuré');
+      }
+    } catch (err: any) {
+      this.logger.error('Failed to send platform alert: Traccar inactive', err);
+    }
   }
 
   private startDisconnectionMonitor() {
     this.disconnectionMonitorTimer = setInterval(async () => {
       if (!this.connected && this.disconnectStartTime) {
         const elapsedMin = (Date.now() - this.disconnectStartTime) / 60000;
-        if (elapsedMin > 15) {
+        if (elapsedMin > 15 && this.disconnectStartTime) {
           try {
-            await this.notifications.create(PLATFORM_COMPANY_ID, {
-              type: NotificationType.system,
-              priority: NotificationPriority.critical,
-              title: 'Pont Traccar hors ligne prolongé',
-              message: `Le pont Traccar est déconnecté depuis ${Math.round(elapsedMin)} minutes (${this.reconnectAttempts} tentatives)`,
-            });
-          } catch {}
+            if (this.alertService) {
+              await this.alertService.send({
+                level: 'critical',
+                title: 'Pont Traccar hors ligne prolongé',
+                message: `Le pont Traccar est déconnecté depuis ${Math.round(elapsedMin)} minutes (${this.reconnectAttempts} tentatives)`,
+                metadata: { service: 'traccar-bridge', reconnectAttempts: this.reconnectAttempts, elapsedMinutes: Math.round(elapsedMin) },
+              });
+            } else {
+              this.logger.warn(`[PLATFORM ALERT] Pont Traccar hors ligne depuis ${Math.round(elapsedMin)} min`);
+            }
+          } catch (err: any) {
+            this.logger.error('Failed to send platform alert: Traccar disconnected', err);
+          }
         }
       }
     }, 60000);
   }
 
-  onModuleDestroy() {
+  private async tryBecomeLeader(): Promise<boolean> {
+    if (!this.redis) return false;
+
+    try {
+      const pid = String(process.pid);
+      const acquired = await this.redis.call('SET', LEADER_KEY, pid, 'NX', 'EX', String(LEADER_TTL_S));
+      if (acquired === 'OK') {
+        if (!this.isLeader) {
+          this.isLeader = true;
+          this.logger.log(`Traccar bridge: became leader (pid=${pid})`);
+          this.startLeaderRenew();
+          await this.connect();
+        }
+        return true;
+      }
+
+      if (this.isLeader) {
+        this.isLeader = false;
+        this.logger.warn('Traccar bridge: lost leadership — disconnecting');
+        this.disconnect();
+        this.stopLeaderRenew();
+      }
+      return false;
+    } catch (err: any) {
+      this.logger.error(`Leader election error: ${err.message}`);
+      return false;
+    }
+  }
+
+  private startLeaderRenew() {
+    this.stopLeaderRenew();
+    this.leaderRenewTimer = setInterval(async () => {
+      if (!this.redis || !this.isLeader) return;
+      try {
+        await this.redis.expire(LEADER_KEY, LEADER_TTL_S);
+      } catch (err: any) {
+        this.logger.error(`Leader renewal failed: ${err.message}`);
+      }
+    }, LEADER_RENEW_INTERVAL_MS);
+  }
+
+  private stopLeaderRenew() {
+    if (this.leaderRenewTimer) {
+      clearInterval(this.leaderRenewTimer);
+      this.leaderRenewTimer = null;
+    }
+  }
+
+  private async stepDown() {
+    if (!this.redis) return;
+    this.isLeader = false;
+    this.stopLeaderRenew();
+    try {
+      const current = await this.redis.get(LEADER_KEY);
+      if (current === String(process.pid)) {
+        await this.redis.del(LEADER_KEY);
+        this.logger.log('Traccar bridge: stepped down as leader');
+      }
+    } catch (err: any) {
+      this.logger.error(`Step down error: ${err.message}`);
+    }
+  }
+
+  async onModuleDestroy() {
+    await this.stepDown();
     this.disconnect();
+    if (this.leaderRenewTimer) clearInterval(this.leaderRenewTimer);
+    if (this.leaderRetryTimer) clearInterval(this.leaderRetryTimer);
     if (this.silenceTimer) clearInterval(this.silenceTimer);
     if (this.healthTimer) clearInterval(this.healthTimer);
     if (this.neverConnectedTimer) clearInterval(this.neverConnectedTimer);
@@ -313,6 +403,10 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async connect() {
+    if (this.redis && !this.isLeader) {
+      this.logger.debug('Traccar bridge: not leader — skipping connect');
+      return;
+    }
     try {
       const cookie = await this.authenticate();
       const { WebSocket } = require('ws');
@@ -368,6 +462,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   }
 
   private scheduleReconnect() {
+    if (!this.isLeader && this.redis) return;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectAttempts++;
 
@@ -406,6 +501,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           id: true,
           traccarDeviceId: true,
           companyId: true,
+          driver: { select: { id: true } },
         },
       });
 
@@ -414,7 +510,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       const now = new Date();
 
       for (const vehicle of vehiclesWithTrackers) {
-        if (!vehicle.traccarDeviceId) continue;
+        if (!vehicle.traccarDeviceId || !vehicle.driver?.id) continue;
 
         let lastTs: Date | null = null;
         if (this.redis) {
@@ -450,8 +546,42 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
           this.logger.log(`Backfill: ${positions.length} positions for device ${vehicle.traccarDeviceId}`);
 
+          const toInsert: Array<{
+            latitude: number; longitude: number; speed: number; heading: number;
+            altitude: number; accuracy: number; suspect: boolean; location: string;
+            timestamp: Date; companyId: string; deliveryId: string | null | undefined;
+            vehicleId: string; driverId: string;
+          }> = [];
+
           for (const pos of positions) {
-            await this.handlePosition(pos);
+            const timestamp = this.parseTimestamp(pos);
+            if (!this.isValidCoordinates(pos.latitude, pos.longitude)) continue;
+
+            toInsert.push({
+              latitude: pos.latitude,
+              longitude: pos.longitude,
+              speed: (pos.speed || 0) * 0.514444,
+              heading: pos.course || 0,
+              altitude: pos.altitude || 0,
+              accuracy: pos.accuracy || 10,
+              suspect: false,
+              location: `POINT(${pos.longitude} ${pos.latitude})`,
+              timestamp,
+              companyId: vehicle.companyId,
+              deliveryId: null,
+              vehicleId: vehicle.id,
+              driverId: vehicle.driver.id,
+            });
+          }
+
+          if (toInsert.length > 0) {
+            await this.prisma.gpsPosition.createMany({ data: toInsert });
+            this.logger.log(`Backfill: inserted ${toInsert.length} positions for device ${vehicle.traccarDeviceId} (no alerts generated — historical data)`);
+
+            if (this.redis) {
+              const lastTs = toInsert[toInsert.length - 1].timestamp;
+              await this.redis.set(`traccar:last_position:${vehicle.traccarDeviceId}`, lastTs.toISOString());
+            }
           }
         } catch (err: any) {
           this.logger.warn(`Backfill error for device ${vehicle.traccarDeviceId}: ${err.message}`);
@@ -462,7 +592,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async handlePosition(pos: TraccarPosition) {
+  private async handlePosition(pos: TraccarPosition, isBackfill = false) {
     try {
       const timestamp = this.parseTimestamp(pos);
       if (!this.isValidCoordinates(pos.latitude, pos.longitude)) {

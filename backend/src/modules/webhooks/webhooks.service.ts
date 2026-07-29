@@ -1,9 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import Redis from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { CreateWebhookDto } from './dto/create-webhook.dto';
 import { UpdateWebhookDto } from './dto/update-webhook.dto';
 import { assertSafeWebhookUrl } from './webhook-url-validator';
@@ -19,14 +16,7 @@ function signPayload(payload: string, secret: string): string {
 
 @Injectable()
 export class WebhooksService {
-  private readonly logger = new Logger(WebhooksService.name);
-  private readonly LOCK_KEY = 'webhook:retry:lock';
-  private readonly LOCK_TTL = 240;
-
-  constructor(
-    private prisma: PrismaService,
-    @Inject(REDIS_CLIENT) private redis: Redis | null,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   async create(companyId: string, dto: CreateWebhookDto) {
     await assertSafeWebhookUrl(dto.url);
@@ -237,103 +227,4 @@ export class WebhooksService {
     return { status: successful ? 'success' : 'failed', statusCode };
   }
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
-  async retryFailedDeliveries() {
-    if (this.redis) {
-      const acquired = (await this.redis.call('SET', this.LOCK_KEY, '1', 'NX', 'EX', String(this.LOCK_TTL))) as string | null;
-      if (!acquired) {
-        this.logger.debug('Distributed lock not acquired — skipping retry cycle');
-        return;
-      }
-    }
-
-    try {
-      await this.doRetryFailedDeliveries();
-    } finally {
-      if (this.redis) {
-        await this.redis.del(this.LOCK_KEY).catch(() => {});
-      }
-    }
-  }
-
-  private async doRetryFailedDeliveries() {
-    const now = new Date();
-
-    const failedDeliveries = await this.prisma.webhookDelivery.findMany({
-      where: {
-        status: 'failed',
-        nextRetryAt: { lte: now },
-        attempts: { lt: 5 },
-      },
-      include: { webhook: true },
-    });
-
-    for (const delivery of failedDeliveries) {
-      try {
-        await assertSafeWebhookUrl(delivery.webhook.url);
-      } catch {
-        continue;
-      }
-
-      const body = JSON.stringify(delivery.payload);
-      const signature = signPayload(body, delivery.webhook.secret);
-
-      let statusCode: number | null = null;
-      let responseBody: string | null = null;
-      let successful = false;
-
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-
-        const response = await fetch(delivery.webhook.url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-DeliveryTrack-Signature-256': signature,
-            'X-DeliveryTrack-Event': delivery.event,
-            'User-Agent': 'DeliveryTrack-Webhook/1.0',
-          },
-          body,
-          signal: controller.signal,
-          redirect: 'manual',
-        });
-
-        clearTimeout(timeout);
-        statusCode = response.status;
-
-        if (statusCode >= 300 && statusCode < 400) {
-          statusCode = 422;
-          responseBody = 'Webhook delivery does not follow redirects';
-          successful = false;
-        } else {
-          responseBody = (await response.text()).slice(0, 5000);
-          successful = statusCode >= 200 && statusCode < 300;
-        }
-      } catch (err: unknown) {
-        const e = err as { name?: string; message?: string };
-        statusCode = e.name === 'AbortError' ? 408 : 0;
-        responseBody = (e.message || 'Unknown error').slice(0, 5000);
-      }
-
-      const newAttempts = delivery.attempts + 1;
-      const remaining = delivery.maxAttempts - newAttempts;
-      const nextRetryAt =
-        !successful && remaining > 0
-          ? new Date(Date.now() + Math.pow(2, newAttempts) * 60000)
-          : null;
-
-      await this.prisma.webhookDelivery.update({
-        where: { id: delivery.id },
-        data: {
-          status: successful ? 'success' : 'failed',
-          responseStatusCode: statusCode,
-          responseBody,
-          attempts: newAttempts,
-          nextRetryAt,
-          completedAt: successful ? new Date() : null,
-        },
-      });
-    }
-  }
 }

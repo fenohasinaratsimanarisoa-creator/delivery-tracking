@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { NotificationsModule } from '../modules/notifications/notifications.module';
 import { FuelAnalysisProcessor } from './fuel-analysis.processor';
 import { CompanyPurgeProcessor } from './company-purge.processor';
+import { WebhookRetryProcessor } from './webhook-retry.processor';
 
 @Global()
 @Module({
@@ -29,10 +30,11 @@ import { CompanyPurgeProcessor } from './company-purge.processor';
     BullModule.registerQueue(
       { name: 'fuel-analysis' },
       { name: 'company-purge' },
+      { name: 'webhook-retry' },
     ),
     NotificationsModule,
   ],
-  providers: [FuelAnalysisProcessor, CompanyPurgeProcessor],
+  providers: [FuelAnalysisProcessor, CompanyPurgeProcessor, WebhookRetryProcessor],
   exports: [BullModule],
 })
 export class QueueModule {}
