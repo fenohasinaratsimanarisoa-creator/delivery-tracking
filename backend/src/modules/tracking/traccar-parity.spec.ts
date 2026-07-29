@@ -294,6 +294,7 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
         trackingService,
         mockGateway as any,
         mockNotifications as any,
+        null,
         mockRedis as any,
       );
 

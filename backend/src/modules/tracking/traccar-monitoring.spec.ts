@@ -22,6 +22,7 @@ describe('Tâche 5 — Surveillance indépendante Traccar', () => {
       mockTrackingService as any,
       mockGateway as any,
       mockNotifications as any,
+      null,
       mockRedis as any,
     );
     return bridge;

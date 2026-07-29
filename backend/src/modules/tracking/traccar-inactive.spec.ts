@@ -1,6 +1,6 @@
 import { TraccarBridgeService } from './traccar-bridge.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { NotificationType, NotificationPriority } from '@prisma/client';
+import { AlertService } from '../../common/alerting/alert.service';
 
 describe('TraccarBridgeService — notification inactive', () => {
   let mockConfig: any;
@@ -8,6 +8,7 @@ describe('TraccarBridgeService — notification inactive', () => {
   let mockTrackingService: any;
   let mockGateway: any;
   let mockNotifications: jest.Mocked<NotificationsService>;
+  let mockAlertService: jest.Mocked<AlertService>;
   let mockRedis: any;
   let bridges: TraccarBridgeService[] = [];
 
@@ -24,6 +25,7 @@ describe('TraccarBridgeService — notification inactive', () => {
       mockTrackingService as any,
       mockGateway as any,
       mockNotifications as any,
+      mockAlertService as any,
       mockRedis as any,
     );
     bridges.push(bridge);
@@ -37,9 +39,8 @@ describe('TraccarBridgeService — notification inactive', () => {
     mockPrisma = {};
     mockTrackingService = {};
     mockGateway = {};
-    mockNotifications = {
-      create: jest.fn().mockResolvedValue({}),
-    } as any;
+    mockNotifications = { create: jest.fn().mockResolvedValue({}) } as any;
+    mockAlertService = { send: jest.fn().mockResolvedValue(undefined) } as any;
     mockRedis = null;
     bridges = [];
   });
@@ -62,37 +63,34 @@ describe('TraccarBridgeService — notification inactive', () => {
   it('envoie une notification admin au démarrage si TRACCAR_URL est la valeur par defaut', async () => {
     const bridge = createBridge('http://traccar:8082');
     await bridge.onModuleInit();
-    expect(mockNotifications.create).toHaveBeenCalledTimes(1);
-    expect(mockNotifications.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000000', {
-      type: NotificationType.system,
-      priority: NotificationPriority.high,
-      title: 'Pont Traccar non configuré',
-      message: expect.stringContaining('TRACCAR_URL'),
-    });
+    expect(mockAlertService.send).toHaveBeenCalledTimes(1);
+    expect(mockAlertService.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: 'warning',
+        title: 'Pont Traccar non configuré',
+      }),
+    );
   });
 
   it('envoie une notification admin si TRACCAR_URL est disabled', async () => {
     const bridge = createBridge('disabled');
     await bridge.onModuleInit();
-    expect(mockNotifications.create).toHaveBeenCalledTimes(1);
-    expect(mockNotifications.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000000', {
-      type: NotificationType.system,
-      priority: NotificationPriority.high,
-      title: 'Pont Traccar non configuré',
-      message: expect.stringContaining('TRACCAR_URL'),
-    });
+    expect(mockAlertService.send).toHaveBeenCalledTimes(1);
+    expect(mockAlertService.send).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Pont Traccar non configuré' }),
+    );
   });
 
   it('envoie la notification une seule fois meme si onModuleInit est appele deux fois', async () => {
     const bridge = createBridge('http://traccar:8082');
     await bridge.onModuleInit();
     await bridge.onModuleInit();
-    expect(mockNotifications.create).toHaveBeenCalledTimes(1);
+    expect(mockAlertService.send).toHaveBeenCalledTimes(1);
   });
 
   it('ne notifie pas si TRACCAR_URL est configure', async () => {
     const bridge = createBridge('http://mon-traccar-vps.com:8082');
     await bridge.onModuleInit();
-    expect(mockNotifications.create).not.toHaveBeenCalled();
+    expect(mockAlertService.send).not.toHaveBeenCalled();
   });
 });
