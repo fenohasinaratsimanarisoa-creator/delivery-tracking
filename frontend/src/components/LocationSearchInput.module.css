@@ -76,9 +76,9 @@
   right: 0;
   z-index: 9999;
   margin-top: 4px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
+  background: var(--color-surface, #121B2E);
+  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border-radius: var(--radius-md, 8px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   max-height: 320px;
   overflow: auto;
@@ -94,22 +94,22 @@
   cursor: pointer;
   text-align: left;
   font-size: 0.8rem;
-  color: var(--color-text);
-  font-family: var(--font-body);
+  color: var(--color-text, #E8ECF3);
+  font-family: var(--font-body, 'Inter', system-ui, sans-serif);
 }
 
 .dropdownItemActive {
-  background: var(--color-accent-muted);
+  background: var(--color-accent-muted, rgba(63,167,150,0.1));
 }
 
 .dropdownItemBorder {
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
 }
 
 .mapIcon {
   margin-top: 2px;
   flex-shrink: 0;
-  color: var(--color-accent);
+  color: var(--color-accent, #3FA796);
 }
 
 .resultContent {
@@ -126,7 +126,7 @@
 
 .resultSub {
   font-size: 0.7rem;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-tertiary, #7A8BA3);
   margin-top: 1px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -153,12 +153,12 @@
   z-index: 9999;
   margin-top: 4px;
   padding: 12px 16px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
+  background: var(--color-surface, #121B2E);
+  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border-radius: var(--radius-md, 8px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   font-size: 0.8rem;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-tertiary, #7A8BA3);
   text-align: center;
 }
 

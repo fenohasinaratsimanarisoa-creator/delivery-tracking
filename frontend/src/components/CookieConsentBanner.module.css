@@ -4,8 +4,8 @@
   left: 0;
   right: 0;
   z-index: 9999;
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
+  background: var(--color-surface, #121B2E);
+  border-top: 1px solid var(--color-border, rgba(232,236,243,0.08));
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
   padding: var(--space-lg) var(--space-xl);
   font-family: var(--font-body);

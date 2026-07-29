@@ -40,14 +40,12 @@ function injectStyles(mode: ThemeMode) {
   document.documentElement.setAttribute('data-theme', mode);
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>('dark');
+// Inject BEFORE React mounts — élimine le FOUC
+const initialMode = getInitialMode();
+injectStyles(initialMode);
 
-  useEffect(() => {
-    const m = getInitialMode();
-    setModeState(m);
-    injectStyles(m);
-  }, []);
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [mode, setModeState] = useState<ThemeMode>(initialMode);
 
   const setMode = useCallback((m: ThemeMode) => {
     setModeState(m);

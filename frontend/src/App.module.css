@@ -22,7 +22,7 @@
   display: flex;
   height: 100vh;
   overflow: hidden;
-  background: var(--color-bg);
+  background: var(--color-bg, #0E1625);
 }
 
 .appLayoutContent {
