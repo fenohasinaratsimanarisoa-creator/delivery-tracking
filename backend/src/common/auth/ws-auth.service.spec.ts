@@ -147,6 +147,31 @@ describe('WsAuthService', () => {
     await expect(service.verify(client)).rejects.toMatchObject({ code: 'TOKEN_INVALID' });
   });
 
+  it('should reject when company is soft-deleted', async () => {
+    mockPrisma.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      email: 'a@b.com',
+      role: 'admin',
+      companyId: 'c1',
+      firstName: 'John',
+      lastName: 'Doe',
+      isActive: true,
+      company: { deletedAt: new Date('2026-07-28') },
+    });
+
+    const token = jwtService.sign({
+      sub: 'u1',
+      email: 'a@b.com',
+      role: 'admin',
+      companyId: 'c1',
+      firstName: 'John',
+      lastName: 'Doe',
+    });
+    const client = makeClient(token);
+    await expect(service.verify(client)).rejects.toThrow(WsAuthError);
+    await expect(service.verify(client)).rejects.toMatchObject({ code: 'TOKEN_INVALID' });
+  });
+
   it('should set default firstName and lastName when missing', async () => {
     mockPrisma.user.findUnique.mockResolvedValueOnce({
       id: 'u1',

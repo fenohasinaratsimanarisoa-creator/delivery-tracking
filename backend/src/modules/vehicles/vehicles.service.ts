@@ -46,8 +46,8 @@ export class VehiclesService {
   }
 
   async create(companyId: string, dto: CreateVehicleDto) {
-    const existing = await this.prisma.vehicle.findUnique({
-      where: { licensePlate: dto.licensePlate },
+    const existing = await this.prisma.vehicle.findFirst({
+      where: { companyId, licensePlate: dto.licensePlate, deletedAt: null },
     });
     if (existing) {
       throw new ConflictException('License plate already exists');
@@ -135,8 +135,8 @@ export class VehiclesService {
     await this.findOne(companyId, id);
 
     if (dto.licensePlate) {
-      const existing = await this.prisma.vehicle.findUnique({
-        where: { licensePlate: dto.licensePlate },
+      const existing = await this.prisma.vehicle.findFirst({
+        where: { companyId, licensePlate: dto.licensePlate, deletedAt: null },
       });
       if (existing && existing.id !== id) {
         throw new ConflictException('License plate already in use');

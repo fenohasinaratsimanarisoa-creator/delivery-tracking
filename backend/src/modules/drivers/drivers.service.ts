@@ -14,8 +14,8 @@ export class DriversService {
   constructor(private prisma: PrismaService, private dataUpdateBus: DataUpdateBus) {}
 
   async create(companyId: string, dto: CreateDriverDto) {
-    const existing = await this.prisma.driver.findUnique({
-      where: { licenseNumber: dto.licenseNumber },
+    const existing = await this.prisma.driver.findFirst({
+      where: { companyId, licenseNumber: dto.licenseNumber, deletedAt: null },
     });
     if (existing) {
       throw new ConflictException('License number already exists');
@@ -86,8 +86,8 @@ export class DriversService {
     await this.findOne(companyId, id);
 
     if (dto.licenseNumber) {
-      const existing = await this.prisma.driver.findUnique({
-        where: { licenseNumber: dto.licenseNumber },
+      const existing = await this.prisma.driver.findFirst({
+        where: { companyId, licenseNumber: dto.licenseNumber, deletedAt: null },
       });
       if (existing && existing.id !== id) {
         throw new ConflictException('License number already in use');

@@ -122,7 +122,7 @@ describe('UsersService', () => {
 
     it('should throw ConflictException when licenseNumber already exists', async () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce(null);
-      mockPrisma.driver.findUnique.mockResolvedValueOnce({ id: 'existing-driver' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'existing-driver' });
 
       const driverDto: CreateUserDto = { ...dto, role: 'driver', email: 'driver@test.com', licenseNumber: 'EXISTING-LIC-123' };
 
@@ -549,7 +549,7 @@ describe('UsersService', () => {
         role: 'driver',
       };
       mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
-      mockPrisma.driver.findUnique.mockResolvedValueOnce({ id: 'other-driver-lic', userId: 'other-user', licenseNumber: 'LIC-999' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'other-driver-lic', userId: 'other-user', licenseNumber: 'LIC-999' });
 
       await expect(
         service.update('comp-1', 'user-drv-3', { licenseNumber: 'LIC-999' }),
@@ -566,7 +566,7 @@ describe('UsersService', () => {
         role: 'driver',
       };
       mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
-      mockPrisma.driver.findUnique.mockResolvedValueOnce({ id: 'driver-4', userId: 'user-drv-4', licenseNumber: 'LIC-777' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-4', userId: 'user-drv-4', licenseNumber: 'LIC-777' });
       mockPrisma.user.update.mockResolvedValueOnce({
         id: 'user-drv-4',
         email: 'driver4@test.com',

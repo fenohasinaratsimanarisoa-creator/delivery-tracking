@@ -47,17 +47,20 @@ describe('JwtStrategy', () => {
     expect(mockPrisma.user.findUnique).not.toHaveBeenCalled();
   });
 
+  const activeUser = {
+    id: 'user-1',
+    email: 'test@test.com',
+    role: 'admin' as const,
+    companyId: 'comp-1',
+    isActive: true,
+    firstName: 'John',
+    lastName: 'Doe',
+    company: { deletedAt: null },
+  };
+
   it('should accept payload with scope access', async () => {
     mockRedis.get.mockResolvedValueOnce(null);
-    mockPrisma.user.findUnique.mockResolvedValueOnce({
-      id: 'user-1',
-      email: 'test@test.com',
-      role: 'admin',
-      companyId: 'comp-1',
-      isActive: true,
-      firstName: 'John',
-      lastName: 'Doe',
-    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce(activeUser);
 
     const payload = {
       sub: 'user-1',
@@ -76,15 +79,7 @@ describe('JwtStrategy', () => {
 
   it('should accept payload without scope (backward compat)', async () => {
     mockRedis.get.mockResolvedValueOnce(null);
-    mockPrisma.user.findUnique.mockResolvedValueOnce({
-      id: 'user-1',
-      email: 'test@test.com',
-      role: 'admin',
-      companyId: 'comp-1',
-      isActive: true,
-      firstName: 'John',
-      lastName: 'Doe',
-    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce(activeUser);
 
     const payload = {
       sub: 'user-1',
@@ -119,15 +114,7 @@ describe('JwtStrategy', () => {
 
   it('should accept token when revocation timestamp is before token iat', async () => {
     mockRedis.get.mockResolvedValueOnce('500');
-    mockPrisma.user.findUnique.mockResolvedValueOnce({
-      id: 'user-1',
-      email: 'test@test.com',
-      role: 'admin',
-      companyId: 'comp-1',
-      isActive: true,
-      firstName: 'John',
-      lastName: 'Doe',
-    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce(activeUser);
 
     const payload = {
       sub: 'user-1',
@@ -141,5 +128,25 @@ describe('JwtStrategy', () => {
 
     const result = await strategy.validate(payload);
     expect(result).toMatchObject({ id: 'user-1', type: 'user' });
+  });
+
+  it('should reject token when company is soft-deleted', async () => {
+    mockRedis.get.mockResolvedValueOnce(null);
+    mockPrisma.user.findUnique.mockResolvedValueOnce({
+      ...activeUser,
+      company: { deletedAt: new Date('2026-07-28') },
+    });
+
+    const payload = {
+      sub: 'user-1',
+      email: 'test@test.com',
+      role: 'admin' as const,
+      companyId: 'comp-1',
+      firstName: 'John',
+      lastName: 'Doe',
+      iat: 1000,
+    };
+
+    await expect(strategy.validate(payload)).rejects.toThrow('Company has been deleted');
   });
 });

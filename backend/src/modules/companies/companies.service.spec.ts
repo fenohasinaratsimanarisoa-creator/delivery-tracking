@@ -1,29 +1,58 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getQueueToken } from '@nestjs/bullmq';
 import { CompaniesService } from './companies.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
+const mockPrisma = {
+  company: {
+    create: jest.fn(),
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
+  },
+  user: { updateMany: jest.fn() },
+  driver: { updateMany: jest.fn() },
+  vehicle: { updateMany: jest.fn() },
+};
+
+const mockQueue = { add: jest.fn() };
+
 describe('CompaniesService', () => {
   let service: CompaniesService;
-  let prisma: PrismaService;
-
-  const mockPrisma = {
-    company: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-    },
-  };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [CompaniesService, { provide: PrismaService, useValue: mockPrisma }],
+      providers: [
+        CompaniesService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: getQueueToken('company-purge'), useValue: mockQueue },
+      ],
     }).compile();
 
     service = module.get<CompaniesService>(CompaniesService);
-    prisma = module.get<PrismaService>(PrismaService);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('should soft-delete company and enqueue purge job', async () => {
+    mockPrisma.company.findUnique.mockResolvedValueOnce({ id: 'comp-1', name: 'Acme Inc' });
+    mockPrisma.company.update.mockResolvedValueOnce({ id: 'comp-1', deletedAt: new Date() });
+
+    const result = await service.deleteCompany('comp-1', 'Acme Inc');
+
+    expect(mockPrisma.company.update).toHaveBeenCalledWith({
+      where: { id: 'comp-1' },
+      data: { deletedAt: expect.any(Date) },
+    });
+    expect(result).toEqual({ message: 'Company deleted successfully' });
+  });
+
+  it('should reject delete when company name does not match', async () => {
+    mockPrisma.company.findUnique.mockResolvedValueOnce({ id: 'comp-1', name: 'Acme Inc' });
+
+    await expect(service.deleteCompany('comp-1', 'Wrong Name')).rejects.toThrow('Company name confirmation does not match');
   });
 });

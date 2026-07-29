@@ -14,6 +14,7 @@ const mockPrisma = {
   gpsPosition: {
     findFirst: jest.fn(),
     create: jest.fn(),
+    createMany: jest.fn(),
     findMany: jest.fn(),
     count: jest.fn(),
   },
@@ -218,6 +219,7 @@ describe('TrackingService', () => {
           suspect: false,
           location: 'POINT(47.5079 -18.8792)',
           timestamp: ts,
+          companyId: 'company-1',
           deliveryId: DID,
           vehicleId: VID,
           driverId: '00000000-0000-4000-0000-000000000002',
@@ -651,14 +653,17 @@ describe('TrackingService', () => {
         { id: DID1, assignedDriverId: 'user-1', driverId: null },
       ]);
 
-      mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
+      mockPrisma.gpsPosition.createMany.mockResolvedValueOnce({ count: 1 });
 
-      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-1', suspect: false });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([
+        { id: 'gps-1', vehicleId: 'vehicle-1', timestamp: new Date(), latitude: 1, longitude: 2, speed: null, heading: null, altitude: null, accuracy: null, suspect: false, driverId: 'driver-1', deliveryId: 'delivery-1' },
+      ]);
 
       const saved = await service.saveBatch('user-1', 'driver-1', positions);
 
       expect(saved).toHaveLength(1);
-      expect(mockPrisma.gpsPosition.create).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.gpsPosition.createMany).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -852,7 +857,7 @@ describe('TrackingService', () => {
       const sql: string = mockPrisma.$executeRawUnsafe.mock.calls[0][0];
       const params = mockPrisma.$executeRawUnsafe.mock.calls[0].slice(1);
 
-      expect(sql).toContain('vehicles.company_id = $2::uuid');
+      expect(sql).toContain('gps_positions.company_id = $2::uuid');
       expect(params[1]).toBe('company-a');
     });
 

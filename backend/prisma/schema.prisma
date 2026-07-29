@@ -113,6 +113,8 @@ model Company {
   webhooks           Webhook[]
   geofences          Geofence[]
   fuelPriceHistory   FuelPriceHistory[]
+  gpsPositions       GpsPosition[]
+  dailyFuelReports   DailyFuelReport[]
 
   @@map("companies")
 }
@@ -289,7 +291,7 @@ model AuditLog {
   ip        String?
   userAgent String?     @map("user_agent")
   createdAt DateTime    @default(now()) @map("created_at")
-  Company   Company     @relation(fields: [companyId], references: [id])
+  company   Company     @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
   @@index([userId])
@@ -302,7 +304,7 @@ model Vehicle {
   brand                  String
   model                  String
   year                   Int
-  licensePlate           String    @unique @map("license_plate")
+  licensePlate           String    @map("license_plate")
   vin                    String?   @unique
   fuelType               String    @map("fuel_type")
   theoreticalConsumption Float?    @map("theoretical_consumption") // L/100km
@@ -323,6 +325,7 @@ model Vehicle {
   gpsPositions       GpsPosition[]
   geofenceEvents     GeofenceEvent[]
 
+  @@unique([companyId, licensePlate])
   @@index([companyId])
   @@map("vehicles")
 }
@@ -333,7 +336,7 @@ model Driver {
   lastName      String    @map("last_name")
   email         String?
   phone         String?
-  licenseNumber String    @unique @map("license_number")
+  licenseNumber String    @map("license_number")
   isActive      Boolean   @default(true) @map("is_active")
   deletedAt     DateTime? @map("deleted_at")
   createdAt     DateTime  @default(now()) @map("created_at")
@@ -351,6 +354,7 @@ model Driver {
   deliveries   Delivery[]
   gpsPositions GpsPosition[]
 
+  @@unique([companyId, licenseNumber])
   @@index([companyId])
   @@map("drivers")
 }
@@ -432,6 +436,9 @@ model GpsPosition {
   timestamp DateTime
   createdAt DateTime @default(now()) @map("created_at")
 
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
   deliveryId String?   @map("delivery_id") @db.Uuid
   delivery   Delivery? @relation(fields: [deliveryId], references: [id])
 
@@ -441,6 +448,7 @@ model GpsPosition {
   driverId String @map("driver_id") @db.Uuid
   driver   Driver @relation(fields: [driverId], references: [id])
 
+  @@index([companyId, timestamp])
   @@index([deliveryId])
   @@index([vehicleId])
   @@index([timestamp])
@@ -472,6 +480,9 @@ model GpsPositionArchive {
   @@map("gps_positions_archive")
 }
 
+/// Données comptables — jamais supprimées (soft-delete), conservées pour fiscalité.
+/// Seule l'entreprise peut être soft-deleted (deletedAt), les lignes FuelLog
+/// sont anonymisées via le job company-purge (BullMQ) après le délai de grâce.
 model FuelLog {
   id                    String   @id @default(uuid()) @db.Uuid
   liters                Float
@@ -496,6 +507,8 @@ model FuelLog {
   @@map("fuel_logs")
 }
 
+/// Données comptables — jamais supprimées (soft-delete), conservées pour fiscalité.
+/// Anonymisées via le job company-purge après délai de grâce.
 model MaintenanceRecord {
   id          String   @id @default(uuid()) @db.Uuid
   type        String
@@ -516,6 +529,8 @@ model MaintenanceRecord {
   @@map("maintenance_records")
 }
 
+/// Données comptables — jamais supprimées (soft-delete), conservées pour fiscalité.
+/// Anonymisées via le job company-purge après délai de grâce.
 model DailyFuelReport {
   id                   String   @id @default(uuid()) @db.Uuid
   reportDate           DateTime @map("report_date")
@@ -529,7 +544,8 @@ model DailyFuelReport {
   pricePerLiterUsed    Float?   @map("price_per_liter_used")
   createdAt            DateTime @default(now()) @map("created_at")
 
-  companyId String @map("company_id") @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([driverId, reportDate])
   @@index([companyId, reportDate])
@@ -537,6 +553,8 @@ model DailyFuelReport {
   @@map("daily_fuel_reports")
 }
 
+/// Données comptables — jamais supprimées (soft-delete), conservées pour fiscalité.
+/// Anonymisées via le job company-purge après délai de grâce.
 model FuelPriceHistory {
   id             String    @id @default(uuid()) @db.Uuid
   companyId      String    @map("company_id") @db.Uuid

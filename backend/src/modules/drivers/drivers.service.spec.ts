@@ -33,7 +33,7 @@ describe('DriversService', () => {
         licenseNumber: 'LIC-001',
       };
       const created = { id: 'driver-1', ...dto, companyId: 'company-1' };
-      mockPrisma.driver.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(null);
       mockPrisma.driver.create.mockResolvedValueOnce(created);
 
       await expect(service.create('company-1', dto)).resolves.toEqual(created);
@@ -44,7 +44,7 @@ describe('DriversService', () => {
     });
 
     it('rejects duplicate license numbers', async () => {
-      mockPrisma.driver.findUnique.mockResolvedValueOnce({ id: 'driver-1' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-1' });
 
       await expect(
         service.create('company-1', {
@@ -111,7 +111,7 @@ describe('DriversService', () => {
   describe('update', () => {
     it('updates after validating ownership and license uniqueness', async () => {
       mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-1' });
-      mockPrisma.driver.findUnique.mockResolvedValueOnce({ id: 'driver-1' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-1' });
       mockPrisma.driver.update.mockResolvedValueOnce({
         id: 'driver-1',
         licenseNumber: 'LIC-NEW',
@@ -129,7 +129,7 @@ describe('DriversService', () => {
 
     it('rejects a license number already used by another driver', async () => {
       mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-1' });
-      mockPrisma.driver.findUnique.mockResolvedValueOnce({ id: 'driver-2' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-2' });
 
       await expect(
         service.update('company-1', 'driver-1', { licenseNumber: 'LIC-TAKEN' }),

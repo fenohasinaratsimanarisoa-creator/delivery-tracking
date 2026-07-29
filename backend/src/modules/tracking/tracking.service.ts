@@ -406,6 +406,8 @@ export class TrackingService {
 
     const locationStr = `POINT(${dto.longitude} ${dto.latitude})`;
 
+    const resolvedCompanyId = companyId || vehicle.companyId;
+
     const saved = await this.prisma.gpsPosition.create({
       data: {
         latitude: dto.latitude,
@@ -417,6 +419,7 @@ export class TrackingService {
         suspect,
         location: locationStr,
         timestamp: ts,
+        companyId: resolvedCompanyId,
         deliveryId: dto.deliveryId,
         vehicleId: dto.vehicleId,
         driverId,
@@ -451,6 +454,22 @@ export class TrackingService {
     companyId?: string,
   ) {
     const saved: any[] = [];
+    const resolvedCompanyId = companyId || '';
+    const toInsert: Array<{
+      latitude: number;
+      longitude: number;
+      speed: number | undefined;
+      heading: number | undefined;
+      altitude: number | undefined;
+      accuracy: number | undefined;
+      suspect: boolean;
+      location: string;
+      timestamp: Date;
+      companyId: string;
+      deliveryId: string | null | undefined;
+      vehicleId: string;
+      driverId: string;
+    }> = [];
 
     const deliveryIds = [...new Set(positions.map((p) => p.deliveryId).filter((x): x is string => !!x))];
     const verifiedDeliveries = new Set<string>();
@@ -462,23 +481,124 @@ export class TrackingService {
       validDeliveries.forEach((d) => verifiedDeliveries.add(d.id));
     }
 
+    const vehicleIds = [...new Set(positions.map((p) => p.vehicleId).filter((x): x is string => !!x))];
+    const lastPositions = new Map<string, { latitude: number; longitude: number; timestamp: Date; speed: number | null }>();
+    if (vehicleIds.length > 0) {
+      const rows = await this.prisma.gpsPosition.findMany({
+        where: { vehicleId: { in: vehicleIds } },
+        orderBy: { timestamp: 'desc' },
+        distinct: ['vehicleId'],
+        select: { vehicleId: true, latitude: true, longitude: true, timestamp: true, speed: true },
+      });
+      for (const row of rows) {
+        lastPositions.set(row.vehicleId, row);
+      }
+    }
+
     for (const pos of positions) {
       try {
         if (pos.deliveryId && !verifiedDeliveries.has(pos.deliveryId)) {
-          this.logger.warn(
-            `Batch position rejected (wrong driver): delivery=${pos.deliveryId} driver=${driverId}`,
-          );
+          this.logger.warn(`Batch position rejected (wrong driver): delivery=${pos.deliveryId} driver=${driverId}`);
           continue;
         }
       } catch {
-        this.logger.warn(
-          `Batch position rejected (wrong driver): delivery=${pos.deliveryId} driver=${driverId}`,
-        );
+        this.logger.warn(`Batch position rejected (wrong driver): delivery=${pos.deliveryId} driver=${driverId}`);
         continue;
       }
-      const result = await this.savePosition(driverId, pos, companyId);
-      if (result) saved.push(result);
+
+      if (!pos.vehicleId || pos.vehicleId.length < 16) continue;
+      if (pos.deliveryId !== undefined && pos.deliveryId !== null && pos.deliveryId.length < 16) continue;
+
+      const ts = new Date(pos.timestamp);
+      const last = lastPositions.get(pos.vehicleId);
+
+      const timeDiffSec = last ? (ts.getTime() - last.timestamp.getTime()) / 1000 : Infinity;
+
+      if (timeDiffSec <= DEDUP_CLOCK_SKEW_S) {
+        this.metrics.deduped++;
+        this.logger.debug(`Batch duplicate rejected (timestamp): vehicle=${pos.vehicleId} ts=${pos.timestamp}`);
+        continue;
+      }
+
+      let suspect = false;
+      if (last && timeDiffSec > 0) {
+        const distance = haversineDistance(last.latitude, last.longitude, pos.latitude, pos.longitude);
+        const speedMs = distance / timeDiffSec;
+        const accuracyScale = pos.accuracy ? Math.max(1, pos.accuracy / 10) : 1;
+        if (speedMs > TELEPORT_SPEED_THRESHOLD_MS * accuracyScale) {
+          suspect = true;
+          this.metrics.teleported++;
+        }
+      }
+
+      lastPositions.set(pos.vehicleId, { latitude: pos.latitude, longitude: pos.longitude, timestamp: ts, speed: pos.speed ?? null });
+
+      toInsert.push({
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        speed: pos.speed,
+        heading: pos.heading,
+        altitude: pos.altitude,
+        accuracy: pos.accuracy,
+        suspect,
+        location: `POINT(${pos.longitude} ${pos.latitude})`,
+        timestamp: ts,
+        companyId: resolvedCompanyId,
+        deliveryId: pos.deliveryId,
+        vehicleId: pos.vehicleId,
+        driverId,
+      });
     }
+
+    if (toInsert.length === 0) return saved;
+
+    this.metrics.batchSaved += toInsert.length;
+
+    await this.prisma.gpsPosition.createMany({
+      data: toInsert,
+    });
+
+    const timestamps = [...new Set(toInsert.map((r) => r.timestamp))];
+    const inserted = await this.prisma.gpsPosition.findMany({
+      where: {
+        vehicleId: { in: vehicleIds },
+        timestamp: { in: timestamps },
+        driverId,
+      },
+      orderBy: { timestamp: 'asc' },
+    });
+
+    this.metrics.saved += inserted.length;
+
+    for (const record of inserted) {
+      saved.push(record);
+      if (companyId && !record.suspect) {
+        this.generateAlerts(
+          {
+            vehicleId: record.vehicleId,
+            deliveryId: record.deliveryId ?? undefined,
+            latitude: record.latitude,
+            longitude: record.longitude,
+            speed: record.speed ?? undefined,
+            heading: record.heading ?? undefined,
+            altitude: record.altitude ?? undefined,
+            accuracy: record.accuracy ?? undefined,
+            timestamp: record.timestamp.toISOString(),
+          },
+          companyId,
+          driverId,
+          record,
+        ).catch((err) => this.logger.error(`Alert generation failed: ${err}`));
+      }
+    }
+
+    if (companyId && inserted.length > 0) {
+      const last = inserted[inserted.length - 1];
+      this.deliveryProximityService
+        .checkProximity(driverId, last.vehicleId, companyId, last.latitude, last.longitude, last.timestamp)
+        .catch((err) => this.logger.error(`Proximity check failed: ${err}`));
+    }
+
     return saved;
   }
 
@@ -510,6 +630,12 @@ export class TrackingService {
   }
 
   async getAllPositionsByDelivery(deliveryId: string, companyId: string) {
+    const total = await this.prisma.gpsPosition.count({
+      where: { deliveryId, delivery: { companyId } },
+    });
+    if (total > 10000) {
+      this.logger.warn(`Delivery ${deliveryId} has ${total} positions — truncating to 10000`);
+    }
     return this.prisma.gpsPosition.findMany({
       where: { deliveryId, delivery: { companyId } },
       orderBy: { timestamp: 'asc' },
@@ -753,8 +879,15 @@ export class TrackingService {
         gp.vehicle_id,
         MIN(ST_DistanceSphere(ST_MakePoint(gp.longitude, gp.latitude), ST_MakePoint(${lng}, ${lat}))) AS distance_meters
       FROM gps_positions gp
-      JOIN deliveries d ON d.id = gp.delivery_id AND d.company_id = CAST(${companyId} AS uuid)
+      JOIN vehicles v ON v.id = gp.vehicle_id AND v.company_id = CAST(${companyId} AS uuid) AND v.deleted_at IS NULL AND v.is_active = true
       WHERE gp.timestamp >= NOW() - INTERVAL '15 minutes'
+        AND gp.vehicle_id NOT IN (
+          SELECT d2.vehicle_id FROM deliveries d2
+          WHERE d2.company_id = CAST(${companyId} AS uuid)
+            AND d2.deleted_at IS NULL
+            AND d2.status IN ('assigned', 'in_progress')
+            AND d2.vehicle_id IS NOT NULL
+        )
       GROUP BY gp.vehicle_id
       ORDER BY distance_meters ASC
       LIMIT 1
@@ -800,9 +933,7 @@ export class TrackingService {
       `
       WITH archived AS (
         DELETE FROM gps_positions
-        USING vehicles
-        WHERE gps_positions.vehicle_id = vehicles.id
-          AND vehicles.company_id = $2::uuid
+        WHERE gps_positions.company_id = $2::uuid
           AND gps_positions.timestamp < $1::timestamp
         RETURNING gps_positions.id, gps_positions.latitude, gps_positions.longitude, gps_positions.speed, gps_positions.heading, gps_positions.altitude, gps_positions.accuracy, gps_positions.suspect, gps_positions.location, gps_positions.timestamp, gps_positions.created_at, gps_positions.delivery_id, gps_positions.vehicle_id, gps_positions.driver_id
       )

@@ -48,7 +48,7 @@ describe('VehiclesService', () => {
 
   describe('create', () => {
     it('creates a vehicle when the plate is unique', async () => {
-      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
       mockPrisma.vehicle.create.mockResolvedValueOnce({
         id: 'vehicle-1',
         ...dto,
@@ -64,14 +64,14 @@ describe('VehiclesService', () => {
     });
 
     it('rejects duplicate plates', async () => {
-      mockPrisma.vehicle.findUnique.mockResolvedValueOnce({ id: 'vehicle-1' });
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1' });
 
       await expect(service.create('company-1', dto)).rejects.toThrow(ConflictException);
       expect(mockPrisma.vehicle.create).not.toHaveBeenCalled();
     });
 
     it('rejects physical_tracker without traccarDeviceId', async () => {
-      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
 
       await expect(
         service.create('company-1', { ...dto, positionSource: 'physical_tracker' }),
@@ -83,7 +83,7 @@ describe('VehiclesService', () => {
     });
 
     it('accepts physical_tracker with traccarDeviceId', async () => {
-      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
       mockPrisma.vehicle.create.mockResolvedValueOnce({
         id: 'vehicle-1',
@@ -172,7 +172,7 @@ describe('VehiclesService', () => {
   describe('update', () => {
     it('updates a vehicle after ownership and plate checks', async () => {
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1' });
-      mockPrisma.vehicle.findUnique.mockResolvedValueOnce({ id: 'vehicle-1' });
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1' });
       mockPrisma.vehicle.update.mockResolvedValueOnce({
         id: 'vehicle-1',
         licensePlate: 'TRK-NEW',
@@ -189,7 +189,7 @@ describe('VehiclesService', () => {
 
     it('rejects a plate already used by another vehicle', async () => {
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1' });
-      mockPrisma.vehicle.findUnique.mockResolvedValueOnce({ id: 'vehicle-2' });
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-2' });
 
       await expect(
         service.update('company-1', 'vehicle-1', { licensePlate: 'TRK-TAKEN' }),

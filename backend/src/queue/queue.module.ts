@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { NotificationsModule } from '../modules/notifications/notifications.module';
 import { FuelAnalysisProcessor } from './fuel-analysis.processor';
+import { CompanyPurgeProcessor } from './company-purge.processor';
 
 @Global()
 @Module({
@@ -25,12 +26,13 @@ import { FuelAnalysisProcessor } from './fuel-analysis.processor';
       },
       inject: [ConfigService],
     }),
-    BullModule.registerQueue({
-      name: 'fuel-analysis',
-    }),
+    BullModule.registerQueue(
+      { name: 'fuel-analysis' },
+      { name: 'company-purge' },
+    ),
     NotificationsModule,
   ],
-  providers: [FuelAnalysisProcessor],
+  providers: [FuelAnalysisProcessor, CompanyPurgeProcessor],
   exports: [BullModule],
 })
 export class QueueModule {}

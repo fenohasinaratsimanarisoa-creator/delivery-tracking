@@ -1,10 +1,33 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { UpdateCompanySettingsDto, UpdateCompanyFuelSettingsDto } from './dto/company-settings.dto';
 
+const PURGE_GRACE_DAYS = parseInt(process.env.COMPANY_PURGE_GRACE_DAYS || '30', 10);
+
 @Injectable()
 export class CompaniesService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(CompaniesService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    @InjectQueue('company-purge') private purgeQueue: Queue,
+  ) {}
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async schedulePendingPurges() {
+    const cutoff = new Date(Date.now() - PURGE_GRACE_DAYS * 24 * 60 * 60 * 1000);
+    const expired = await this.prisma.company.findMany({
+      where: { deletedAt: { not: null, lte: cutoff } },
+      select: { id: true, name: true, deletedAt: true },
+    });
+    for (const company of expired) {
+      await this.purgeQueue.add('purge', { companyId: company.id });
+      this.logger.log(`Scheduled purge for company ${company.id} (deleted ${company.deletedAt?.toISOString()})`);
+    }
+  }
 
   async getSettings(companyId: string) {
     const company = await this.prisma.company.findUnique({

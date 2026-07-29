@@ -69,11 +69,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         isActive: true,
         firstName: true,
         lastName: true,
+        company: { select: { deletedAt: true } },
       },
     });
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('User not found or inactive');
+    }
+
+    if (user.company?.deletedAt) {
+      throw new UnauthorizedException('Company has been deleted — access revoked');
     }
 
     return { ...user, type: 'user' as const };

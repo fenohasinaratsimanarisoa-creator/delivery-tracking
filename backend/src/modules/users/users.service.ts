@@ -52,8 +52,8 @@ export class UsersService {
         }
       }
       if (dto.licenseNumber) {
-        const existingLic = await this.prisma.driver.findUnique({
-          where: { licenseNumber: dto.licenseNumber },
+        const existingLic = await this.prisma.driver.findFirst({
+          where: { companyId, licenseNumber: dto.licenseNumber, deletedAt: null },
         });
         if (existingLic) {
           throw new ConflictException('License number already exists');
@@ -259,8 +259,8 @@ export class UsersService {
         if (alreadyAssigned) throw new ConflictException('Vehicle is already assigned to another driver');
       }
       if (dto.licenseNumber) {
-        const existingLic = await this.prisma.driver.findUnique({
-          where: { licenseNumber: dto.licenseNumber },
+        const existingLic = await this.prisma.driver.findFirst({
+          where: { companyId, licenseNumber: dto.licenseNumber, deletedAt: null },
         });
         if (existingLic && existingLic.userId !== id) {
           throw new ConflictException('License number already exists');

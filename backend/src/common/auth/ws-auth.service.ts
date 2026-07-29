@@ -48,11 +48,15 @@ export class WsAuthService {
 
       const dbUser = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { id: true, email: true, role: true, companyId: true, firstName: true, lastName: true, isActive: true },
+        select: { id: true, email: true, role: true, companyId: true, firstName: true, lastName: true, isActive: true, company: { select: { deletedAt: true } } },
       });
 
       if (!dbUser || !dbUser.isActive) {
         throw new WsAuthError('User not found or inactive', 'TOKEN_INVALID');
+      }
+
+      if (dbUser.company?.deletedAt) {
+        throw new WsAuthError('Company has been deleted', 'TOKEN_INVALID');
       }
 
       const user: WsAuthenticatedUser = {
