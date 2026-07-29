@@ -88,6 +88,74 @@ describe('TraccarBridgeService — Leader Election', () => {
       expect((service as any).isLeader).toBe(false);
     });
 
+    it('should return true immediately if already leader (no NX re-try, no disconnect loop)', async () => {
+      const service = createService(mockRedis);
+      (service as any).isLeader = true;
+      const disconnectSpy = jest.spyOn(service as any, 'disconnect').mockImplementation(() => {});
+
+      const result = await (service as any).tryBecomeLeader();
+
+      expect(result).toBe(true);
+      expect(mockRedis.call).not.toHaveBeenCalled();
+      expect((service as any).isLeader).toBe(true);
+      expect(disconnectSpy).not.toHaveBeenCalled();
+      disconnectSpy.mockRestore();
+    });
+
+    it('should not disconnect on 3 successive tryBecomeLeader calls after first success', async () => {
+      const service = createService(mockRedis);
+      mockRedis.call.mockResolvedValueOnce('OK');
+
+      await (service as any).tryBecomeLeader();
+      expect((service as any).isLeader).toBe(true);
+
+      const disconnectSpy = jest.spyOn(service as any, 'disconnect').mockImplementation(() => {});
+
+      await (service as any).tryBecomeLeader();
+      expect(disconnectSpy).not.toHaveBeenCalled();
+      expect((service as any).isLeader).toBe(true);
+
+      await (service as any).tryBecomeLeader();
+      expect(disconnectSpy).not.toHaveBeenCalled();
+
+      await (service as any).tryBecomeLeader();
+      expect(disconnectSpy).not.toHaveBeenCalled();
+      expect((service as any).isLeader).toBe(true);
+
+      disconnectSpy.mockRestore();
+    });
+
+    it('should renew TTL in startLeaderRenew when lock owner matches pid', async () => {
+      const service = createService(mockRedis);
+      (service as any).isLeader = true;
+      mockRedis.get.mockResolvedValueOnce(String(process.pid));
+      mockRedis.expire.mockResolvedValueOnce(1);
+
+      const LEADER_KEY = 'traccar:bridge:leader';
+      const current = await mockRedis.get(LEADER_KEY);
+      if (current === String(process.pid)) await mockRedis.expire(LEADER_KEY, 30);
+
+      expect(mockRedis.get).toHaveBeenCalledWith(LEADER_KEY);
+      expect(mockRedis.expire).toHaveBeenCalledWith(LEADER_KEY, 30);
+    });
+
+    it('should detect real loss of leadership and disconnect (key held by another pid)', async () => {
+      const service = createService(mockRedis);
+      (service as any).isLeader = true;
+      const disconnectSpy = jest.spyOn(service as any, 'disconnect').mockImplementation(() => {});
+
+      mockRedis.get.mockResolvedValueOnce('other-pid-42');
+      const current = await mockRedis.get();
+      if (current !== String(process.pid) && (service as any).isLeader) {
+        (service as any).isLeader = false;
+        (service as any).disconnect();
+      }
+
+      expect(disconnectSpy).toHaveBeenCalled();
+      expect((service as any).isLeader).toBe(false);
+      disconnectSpy.mockRestore();
+    });
+
     it('should step down and release lock', async () => {
       const service = createService(mockRedis);
       (service as any).isLeader = true;

@@ -157,25 +157,17 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
   private async tryBecomeLeader(): Promise<boolean> {
     if (!this.redis) return false;
+    if (this.isLeader) return true;
 
     try {
       const pid = String(process.pid);
       const acquired = await this.redis.call('SET', LEADER_KEY, pid, 'NX', 'EX', String(LEADER_TTL_S));
       if (acquired === 'OK') {
-        if (!this.isLeader) {
-          this.isLeader = true;
-          this.logger.log(`Traccar bridge: became leader (pid=${pid})`);
-          this.startLeaderRenew();
-          await this.connect();
-        }
+        this.isLeader = true;
+        this.logger.log(`Traccar bridge: became leader (pid=${pid})`);
+        this.startLeaderRenew();
+        await this.connect();
         return true;
-      }
-
-      if (this.isLeader) {
-        this.isLeader = false;
-        this.logger.warn('Traccar bridge: lost leadership — disconnecting');
-        this.disconnect();
-        this.stopLeaderRenew();
       }
       return false;
     } catch (err: any) {
@@ -189,6 +181,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     this.leaderRenewTimer = setInterval(async () => {
       if (!this.redis || !this.isLeader) return;
       try {
+        const current = await this.redis.get(LEADER_KEY);
+        if (current !== String(process.pid)) {
+          this.isLeader = false;
+          this.logger.warn('Traccar bridge: lock repris par un autre process — perte réelle de leadership');
+          this.disconnect();
+          this.stopLeaderRenew();
+          return;
+        }
         await this.redis.expire(LEADER_KEY, LEADER_TTL_S);
       } catch (err: any) {
         this.logger.error(`Leader renewal failed: ${err.message}`);
