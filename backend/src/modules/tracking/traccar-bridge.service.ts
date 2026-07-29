@@ -22,6 +22,7 @@ interface TraccarPosition {
   course: number;
   altitude: number;
   accuracy: number;
+  valid: boolean;
   fixTime: string;
   deviceTime: string;
   attributes?: Record<string, unknown>;
@@ -575,6 +576,10 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           for (const pos of positions) {
             const timestamp = this.parseTimestamp(pos);
             if (!this.isValidCoordinates(pos.latitude, pos.longitude)) continue;
+            if (pos.valid === false) {
+              this.logger.warn(`Backfill: position LBS rejetée (valid=false) pour device ${pos.deviceId}`);
+              continue;
+            }
 
             const speedMs = (pos.speed || 0) * 0.514444;
             const { accuracy } = computeCombinedAccuracy(pos.accuracy, pos.attributes);
@@ -637,6 +642,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       if (!this.isValidCoordinates(pos.latitude, pos.longitude)) {
         this.logger.warn(
           `Invalid coordinates from Traccar device ${pos.deviceId}: lat=${pos.latitude}, lng=${pos.longitude}`,
+        );
+        return;
+      }
+
+      if (pos.valid === false) {
+        this.logger.warn(
+          `Position LBS rejetée (valid=false) pour device ${pos.deviceId} ` +
+          `à ${pos.latitude},${pos.longitude} — seul un fix GPS réel est accepté`,
         );
         return;
       }
