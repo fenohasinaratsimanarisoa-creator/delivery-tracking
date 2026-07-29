@@ -81,6 +81,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Company has been deleted — access revoked');
     }
 
-    return { ...user, type: 'user' as const };
+    return {
+      ...user,
+      type: 'user' as const,
+      impersonatedBy: payload.impersonatedBy,
+    };
   }
 }

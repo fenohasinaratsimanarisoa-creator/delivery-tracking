@@ -12,6 +12,9 @@ import { PlatformAdminVerify2faDto } from './dto/verify-2fa.dto';
 jest.mock('bcrypt');
 
 const mockPrisma = {
+  auditLog: {
+    create: jest.fn(),
+  },
   platformAdmin: {
     findUnique: jest.fn(),
     create: jest.fn(),
@@ -386,26 +389,68 @@ describe('PlatformAdminService', () => {
   });
 
   describe('impersonate', () => {
-    it('should return user tokens for company admin', async () => {
+    it('should return access token with impersonatedBy claim (no refresh token)', async () => {
       const company = { id: 'comp-1', deletedAt: null };
       const adminUser = {
         id: 'user-1',
         email: 'admin@comp1.com',
         role: 'admin',
         companyId: 'comp-1',
+        firstName: 'Admin',
+        lastName: 'User',
+      };
+
+      mockPrisma.company.findUnique.mockResolvedValueOnce(company);
+      mockPrisma.user.findFirst.mockResolvedValueOnce(adminUser);
+      mockJwtService.sign.mockReturnValue('impersonation_token');
+      mockPrisma.platformAuditLog.create.mockResolvedValueOnce({});
+      mockPrisma.auditLog.create.mockResolvedValueOnce({});
+
+      const result = await service.impersonate('comp-1', 'admin-1', 'admin@platform.com');
+
+      expect(result.accessToken).toBe('impersonation_token');
+      expect(result.refreshToken).toBeNull();
+      expect(result.user.id).toBe('user-1');
+
+      expect(mockJwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sub: 'user-1',
+          impersonatedBy: 'admin-1',
+        }),
+        expect.objectContaining({ expiresIn: '30m' }),
+      );
+    });
+
+    it('should write audit log in target company', async () => {
+      const company = { id: 'comp-1', deletedAt: null };
+      const adminUser = {
+        id: 'user-1',
+        email: 'admin@comp1.com',
+        role: 'admin',
+        companyId: 'comp-1',
+        firstName: 'Admin',
+        lastName: 'User',
       };
 
       mockPrisma.company.findUnique.mockResolvedValueOnce(company);
       mockPrisma.user.findFirst.mockResolvedValueOnce(adminUser);
       mockJwtService.sign.mockReturnValue('token');
       mockPrisma.platformAuditLog.create.mockResolvedValueOnce({});
+      mockPrisma.auditLog.create.mockResolvedValueOnce({});
 
-      const result = await service.impersonate('comp-1', 'admin-1', 'admin@platform.com');
+      await service.impersonate('comp-1', 'admin-1', 'admin@platform.com');
 
-      expect(result.accessToken).toBe('token');
-      expect(result.refreshToken).toBe('token');
-      expect(result.user.id).toBe('user-1');
-      expect((result.user as any).type).toBe('user');
+      expect(mockPrisma.platformAuditLog.create).toHaveBeenCalled();
+      expect(mockPrisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'user-1',
+            companyId: 'comp-1',
+            action: 'profile_update',
+            metadata: expect.objectContaining({ impersonatedBy: 'admin-1' }),
+          }),
+        }),
+      );
     });
 
     it('should throw UnauthorizedException when company not found', async () => {

@@ -9,6 +9,7 @@ export interface JwtPayload {
   lastName: string;
   type?: 'user' | 'platform_admin';
   scope?: 'access' | '2fa_pending';
+  impersonatedBy?: string;
   iat?: number;
   exp?: number;
 }

@@ -25,6 +25,7 @@ import {
   UpdateAvatarDto,
 } from './dto/update-profile.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { BlockImpersonationGuard } from '../../common/guards/block-impersonation.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { UsageGuard } from '../../common/guards/usage.guard';
@@ -90,16 +91,19 @@ export class UsersController {
     return this.usersService.updatePreferences(userId, body);
   }
 
+  @UseGuards(BlockImpersonationGuard)
   @Patch('me/password')
   changePassword(@CurrentUser('id') userId: string, @Body() dto: ChangePasswordDto) {
     return this.usersService.changePassword(userId, dto);
   }
 
+  @UseGuards(BlockImpersonationGuard)
   @Get('me/export')
   async exportPersonalData(@CurrentUser() user: any) {
     return this.usersService.exportPersonalData(user.id, user.companyId);
   }
 
+  @UseGuards(BlockImpersonationGuard)
   @Delete('me')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteMyAccount(@CurrentUser() user: any) {

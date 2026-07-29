@@ -28,6 +28,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Enable2faDto, Verify2faDto, Disable2faDto } from './dto/two-factor.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { BlockImpersonationGuard } from '../../common/guards/block-impersonation.guard';
 import { CsrfGuard, getDevFallbackSecret } from '../../common/guards/csrf.guard';
 import { Public } from '../../common/decorators/public.decorator';
 import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
@@ -117,16 +118,21 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const ip = req.ip || '';
-    const userAgent = req.headers?.['user-agent'] || '';
-    const result = await this.authService.login(dto, ip, userAgent);
-    const opts = this.getRefreshCookieOpts();
-    res.cookie('refreshToken', result.refreshToken, opts);
-    return {
-      accessToken: result.accessToken,
-      user: result.user,
-      requiresTwoFactor: result.requiresTwoFactor,
-    };
+    try {
+      const ip = req.ip || '';
+      const userAgent = req.headers?.['user-agent'] || '';
+      const result = await this.authService.login(dto, ip, userAgent);
+      const opts = this.getRefreshCookieOpts();
+      res.cookie('refreshToken', result.refreshToken, opts);
+      return {
+        accessToken: result.accessToken,
+        user: result.user,
+        requiresTwoFactor: result.requiresTwoFactor,
+      };
+    } catch (err: any) {
+      this.logger.error(`LOGIN FAILED for ${dto.email}: ${err?.message || err}`, err?.stack);
+      throw err;
+    }
   }
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -237,7 +243,7 @@ export class AuthController {
     return { message: 'Your password has been reset successfully.' };
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, BlockImpersonationGuard)
   @Get('2fa/generate')
   async generate2fa(@CurrentUser('id') userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -272,7 +278,7 @@ export class AuthController {
     return { message: '2FA enabled successfully' };
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, BlockImpersonationGuard)
   @Post('2fa/disable')
   @HttpCode(HttpStatus.OK)
   async disable2fa(@CurrentUser('id') userId: string, @Body() dto: Disable2faDto) {
@@ -337,14 +343,20 @@ export class AuthController {
           else if (err?.message === 'Email not verified') error = 'email_not_verified';
           else if (err?.message === 'Account deactivated') error = 'account_deactivated';
           else if (err?.message === 'Domain not found') error = 'account_not_found';
-          this.logger.error('Google OAuth callback failed', err?.message || info?.message || 'no user');
+          this.logger.error(`Google OAuth callback failed: err=${err?.message || 'none'}, info=${info?.message || 'none'}, user=${!!user}`);
+          if (err?.stack) this.logger.error(`Google OAuth stack: ${err.stack}`);
           return res.redirect(`${frontendUrl}/auth/callback?error=${error}`);
+        }
+
+        if (!user.accessToken) {
+          this.logger.error(`Google OAuth: no accessToken in response for user ${user.user?.id}`);
+          return res.redirect(`${frontendUrl}/auth/callback?error=google_auth_failed`);
         }
 
         this.logger.log(`Google OAuth success for user ${user.user?.id}`);
 
         const tokenParam = encodeURIComponent(user.accessToken);
-        res.cookie('refreshToken', user.refreshToken, refreshOpts);
+        res.cookie('refreshToken', user.refreshToken || '', refreshOpts);
 
         const configuredSecret = this.configService.get<string>('CSRF_SECRET');
         const secret = configuredSecret || getDevFallbackSecret();

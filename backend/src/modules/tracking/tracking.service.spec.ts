@@ -8,6 +8,7 @@ const mockPrisma = {
   },
   vehicle: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
   },
   $executeRawUnsafe: jest.fn(),
   $queryRaw: jest.fn(),
@@ -844,6 +845,71 @@ describe('TrackingService', () => {
       const result = await service.getLivePositions('company-empty');
 
       expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('assertVehicleOwnership', () => {
+    it('throws NotFoundException when vehicle not found or wrong company', async () => {
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
+      await expect(service.assertVehicleOwnership('vehicle-1', 'company-2')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('isRateLimited', () => {
+    it('returns true when rate limited', async () => {
+      mockCacheService.get.mockResolvedValueOnce(true);
+      expect(await service.isRateLimited('driver-1')).toBe(true);
+    });
+
+    it('returns false when not rate limited', async () => {
+      mockCacheService.get.mockResolvedValueOnce(null);
+      mockCacheService.set.mockResolvedValueOnce(undefined);
+      expect(await service.isRateLimited('driver-1')).toBe(false);
+    });
+  });
+
+  describe('calculateDistancePostGIS', () => {
+    it('returns 0 when no positions found', async () => {
+      mockPrisma.$queryRaw.mockResolvedValueOnce([{ total_meters: 0 }]);
+      const result = await service.calculateDistancePostGIS('delivery-1', 'company-1');
+      expect(result.kilometers).toBe(0);
+    });
+  });
+
+  describe('getLastPositionByTraccarId', () => {
+    it('finds last position by traccar device id', async () => {
+      const pos = { timestamp: new Date(), latitude: -18.87, longitude: 47.51 };
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(pos);
+      const result = await service.getLastPositionByTraccarId('42', 'company-1');
+      expect(result).toEqual(pos);
+      expect(mockPrisma.gpsPosition.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ vehicle: { traccarDeviceId: '42', companyId: 'company-1' } }),
+        }),
+      );
+    });
+  });
+
+  describe('calculateDistance', () => {
+    it('returns 0 when less than 2 positions', async () => {
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([{ id: 'gps-1' }]);
+      mockPrisma.gpsPosition.count.mockResolvedValueOnce(1);
+      const result = await service.calculateDistance('delivery-1', 'company-1');
+      expect(result.meters).toBe(0);
+    });
+  });
+
+  describe('getStatus', () => {
+    it('returns ok status', async () => {
+      const result = await service.getStatus();
+      expect(result.status).toBe('ok');
+    });
+  });
+
+  describe('getDeliveryInfo', () => {
+    it('throws NotFoundException when delivery not found', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(null);
+      await expect(service.getDeliveryInfo('delivery-1', 'company-1')).rejects.toThrow(NotFoundException);
     });
   });
 

@@ -10,11 +10,12 @@ import {
 import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { UseGuards, UseFilters, Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { GpsPosition } from '@prisma/client';
 import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 import { WsAuthService } from '../../common/auth/ws-auth.service';
 import { TrackingService } from './tracking.service';
 import { UpdatePositionDto, BatchPositionDto } from './dto/update-position.dto';
-import { DataUpdateBus } from '../../common/events/data-update.bus';
+import { DataUpdateBus, DataUpdateEvent } from '../../common/events/data-update.bus';
 import { WsTrackingExceptionFilter } from '../../common/filters/ws-tracking-exception.filter';
 import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
 import { haversineDistance } from '../../common/geo/geo.utils';
@@ -32,7 +33,7 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
   private disconnectedDrivers = new Map<string, Date>();
   private driverCleanupTimer: ReturnType<typeof setInterval> | null = null;
 
-  private dataUpdateListener: (event: any) => void;
+  private dataUpdateListener: (event: DataUpdateEvent) => void;
 
   constructor(
     private trackingService: TrackingService,
@@ -211,7 +212,7 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     );
 
     // Only broadcast positions that were actually saved
-    const broadcasts = saved.map((pos: any) => ({
+    const broadcasts = saved.map((pos: GpsPosition) => ({
       driverId: driver.id,
       driverName: `${user.firstName} ${user.lastName}`,
       latitude: pos.latitude,
@@ -301,11 +302,11 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.server.to(`company:${companyId}`).emit('dataUpdate', { type, ...payload });
   }
 
-  broadcastToCompany(companyId: string, event: string, data: any) {
+  broadcastToCompany(companyId: string, event: string, data: Record<string, unknown>) {
     this.server.to(`company:${companyId}`).emit(event, data);
   }
 
-  sendToDriver(userId: string, event: string, data: any) {
+  sendToDriver(userId: string, event: string, data: Record<string, unknown>) {
     this.server.to(`driver:${userId}`).emit(event, data);
   }
 }

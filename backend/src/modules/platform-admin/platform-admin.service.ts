@@ -240,31 +240,23 @@ export class PlatformAdminService {
       throw new UnauthorizedException('No admin found for this tenant');
     }
 
+    // Option B: no refresh token for impersonation — only short-lived access token
+    // Prevents the bug where a stolen impersonation refresh token could
+    // trigger token-reuse detection and revoke the real admin's sessions.
     const accessToken = this.jwtService.sign(
       {
         sub: adminUser.id,
         email: adminUser.email,
         role: adminUser.role,
         companyId: adminUser.companyId,
+        firstName: adminUser.firstName,
+        lastName: adminUser.lastName,
         type: 'user',
+        impersonatedBy: adminId,
       },
       {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
-        expiresIn: '1h',
-      },
-    );
-
-    const refreshToken = this.jwtService.sign(
-      {
-        sub: adminUser.id,
-        email: adminUser.email,
-        role: adminUser.role,
-        companyId: adminUser.companyId,
-        type: 'user',
-      },
-      {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET')!,
-        expiresIn: '24h',
+        expiresIn: '30m',
       },
     );
 
@@ -279,9 +271,22 @@ export class PlatformAdminService {
       },
     });
 
+    // Write audit log in target company's own AuditLog as well
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminUser.id,
+        companyId,
+        action: 'profile_update',
+        metadata: { impersonatedBy: adminId, platformAdminEmail: adminEmail },
+        ip,
+      },
+    }).catch((err: any) => {
+      this.logger.error(`Failed to write impersonation audit log for company ${companyId}: ${err.message}`);
+    });
+
     return {
       accessToken,
-      refreshToken,
+      refreshToken: null,
       user: {
         id: adminUser.id,
         email: adminUser.email,
