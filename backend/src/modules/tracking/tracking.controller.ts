@@ -232,6 +232,7 @@ export class TrackingController {
     try {
       const payload = this.jwtService.verify(token, {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
+        algorithms: ['HS256'],
       });
 
       if (payload.scope !== 'public-tracking') {

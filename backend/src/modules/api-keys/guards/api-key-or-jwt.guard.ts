@@ -34,6 +34,7 @@ export class ApiKeyOrJwtGuard implements CanActivate {
         const token = authHeader.slice(7);
         const payload = this.jwtService.verify(token, {
           secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+          algorithms: ['HS256'],
         });
         request.user = {
           id: payload.sub,

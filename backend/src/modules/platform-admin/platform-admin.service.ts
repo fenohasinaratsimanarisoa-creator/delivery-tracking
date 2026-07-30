@@ -117,6 +117,7 @@ export class PlatformAdminService {
     try {
       payload = this.jwtService.verify<{ sub: string; scope: string }>(dto.tempToken, {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
+        algorithms: ['HS256'],
       });
     } catch {
       throw new UnauthorizedException('Invalid or expired temporary token');
@@ -537,6 +538,7 @@ export class PlatformAdminService {
     try {
       payload = this.jwtService.verify<{ sub: string; scope: string }>(tempToken, {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
+        algorithms: ['HS256'],
       });
     } catch {
       throw new UnauthorizedException('Invalid or expired temporary token');
