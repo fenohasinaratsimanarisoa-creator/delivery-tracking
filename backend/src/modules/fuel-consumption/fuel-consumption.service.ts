@@ -49,9 +49,9 @@ export class FuelConsumptionService {
         companyId,
         fuelType: fuelType.toLowerCase(),
         effectiveFrom: { lte: date },
-        AND: [
+        OR: [
           { effectiveUntil: null },
-          { OR: [{ effectiveUntil: { gte: date } }, { effectiveUntil: null }] },
+          { effectiveUntil: { gte: date } },
         ],
       },
       orderBy: { effectiveFrom: 'desc' },
@@ -61,6 +61,11 @@ export class FuelConsumptionService {
   }
 
   async create(companyId: string, dto: CreateFuelLogDto) {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: dto.vehicleId, companyId, deletedAt: null },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found in your company');
+
     const fuelLog = await this.prisma.fuelLog.create({
       data: {
         liters: dto.liters,
@@ -214,18 +219,6 @@ export class FuelConsumptionService {
     return { start, end };
   }
 
-  /**
-   * Pour le cron global (22h UTC), utilise la date UTC directement — cohérent avec
-   * l'heure de déclenchement (22h UTC = 01h EAT le lendemain).
-   */
-  private getUTCDayBounds(date: Date): { start: Date; end: Date } {
-    const start = new Date(date);
-    start.setUTCHours(0, 0, 0, 0);
-    const end = new Date(date);
-    end.setUTCHours(23, 59, 59, 999);
-    return { start, end };
-  }
-
   private async generateDailyReportForCompany(companyId: string, forDate?: Date) {
     const targetDate = forDate || new Date();
     const bounds = this.getMadagascarDayBounds(targetDate);
@@ -272,7 +265,8 @@ export class FuelConsumptionService {
       if (distanceKm < 0.1) continue;
 
       const vehicle = driver.vehicle;
-      const fuelType = vehicle?.fuelType?.toLowerCase() || 'essence';
+      if (!vehicle) continue;
+      const fuelType = vehicle.fuelType?.toLowerCase() || 'essence';
       const consumption = vehicle?.theoreticalConsumption || 8;
       const pricePerLiter = await this.getFuelPriceForDate(companyId, fuelType, targetDate);
       const estimatedCost = Math.round(distanceKm * consumption / 100 * pricePerLiter * 100) / 100;
@@ -289,6 +283,7 @@ export class FuelConsumptionService {
           reportDate,
           driverId: driver.id,
           driverName: `${driver.firstName} ${driver.lastName}`,
+          vehicleId: vehicle.id,
           vehiclePlate: vehicle?.licensePlate || 'N/A',
           fuelType: fuelType,
           distanceKm,
@@ -322,17 +317,16 @@ export class FuelConsumptionService {
     const periodStart = prevLog?.fillDate || new Date(fuelLog.fillDate.getTime() - 30 * 24 * 60 * 60 * 1000);
     const periodEnd = fuelLog.fillDate;
 
-    // Sommer les distances GPS sur la période entre les deux pleins
     const gpsDistance = await this.prisma.dailyFuelReport.aggregate({
       where: {
         companyId,
+        vehicleId: fuelLog.vehicleId,
         reportDate: { gte: periodStart, lte: periodEnd },
-        // On ne peut pas filtrer par vehiclePlate ici car DailyFuelReport n'a pas vehicleId
       },
       _sum: { distanceKm: true },
     });
 
-    const gpsKm = gpsDistance._sum.distanceKm || 0;
+    const gpsKm = gpsDistance._sum?.distanceKm || 0;
     if (gpsKm <= 0) return;
 
     const manualKm = fuelLog.kilometers;
@@ -357,25 +351,4 @@ export class FuelConsumptionService {
         deliveryId: undefined,
       });
     }
-  }
-
-  private async analyzeFuelLog(
-    fuelLogId: string,
-    companyId: string,
-    licensePlate: string,
-    calcConsumption: number | null,
-    expectedConsumption: number | null,
-    isAnomaly: boolean,
-  ) {
-    if (!isAnomaly) return;
-
-    await this.notifications.create(companyId, {
-      type: NotificationType.fuel_anomaly,
-      priority: NotificationPriority.high,
-      title: 'Fuel Consumption Anomaly',
-      message: `Vehicle ${licensePlate} exceeded consumption threshold: ${calcConsumption?.toFixed(1)} L/100km (expected ${expectedConsumption?.toFixed(1)} L/100km)`,
-      link: `/fuel-consumption`,
-      deliveryId: undefined,
-    });
-  }
-}
+  }}
