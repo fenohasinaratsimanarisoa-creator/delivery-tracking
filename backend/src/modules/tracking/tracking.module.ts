@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import * as jwt from 'jsonwebtoken';
 import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 import { WsAuthService } from '../../common/auth/ws-auth.service';
 import { TrackingGateway } from './tracking.gateway';
@@ -22,7 +24,7 @@ import { RedisModule } from '../../common/redis/redis.module';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_ACCESS_SECRET'),
-        signOptions: { expiresIn: configService.get<string>('JWT_ACCESS_EXPIRATION', '15m') },
+        signOptions: { expiresIn: configService.get<string>('JWT_ACCESS_EXPIRATION', '15m') as jwt.SignOptions['expiresIn'] },
       }),
     }),
     NotificationsModule,
