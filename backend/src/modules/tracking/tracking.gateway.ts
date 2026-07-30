@@ -12,7 +12,7 @@ import { UseGuards, UseFilters, Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { GpsPosition } from '@prisma/client';
 import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
-import { WsAuthService } from '../../common/auth/ws-auth.service';
+import { WsAuthService, WsAuthenticatedUser } from '../../common/auth/ws-auth.service';
 import { TrackingService } from './tracking.service';
 import { UpdatePositionDto, BatchPositionDto } from './dto/update-position.dto';
 import { DataUpdateBus, DataUpdateEvent } from '../../common/events/data-update.bus';
@@ -71,20 +71,25 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   async handleConnection(client: Socket) {
-    try {
-      const user = await this.wsAuthService.verify(client);
-      if (user.role === 'driver') {
-        client.join(`driver:${user.id}`);
-        this.disconnectedDrivers.delete(user.id);
-        this.logger.log(`Driver connected: ${user.id} (${user.firstName} ${user.lastName})`);
+    let user = client.data.user as WsAuthenticatedUser | undefined;
+    if (!user) {
+      try {
+        user = await this.wsAuthService.verify(client);
+      } catch {
+        client.emit('error', 'Invalid token');
+        client.disconnect?.();
+        return;
       }
-      if (user.companyId) {
-        client.join(`company:${user.companyId}`);
-        this.logger.log(`${user.role} joined company room: ${user.companyId}`);
-      }
-    } catch {
-      client.emit('error', 'Invalid token');
-      client.disconnect();
+    }
+
+    if (user.role === 'driver') {
+      client.join(`driver:${user.id}`);
+      this.disconnectedDrivers.delete(user.id);
+      this.logger.log(`Driver connected: ${user.id} (${user.firstName} ${user.lastName})`);
+    }
+    if (user.companyId) {
+      client.join(`company:${user.companyId}`);
+      this.logger.log(`${user.role} joined company room: ${user.companyId}`);
     }
   }
 
