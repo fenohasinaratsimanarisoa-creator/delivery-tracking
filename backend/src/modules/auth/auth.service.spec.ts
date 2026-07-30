@@ -352,7 +352,6 @@ describe('AuthService', () => {
 
       expect(mockJwtService.verify).toHaveBeenCalledWith('valid_temp_token', {
         secret: 'temp-token-secret',
-        algorithms: ['HS256'],
       });
       expect(mockTotpService.verifyToken).toHaveBeenCalledWith('base32secret', '123456');
       expect(result).toEqual({
@@ -443,7 +442,6 @@ describe('AuthService', () => {
 
       expect(mockJwtService.verify).toHaveBeenCalledWith(refreshToken, {
         secret: 'refresh-secret',
-        algorithms: ['HS256'],
       });
       expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(mockTx.user.findUnique).toHaveBeenCalledWith({
