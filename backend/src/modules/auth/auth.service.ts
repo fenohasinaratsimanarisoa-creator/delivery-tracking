@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -21,9 +22,9 @@ import { TokenResponse } from './interfaces/token-response.interface';
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  private readonly accessExpiration: string;
-  private readonly refreshExpiration: string;
-  private readonly tempTokenExpiration = '5m';
+  private readonly accessExpiration: jwt.SignOptions['expiresIn'];
+  private readonly refreshExpiration: jwt.SignOptions['expiresIn'];
+  private readonly tempTokenExpiration: jwt.SignOptions['expiresIn'] = '5m';
   private dummyHash: string | null = null;
 
   constructor(
@@ -33,8 +34,8 @@ export class AuthService {
     private emailService: EmailService,
     private totpService: TotpService,
   ) {
-    this.accessExpiration = this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m');
-    this.refreshExpiration = this.configService.get<string>('JWT_REFRESH_EXPIRATION', '7d');
+    this.accessExpiration = this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m') as jwt.SignOptions['expiresIn'];
+    this.refreshExpiration = this.configService.get<string>('JWT_REFRESH_EXPIRATION', '7d') as jwt.SignOptions['expiresIn'];
   }
 
   private getDummyHash(): string {

@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TotpService } from '../auth/totp.service';
@@ -11,9 +12,9 @@ import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 @Injectable()
 export class PlatformAdminService {
   private readonly logger = new Logger(PlatformAdminService.name);
-  private readonly accessExpiration: string;
-  private readonly refreshExpiration: string;
-  private readonly tempTokenExpiration = '5m';
+  private readonly accessExpiration: jwt.SignOptions['expiresIn'];
+  private readonly refreshExpiration: jwt.SignOptions['expiresIn'];
+  private readonly tempTokenExpiration: jwt.SignOptions['expiresIn'] = '5m';
 
   constructor(
     private prisma: PrismaService,
@@ -21,8 +22,8 @@ export class PlatformAdminService {
     private configService: ConfigService,
     private totpService: TotpService,
   ) {
-    this.accessExpiration = this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m');
-    this.refreshExpiration = this.configService.get<string>('JWT_REFRESH_EXPIRATION', '7d');
+    this.accessExpiration = this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m') as jwt.SignOptions['expiresIn'];
+    this.refreshExpiration = this.configService.get<string>('JWT_REFRESH_EXPIRATION', '7d') as jwt.SignOptions['expiresIn'];
   }
 
   async login(dto: PlatformAdminLoginDto, ip?: string, userAgent?: string) {
