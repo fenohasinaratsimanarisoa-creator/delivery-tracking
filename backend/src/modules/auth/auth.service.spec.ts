@@ -8,6 +8,7 @@ import { AuthService } from './auth.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { TotpService } from './totp.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Verify2faDto } from './dto/two-factor.dto';
@@ -67,6 +68,10 @@ const mockTotpService = {
   generateSecret: jest.fn(),
 };
 
+const mockAuditLog = {
+  log: jest.fn(),
+};
+
 describe('AuthService', () => {
   let service: AuthService;
   let prisma: PrismaService;
@@ -98,6 +103,7 @@ describe('AuthService', () => {
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EmailService, useValue: mockEmailService },
         { provide: TotpService, useValue: mockTotpService },
+        { provide: AuditLogService, useValue: mockAuditLog },
       ],
     }).compile();
 
@@ -234,6 +240,13 @@ describe('AuthService', () => {
           expiresAt: expect.any(Date),
         },
       });
+      expect(mockAuditLog.log).toHaveBeenCalledWith({
+        userId: 'user-1',
+        companyId: 'comp-1',
+        action: 'login_success',
+        ip: '127.0.0.1',
+        userAgent: 'Chrome',
+      });
       expect(result).toEqual({
         accessToken: 'access_token',
         refreshToken: 'refresh_token',
@@ -253,6 +266,14 @@ describe('AuthService', () => {
 
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
       expect(bcrypt.compare).toHaveBeenCalledWith('ValidPass123!', expect.any(String));
+      expect(mockAuditLog.log).toHaveBeenCalledWith({
+        userId: null,
+        companyId: null,
+        action: 'login_failed',
+        metadata: { reason: 'user_not_found' },
+        ip: undefined,
+        userAgent: undefined,
+      });
     });
 
     it('should throw UnauthorizedException when user is inactive (timing-safe)', async () => {
@@ -263,6 +284,14 @@ describe('AuthService', () => {
 
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
       expect(bcrypt.compare).toHaveBeenCalledWith('ValidPass123!', expect.any(String));
+      expect(mockAuditLog.log).toHaveBeenCalledWith({
+        userId: 'user-1',
+        companyId: 'comp-1',
+        action: 'login_failed',
+        metadata: { reason: 'account_inactive' },
+        ip: undefined,
+        userAgent: undefined,
+      });
     });
 
     it('should throw UnauthorizedException when password is invalid', async () => {
@@ -271,6 +300,14 @@ describe('AuthService', () => {
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
 
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
+      expect(mockAuditLog.log).toHaveBeenCalledWith({
+        userId: 'user-1',
+        companyId: 'comp-1',
+        action: 'login_failed',
+        metadata: { reason: 'invalid_password' },
+        ip: undefined,
+        userAgent: undefined,
+      });
     });
 
     it('should return tempToken when 2FA is enabled', async () => {

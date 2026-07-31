@@ -68,6 +68,8 @@ enum AuditAction {
   session_revoke
   company_delete
   google_unlink
+  login_success
+  login_failed
 }
 
 enum PlatformAdminAction {
@@ -283,15 +285,15 @@ model Invitation {
 
 model AuditLog {
   id        String      @id @default(uuid()) @db.Uuid
-  userId    String      @map("user_id") @db.Uuid
-  user      User        @relation(fields: [userId], references: [id])
-  companyId String      @map("company_id") @db.Uuid
+  userId    String?     @map("user_id") @db.Uuid
+  user      User?       @relation(fields: [userId], references: [id])
+  companyId String?     @map("company_id") @db.Uuid
   action    AuditAction
   metadata  Json? // additional context (old/new values, etc.)
   ip        String?
   userAgent String?     @map("user_agent")
   createdAt DateTime    @default(now()) @map("created_at")
-  company   Company     @relation(fields: [companyId], references: [id])
+  company   Company?    @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
   @@index([userId])
