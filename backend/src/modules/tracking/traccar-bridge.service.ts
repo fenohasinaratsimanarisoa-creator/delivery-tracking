@@ -723,6 +723,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           driver.id,
           validated,
           vehicleMapping.companyId,
+          // Le pont Traccar est toujours une source 'physical_tracker'.
+          'physical_tracker',
         );
 
         if (this.redis) {

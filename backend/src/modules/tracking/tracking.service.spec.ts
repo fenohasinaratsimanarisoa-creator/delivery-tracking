@@ -304,6 +304,63 @@ describe('TrackingService', () => {
       expect(result).toBeNull();
       expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
     });
+
+    it('rejects phone position for physical_tracker vehicle — no GPS row inserted', async () => {
+      // Isolation stricte des sources : l'app mobile (source='phone') ne doit JAMAIS
+      // écrire de position pour un véhicule équipé d'un traceur physique.
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        companyId: 'company-1',
+        positionSource: 'physical_tracker',
+      });
+
+      const result = await service.savePosition(
+        '00000000-0000-4000-0000-000000000002',
+        dto,
+        'company-1',
+        'phone',
+      );
+
+      expect(result).toBeNull();
+      expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
+    });
+
+    it('accepts phone position for a phone vehicle (no regression on normal flow)', async () => {
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        companyId: 'company-1',
+        positionSource: 'phone',
+      });
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-phone', suspect: false });
+
+      const result = await service.savePosition(
+        '00000000-0000-4000-0000-000000000002',
+        dto,
+        'company-1',
+        'phone',
+      );
+
+      expect(result).not.toBeNull();
+      expect(mockPrisma.gpsPosition.create).toHaveBeenCalled();
+    });
+
+    it('accepts physical_tracker position for a physical_tracker vehicle (Traccar bridge)', async () => {
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        companyId: 'company-1',
+        positionSource: 'physical_tracker',
+      });
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-traccar', suspect: false });
+
+      const result = await service.savePosition(
+        '00000000-0000-4000-0000-000000000002',
+        dto,
+        'company-1',
+        'physical_tracker',
+      );
+
+      expect(result).not.toBeNull();
+      expect(mockPrisma.gpsPosition.create).toHaveBeenCalled();
+    });
   });
 
   describe('teleportation detection — real-world scenarios', () => {

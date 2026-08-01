@@ -19,6 +19,12 @@ const SPEED_SMOOTHING_WINDOW = 5; // nombre de positions pour lisser la vitesse 
 // Avec INTERVAL_FAST=3000 côté frontend, les 3s de battement passent sans être rejetées.
 const DEDUP_CLOCK_SKEW_S = 1;
 
+// Source d'émission d'une position GPS. Utilisée par savePosition() pour isoler
+// strictement les flux : un véhicule 'physical_tracker' ne doit recevoir que des
+// positions du pont Traccar (source='physical_tracker'), jamais de l'app mobile
+// chauffeur (source='phone').
+export type PositionSource = 'phone' | 'physical_tracker';
+
 @Injectable()
 export class TrackingService {
   private readonly logger = new Logger(TrackingService.name);
@@ -351,7 +357,12 @@ export class TrackingService {
    * Toute logique métier (téléportation, alertes, géofences) doit s'appuyer sur les données
    * brutes reçues ici, pas sur des coordonnées filtrées.
    */
-  async savePosition(driverId: string, dto: UpdatePositionDto, companyId?: string) {
+  async savePosition(
+    driverId: string,
+    dto: UpdatePositionDto,
+    companyId?: string,
+    source: PositionSource = 'phone',
+  ) {
     this.metrics.received++;
 
     if (!dto.vehicleId || dto.vehicleId.length < 16) {
@@ -373,7 +384,7 @@ export class TrackingService {
     // Alignement sur assertVehicleOwnership() + getLivePositions().
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: dto.vehicleId, deletedAt: null, isActive: true },
-      select: { companyId: true },
+      select: { companyId: true, positionSource: true },
     });
     if (!vehicle) {
       // Distingue dans les logs "véhicule inexistant" de "véhicule trouvé mais
@@ -397,6 +408,20 @@ export class TrackingService {
     if (companyId && vehicle.companyId !== companyId) {
       this.logger.warn(
         `Cross-tenant position rejected: vehicle ${dto.vehicleId} belongs to company ${vehicle.companyId}, not ${companyId} (driverId=${driverId})`,
+      );
+      return null;
+    }
+
+    // Isolation stricte des sources : un véhicule équipé d'un traceur physique
+    // (positionSource='physical_tracker') ne doit recevoir que les positions du pont
+    // Traccar (source='physical_tracker'). Une position envoyée par l'app mobile
+    // chauffeur (source='phone') pour ce véhicule est rejetée silencieusement côté
+    // serveur (log warn identifiable, pas d'erreur renvoyée au chauffeur) pour éviter
+    // de mélanger deux flux GPS incohérents dans gps_positions. Aucun mode dégradé
+    // légitime (traceur en panne) n'existe aujourd'hui : le blocage est strict.
+    if (source === 'phone' && vehicle.positionSource === 'physical_tracker') {
+      this.logger.warn(
+        `Phone position rejected: vehicle ${dto.vehicleId} is a physical_tracker vehicle (positionSource=physical_tracker) — phone app stream not allowed (driverId=${driverId})`,
       );
       return null;
     }
@@ -510,7 +535,11 @@ export class TrackingService {
     //    rejette les positions dont le véhicule n'est pas actif / est soft-deleted.
     const validVehicleIds = new Set<string>();
     if (vehicleIds.length > 0) {
-      const vehicleWhere: any = { id: { in: vehicleIds }, deletedAt: null, isActive: true };
+      // saveBatch() est utilisé UNIQUEMENT par le flux batch de l'app mobile
+      // (TrackingGateway.handleBatchPosition). Même isolation stricte que savePosition :
+      // seuls les véhicules 'phone' acceptent des positions batch ; les véhicules
+      // 'physical_tracker' sont gérés exclusivement par le pont Traccar.
+      const vehicleWhere: any = { id: { in: vehicleIds }, deletedAt: null, isActive: true, positionSource: 'phone' };
       if (companyId) vehicleWhere.companyId = companyId;
       const validVehicles = await this.prisma.vehicle.findMany({
         where: vehicleWhere,

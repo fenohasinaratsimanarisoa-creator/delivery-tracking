@@ -159,7 +159,8 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
       }
     }
 
-    const position = await this.trackingService.savePosition(driver.id, dto, user.companyId);
+    // Le WebSocket de l'app mobile est toujours une source 'phone'.
+    const position = await this.trackingService.savePosition(driver.id, dto, user.companyId, 'phone');
     if (!position) return;
 
     this.logger.log(
