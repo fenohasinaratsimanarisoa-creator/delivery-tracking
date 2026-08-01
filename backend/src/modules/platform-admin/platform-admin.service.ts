@@ -41,10 +41,22 @@ export class PlatformAdminService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // 2FA OPTIONNELLE : si la 2FA est désactivée sur le compte (totpEnabled=false),
+    // le login s'achève ici avec le mot de passe seul — le token est émis directement.
+    // Décision produit (demande explicite de l'entreprise) : la 2FA reste active tant
+    // que totpEnabled=true. On ne journalise login_2fa_required que si la 2FA est
+    // réellement requise.
+    if (!admin.totpEnabled) {
+      await this.prisma.platformAuditLog.create({
+        data: { adminId: admin.id, action: 'login', ip, userAgent },
+      });
+      return this.generateTokens(admin);
+    }
+
     await this.prisma.platformAuditLog.create({
       data: {
         adminId: admin.id,
-        action: admin.totpEnabled ? 'login_2fa_required' : 'login',
+        action: 'login_2fa_required',
         ip,
         userAgent,
       },
@@ -57,45 +69,6 @@ export class PlatformAdminService {
         expiresIn: this.tempTokenExpiration,
       },
     );
-
-    if (!admin.totpEnabled) {
-      let secret = admin.totpSecret;
-      let qrCode = '';
-      let otpauthUrl = '';
-
-      if (!secret) {
-        const result = await this.totpService.generateSecret(admin.email);
-        secret = result.secret;
-        qrCode = result.qrCode;
-        otpauthUrl = result.otpauthUrl;
-        await this.prisma.platformAdmin.update({
-          where: { id: admin.id },
-          data: { totpSecret: secret },
-        });
-      } else {
-        try {
-          qrCode = await this.totpService.generateQrCode(admin.email, secret);
-          otpauthUrl = `otpauth://totp/DeliveryTracking:${admin.email}?secret=${secret}&issuer=DeliveryTracking`;
-        } catch {}
-      }
-
-      return {
-        accessToken: '',
-        refreshToken: '',
-        admin: {
-          id: admin.id,
-          email: admin.email,
-          firstName: admin.firstName,
-          lastName: admin.lastName,
-        },
-        requiresTwoFactor: true,
-        requires2faSetup: true,
-        tempToken,
-        totpSecret: secret,
-        qrCode,
-        otpauthUrl,
-      };
-    }
 
     return {
       accessToken: '',
