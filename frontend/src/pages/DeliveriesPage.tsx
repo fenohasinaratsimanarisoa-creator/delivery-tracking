@@ -16,7 +16,7 @@ import { formatAriary } from '../services/formatAriary';
 import { useToast } from '../components/Toast';
 import type { Delivery, Driver } from '../types';
 
-type ApiError = { response?: { data?: { message?: string } } };
+type ApiError = { response?: { data?: { message?: string } }; userMessage?: string };
 
 interface DeliveryFormValues {
   title: string;
@@ -234,7 +234,7 @@ export default function DeliveriesPage() {
       setEditing(null);
     },
     onError: (err: ApiError) => {
-      toast(err?.response?.data?.message || "Erreur lors de l'enregistrement", 'error');
+      toast(err?.userMessage || err?.response?.data?.message || "Erreur lors de l'enregistrement", 'error');
     },
   });
 

@@ -152,9 +152,9 @@ export function useEntityForm<T extends Record<string, any>>({
       }
     } catch (err: unknown) {
       if (mountedRef.current) {
-        const apiErr = err as { response?: { data?: { message?: string | string[] } }; message?: string };
+        const apiErr = err as { response?: { data?: { message?: string | string[] } }; userMessage?: string; message?: string };
         const msg = apiErr?.response?.data?.message;
-        setServerError(Array.isArray(msg) ? msg[0] : (msg || apiErr?.message || i18n.t('common.saveError')));
+        setServerError(Array.isArray(msg) ? msg[0] : (msg || apiErr?.userMessage || apiErr?.message || i18n.t('common.saveError')));
       }
     } finally {
       if (mountedRef.current) setSaving(false);
