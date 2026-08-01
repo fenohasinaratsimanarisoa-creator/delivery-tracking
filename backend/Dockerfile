@@ -1,7 +1,9 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --ignore-scripts && npm rebuild bcrypt
+# --include=dev : garantit que typescript/ts-node (utilisés par nest build ET le
+# seed prisma/seed.ts) sont installés même si NODE_ENV=production est actif au build.
+RUN npm ci --ignore-scripts --include=dev && npm rebuild bcrypt
 COPY prisma ./prisma
 RUN npx prisma generate
 COPY tsconfig*.json ./
