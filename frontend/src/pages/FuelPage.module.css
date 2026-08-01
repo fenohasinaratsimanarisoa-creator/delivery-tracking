@@ -13,6 +13,30 @@
   margin-bottom: 20px;
 }
 
+.toolbarRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  background: #007bff;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.addBtn:hover {
+  background: #0069d9;
+}
+
 .skeleton {
   height: 300px;
   background: #eee;

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import api from '../services/api/client';
 import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -33,6 +33,7 @@ export default function FuelPage() {
   const [tab, setTab] = useState<'manual' | 'gps'>('manual');
   const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
   const [editing, setEditing] = useState<FuelLog | null>(null);
+  const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<FuelLog | null>(null);
   const [form, setForm] = useState({
     vehicleId: '', liters: '', kilometers: '', cost: '', fillDate: '', notes: '',
@@ -77,6 +78,20 @@ export default function FuelPage() {
     },
   });
 
+  const createMutation = useMutation({
+    mutationFn: (payload: Record<string, unknown>) =>
+      api.post('/fuel-consumption', payload).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fuel-consumption'] });
+      toast(t('fuel.addSuccess'));
+      setCreating(false);
+      setPage(1);
+    },
+    onError: (err: ApiError) => {
+      toast(err?.response?.data?.message || t('fuel.addError'), 'error');
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/fuel-consumption/${id}`),
     onSuccess: () => {
@@ -92,6 +107,7 @@ export default function FuelPage() {
 
   const openEdit = (l: FuelLog) => {
     setEditing(l);
+    setCreating(false);
     setForm({
       vehicleId: l.vehicleId ?? l.vehicle?.id ?? '',
       liters: String(l.liters),
@@ -100,6 +116,24 @@ export default function FuelPage() {
       fillDate: l.fillDate.slice(0, 10),
       notes: l.notes ?? '',
     });
+  };
+
+  const openCreate = () => {
+    setCreating(true);
+    setEditing(null);
+    setForm({
+      vehicleId: (vehicles && vehicles.length > 0 ? vehicles[0].id : ''),
+      liters: '',
+      kilometers: '',
+      cost: '',
+      fillDate: new Date().toISOString().slice(0, 10),
+      notes: '',
+    });
+  };
+
+  const closeDialog = () => {
+    setEditing(null);
+    setCreating(false);
   };
 
   const saveEdit = () => {
@@ -113,6 +147,22 @@ export default function FuelPage() {
     };
     if (form.notes.trim()) payload.notes = form.notes.trim();
     updateMutation.mutate({ id: editing.id, payload });
+  };
+
+  const saveCreate = () => {
+    if (!form.vehicleId || !form.liters || !form.kilometers || !form.cost || !form.fillDate) {
+      toast(t('fuel.requiredFields'), 'error');
+      return;
+    }
+    const payload: Record<string, unknown> = {
+      liters: Number(form.liters),
+      kilometers: Number(form.kilometers),
+      cost: Number(form.cost),
+      fillDate: new Date(form.fillDate).toISOString(),
+      vehicleId: form.vehicleId,
+    };
+    if (form.notes.trim()) payload.notes = form.notes.trim();
+    createMutation.mutate(payload);
   };
 
   const entries: FuelLog[] = data?.data ?? [];
@@ -162,6 +212,16 @@ export default function FuelPage() {
       {/* Saisie manuelle */}
       {tab === 'manual' && (
         <>
+          <div className={styles.toolbarRow}>
+            <button
+              type="button"
+              className={styles.addBtn}
+              onClick={openCreate}
+            >
+              <Plus size={16} /> {t('fuel.addEntry')}
+            </button>
+          </div>
+
           {entries.length === 0 && (
             <p className={styles.emptyText}>
               {t('fuel.empty')}
@@ -326,21 +386,21 @@ export default function FuelPage() {
       )}
 
       <EntityDialog
-        open={!!editing}
-        onClose={() => setEditing(null)}
-        title={t('fuel.editTitle')}
+        open={!!editing || creating}
+        onClose={closeDialog}
+        title={editing ? t('fuel.editTitle') : t('fuel.addTitle')}
         footer={
           <DialogSubmitBar
-            loading={updateMutation.isPending}
-            onCancel={() => setEditing(null)}
-            submitLabel={t('common.save')}
-            form="fuel-edit-form"
+            loading={updateMutation.isPending || createMutation.isPending}
+            onCancel={closeDialog}
+            submitLabel={editing ? t('common.save') : t('fuel.addSubmit')}
+            form={editing ? 'fuel-edit-form' : 'fuel-create-form'}
           />
         }
       >
         <form
-          id="fuel-edit-form"
-          onSubmit={(e) => { e.preventDefault(); saveEdit(); }}
+          id={editing ? 'fuel-edit-form' : 'fuel-create-form'}
+          onSubmit={(e) => { e.preventDefault(); editing ? saveEdit() : saveCreate(); }}
         >
           <DialogSection title={t('fuel.editDetails')}>
             <DialogField label={t('fuel.table.vehicle')} required>
