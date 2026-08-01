@@ -63,6 +63,7 @@ export interface DriverAlert {
   message: string;
   deliveryId?: string;
   urgency?: 'normal' | 'high' | 'critical';
+  escalationLevel?: number;
   snoozedUntil?: number;
 }
 
@@ -91,6 +92,8 @@ export function useDriverTracking() {
   const [geolocationDenied, setGeolocationDenied] = useState(false);
   const [activeDeliveryId, setActiveDeliveryId] = useState('');
   const [alerts, setAlerts] = useState<DriverAlert[]>([]);
+  const alertsRef = useRef<DriverAlert[]>([]);
+  alertsRef.current = alerts;
   const lastProximityAlertRef = useRef(0);
   const soundEnabledRef = useRef(true);
   const inProgressDeliveryRef = useRef<Delivery | null>(null);
@@ -233,6 +236,7 @@ export function useDriverTracking() {
             : 'Vous êtes à proximité du point de livraison. N\'oubliez pas de valider.',
           deliveryId: delivery.id,
           urgency: escalationLevel >= 2 ? 'critical' : escalationLevel >= 1 ? 'high' : 'normal',
+          escalationLevel,
         });
       }
     } else {
@@ -244,9 +248,15 @@ export function useDriverTracking() {
 
   const dismissAlert = useCallback((type: string, deliveryId?: string) => {
     if (type === 'proximity') {
-      setAlerts((prev) => prev.filter((a) => !(a.type === 'proximity' && a.deliveryId === deliveryId)));
-      const escalation = escalationLevelRef.current;
+      // L'escalade de l'alerte réellement affichée prime (elle provient du serveur
+      // pour les véhicules physical_tracker) ; sinon repli sur la ref locale (app
+      // téléphone). Permet au snooze serveur de recevoir le bon niveau d'escalade.
+      const alertEscalation = alertsRef.current.find(
+        (a) => a.type === 'proximity' && a.deliveryId === deliveryId,
+      )?.escalationLevel;
+      const escalation = alertEscalation ?? escalationLevelRef.current;
       const snoozeTime = escalation >= 2 ? ESCALATION_SNOOZE_MS : SNOOZE_MS;
+      setAlerts((prev) => prev.filter((a) => !(a.type === 'proximity' && a.deliveryId === deliveryId)));
       proximitySnoozedUntilRef.current = Date.now() + snoozeTime;
       soundEnabledRef.current = true;
       if (escalation >= 1 && navigator.vibrate) navigator.vibrate(200);
@@ -519,7 +529,7 @@ export function useDriverTracking() {
         });
       }
     });
-    socket.on('proximityAlert', (alert: { type: string; urgency?: 'normal' | 'high' | 'critical'; title?: string; message: string; deliveryId?: string }) => {
+    socket.on('proximityAlert', (alert: { type: string; urgency?: 'normal' | 'high' | 'critical'; title?: string; message: string; deliveryId?: string; escalationLevel?: number }) => {
       if (alert.type === 'proximity' && usesPhysicalTrackerRef.current) {
         const urgency = alert.urgency || 'normal';
         addAlert({
@@ -528,6 +538,7 @@ export function useDriverTracking() {
           message: alert.message,
           deliveryId: alert.deliveryId,
           urgency,
+          escalationLevel: alert.escalationLevel,
         });
       }
     });
