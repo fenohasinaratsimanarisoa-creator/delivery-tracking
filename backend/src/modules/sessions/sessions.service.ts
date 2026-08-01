@@ -84,10 +84,11 @@ export class SessionsService {
   }
 
   async getLoginHistory(userId: string, limit = 50) {
+    // This could be from audit logs or a separate login history table
     return this.prisma.auditLog.findMany({
       where: {
         userId,
-        action: { in: [AuditAction.login_success, AuditAction.login_failed] },
+        action: { in: [AuditAction.session_revoke] }, // We'll expand this
       },
       orderBy: { createdAt: 'desc' },
       take: limit,

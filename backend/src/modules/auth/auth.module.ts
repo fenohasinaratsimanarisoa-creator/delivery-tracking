@@ -9,7 +9,6 @@ import { TotpService } from './totp.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { EmailModule } from '../email/email.module';
-import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
   imports: [
@@ -23,7 +22,6 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
       }),
     }),
     EmailModule,
-    AuditLogModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, TotpService, JwtStrategy, GoogleStrategy],

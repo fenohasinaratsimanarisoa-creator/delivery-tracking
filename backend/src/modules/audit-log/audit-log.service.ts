@@ -7,22 +7,15 @@ export class AuditLogService {
   constructor(private prisma: PrismaService) {}
 
   async log(params: {
-    userId?: string | null;
-    companyId?: string | null;
+    userId: string;
+    companyId: string;
     action: AuditAction;
     metadata?: Record<string, any>;
     ip?: string;
     userAgent?: string;
   }) {
     return this.prisma.auditLog.create({
-      data: {
-        userId: params.userId ?? null,
-        companyId: params.companyId ?? null,
-        action: params.action,
-        metadata: params.metadata,
-        ip: params.ip,
-        userAgent: params.userAgent,
-      },
+      data: params,
     });
   }
 

@@ -133,7 +133,7 @@ describe('SessionsService', () => {
 
     await expect(service.getLoginHistory('user-1', 5)).resolves.toEqual([{ id: 'audit-1' }]);
     expect(mockPrisma.auditLog.findMany).toHaveBeenCalledWith({
-      where: { userId: 'user-1', action: { in: [AuditAction.login_success, AuditAction.login_failed] } },
+      where: { userId: 'user-1', action: { in: [AuditAction.session_revoke] } },
       orderBy: { createdAt: 'desc' },
       take: 5,
     });

@@ -12,8 +12,6 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
-import { AuditLogService } from '../audit-log/audit-log.service';
-import { AuditAction } from '@prisma/client';
 import { TotpService } from './totp.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -35,7 +33,6 @@ export class AuthService {
     private configService: ConfigService,
     private emailService: EmailService,
     private totpService: TotpService,
-    private auditLog: AuditLogService,
   ) {
     this.accessExpiration = this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m') as jwt.SignOptions['expiresIn'];
     this.refreshExpiration = this.configService.get<string>('JWT_REFRESH_EXPIRATION', '7d') as jwt.SignOptions['expiresIn'];
@@ -89,14 +86,6 @@ export class AuthService {
     );
   }
 
-  private async logAudit(params: Parameters<AuditLogService['log']>[0]) {
-    try {
-      await this.auditLog.log(params);
-    } catch (err) {
-      this.logger.warn(`Failed to write audit log (${params.action}): ${(err as Error)?.message || err}`);
-    }
-  }
-
   async login(dto: LoginDto, ip?: string, userAgent?: string): Promise<TokenResponse> {
     dto.email = dto.email.toLowerCase().trim();
     const user = await this.prisma.user.findFirst({
@@ -109,37 +98,13 @@ export class AuthService {
     );
 
     if (!user || !user.isActive) {
-      await this.logAudit({
-        userId: user?.id ?? null,
-        companyId: user?.companyId ?? null,
-        action: AuditAction.login_failed,
-        metadata: { reason: !user ? 'user_not_found' : 'account_inactive' },
-        ip,
-        userAgent,
-      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) {
-      await this.logAudit({
-        userId: user.id,
-        companyId: user.companyId,
-        action: AuditAction.login_failed,
-        metadata: { reason: 'invalid_password' },
-        ip,
-        userAgent,
-      });
       throw new UnauthorizedException('Invalid credentials');
     }
-
-    await this.logAudit({
-      userId: user.id,
-      companyId: user.companyId,
-      action: AuditAction.login_success,
-      ip,
-      userAgent,
-    });
 
     await this.prisma.userSession.create({
       data: {
