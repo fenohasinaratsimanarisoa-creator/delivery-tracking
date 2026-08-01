@@ -61,21 +61,21 @@ interface DriverReport {
 }
 
 const COLORS = {
-  accent: '#F2A93C',
-  teal: '#3FA796',
-  red: '#E8544C',
-  blue: '#3b82f6',
-  purple: '#8b5cf6',
-  gray: '#6b7280',
+  accent: 'var(--color-accent)',
+  teal: 'var(--color-teal)',
+  red: 'var(--color-red)',
+  blue: 'var(--color-blue)',
+  purple: 'var(--color-purple)',
+  gray: 'var(--color-text-tertiary)',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b',
-  assigned: '#06b6d4',
-  in_progress: '#3b82f6',
-  delivered: '#22c55e',
-  failed: '#ef4444',
-  cancelled: '#6b7280',
+  pending: 'var(--color-accent)',
+  assigned: 'var(--color-blue)',
+  in_progress: 'var(--color-blue)',
+  delivered: 'var(--color-teal)',
+  failed: 'var(--color-red)',
+  cancelled: 'var(--color-text-tertiary)',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -125,7 +125,7 @@ function StatBox({ label, value, color }: { label: string; value: string; color?
   return (
     <div className={styles.statBox}>
       <div className={styles.statLabel}>{label}</div>
-      <div className={styles.statValue} style={{ color: color || 'var(--color-text, #E8ECF3)' }}>
+      <div className={styles.statValue} style={{ color: color || 'var(--color-text)' }}>
         {value}
       </div>
     </div>
@@ -133,11 +133,11 @@ function StatBox({ label, value, color }: { label: string; value: string; color?
 }
 
 const tooltipStyle = {
-  background: 'var(--color-surface, #121B2E)',
-  border: '1px solid var(--color-border, rgba(242,169,60,0.2))',
-  borderRadius: 'var(--radius-md, 6px)',
-  fontSize: '0.8rem',
-  color: 'var(--color-text, #E8ECF3)',
+  background: 'var(--color-surface)',
+  border: '1px solid var(--color-border)',
+  borderRadius: 'var(--radius-md)',
+  fontSize: 'var(--text-sm)',
+  color: 'var(--color-text)',
 };
 
 export default function ReportsPage() {
@@ -281,10 +281,10 @@ function renderDeliveryReport(data: DeliveryReport | undefined, loading: boolean
         <Card title={i18n.t('reports.charts.dailyEvolution')}>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={data.byDay}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle, rgba(232,236,243,0.08))" />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--color-text-secondary, #9BA6B9)' }}
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }}
                 tickFormatter={(v: string) => v.slice(5)} />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-secondary, #9BA6B9)' }} />
+              <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }} />
               <Tooltip contentStyle={tooltipStyle} />
               <Bar dataKey="count" fill={COLORS.accent} radius={[3, 3, 0, 0]} name={i18n.t('reports.charts.deliveries')} />
             </BarChart>
@@ -311,10 +311,10 @@ function renderFleetReport(data: FleetReport | undefined, loading: boolean) {
       <Card title="Distance par véhicule">
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={data.vehicles} layout="vertical" margin={{ left: 80 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle, rgba(232,236,243,0.08))" />
-            <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--color-text-secondary, #9BA6B9)' }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" />
+            <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }} />
             <YAxis type="category" dataKey="licensePlate"
-              tick={{ fontSize: 10, fill: 'var(--color-text-secondary, #9BA6B9)' }} />
+              tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }} />
             <Tooltip contentStyle={tooltipStyle} />
             <Bar dataKey="distanceKm" fill={COLORS.accent} radius={[0, 3, 3, 0]} name="Distance (km)" />
           </BarChart>
@@ -325,10 +325,10 @@ function renderFleetReport(data: FleetReport | undefined, loading: boolean) {
         <Card title="Consommation (L/100km)">
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={data.vehicles} layout="vertical" margin={{ left: 80 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle, rgba(232,236,243,0.08))" />
-              <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--color-text-secondary, #9BA6B9)' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" />
+              <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }} />
               <YAxis type="category" dataKey="licensePlate"
-                tick={{ fontSize: 10, fill: 'var(--color-text-secondary, #9BA6B9)' }} />
+                tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }} />
               <Tooltip contentStyle={tooltipStyle} />
               <Bar dataKey="avgConsumption" fill={COLORS.teal} radius={[0, 3, 3, 0]} name="L/100km" />
             </BarChart>
@@ -338,10 +338,10 @@ function renderFleetReport(data: FleetReport | undefined, loading: boolean) {
         <Card title="Livraisons par véhicule">
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={data.vehicles} layout="vertical" margin={{ left: 80 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle, rgba(232,236,243,0.08))" />
-              <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--color-text-secondary, #9BA6B9)' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" />
+              <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }} />
               <YAxis type="category" dataKey="licensePlate"
-                tick={{ fontSize: 10, fill: 'var(--color-text-secondary, #9BA6B9)' }} />
+                tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }} />
               <Tooltip contentStyle={tooltipStyle} />
               <Bar dataKey="deliveriesCount" fill={COLORS.blue} radius={[0, 3, 3, 0]} name="Livraisons" />
             </BarChart>
@@ -362,12 +362,12 @@ function renderFleetReport(data: FleetReport | undefined, loading: boolean) {
             <tbody>
               {data.vehicles.map((v: FleetVehicle) => (
                 <tr key={v.vehicleId} className={styles.tableRow}>
-                  <td className={styles.tableCell}>{v.vehicleName}</td>
+                  <td className={styles.tableCell}><span className={styles.cellPrimary}>{v.vehicleName}</span></td>
                   <td className={styles.tableCellMono}>{v.licensePlate}</td>
-                  <td className={styles.tableCell}>{v.deliveriesCount}</td>
-                  <td className={styles.tableCell}>{v.distanceKm} km</td>
-                  <td className={styles.tableCell}>{v.fuelLiters} L</td>
-                  <td className={styles.tableCell}>{v.avgConsumption} L/100km</td>
+                  <td className={styles.tableCell}><span className={styles.cellNumber}>{v.deliveriesCount}</span></td>
+                  <td className={styles.tableCell}><span className={styles.cellNumber}>{v.distanceKm} km</span></td>
+                  <td className={styles.tableCell}><span className={styles.cellNumber}>{v.fuelLiters} L</span></td>
+                  <td className={styles.tableCell}><span className={styles.cellNumber}>{v.avgConsumption} L/100km</span></td>
                   <td className={styles.tableCell}>
                     <span className={`${styles.statusBadge} ${v.isOnline ? styles.statusBadgeOnline : styles.statusBadgeOffline}`}>
                       {v.isOnline ? 'En ligne' : 'Hors-ligne'}
@@ -401,10 +401,10 @@ function renderDriverReport(data: DriverReport | undefined, loading: boolean) {
       <Card title="Livraisons par chauffeur">
         <ResponsiveContainer width="100%" height={Math.max(200, sorted.length * 40)}>
           <BarChart data={sorted} layout="vertical" margin={{ left: 120 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle, rgba(232,236,243,0.08))" />
-            <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--color-text-secondary, #9BA6B9)' }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" />
+            <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }} />
             <YAxis type="category" dataKey="driverName"
-              tick={{ fontSize: 10, fill: 'var(--color-text-secondary, #9BA6B9)' }} />
+              tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }} />
             <Tooltip contentStyle={tooltipStyle} />
             <Bar dataKey="completedDeliveries" fill={COLORS.teal} radius={[0, 3, 3, 0]} name="Complétées" stackId="a" />
             <Bar dataKey="inProgressDeliveries" fill={COLORS.accent} radius={[0, 3, 3, 0]} name="En cours" stackId="a" />
@@ -427,11 +427,11 @@ function renderDriverReport(data: DriverReport | undefined, loading: boolean) {
             <tbody>
               {sorted.map((d: DriverReportEntry) => (
                 <tr key={d.driverId} className={styles.tableRow}>
-                  <td className={styles.tableCellBold}>{d.driverName}</td>
-                  <td className={styles.tableCell} style={{ color: 'var(--color-text-secondary, #9BA6B9)', fontSize: '0.75rem' }}>{d.phone || '-'}</td>
-                  <td className={styles.tableCell}>{d.totalDeliveries}</td>
-                  <td className={styles.tableCell}>{d.completedDeliveries}</td>
-                  <td className={styles.tableCell}>{d.onTimeDeliveries}</td>
+                  <td className={styles.tableCellBold}><span className={styles.cellPrimary}>{d.driverName}</span></td>
+                  <td className={styles.tableCell}><span className={styles.cellSecondary}>{d.phone || '-'}</span></td>
+                  <td className={styles.tableCell}><span className={styles.cellNumber}>{d.totalDeliveries}</span></td>
+                  <td className={styles.tableCell}><span className={styles.cellNumber}>{d.completedDeliveries}</span></td>
+                  <td className={styles.tableCell}><span className={styles.cellNumber}>{d.onTimeDeliveries}</span></td>
                   <td className={styles.tableCell}>
                     <span className={styles.punctualityValue} style={{
                       color: d.onTimeRate >= 80 ? COLORS.teal : d.onTimeRate >= 50 ? COLORS.accent : COLORS.red,
@@ -439,9 +439,9 @@ function renderDriverReport(data: DriverReport | undefined, loading: boolean) {
                       {d.onTimeRate}%
                     </span>
                   </td>
-                  <td className={styles.tableCell} style={{ color: d.failedDeliveries > 0 ? COLORS.red : 'inherit' }}>
+                  <td className={styles.tableCell}><span className={styles.cellNumber} style={{ color: d.failedDeliveries > 0 ? COLORS.red : 'inherit' }}>
                     {d.failedDeliveries}
-                  </td>
+                  </span></td>
                 </tr>
               ))}
             </tbody>
