@@ -532,7 +532,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           if (lastPos) lastTs = lastPos.timestamp;
         }
 
-        const from = lastTs || new Date(now.getTime() - BACKFILL_MAX_HOURS * 3600000);
+        const rawFrom = lastTs || new Date(now.getTime() - BACKFILL_MAX_HOURS * 3600000);
+        // Marge anti-doublon : l'API /api/positions de Traccar traite `from` de façon
+        // INCLUSIVE (Condition.Between → SQL BETWEEN, fixTime >= from AND fixTime <= to,
+        // cf. source Traccar PositionUtil.getPositionsStream). Sans marge, lastTs (la
+        // dernière position déjà traitée) serait re-fetchée à chaque reconnexion et
+        // réinsérée en double. On décale donc la borne de +1s pour ne plus refetcher
+        // le dernier point déjà stocké.
+        const from = new Date(rawFrom.getTime() + 1000);
 
         const fromLimit = new Date(now.getTime() - BACKFILL_MAX_HOURS * 3600000);
         const effectiveFrom = from > fromLimit ? from : fromLimit;
@@ -619,12 +626,32 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           }
 
           if (toInsert.length > 0) {
-            await this.prisma.gpsPosition.createMany({ data: toInsert });
-            this.logger.log(`Backfill: inserted ${toInsert.length} positions for device ${vehicle.traccarDeviceId} (no alerts generated — historical data)`);
+            // Garde-fou anti-doublons, indépendant de la marge effectiveFrom : on charge
+            // en UNE requête groupée les timestamps déjà présents en base pour ce véhicule
+            // sur la fenêtre couverte par le lot, puis on filtre toInsert avant insertion.
+            // Couvre le cas où la marge +1s est insuffisante (ex: clé Redis perdue au
+            // redémarrage) et évite le problème N+1 (une requête par position) déjà
+            // identifié dans l'audit. On conserve le choix actuel de ne pas générer
+            // d'alertes sur les positions de backfill (donnée historique).
+            const windowStart = new Date(Math.min(...toInsert.map((p) => p.timestamp.getTime())));
+            const windowEnd = new Date(Math.max(...toInsert.map((p) => p.timestamp.getTime())));
+            const existing = await this.prisma.gpsPosition.findMany({
+              where: { vehicleId: vehicle.id, timestamp: { gte: windowStart, lte: windowEnd } },
+              select: { timestamp: true },
+            });
+            const existingTs = new Set(existing.map((e) => e.timestamp.getTime()));
+            const uniqueToInsert = toInsert.filter((p) => !existingTs.has(p.timestamp.getTime()));
 
-            if (this.redis) {
-              const lastTs = toInsert[toInsert.length - 1].timestamp;
-              await this.redis.set(`traccar:last_position:${vehicle.traccarDeviceId}`, lastTs.toISOString());
+            if (uniqueToInsert.length > 0) {
+              await this.prisma.gpsPosition.createMany({ data: uniqueToInsert });
+              this.logger.log(`Backfill: inserted ${uniqueToInsert.length} positions for device ${vehicle.traccarDeviceId} (no alerts generated — historical data)`);
+
+              if (this.redis) {
+                const lastTs = uniqueToInsert[uniqueToInsert.length - 1].timestamp;
+                await this.redis.set(`traccar:last_position:${vehicle.traccarDeviceId}`, lastTs.toISOString());
+              }
+            } else {
+              this.logger.log(`Backfill: 0 new positions for device ${vehicle.traccarDeviceId} (${toInsert.length} filtered as duplicates)`);
             }
           }
         } catch (err: any) {
