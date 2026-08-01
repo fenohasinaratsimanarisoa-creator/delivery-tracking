@@ -15,6 +15,21 @@ export class StripeService {
   private readonly logger = new Logger(StripeService.name);
   private stripe: Stripe | null = null;
 
+  // Garde de production, appelée au démarrage (main.ts) à côté de
+  // MobileMoneyService.validateSandbox() : interdit un checkout simulé silencieux
+  // en production quand STRIPE_SECRET_KEY est absente. Le mode simulé ne reste
+  // possible qu'en développement/test/CI.
+  static validateConfig(configService: ConfigService): void {
+    const secretKey = configService.get<string>('STRIPE_SECRET_KEY');
+    const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+    if (!secretKey && nodeEnv === 'production') {
+      throw new Error(
+        'STRIPE_SECRET_KEY is required in production for Stripe payments. ' +
+          'Configure it or set BILLING_ENABLED=false to disable billing.',
+      );
+    }
+  }
+
   constructor(private configService: ConfigService) {
     const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
     if (secretKey) {
@@ -33,7 +48,15 @@ export class StripeService {
     cancelUrl: string,
   ): Promise<CheckoutResult> {
     if (!this.stripe) {
-      this.logger.warn('Stripe not configured — simulating checkout session');
+      // Défense en profondeur : même si le garde de démarrage (validateConfig) était
+      // contourné, on refuse de simuler un checkout en production.
+      const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
+      if (nodeEnv === 'production') {
+        throw new Error(
+          'Stripe is not configured and simulated checkout is forbidden in production (STRIPE_SECRET_KEY missing).',
+        );
+      }
+      this.logger.warn('Stripe not configured — simulating checkout session (non-production only)');
       return {
         provider: 'stripe' as BillingProvider,
         sessionUrl: `${this.configService.get('APP_URL', 'http://localhost:5173')}/billing/success?session_id=sim_sub_${companyId}`,

@@ -15,6 +15,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AlertService } from './common/alerting/alert.service';
 import { validateCsrfSecret } from './common/guards/csrf.guard';
 import { MobileMoneyService } from './modules/billing/mobile-money.service';
+import { StripeService } from './modules/billing/stripe.service';
 
 class RedisIoAdapter extends IoAdapter {
   createIOServer(port: number, options?: any) {
@@ -45,6 +46,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   validateCsrfSecret(configService);
   MobileMoneyService.validateSandbox(configService);
+  StripeService.validateConfig(configService);
 
   const encryptionKey = configService.get<string>('ENCRYPTION_KEY');
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');

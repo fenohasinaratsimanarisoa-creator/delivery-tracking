@@ -116,6 +116,16 @@ export class BillingService {
         `${process.env.APP_URL || 'http://localhost:5173'}/billing`,
       );
 
+      // Mode simulé (développement/CI uniquement — StripeService interdit le checkout
+      // simulé en production) : le checkout simulé représente un paiement réussi
+      // immédiat. On active donc directement l'abonnement pour que le frontend
+      // (SuccessPage, qui vérifie désormais status==='active' côté serveur) affiche
+      // le succès sans se fier à un préfixe 'sim_sub_' non confirmé.
+      const isSimulated = checkout.subscriptionId?.startsWith('sim_');
+      const stripeStatus: SubscriptionStatus = isSimulated
+        ? SubscriptionStatus.active
+        : SubscriptionStatus.incomplete;
+
       if (existing) {
         await this.prisma.subscription.update({
           where: { id: existing.id },
@@ -123,7 +133,8 @@ export class BillingService {
             planId: plan.id,
             provider: 'stripe',
             stripeSubscriptionId: checkout.subscriptionId,
-            status: 'incomplete',
+            status: stripeStatus,
+            currentPeriodStart: isSimulated ? now : undefined,
             currentPeriodEnd: periodEnd,
           },
         });
@@ -134,7 +145,8 @@ export class BillingService {
             planId: plan.id,
             provider: 'stripe',
             stripeSubscriptionId: checkout.subscriptionId,
-            status: 'incomplete',
+            status: stripeStatus,
+            currentPeriodStart: isSimulated ? now : undefined,
             currentPeriodEnd: periodEnd,
           },
         });

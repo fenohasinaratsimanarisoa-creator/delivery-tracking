@@ -151,6 +151,25 @@ describe('UsageGuard', () => {
       const ctx = makeCtx({ path: '/deliveries', method: 'POST' });
       await expect(guard.canActivate(ctx)).rejects.toThrow('Votre abonnement est suspendu');
     });
+
+    it('bloque si incomplete (checkout créé mais jamais payé)', async () => {
+      mockPrisma.subscription.findUnique.mockResolvedValue({ status: 'incomplete', plan: {} });
+      const ctx = makeCtx({ path: '/deliveries', method: 'POST' });
+      await expect(guard.canActivate(ctx)).rejects.toThrow('Votre abonnement est suspendu');
+    });
+
+    it('bloque si past_due (paiement en échec)', async () => {
+      mockPrisma.subscription.findUnique.mockResolvedValue({ status: 'past_due', plan: {} });
+      const ctx = makeCtx({ path: '/deliveries', method: 'POST' });
+      await expect(guard.canActivate(ctx)).rejects.toThrow('Votre abonnement est suspendu');
+    });
+
+    it('laisse passer un abonnement actif (seul statut autorisé)', async () => {
+      mockPrisma.subscription.findUnique.mockResolvedValue(makeCompanyResponse());
+      mockPrisma.delivery.count.mockResolvedValue(0);
+      const ctx = makeCtx({ path: '/deliveries', method: 'POST' });
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    });
   });
 
   describe("message d'erreur contient quota et plan", () => {

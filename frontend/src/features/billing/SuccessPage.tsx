@@ -17,13 +17,18 @@ export default function SuccessPage() {
       return;
     }
 
-    if (sessionId.startsWith('sim_sub_')) {
-      setTimeout(() => setStatus('success'), 800);
-      return;
-    }
-
+    // On ne se fie JAMAIS au préfixe 'sim_sub_' ni au seul fait qu'une session_id
+    // existe : on confirme toujours côté serveur que l'abonnement est bien 'active'
+    // avant d'afficher le succès (même en mode simulé).
     api.get('/billing/subscription')
-      .then(() => setStatus('success'))
+      .then((res) => {
+        const sub = res.data as { status?: string } | null;
+        if (sub?.status === 'active') {
+          setStatus('success');
+        } else {
+          setStatus('error');
+        }
+      })
       .catch(() => setStatus('error'));
   }, [searchParams]);
 

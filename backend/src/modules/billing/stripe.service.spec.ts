@@ -115,6 +115,61 @@ describe('StripeService', () => {
       expect(result.sessionUrl).toContain('sim_sub_comp-1');
       expect(result.subscriptionId).toBe('sim_sub_comp-1');
     });
+
+    it('should throw in production when Stripe is not configured (no silent simulation)', async () => {
+      (mockConfigService.get as jest.Mock).mockImplementation((key: string): string | undefined => {
+        if (key === 'NODE_ENV') return 'production';
+        if (key === 'STRIPE_SECRET_KEY') return undefined;
+        return undefined;
+      });
+
+      const serviceProd = new StripeService(mockConfigService as unknown as ConfigService);
+
+      await expect(
+        serviceProd.createCheckoutSession(
+          'plan-1',
+          'comp-1',
+          'company@test.com',
+          'Test Company',
+          'http://localhost:3000/success',
+          'http://localhost:3000/cancel',
+        ),
+      ).rejects.toThrow('forbidden in production');
+    });
+  });
+
+  describe('validateConfig', () => {
+    it('throws in production when STRIPE_SECRET_KEY is missing', () => {
+      (mockConfigService.get as jest.Mock).mockImplementation((key: string): string | undefined => {
+        if (key === 'NODE_ENV') return 'production';
+        if (key === 'STRIPE_SECRET_KEY') return undefined;
+        return undefined;
+      });
+
+      expect(() => StripeService.validateConfig(mockConfigService as unknown as ConfigService)).toThrow(
+        'STRIPE_SECRET_KEY is required in production',
+      );
+    });
+
+    it('does not throw outside production without STRIPE_SECRET_KEY', () => {
+      (mockConfigService.get as jest.Mock).mockImplementation((key: string): string | undefined => {
+        if (key === 'NODE_ENV') return 'development';
+        if (key === 'STRIPE_SECRET_KEY') return undefined;
+        return undefined;
+      });
+
+      expect(() => StripeService.validateConfig(mockConfigService as unknown as ConfigService)).not.toThrow();
+    });
+
+    it('does not throw in production when STRIPE_SECRET_KEY is set', () => {
+      (mockConfigService.get as jest.Mock).mockImplementation((key: string): string | undefined => {
+        if (key === 'NODE_ENV') return 'production';
+        if (key === 'STRIPE_SECRET_KEY') return 'sk_live_123';
+        return undefined;
+      });
+
+      expect(() => StripeService.validateConfig(mockConfigService as unknown as ConfigService)).not.toThrow();
+    });
   });
 
   describe('constructWebhookEvent', () => {

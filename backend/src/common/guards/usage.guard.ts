@@ -33,7 +33,20 @@ export class UsageGuard implements CanActivate {
       return true;
     }
 
-    if (sub.status === 'canceled' || sub.status === 'unpaid') {
+    // Liste blanche explicite : seul un abonnement 'active' (payé) donne accès aux
+    // limites de son plan. Tout autre statut est bloqué :
+    //  - 'incomplete' : checkout créé mais jamais payé
+    //  - 'past_due'   : paiement en échec (facture impayée / période dépassée)
+    //  - 'unpaid'     : impayé après la période de grâce
+    //  - 'canceled'   : résilié
+    // Période de grâce sur 'past_due' : décision assumée de NE PAS en accorder au
+    // niveau du garde — le cron handleUnpaidSubscriptions laisse déjà 7 jours après
+    // la fin de période avant de basculer en 'unpaid'. Bloquer immédiatement évite
+    // qu'une entreprise en échec de paiement conserve les limites premium sans payer.
+    // 'trialing' existe dans l'enum SubscriptionStatus mais n'est jamais utilisé dans
+    // le code métier : volontairement exclu de la liste blanche.
+    const PAYING_STATUSES = new Set(['active']);
+    if (!PAYING_STATUSES.has(sub.status)) {
       throw new ForbiddenException(
         'Votre abonnement est suspendu. Rendez-vous dans la section Facturation pour le réactiver.',
       );

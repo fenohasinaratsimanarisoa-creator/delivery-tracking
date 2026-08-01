@@ -232,6 +232,29 @@ describe('BillingService', () => {
       expect(result).toEqual(checkoutSession);
     });
 
+    it('activates immediately a simulated (sim_) Stripe checkout — non-production only', async () => {
+      const checkoutSession = {
+        sessionId: 'cs_sim_123',
+        subscriptionId: 'sim_sub_comp-1',
+        url: 'http://localhost:3000/billing/success?session_id=sim_sub_comp-1',
+      };
+      mockStripeService.createCheckoutSession.mockResolvedValueOnce(checkoutSession);
+      mockPrisma.subscription.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.subscription.create.mockResolvedValueOnce({ id: 'sub-1', status: 'active' });
+
+      const dto: CreateCheckoutDto = { planId: 'plan-1', provider: 'stripe' };
+      await service.createOrUpdateSubscription('comp-1', dto);
+
+      expect(mockPrisma.subscription.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'active',
+            stripeSubscriptionId: 'sim_sub_comp-1',
+          }),
+        }),
+      );
+    });
+
     it('should throw BadRequestException when already subscribed to same plan', async () => {
       const existingSub = { id: 'sub-1', planId: 'plan-1', status: 'active' };
       mockPrisma.subscription.findUnique.mockResolvedValueOnce(existingSub);
