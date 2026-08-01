@@ -401,7 +401,16 @@
     "normal": "✓ Normal",
     "helpTitle": "Comprendre les deux relevés",
     "helpManual": "• Saisie manuelle : enregistrements de pleins réels saisis par l'équipe (litres, coût, kilométrage). Permet de suivre les dépenses réelles en carburant.",
-    "helpGps": "• Rapport GPS : estimation automatique basée sur les positions GPS des véhicules. La consommation théorique du véhicule est utilisée pour estimer le coût. Complémentaire à la saisie manuelle."
+    "helpGps": "• Rapport GPS : estimation automatique basée sur les positions GPS des véhicules. La consommation théorique du véhicule est utilisée pour estimer le coût. Complémentaire à la saisie manuelle.",
+    "editTitle": "Modifier le relevé",
+    "editDetails": "Détails du plein",
+    "notes": "Notes",
+    "updateSuccess": "Relevé mis à jour",
+    "updateError": "Erreur lors de la mise à jour du relevé",
+    "deleteSuccess": "Relevé supprimé",
+    "deleteError": "Erreur lors de la suppression du relevé",
+    "confirmDeleteTitle": "Supprimer le relevé",
+    "confirmDeleteMessage": "Supprimer définitivement ce relevé de carburant ? Cette action est irréversible."
   },
   "reports": {
     "title": "Rapports",

@@ -118,7 +118,9 @@ export interface FuelLog {
   fillDate: string;
   anomalyFlag: boolean;
   calculatedConsumption: number | null;
-  vehicle: { licensePlate: string };
+  notes?: string;
+  vehicleId?: string;
+  vehicle: { id?: string; licensePlate: string };
 }
 
 export interface DeliveryInfo {

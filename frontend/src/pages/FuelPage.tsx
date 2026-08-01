@@ -1,10 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { Pencil, Trash2 } from 'lucide-react';
 import api from '../services/api/client';
+import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { useToast } from '../components/Toast';
 import { formatAriary } from '../services/formatAriary';
-import type { FuelLog } from '../types';
+import type { FuelLog, Vehicle } from '../types';
 import styles from './FuelPage.module.css';
+
+type ApiError = { response?: { data?: { message?: string } } };
 
 const pageBtnStyle = (disabled: boolean): React.CSSProperties => ({
   padding: '6px 12px', border: '1px solid #ddd', borderRadius: 4,
@@ -22,9 +28,15 @@ const tabStyle = (active: boolean): React.CSSProperties => ({
 export default function FuelPage() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [page, setPage] = useState(1);
   const [tab, setTab] = useState<'manual' | 'gps'>('manual');
   const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
+  const [editing, setEditing] = useState<FuelLog | null>(null);
+  const [deleting, setDeleting] = useState<FuelLog | null>(null);
+  const [form, setForm] = useState({
+    vehicleId: '', liters: '', kilometers: '', cost: '', fillDate: '', notes: '',
+  });
   const limit = 20;
 
   const { data, isLoading, error } = useQuery({
@@ -38,6 +50,12 @@ export default function FuelPage() {
     enabled: tab === 'gps',
   });
 
+  const { data: vehicles } = useQuery({
+    queryKey: ['vehicles', 'list'],
+    queryFn: () => api.get('/vehicles/list').then((r) => r.data),
+    staleTime: 30000,
+  });
+
   const generateMutation = useMutation({
     mutationFn: (date: string) =>
       api.post('/fuel-consumption/daily-reports/generate', { date }).then((r) => r.data),
@@ -45,6 +63,57 @@ export default function FuelPage() {
       queryClient.invalidateQueries({ queryKey: ['fuel-daily-reports', reportDate] });
     },
   });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) =>
+      api.patch(`/fuel-consumption/${id}`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fuel-consumption'] });
+      toast(t('fuel.updateSuccess'));
+      setEditing(null);
+    },
+    onError: (err: ApiError) => {
+      toast(err?.response?.data?.message || t('fuel.updateError'), 'error');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/fuel-consumption/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fuel-consumption'] });
+      toast(t('fuel.deleteSuccess'));
+      setDeleting(null);
+    },
+    onError: (err: ApiError) => {
+      toast(err?.response?.data?.message || t('fuel.deleteError'), 'error');
+      setDeleting(null);
+    },
+  });
+
+  const openEdit = (l: FuelLog) => {
+    setEditing(l);
+    setForm({
+      vehicleId: l.vehicleId ?? l.vehicle?.id ?? '',
+      liters: String(l.liters),
+      kilometers: String(l.kilometers),
+      cost: String(l.cost),
+      fillDate: l.fillDate.slice(0, 10),
+      notes: l.notes ?? '',
+    });
+  };
+
+  const saveEdit = () => {
+    if (!editing) return;
+    const payload: Record<string, unknown> = {
+      liters: Number(form.liters),
+      kilometers: Number(form.kilometers),
+      cost: Number(form.cost),
+      fillDate: new Date(form.fillDate).toISOString(),
+      vehicleId: form.vehicleId,
+    };
+    if (form.notes.trim()) payload.notes = form.notes.trim();
+    updateMutation.mutate({ id: editing.id, payload });
+  };
 
   const entries: FuelLog[] = data?.data ?? [];
   const meta = data?.meta ?? { total: 0, page: 1, limit, totalPages: 1 };
@@ -111,6 +180,7 @@ export default function FuelPage() {
                     <th className={styles.th}>{t('fuel.table.cost')}</th>
                     <th className={styles.th}>{t('fuel.table.date')}</th>
                     <th className={styles.th}>{t('fuel.table.anomaly')}</th>
+                    <th className={styles.thActions}>{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -126,6 +196,28 @@ export default function FuelPage() {
                         {l.anomalyFlag
                           ? <span className={styles.anomalyBadge}>{t('fuel.anomaly')}</span>
                           : <span className={styles.normalBadge}>{t('fuel.normal')}</span>}
+                      </td>
+                      <td className={styles.td}>
+                        <div className={styles.actionsRow}>
+                          <button
+                            type="button"
+                            className={styles.actionBtn}
+                            onClick={() => openEdit(l)}
+                            title={t('common.edit')}
+                            aria-label={t('common.edit')}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.actionBtn} ${styles.danger}`}
+                            onClick={() => setDeleting(l)}
+                            title={t('common.delete')}
+                            aria-label={t('common.delete')}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -232,6 +324,101 @@ export default function FuelPage() {
           </div>
         </div>
       )}
+
+      <EntityDialog
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={t('fuel.editTitle')}
+        footer={
+          <DialogSubmitBar
+            loading={updateMutation.isPending}
+            onCancel={() => setEditing(null)}
+            submitLabel={t('common.save')}
+            form="fuel-edit-form"
+          />
+        }
+      >
+        <form
+          id="fuel-edit-form"
+          onSubmit={(e) => { e.preventDefault(); saveEdit(); }}
+        >
+          <DialogSection title={t('fuel.editDetails')}>
+            <DialogField label={t('fuel.table.vehicle')} required>
+              <select
+                className="dialog-select"
+                value={form.vehicleId}
+                onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}
+              >
+                {(vehicles ?? []).map((v: Vehicle) => (
+                  <option key={v.id} value={v.id}>
+                    {v.brand} {v.model} ({v.licensePlate})
+                  </option>
+                ))}
+              </select>
+            </DialogField>
+            <DialogField label={t('fuel.table.liters')} required>
+              <input
+                className="dialog-input"
+                type="number"
+                step="any"
+                min="0"
+                value={form.liters}
+                onChange={(e) => setForm({ ...form, liters: e.target.value })}
+              />
+            </DialogField>
+            <DialogField label={t('fuel.table.km')} required>
+              <input
+                className="dialog-input"
+                type="number"
+                step="any"
+                min="0"
+                value={form.kilometers}
+                onChange={(e) => setForm({ ...form, kilometers: e.target.value })}
+              />
+            </DialogField>
+            <DialogField label={t('fuel.table.cost')} required>
+              <input
+                className="dialog-input"
+                type="number"
+                step="any"
+                min="0"
+                value={form.cost}
+                onChange={(e) => setForm({ ...form, cost: e.target.value })}
+              />
+            </DialogField>
+            <DialogField label={t('fuel.date')} required>
+              <input
+                className="dialog-input"
+                type="date"
+                value={form.fillDate}
+                onChange={(e) => setForm({ ...form, fillDate: e.target.value })}
+              />
+            </DialogField>
+            <DialogField label={t('fuel.notes')}>
+              <input
+                className="dialog-input"
+                type="text"
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
+            </DialogField>
+          </DialogSection>
+        </form>
+      </EntityDialog>
+
+      <ConfirmDialog
+        open={!!deleting}
+        title={t('fuel.confirmDeleteTitle')}
+        message={
+          deleting
+            ? `${t('fuel.confirmDeleteMessage')} (${deleting.vehicle?.licensePlate ?? deleting.vehicleId}, ${new Date(deleting.fillDate).toLocaleDateString(i18n.language)})`
+            : ''
+        }
+        variant="danger"
+        confirmLabel={t('common.delete')}
+        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
+        onCancel={() => setDeleting(null)}
+      />
     </div>
   );
 }

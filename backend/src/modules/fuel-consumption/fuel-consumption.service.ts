@@ -7,6 +7,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
+import { UpdateFuelLogDto } from './dto/update-fuel-log.dto';
 import { FuelFilterDto } from './dto/fuel-filter.dto';
 import { haversineDistance as haversineDistanceM } from '../../common/geo/geo.utils';
 
@@ -138,6 +139,81 @@ export class FuelConsumptionService {
     });
     if (!log) throw new NotFoundException('Fuel log not found');
     return log;
+  }
+
+  async update(companyId: string, id: string, dto: UpdateFuelLogDto) {
+    // Vérifie que le fuel log existe ET appartient à la company (même pattern que
+    // vehicles.service.ts / deliveries.service.ts via findOne()).
+    const existing = await this.findOne(companyId, id);
+
+    const data: any = { ...dto };
+    if (dto.fillDate) data.fillDate = new Date(dto.fillDate);
+
+    // Si le véhicule est modifié, revérifie son appartenance à la company
+    // (même logique que dans create()).
+    if (dto.vehicleId && dto.vehicleId !== existing.vehicleId) {
+      const vehicle = await this.prisma.vehicle.findFirst({
+        where: { id: dto.vehicleId, companyId, deletedAt: null },
+      });
+      if (!vehicle) throw new NotFoundException('Vehicle not found in your company');
+    }
+
+    const measuredChanged =
+      (dto.liters !== undefined && dto.liters !== existing.liters) ||
+      (dto.kilometers !== undefined && dto.kilometers !== existing.kilometers) ||
+      (dto.fillDate !== undefined &&
+        new Date(dto.fillDate).getTime() !== existing.fillDate.getTime()) ||
+      (dto.vehicleId !== undefined && dto.vehicleId !== existing.vehicleId);
+
+    // On efface l'ancien flag avant relance du cross-check : crossCheckFuelLogWithGps()
+    // ne fait que POSER anomalyFlag à true si anomalie. Sans remise à zéro, un flag
+    // obsolète resterait affiché après correction d'une erreur de saisie.
+    if (measuredChanged) {
+      data.anomalyFlag = false;
+      data.anomalyReason = null;
+    }
+
+    const updated = await this.prisma.fuelLog.update({
+      where: { id },
+      data,
+      include: { vehicle: true },
+    });
+
+    // Recalcule l'anomalyFlag à partir du nouveau kilométrage/distance GPS.
+    try {
+      if (measuredChanged) {
+        await this.crossCheckFuelLogWithGps(updated, companyId);
+      }
+    } catch (e: any) {
+      this.logger.warn(`Cross-check failed for fuel log ${updated.id}: ${e.message}`);
+    }
+
+    return this.prisma.fuelLog.findUnique({
+      where: { id: updated.id },
+      include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
+    });
+  }
+
+  async remove(companyId: string, id: string) {
+    // Vérifie que le fuel log existe ET appartient à la company (même pattern que update()).
+    await this.findOne(companyId, id);
+
+    // DÉCISION : hard delete (prisma.fuelLog.delete), PAS de soft-delete avec deletedAt.
+    // Justification (diagnostic schema.prisma) :
+    //  - FuelLog ne possède PAS de champ `deletedAt`, contrairement à Vehicle/Delivery
+    //    (soft-delete), et ne porte PAS le commentaire "Données comptables — jamais
+    //    supprimées" présent sur MaintenanceRecord/DailyFuelReport/FuelPriceHistory.
+    //  - Aucune table ne référence fuel_logs : DailyFuelReport est calculé depuis les
+    //    positions GPS du véhicule (pas depuis les fuel logs) et les notifications ne
+    //    portent qu'un lien URL. Un hard delete ne brise donc aucune clé étrangère.
+    //  - findAll()/getConsumptionStats()/crossCheckFuelLogWithGps() ne filtrent pas sur
+    //    deletedAt : un soft-delete exigerait de modifier ces méthodes existantes
+    //    (interdit) pour exclure les logs supprimés des stats et du cross-check.
+    //  - Comportement assumé : la suppression NE recalcule PAS rétroactivement les
+    //    dailyFuelReport historiques — c'est acceptable pour un rapport historique
+    //    indépendant du détail des pleins (distance GPS + consommation théorique).
+    await this.prisma.fuelLog.delete({ where: { id } });
+    return { message: 'Fuel log deleted' };
   }
 
   async getConsumptionStats(companyId: string, vehicleId?: string) {

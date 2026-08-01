@@ -20,6 +20,7 @@ const mockPrisma = {
     count: jest.fn(),
     findFirst: jest.fn(),
     update: jest.fn(),
+    delete: jest.fn(),
   },
   fuelPriceHistory: {
     findFirst: jest.fn(),
@@ -321,6 +322,126 @@ describe('FuelConsumptionService', () => {
       anomalyCount: 1,
       anomalies: [anomaly],
       logCount: 2,
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // UPDATE — new PATCH :id
+  // ----------------------------------------------------------------
+  describe('update', () => {
+    const existing = {
+      id: 'fuel-1',
+      liters: 50,
+      kilometers: 500,
+      cost: 100,
+      fillDate: new Date('2026-07-21T00:00:00.000Z'),
+      vehicleId: 'vehicle-1',
+      companyId: 'company-1',
+      anomalyFlag: false,
+      anomalyReason: null,
+      notes: 'Full tank',
+    };
+
+    it('updates a fuel log that belongs to the company (notes only, no cross-check re-run)', async () => {
+      const updated = { ...existing, notes: 'Corrected note' };
+      const enriched = { ...updated, vehicle: { id: 'vehicle-1', brand: 'X', model: 'Y', licensePlate: 'TRK-001' } };
+
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce(existing);
+      mockPrisma.fuelLog.update.mockResolvedValueOnce(updated);
+      mockPrisma.fuelLog.findUnique.mockResolvedValueOnce(enriched);
+
+      await expect(service.update('company-1', 'fuel-1', { notes: 'Corrected note' })).resolves.toEqual(enriched);
+
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith({
+        where: { id: 'fuel-1' },
+        data: { notes: 'Corrected note' },
+        include: { vehicle: true },
+      });
+      // Aucun champ mesuré changé : le cross-check ne doit PAS être relancé.
+      expect(mockPrisma.dailyFuelReport.aggregate).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFound when the fuel log belongs to another company', async () => {
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.update('company-a', 'fuel-other-company', { liters: 60 }),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(mockPrisma.fuelLog.update).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFound when updating to a vehicle that belongs to another company', async () => {
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce(existing);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.update('company-1', 'fuel-1', { vehicleId: 'vehicle-other-company' }),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(mockPrisma.vehicle.findFirst).toHaveBeenCalledWith({
+        where: { id: 'vehicle-other-company', companyId: 'company-1', deletedAt: null },
+      });
+      expect(mockPrisma.fuelLog.update).not.toHaveBeenCalled();
+    });
+
+    it('resets a stale anomalyFlag and re-runs the GPS cross-check when measured fields change', async () => {
+      const flagged = { ...existing, anomalyFlag: true, anomalyReason: 'Old anomaly' };
+      const corrected = { ...flagged, kilometers: 120, anomalyFlag: false, anomalyReason: null };
+      const enriched = { ...corrected, vehicle: { id: 'vehicle-1', brand: 'X', model: 'Y', licensePlate: 'TRK-001' } };
+
+      // findOne() puis look-up du plein précédent dans crossCheckFuelLogWithGps()
+      mockPrisma.fuelLog.findFirst
+        .mockResolvedValueOnce(flagged)
+        .mockResolvedValueOnce({ fillDate: new Date('2026-07-10T00:00:00.000Z') });
+      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({ _sum: { distanceKm: 0 } });
+      mockPrisma.fuelLog.update.mockResolvedValueOnce(corrected);
+      mockPrisma.fuelLog.findUnique.mockResolvedValueOnce(enriched);
+
+      await service.update('company-1', 'fuel-1', { kilometers: 120 });
+
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith({
+        where: { id: 'fuel-1' },
+        data: {
+          kilometers: 120,
+          anomalyFlag: false,
+          anomalyReason: null,
+        },
+        include: { vehicle: true },
+      });
+      // Le cross-check a été relancé après la correction de saisie.
+      expect(mockPrisma.dailyFuelReport.aggregate).toHaveBeenCalled();
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // REMOVE — new DELETE :id
+  // ----------------------------------------------------------------
+  describe('remove', () => {
+    it('hard-deletes a fuel log that belongs to the company', async () => {
+      const existing = {
+        id: 'fuel-1',
+        liters: 50,
+        kilometers: 500,
+        cost: 100,
+        fillDate: new Date('2026-07-21T00:00:00.000Z'),
+        vehicleId: 'vehicle-1',
+        companyId: 'company-1',
+      };
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce(existing);
+      mockPrisma.fuelLog.delete.mockResolvedValueOnce(existing);
+
+      await expect(service.remove('company-1', 'fuel-1')).resolves.toEqual({ message: 'Fuel log deleted' });
+
+      expect(mockPrisma.fuelLog.delete).toHaveBeenCalledWith({ where: { id: 'fuel-1' } });
+    });
+
+    it('throws NotFound when the fuel log belongs to another company', async () => {
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce(null);
+
+      await expect(service.remove('company-a', 'fuel-other-company')).rejects.toThrow(NotFoundException);
+
+      expect(mockPrisma.fuelLog.delete).not.toHaveBeenCalled();
     });
   });
 });

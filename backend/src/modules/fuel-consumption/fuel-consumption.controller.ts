@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Patch, Delete, UseGuards } from '@nestjs/common';
 import { FuelConsumptionService } from './fuel-consumption.service';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
+import { UpdateFuelLogDto } from './dto/update-fuel-log.dto';
 import { FuelFilterDto } from './dto/fuel-filter.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
@@ -55,5 +56,21 @@ export class FuelConsumptionController {
   @Get(':id')
   findOne(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
     return this.fuelService.findOne(companyId, id);
+  }
+
+  @Roles('admin', 'dispatcher')
+  @Patch(':id')
+  update(
+    @CurrentUser('companyId') companyId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateFuelLogDto,
+  ) {
+    return this.fuelService.update(companyId, id, dto);
+  }
+
+  @Roles('admin', 'dispatcher')
+  @Delete(':id')
+  remove(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
+    return this.fuelService.remove(companyId, id);
   }
 }

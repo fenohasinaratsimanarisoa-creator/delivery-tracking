@@ -401,7 +401,16 @@
     "normal": "✓ Normal",
     "helpTitle": "Understanding both records",
     "helpManual": "• Manual entry: real fuel fill-ups recorded by the team (liters, cost, mileage). Used to track actual fuel expenses.",
-    "helpGps": "• GPS Report: automatic estimation based on vehicle GPS positions. Uses the vehicle's theoretical consumption to estimate costs. Complements manual entries."
+    "helpGps": "• GPS Report: automatic estimation based on vehicle GPS positions. Uses the vehicle's theoretical consumption to estimate costs. Complements manual entries.",
+    "editTitle": "Edit fuel log",
+    "editDetails": "Fill-up details",
+    "notes": "Notes",
+    "updateSuccess": "Fuel log updated",
+    "updateError": "Error updating fuel log",
+    "deleteSuccess": "Fuel log deleted",
+    "deleteError": "Error deleting fuel log",
+    "confirmDeleteTitle": "Delete fuel log",
+    "confirmDeleteMessage": "Permanently delete this fuel log? This action cannot be undone."
   },
   "reports": {
     "title": "Reports",
