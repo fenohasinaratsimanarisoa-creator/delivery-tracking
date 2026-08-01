@@ -6,6 +6,7 @@ import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CreateGeofenceDto } from './dto/create-geofence.dto';
 
 @ApiTags('Geofences')
 @Controller('geofences')
@@ -20,8 +21,7 @@ export class GeofenceController {
   @ApiOperation({ summary: 'Create a geofence for a delivery' })
   async create(
     @CurrentUser('companyId') companyId: string,
-    @Body()
-    data: { deliveryId: string; name: string; lat: number; lng: number; radiusMeters: number },
+    @Body() data: CreateGeofenceDto,
   ) {
     if (data.deliveryId) {
       const delivery = await this.prisma.delivery.findUnique({
