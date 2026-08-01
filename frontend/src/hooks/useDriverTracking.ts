@@ -258,6 +258,11 @@ export function useDriverTracking() {
       const snoozeTime = escalation >= 2 ? ESCALATION_SNOOZE_MS : SNOOZE_MS;
       setAlerts((prev) => prev.filter((a) => !(a.type === 'proximity' && a.deliveryId === deliveryId)));
       proximitySnoozedUntilRef.current = Date.now() + snoozeTime;
+      // Le rappel suivant doit survenir à l'EXPIRATION du snooze (2 min en escalade,
+      // 5 min sinon), pas au rythme de rappel fixe de 5 min (PROXIMITY_REMINDER_MS) :
+      // sinon, en escalade 2, on n'entendrait jamais de son à +2 min. On réinitialise
+      // la référence du dernier rappel pour que la fenêtre de snooze serve de cadence.
+      lastProximityAlertRef.current = 0;
       soundEnabledRef.current = true;
       if (escalation >= 1 && navigator.vibrate) navigator.vibrate(200);
 

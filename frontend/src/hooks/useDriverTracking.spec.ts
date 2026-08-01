@@ -151,4 +151,51 @@ describe('useDriverTracking core logic', () => {
     const { result } = renderHook(() => useDriverTracking(), { wrapper });
     expect(result.current.activeDeliveryId).toBe('');
   });
+
+  it('re-alerts (reminder) when the 2-min snooze expires after a dismiss at escalation 2 (phone)', async () => {
+    vi.useRealTimers();
+    socketConnected = false;
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/drivers/profile') {
+        return Promise.resolve({
+          data: { id: 'd1', firstName: 'A', lastName: 'B', vehicle: { id: 'v1', brand: 'X', model: 'Y', licensePlate: 'Z', positionSource: 'phone' } },
+        });
+      }
+      if (url === '/deliveries/my-deliveries') {
+        return Promise.resolve({
+          data: { data: [{ id: 'delivery-1', title: 'Livraison', status: 'in_progress', deliveryLat: -18.8792, deliveryLng: 47.5079 }] },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    const { result } = renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); }); // profil + livraisons
+    await act(async () => { await new Promise((r) => setTimeout(r, 1600)); }); // startTracking → watchPosition
+
+    vi.useFakeTimers();
+    const watchCb = (navigator.geolocation.watchPosition as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const pos = { coords: { latitude: -18.8792, longitude: 47.5079, speed: 0, heading: 0, altitude: 0, accuracy: 10 } };
+
+    // Entrée dans la zone (escalade 0).
+    act(() => { watchCb(pos); });
+    expect(result.current.alerts.some((a) => a.type === 'proximity')).toBe(true);
+
+    // Escalade 1 (~8 min) puis escalade 2 (~16 min).
+    await act(async () => { vi.advanceTimersByTime(8 * 60 * 1000); });
+    act(() => { watchCb(pos); });
+    await act(async () => { vi.advanceTimersByTime(8 * 60 * 1000); });
+    act(() => { watchCb(pos); });
+    expect(result.current.alerts.find((a) => a.type === 'proximity')?.escalationLevel).toBe(2);
+
+    // Dismiss → snooze 2 min (ESCALATION_SNOOZE_MS).
+    act(() => { result.current.dismissAlert('proximity', 'delivery-1'); });
+    expect(result.current.alerts.filter((a) => a.type === 'proximity')).toHaveLength(0);
+
+    // +2 min : le snooze expire → rappel (le banner/son réapparaît) — le throttle
+    // fixe de 5 min ne doit pas écraser la fenêtre de snooze.
+    await act(async () => { vi.advanceTimersByTime(2 * 60 * 1000 + 1000); });
+    act(() => { watchCb(pos); });
+    expect(result.current.alerts.filter((a) => a.type === 'proximity')).toHaveLength(1);
+  });
 });
