@@ -116,7 +116,7 @@ export default function AdminDashboard() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [auditLogs, setAuditLogs] = useState<{ data: AuditLog[]; total: number; page: number; totalPages: number } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [impersonating, setImpersonating] = useState<{ email: string; name: string; token: string } | null>(null);
+  const [impersonating, setImpersonating] = useState<{ email: string; name: string; token: string; role: string } | null>(null);
   const [tenantSearch, setTenantSearch] = useState('');
   const [auditPage, setAuditPage] = useState(1);
   const [admins, setAdmins] = useState<Admin[]>([]);
@@ -164,7 +164,12 @@ export default function AdminDashboard() {
     try {
       const res = await adminApi.post(`/tenants/${companyId}/impersonate`);
       const u = res.data.user;
-      setImpersonating({ email: u.email, name: `${u.firstName} ${u.lastName}`, token: res.data.accessToken });
+      setImpersonating({
+        email: u.email,
+        name: `${u.firstName} ${u.lastName}`,
+        token: res.data.accessToken,
+        role: u.role,
+      });
     } catch (err: unknown) {
       alert(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('common.error'));
     }
@@ -205,11 +210,22 @@ export default function AdminDashboard() {
   if (!token) return null;
 
   if (impersonating) {
+    // On cible la page d'accueil du RÔLE impersoné (pas /dashboard, réservé
+    // admin/dispatcher) : un driver -> /my-deliveries, un client -> /my-orders,
+    // sinon /dashboard. Le token d'impersonation est passé en query string et
+    // consommé par AuthContext (voir ?token= dans AuthContext.tsx).
+    const IMPERSONATION_HOME: Record<string, string> = {
+      admin: '/dashboard',
+      dispatcher: '/dashboard',
+      driver: '/my-deliveries',
+      client: '/my-orders',
+    };
+    const home = IMPERSONATION_HOME[impersonating.role] || '/dashboard';
     return (
       <div>
         <ImpersonationBanner user={impersonating} onStop={stopImpersonating} />
         <iframe
-          src={`/dashboard?token=${impersonating.token}`}
+          src={`${home}?token=${impersonating.token}`}
           className={styles.iframeStyle}
         />
       </div>

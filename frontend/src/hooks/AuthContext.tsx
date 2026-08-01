@@ -40,6 +40,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (initialisedRef.current) return;
     initialisedRef.current = true;
 
+    // Mode impersonation (super-admin) : token passé en query string (?token=...).
+    // On l'utilise directement comme session — SANS passer par /api/auth/refresh,
+    // qui remplacerait le token d'impersonation par celui de l'utilisateur réel.
+    // La route de destination (role home) est choisie par AdminDashboard.
+    const urlToken = new URLSearchParams(window.location.search).get('token');
+    if (urlToken) {
+      const u = userFromToken(urlToken);
+      if (u) {
+        setAccessToken(urlToken);
+        setUser(u);
+        setIsInitializing(false);
+        fetchCsrfToken().catch(() => {});
+        return;
+      }
+    }
+
     const currentToken = getAccessToken();
     if (currentToken) {
       const u = userFromToken(currentToken);
