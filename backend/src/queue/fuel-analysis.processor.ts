@@ -4,11 +4,18 @@ import { Job } from 'bullmq';
 import { NotificationType, NotificationPriority } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { NotificationsService } from '../modules/notifications/notifications.service';
+import { FuelConsumptionService } from '../modules/fuel-consumption/fuel-consumption.service';
 
 interface FuelAnalysisJobData {
   fuelLogId: string;
   vehicleId: string;
   companyId: string;
+}
+
+interface RecomputeDriverReportJobData {
+  companyId: string;
+  driverId: string;
+  date?: string;
 }
 
 @Processor('fuel-analysis')
@@ -18,11 +25,51 @@ export class FuelAnalysisProcessor extends WorkerHost {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private fuelConsumption: FuelConsumptionService,
   ) {
     super();
   }
 
-  async process(job: Job<FuelAnalysisJobData>): Promise<void> {
+  async process(job: Job<FuelAnalysisJobData | RecomputeDriverReportJobData>): Promise<void> {
+    if (job.name === 'recompute-driver-report') {
+      await this.processDriverReport(job as Job<RecomputeDriverReportJobData>);
+      return;
+    }
+
+    if (job.name === 'analyze') {
+      await this.processFuelLogAnalysis(job as Job<FuelAnalysisJobData>);
+      return;
+    }
+
+    this.logger.warn(`Unknown job type on fuel-analysis queue: ${job.name}`);
+  }
+
+  /**
+   * Recalcul temps réel du DailyFuelReport d'un seul chauffeur (déclenché à chaque
+   * livraison marquée delivered). Cible UNIQUEMENT le chauffeur de la livraison,
+   * jamais toute la company.
+   */
+  private async processDriverReport(job: Job<RecomputeDriverReportJobData>): Promise<void> {
+    const { companyId, driverId, date } = job.data;
+
+    try {
+      await this.fuelConsumption.generateDailyReportForSingleDriver(
+        companyId,
+        driverId,
+        date ? new Date(date) : undefined,
+      );
+      this.logger.log(
+        `Driver fuel report recomputed for driver ${driverId} (company ${companyId})`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to recompute driver fuel report for ${driverId}: ${error}`,
+      );
+      throw error;
+    }
+  }
+
+  private async processFuelLogAnalysis(job: Job<FuelAnalysisJobData>): Promise<void> {
     const { fuelLogId, companyId } = job.data;
 
     try {

@@ -32,6 +32,10 @@ const mockPrisma = {
   },
   driver: {
     findMany: jest.fn(),
+    findFirst: jest.fn(),
+  },
+  gpsPosition: {
+    findMany: jest.fn(),
   },
 };
 
@@ -481,6 +485,136 @@ describe('FuelConsumptionService', () => {
       await expect(service.remove('company-a', 'fuel-other-company')).rejects.toThrow(NotFoundException);
 
       expect(mockPrisma.fuelLog.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // REAL-TIME DAILY FUEL REPORT — generateDailyReportForSingleDriver()
+  // ----------------------------------------------------------------
+  describe('generateDailyReportForSingleDriver', () => {
+    const TARGET_DATE = new Date('2026-07-20T12:00:00.000Z');
+    const driver = {
+      id: 'driver-1',
+      firstName: 'Jean',
+      lastName: 'Rakoto',
+      vehicle: { id: 'vehicle-1', licensePlate: 'TRK-001', fuelType: 'Diesel', theoreticalConsumption: 10 },
+    };
+    // 4 points : le 2e est du bruit GPS (< 5m depuis le 1er, doit être ignoré), puis
+    // deux segments ~1111.95m → distanceKm = 2.22.
+    const POSITIONS = [
+      { latitude: 0, longitude: 0 },
+      { latitude: 0, longitude: 0.00004 },
+      { latitude: 0, longitude: 0.01004 },
+      { latitude: 0, longitude: 0.02004 },
+    ];
+    const expectedUpsertPayload = {
+      where: {
+        driverId_reportDate: {
+          driverId: 'driver-1',
+          reportDate: new Date('2026-07-20T00:00:00.000Z'),
+        },
+      },
+      create: {
+        reportDate: new Date('2026-07-20T00:00:00.000Z'),
+        driverId: 'driver-1',
+        driverName: 'Jean Rakoto',
+        vehicleId: 'vehicle-1',
+        vehiclePlate: 'TRK-001',
+        fuelType: 'diesel',
+        distanceKm: 2.22,
+        consumptionLPer100Km: 10,
+        estimatedCost: 1087.8,
+        pricePerLiterUsed: 4900,
+        companyId: 'company-1',
+      },
+      update: {
+        distanceKm: 2.22,
+        estimatedCost: 1087.8,
+        fuelType: 'diesel',
+        consumptionLPer100Km: 10,
+        vehiclePlate: 'TRK-001',
+        pricePerLiterUsed: 4900,
+      },
+    };
+
+    beforeEach(() => {
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 4900 });
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(POSITIONS);
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (args: any) => args);
+    });
+
+    it('computes and upserts the report for the target driver ONLY (never scans the whole company)', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      expect(mockPrisma.driver.findFirst).toHaveBeenCalledWith({
+        where: { id: 'driver-1', companyId: 'company-1', deletedAt: null },
+        select: expect.anything(),
+      });
+      // Le chemin temps réel ne doit PAS boucler sur toute la company.
+      expect(mockPrisma.driver.findMany).not.toHaveBeenCalled();
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledWith(expectedUpsertPayload);
+    });
+
+    it('produces an IDENTICAL report to generateDailyReportForCompany for that same driver', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.driver.findMany.mockResolvedValue([driver]);
+
+      // 1) Via le flux temps réel (un seul chauffeur)
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+      // 2) Via le batch quotidien (toute la company, le cron de 22h)
+      await (service as any).generateDailyReportForCompany('company-1', TARGET_DATE);
+
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(2);
+      const singleDriverPayload = mockPrisma.dailyFuelReport.upsert.mock.calls[0][0];
+      const companyPayload = mockPrisma.dailyFuelReport.upsert.mock.calls[1][0];
+      // Refactor neutre : le calcul (et donc l'upsert) doit être strictement identique.
+      expect(singleDriverPayload).toEqual(companyPayload);
+    });
+
+    it('handles two near-simultaneous completions via a full-day recompute (no distance double-count)', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+
+      // Deux livraisons du même chauffeur se terminent presque en même temps → deux jobs.
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(2);
+      // Chaque appel recalcule la TOTALITÉ du jour (2.22 km) et non un incrément :
+      // l'upsert écrasé par le dernier job garde une distance correcte, jamais doublée.
+      const first = mockPrisma.dailyFuelReport.upsert.mock.calls[0][0] as any;
+      const second = mockPrisma.dailyFuelReport.upsert.mock.calls[1][0] as any;
+      expect(first.create.distanceKm).toBe(2.22);
+      expect(second.create.distanceKm).toBe(2.22);
+      expect(first.create.distanceKm).toBe(second.create.distanceKm);
+    });
+
+    it('does nothing when the driver is not in the company', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(null);
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-999', TARGET_DATE);
+
+      expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
+      expect(mockPrisma.gpsPosition.findMany).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the driver has fewer than 2 GPS positions', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue([POSITIONS[0]]);
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the driver has no vehicle', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue({ ...driver, vehicle: null });
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
     });
   });
 });

@@ -2,6 +2,7 @@ import { Module, Global } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { NotificationsModule } from '../modules/notifications/notifications.module';
+import { FuelConsumptionModule } from '../modules/fuel-consumption/fuel-consumption.module';
 import { FuelAnalysisProcessor } from './fuel-analysis.processor';
 import { CompanyPurgeProcessor } from './company-purge.processor';
 import { WebhookRetryProcessor } from './webhook-retry.processor';
@@ -33,6 +34,7 @@ import { WebhookRetryProcessor } from './webhook-retry.processor';
       { name: 'webhook-retry' },
     ),
     NotificationsModule,
+    FuelConsumptionModule,
   ],
   providers: [FuelAnalysisProcessor, CompanyPurgeProcessor, WebhookRetryProcessor],
   exports: [BullModule],

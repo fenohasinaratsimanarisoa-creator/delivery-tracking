@@ -19,6 +19,12 @@ const DEFAULT_FUEL_PRICES: Record<string, number> = {
   hybrid: 3000,
 };
 
+// Seuil de bruit GPS : en dessous de 5m entre deux positions consécutives, on considère
+// qu'il s'agit de bruit de réception (dérive à l'arrêt) et non d'un déplacement réel.
+// Ce seuil est cohérent avec le scale d'accuracy utilisé dans detectTeleportation
+// (backend tracking.service.ts) où une accuracy de 10m donne un scale de 1.
+const GPS_NOISE_THRESHOLD_M = 5;
+
 @Injectable()
 export class FuelConsumptionService {
   private readonly logger = new Logger(FuelConsumptionService.name);
@@ -297,7 +303,6 @@ export class FuelConsumptionService {
 
   private async generateDailyReportForCompany(companyId: string, forDate?: Date) {
     const targetDate = forDate || new Date();
-    const bounds = this.getMadagascarDayBounds(targetDate);
 
     const drivers = await this.prisma.driver.findMany({
       where: { companyId, deletedAt: null, isActive: true },
@@ -307,77 +312,122 @@ export class FuelConsumptionService {
       },
     });
 
-    // Seuil de bruit GPS : en dessous de 5m entre deux positions consécutives, on considère
-    // qu'il s'agit de bruit de réception (dérive à l'arrêt) et non d'un déplacement réel.
-    // Ce seuil est cohérent avec le scale d'accuracy utilisé dans detectTeleportation
-    // (backend tracking.service.ts) où une accuracy de 10m donne un scale de 1.
-    const GPS_NOISE_THRESHOLD_M = 5;
-
+    // Comportement du cron de 22h strictement inchangé : boucle sur TOUS les chauffeurs
+    // actifs de la company, chacun recalculé via generateDailyReportForDriver() (même
+    // logique que l'ancien corps de boucle, extrait sans modification de comportement).
     for (const driver of drivers) {
-      const positions = await this.prisma.gpsPosition.findMany({
-        where: {
-          driverId: driver.id,
-          suspect: false,
-          timestamp: { gte: bounds.start, lte: bounds.end },
-        },
-        orderBy: { timestamp: 'asc' },
-        select: { latitude: true, longitude: true },
-      });
-
-      if (positions.length < 2) continue;
-
-      let totalDistance = 0;
-      for (let i = 1; i < positions.length; i++) {
-        const segDist = haversineDistanceM(
-          positions[i - 1].latitude, positions[i - 1].longitude,
-          positions[i].latitude, positions[i].longitude,
-        );
-        if (segDist >= GPS_NOISE_THRESHOLD_M) {
-          totalDistance += segDist;
-        }
-      }
-
-      const distanceKm = Math.round(totalDistance / 1000 * 100) / 100;
-      if (distanceKm < 0.1) continue;
-
-      const vehicle = driver.vehicle;
-      if (!vehicle) continue;
-      const fuelType = vehicle.fuelType?.toLowerCase() || 'essence';
-      const consumption = vehicle?.theoreticalConsumption || 8;
-      const pricePerLiter = await this.getFuelPriceForDate(companyId, fuelType, targetDate);
-      const estimatedCost = Math.round(distanceKm * consumption / 100 * pricePerLiter * 100) / 100;
-
-      const reportDate = new Date(Date.UTC(targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate()));
-      await this.prisma.dailyFuelReport.upsert({
-        where: {
-          driverId_reportDate: {
-            driverId: driver.id,
-            reportDate,
-          },
-        },
-        create: {
-          reportDate,
-          driverId: driver.id,
-          driverName: `${driver.firstName} ${driver.lastName}`,
-          vehicleId: vehicle.id,
-          vehiclePlate: vehicle?.licensePlate || 'N/A',
-          fuelType: fuelType,
-          distanceKm,
-          consumptionLPer100Km: consumption,
-          estimatedCost,
-          pricePerLiterUsed: pricePerLiter,
-          companyId,
-        },
-        update: {
-          distanceKm,
-          estimatedCost,
-          fuelType: fuelType,
-          consumptionLPer100Km: consumption,
-          vehiclePlate: vehicle?.licensePlate || 'N/A',
-          pricePerLiterUsed: pricePerLiter,
-        },
-      });
+      await this.generateDailyReportForDriver(driver, companyId, targetDate);
     }
+  }
+
+  /**
+   * Recalcule le DailyFuelReport d'UN SEUL chauffeur pour la journée donnée.
+   * C'est la méthode utilisée par le flux temps réel : à chaque livraison marquée
+   * `delivered`, un job de queue cible UNIQUEMENT le chauffeur de cette livraison —
+   * jamais toute la company — pour éviter de recréer le coût du batch quotidien à
+   * chaque livraison terminée.
+   */
+  async generateDailyReportForSingleDriver(companyId: string, driverId: string, date?: Date) {
+    const targetDate = date || new Date();
+
+    const driver = await this.prisma.driver.findFirst({
+      where: { id: driverId, companyId, deletedAt: null },
+      select: {
+        id: true, firstName: true, lastName: true,
+        vehicle: { select: { id: true, licensePlate: true, fuelType: true, theoreticalConsumption: true } },
+      },
+    });
+
+    if (!driver) {
+      this.logger.warn(`generateDailyReportForSingleDriver: driver ${driverId} not found in company ${companyId}`);
+      return;
+    }
+
+    await this.generateDailyReportForDriver(driver, companyId, targetDate);
+  }
+
+  /**
+   * Calcule et upsert le DailyFuelReport d'un seul chauffeur (corps extrait de l'ancienne
+   * boucle de generateDailyReportForCompany — refactor interne, résultat strictement
+   * identique). Le upsert Prisma sur driverId_reportDate recalcule TOUJOURS la totalité
+   * du jour : deux livraisons du même chauffeur terminées quasi simultanément produisent
+   * deux jobs qui se recouvrent sans jamais accumuler de distance en double.
+   */
+  private async generateDailyReportForDriver(
+    driver: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      vehicle: { id: string; licensePlate: string; fuelType: string; theoreticalConsumption: number | null } | null;
+    },
+    companyId: string,
+    targetDate: Date,
+  ) {
+    const bounds = this.getMadagascarDayBounds(targetDate);
+
+    const positions = await this.prisma.gpsPosition.findMany({
+      where: {
+        driverId: driver.id,
+        suspect: false,
+        timestamp: { gte: bounds.start, lte: bounds.end },
+      },
+      orderBy: { timestamp: 'asc' },
+      select: { latitude: true, longitude: true },
+    });
+
+    if (positions.length < 2) return;
+
+    let totalDistance = 0;
+    for (let i = 1; i < positions.length; i++) {
+      const segDist = haversineDistanceM(
+        positions[i - 1].latitude, positions[i - 1].longitude,
+        positions[i].latitude, positions[i].longitude,
+      );
+      if (segDist >= GPS_NOISE_THRESHOLD_M) {
+        totalDistance += segDist;
+      }
+    }
+
+    const distanceKm = Math.round(totalDistance / 1000 * 100) / 100;
+    if (distanceKm < 0.1) return;
+
+    const vehicle = driver.vehicle;
+    if (!vehicle) return;
+    const fuelType = vehicle.fuelType?.toLowerCase() || 'essence';
+    const consumption = vehicle?.theoreticalConsumption || 8;
+    const pricePerLiter = await this.getFuelPriceForDate(companyId, fuelType, targetDate);
+    const estimatedCost = Math.round(distanceKm * consumption / 100 * pricePerLiter * 100) / 100;
+
+    const reportDate = new Date(Date.UTC(targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate()));
+    await this.prisma.dailyFuelReport.upsert({
+      where: {
+        driverId_reportDate: {
+          driverId: driver.id,
+          reportDate,
+        },
+      },
+      create: {
+        reportDate,
+        driverId: driver.id,
+        driverName: `${driver.firstName} ${driver.lastName}`,
+        vehicleId: vehicle.id,
+        vehiclePlate: vehicle?.licensePlate || 'N/A',
+        fuelType: fuelType,
+        distanceKm,
+        consumptionLPer100Km: consumption,
+        estimatedCost,
+        pricePerLiterUsed: pricePerLiter,
+        companyId,
+      },
+      update: {
+        distanceKm,
+        estimatedCost,
+        fuelType: fuelType,
+        consumptionLPer100Km: consumption,
+        vehiclePlate: vehicle?.licensePlate || 'N/A',
+        pricePerLiterUsed: pricePerLiter,
+      },
+    });
   }
 
   private async crossCheckFuelLogWithGps(fuelLog: any, companyId: string) {

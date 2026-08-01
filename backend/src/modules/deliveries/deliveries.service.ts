@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Optional } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { DeliveryStatus, NotificationType, NotificationPriority, Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import * as ExcelJS from 'exceljs';
@@ -36,7 +38,42 @@ export class DeliveriesService {
     private configService: ConfigService,
     private dataUpdateBus: DataUpdateBus,
     private geocoding: GeocodingService,
+    @Optional() @InjectQueue('fuel-analysis') private fuelAnalysisQueue?: Queue,
   ) {}
+
+  /**
+   * Ajoute un job 'recompute-driver-report' à la queue fuel-analysis pour recalculer le
+   * DailyFuelReport du chauffeur concerné (temps réel, à chaque livraison terminée).
+   * Strictement fire-and-forget : la réponse HTTP de complétion de livraison ne doit
+   * JAMAIS attendre ce recalcul. @Optional() + try/catch : aucun plantage si Redis/BullMQ
+   * n'est pas configuré (dev local sans Redis par exemple).
+   */
+  private dispatchDailyFuelReportRecompute(companyId: string, driverId?: string | null): void {
+    if (!driverId) return;
+    const date = new Date().toISOString();
+    void this.enqueueDailyFuelReportRecompute(companyId, driverId, date);
+  }
+
+  private async enqueueDailyFuelReportRecompute(
+    companyId: string,
+    driverId: string,
+    date: string,
+  ): Promise<void> {
+    try {
+      if (this.fuelAnalysisQueue) {
+        await this.fuelAnalysisQueue.add('recompute-driver-report', {
+          companyId,
+          driverId,
+          date,
+        });
+      }
+    } catch (e: any) {
+      Logger.warn(
+        `Failed to dispatch daily fuel report recompute: ${e?.message}`,
+        'DeliveriesService',
+      );
+    }
+  }
 
   async create(companyId: string, dto: CreateDeliveryDto) {
     let assignedDriverId: string | undefined;
@@ -160,6 +197,7 @@ export class DeliveriesService {
     const updateData: any = { ...proofData, status: dto.status };
     if (dto.status === DeliveryStatus.delivered) {
       updateData.completedAt = new Date();
+      this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId);
     }
 
     const updated = await this.prisma.delivery.update({
@@ -268,6 +306,7 @@ export class DeliveriesService {
       }
       if (dto.status === DeliveryStatus.delivered) {
         updateData.completedAt = new Date();
+        this.dispatchDailyFuelReportRecompute(companyId, dto.driverId ?? delivery.driverId);
       }
     }
 
@@ -297,6 +336,7 @@ export class DeliveriesService {
     const updateData: any = { ...proofData, status: dto.status };
     if (dto.status === DeliveryStatus.delivered) {
       updateData.completedAt = new Date();
+      this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId);
     }
 
     const updated = await this.prisma.delivery.update({
@@ -535,6 +575,7 @@ export class DeliveriesService {
           const updateData: any = { status: targetStatus };
           if (targetStatus === DeliveryStatus.delivered) {
             updateData.completedAt = new Date();
+            this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId);
           }
           await this.prisma.delivery.update({ where: { id }, data: updateData });
           this.webhooks.dispatch('delivery.status_changed', {

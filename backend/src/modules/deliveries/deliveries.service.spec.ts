@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getQueueToken } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { DeliveryStatus } from '@prisma/client';
@@ -56,6 +57,10 @@ describe('DeliveriesService - State Machine', () => {
     dispatch: jest.fn(),
   };
 
+  const mockQueue = {
+    add: jest.fn().mockResolvedValue({ id: 'job-1' }),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
@@ -67,6 +72,7 @@ describe('DeliveriesService - State Machine', () => {
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('false') } },
         { provide: DataUpdateBus, useValue: { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() } },
         { provide: GeocodingService, useValue: { search: jest.fn().mockResolvedValue([]) } },
+        { provide: getQueueToken('fuel-analysis'), useValue: mockQueue },
       ],
     }).compile();
 
@@ -569,6 +575,160 @@ describe('DeliveriesService - State Machine', () => {
       expect(mockPrisma.delivery.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ driverId: 'drv-1', assignedDriverId: 'user-99' }) }),
       );
+    });
+  });
+
+  describe('realtime fuel report recompute (delivered)', () => {
+    const inProgressDelivery = {
+      id: 'del-1', companyId: 'comp-1', title: 'Test',
+      status: DeliveryStatus.in_progress, deletedAt: null,
+      vehicle: null, driver: null, deliveryLat: null, deliveryLng: null,
+      deliveryAddress: 'Ivato', assignedDriverId: 'user-1', clientId: null,
+      driverId: 'driver-1',
+    };
+    const expectJobAdded = (driverId: string) => {
+      expect(mockQueue.add).toHaveBeenCalledWith(
+        'recompute-driver-report',
+        expect.objectContaining({ companyId: 'comp-1', driverId, date: expect.any(String) }),
+      );
+    };
+    const expectNoJobAdded = () => expect(mockQueue.add).not.toHaveBeenCalled();
+
+    it('updateDriverStatus → delivered enqueues a recompute job with the driverId', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
+      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'delivered' });
+
+      await service.updateDriverStatus('comp-1', 'del-1', 'user-1', { status: DeliveryStatus.delivered } as any);
+
+      expectJobAdded('driver-1');
+    });
+
+    it('updateDriverStatus → failed does NOT enqueue a recompute job', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
+      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'failed' });
+
+      await service.updateDriverStatus('comp-1', 'del-1', 'user-1', { status: DeliveryStatus.failed } as any);
+
+      expectNoJobAdded();
+    });
+
+    it('updateDriverStatus → delivered with no driver does NOT enqueue a job', async () => {
+      const noDriver = { ...inProgressDelivery, driverId: null };
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(noDriver);
+      mockPrisma.delivery.update.mockResolvedValueOnce({ ...noDriver, status: 'delivered' });
+
+      await service.updateDriverStatus('comp-1', 'del-1', 'user-1', { status: DeliveryStatus.delivered } as any);
+
+      expectNoJobAdded();
+    });
+
+    it('updateStatus → delivered enqueues a recompute job with the driverId', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
+      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'delivered' });
+
+      await service.updateStatus('comp-1', 'del-1', { status: DeliveryStatus.delivered } as any);
+
+      expectJobAdded('driver-1');
+    });
+
+    it('updateStatus → failed does NOT enqueue a recompute job', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
+      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'failed' });
+
+      await service.updateStatus('comp-1', 'del-1', { status: DeliveryStatus.failed } as any);
+
+      expectNoJobAdded();
+    });
+
+    it('update → delivered enqueues a recompute job using the delivery driverId', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
+      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'delivered' });
+
+      await service.update('comp-1', 'del-1', { status: DeliveryStatus.delivered } as any);
+
+      expectJobAdded('driver-1');
+    });
+
+    it('update → delivered enqueues a recompute job using the new driverId when reassigning simultaneously', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-2', userId: 'user-2', companyId: 'comp-1' });
+      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, driverId: 'driver-2', status: 'delivered' });
+
+      await service.update('comp-1', 'del-1', { status: DeliveryStatus.delivered, driverId: 'driver-2' } as any);
+
+      expectJobAdded('driver-2');
+    });
+
+    it('update → assigned does NOT enqueue a recompute job', async () => {
+      const pendingDelivery = { ...inProgressDelivery, status: DeliveryStatus.pending };
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(pendingDelivery);
+      mockPrisma.delivery.update.mockResolvedValueOnce({ ...pendingDelivery, status: 'assigned' });
+
+      await service.update('comp-1', 'del-1', { status: DeliveryStatus.assigned } as any);
+
+      expectNoJobAdded();
+    });
+
+    it('bulkAction updateStatus → delivered enqueues a recompute job per affected delivery', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValue([
+        { id: 'del-a', status: 'in_progress', companyId: 'comp-1', deletedAt: null, driverId: 'driver-1' },
+        { id: 'del-b', status: 'in_progress', companyId: 'comp-1', deletedAt: null, driverId: 'driver-2' },
+      ]);
+      mockPrisma.delivery.update.mockResolvedValue({});
+
+      const result = await service.bulkAction('comp-1', {
+        ids: ['del-a', 'del-b'],
+        action: 'updateStatus',
+        status: 'delivered',
+      });
+
+      expect(result.succeeded).toEqual(['del-a', 'del-b']);
+      expect(mockQueue.add).toHaveBeenCalledWith(
+        'recompute-driver-report',
+        expect.objectContaining({ companyId: 'comp-1', driverId: 'driver-1' }),
+      );
+      expect(mockQueue.add).toHaveBeenCalledWith(
+        'recompute-driver-report',
+        expect.objectContaining({ companyId: 'comp-1', driverId: 'driver-2' }),
+      );
+    });
+
+    it('bulkAction updateStatus → failed does NOT enqueue a recompute job', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValue([
+        { id: 'del-a', status: 'in_progress', companyId: 'comp-1', deletedAt: null, driverId: 'driver-1' },
+      ]);
+      mockPrisma.delivery.update.mockResolvedValue({});
+
+      await service.bulkAction('comp-1', {
+        ids: ['del-a'],
+        action: 'updateStatus',
+        status: 'failed',
+      });
+
+      expectNoJobAdded();
+    });
+
+    it('still succeeds when the queue is not configured (@Optional) — job simply not dispatched', async () => {
+      // Reconstruit le service SANS le provider de queue pour simuler un environnement
+      // sans Redis/BullMQ : la complétion de livraison ne doit pas planter.
+      const moduleNoQueue = await Test.createTestingModule({
+        providers: [
+          DeliveriesService,
+          { provide: PrismaService, useValue: mockPrisma },
+          { provide: NotificationsService, useValue: mockNotifications },
+          { provide: WebhooksService, useValue: mockWebhooks },
+          { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('false') } },
+          { provide: DataUpdateBus, useValue: { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() } },
+          { provide: GeocodingService, useValue: { search: jest.fn().mockResolvedValue([]) } },
+        ],
+      }).compile();
+      const svc = moduleNoQueue.get<DeliveriesService>(DeliveriesService);
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
+      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'delivered' });
+
+      await expect(
+        svc.updateStatus('comp-1', 'del-1', { status: DeliveryStatus.delivered } as any),
+      ).resolves.toBeDefined();
     });
   });
 });
