@@ -25,6 +25,7 @@ describe('TrackingGateway — cross-tenant security', () => {
     savePosition: jest.Mock;
   };
   let mockServer: { to: jest.Mock; emit: jest.Mock };
+  let deliveryProximityService: { snoozeProximity: jest.Mock };
 
   beforeEach(async () => {
     trackingService = {
@@ -37,6 +38,7 @@ describe('TrackingGateway — cross-tenant security', () => {
       getLastPosition: jest.fn().mockResolvedValue(null),
       savePosition: jest.fn().mockResolvedValue({ id: 'pos-1', suspect: false }),
     };
+    deliveryProximityService = { snoozeProximity: jest.fn() };
 
     const mockEventEmitter = { on: jest.fn(), emit: jest.fn() };
     mockServer = {
@@ -48,6 +50,7 @@ describe('TrackingGateway — cross-tenant security', () => {
       trackingService as any,
       {} as any, // wsAuthService mock
       mockEventEmitter as any, // dataUpdateBus
+      deliveryProximityService as any, // deliveryProximityService mock
     );
     (gateway as any).server = mockServer;
   });
@@ -301,6 +304,41 @@ describe('TrackingGateway — cross-tenant security', () => {
       await gateway.handlePosition(client, positionDto({ vehicleId: 'vehicle-b-1' }));
 
       expect(trackingService.getLastPosition).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleSnoozeProximityAlert', () => {
+    it('rejects snooze when the driver is not assigned to the delivery', async () => {
+      const client = mockSocket();
+      client.data.user = { id: 'driver-user-1', role: 'driver', companyId: 'company-a' };
+      trackingService.verifyDriverAssignment.mockRejectedValueOnce(
+        new NotFoundException('Driver is not assigned to this delivery'),
+      );
+
+      await gateway.handleSnoozeProximityAlert(client, { deliveryId: 'delivery-1', escalationLevel: 0 });
+
+      expect(deliveryProximityService.snoozeProximity).not.toHaveBeenCalled();
+    });
+
+    it('snoozes using the vehicleId derived from the authenticated driver session', async () => {
+      const client = mockSocket();
+      client.data.user = { id: 'driver-user-1', role: 'driver', companyId: 'company-a' };
+      trackingService.verifyDriverAssignment.mockResolvedValueOnce(undefined);
+      trackingService.findDriverByUserId.mockResolvedValueOnce({ id: 'driver-1', vehicleId: 'vehicle-1' });
+
+      await gateway.handleSnoozeProximityAlert(client, { deliveryId: 'delivery-1', escalationLevel: 2 });
+
+      expect(deliveryProximityService.snoozeProximity).toHaveBeenCalledWith('delivery-1', 'vehicle-1', 2);
+    });
+
+    it('does nothing for non-driver roles', async () => {
+      const client = mockSocket();
+      client.data.user = { id: 'admin-1', role: 'admin', companyId: 'company-a' };
+
+      await gateway.handleSnoozeProximityAlert(client, { deliveryId: 'delivery-1', escalationLevel: 0 });
+
+      expect(trackingService.verifyDriverAssignment).not.toHaveBeenCalled();
+      expect(deliveryProximityService.snoozeProximity).not.toHaveBeenCalled();
     });
   });
 });

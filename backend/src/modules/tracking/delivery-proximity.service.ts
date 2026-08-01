@@ -69,6 +69,30 @@ export class DeliveryProximityService {
     return cached !== null && cached > Date.now();
   }
 
+  /**
+   * Écrit la clé de snooze serveur (`proximity:snoozed:{deliveryId}:{vehicleId}`).
+   * Appelée par le client via le message WebSocket 'snoozeProximityAlert' après un
+   * dismiss : c'est ce qui permet au serveur de NE PAS réémettre proximityAlert à
+   * chaque position GPS reçue tant que le véhicule reste dans le rayon de 300m
+   * (throttling serveur réel, consommé par isSnoozed() dans checkProximity()).
+   * Réutilise les constantes SNOOZE_MS / ESCALATION_SNOOZE_MS déjà définies —
+   * mêmes durées que le snooze local côté client (pas de duplication).
+   */
+  async snoozeProximity(deliveryId: string, vehicleId: string, escalationLevel: number): Promise<void> {
+    const snoozeMs = escalationLevel >= 2 ? ESCALATION_SNOOZE_MS : SNOOZE_MS;
+    const until = Date.now() + snoozeMs;
+    const key = await this.getSnoozeKey(deliveryId, vehicleId);
+    const ttlSec = Math.ceil(snoozeMs / 1000);
+    if (this.redis) {
+      await this.redis.set(key, until, 'EX', ttlSec);
+    } else {
+      await this.cacheService.set(key, until, ttlSec);
+    }
+    this.logger.log(
+      `[PROXIMITY] snoozed delivery=${deliveryId} vehicle=${vehicleId} escalation=${escalationLevel} (${snoozeMs}ms)`,
+    );
+  }
+
   async checkProximity(
     driverId: string,
     vehicleId: string,

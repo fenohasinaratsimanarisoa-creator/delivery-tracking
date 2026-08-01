@@ -14,6 +14,7 @@ import { GpsPosition } from '@prisma/client';
 import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 import { WsAuthService } from '../../common/auth/ws-auth.service';
 import { TrackingService } from './tracking.service';
+import { DeliveryProximityService } from './delivery-proximity.service';
 import { UpdatePositionDto, BatchPositionDto } from './dto/update-position.dto';
 import { DataUpdateBus, DataUpdateEvent } from '../../common/events/data-update.bus';
 import { WsTrackingExceptionFilter } from '../../common/filters/ws-tracking-exception.filter';
@@ -40,6 +41,7 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     private trackingService: TrackingService,
     private wsAuthService: WsAuthService,
     private dataUpdateBus: DataUpdateBus,
+    private deliveryProximityService: DeliveryProximityService,
   ) {
     this.dataUpdateListener = (event) => {
       if (event.targetUserId && event.entity === 'proximityAlert') {
@@ -246,6 +248,47 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
 
       return { event: 'positionsSaved', data: { count: saved.length } };
     });
+  }
+
+  /**
+   * Reçoit un snooze d'alerte de proximité du chauffeur (après dismiss côté app).
+   * On ne fait confiance à AUCUN deliveryId/vehicleId envoyé par le client : on
+   * revérifie que le chauffeur authentifié est bien assigné à la livraison, puis
+   * on dérive le vehicleId de sa session (véhicule du chauffeur). Le snooze
+   * serveur ainsi écrit évite que le serveur réémette proximityAlert à chaque
+   * position GPS reçue tant que le véhicule reste dans le rayon.
+   * Les clients mobiles qui n'envoient pas ce message gardent un comportement
+   * fonctionnel (alertes réémises), juste moins optimisé.
+   */
+  @SubscribeMessage('snoozeProximityAlert')
+  async handleSnoozeProximityAlert(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { deliveryId?: string; escalationLevel?: number },
+  ) {
+    const user = client.data.user;
+    if (!user || user.role !== 'driver') return;
+
+    const deliveryId = body?.deliveryId;
+    if (!deliveryId || typeof deliveryId !== 'string') return;
+
+    try {
+      await this.trackingService.verifyDriverAssignment(deliveryId, user.id);
+    } catch {
+      this.logger.warn(
+        `Snooze proximity rejected: driver ${user.id} not assigned to delivery ${deliveryId}`,
+      );
+      return;
+    }
+
+    const driver = await this.trackingService.findDriverByUserId(user.id);
+    if (!driver?.vehicleId) return;
+
+    const escalationLevel =
+      typeof body?.escalationLevel === 'number' && body.escalationLevel >= 0
+        ? Math.floor(body.escalationLevel)
+        : 0;
+
+    await this.deliveryProximityService.snoozeProximity(deliveryId, driver.vehicleId, escalationLevel);
   }
 
   @SubscribeMessage('subscribeToDelivery')

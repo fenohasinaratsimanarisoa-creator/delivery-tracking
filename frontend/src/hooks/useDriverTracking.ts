@@ -250,6 +250,19 @@ export function useDriverTracking() {
       proximitySnoozedUntilRef.current = Date.now() + snoozeTime;
       soundEnabledRef.current = true;
       if (escalation >= 1 && navigator.vibrate) navigator.vibrate(200);
+
+      // Informe le serveur du snooze (throttling réel côté serveur) : il ne
+      // réémettra plus proximityAlert pour cette livraison tant que la fenêtre de
+      // snooze n'est pas écoulée. L'état local reste conservé comme protection
+      // immédiate (latence réseau avant confirmation serveur) — défense en
+      // profondeur. Les versions qui n'écoutent pas ce message restent
+      // fonctionnelles (alertes réémises, juste moins optimisées).
+      if (deliveryId) {
+        const socket = getSocket();
+        if (socket.connected) {
+          socket.emit('snoozeProximityAlert', { deliveryId, escalationLevel: escalation });
+        }
+      }
     } else if (type === 'cascade' && deliveryId) {
       cascadeSnoozedRef.current[`cascade:${deliveryId}`] = Date.now();
       setAlerts((prev) => prev.filter((a) => !(a.type === 'cascade' && a.deliveryId === deliveryId)));
