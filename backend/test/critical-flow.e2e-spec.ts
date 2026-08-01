@@ -1,9 +1,11 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import * as cookieParser from 'cookie-parser';
 import { DeliveryStatus, NotificationPriority, NotificationType } from '@prisma/client';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { CsrfContext, fetchCsrf, withCsrf } from './helpers/csrf';
 
 describe('Critical delivery flow (e2e)', () => {
   let app: INestApplication;
@@ -23,6 +25,7 @@ describe('Critical delivery flow (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -71,9 +74,14 @@ describe('Critical delivery flow (e2e)', () => {
     const accessToken = loginRes.body.accessToken as string;
     expect(accessToken).toBeDefined();
 
-    const vehicleRes = await request(app.getHttpServer())
-      .post('/vehicles')
-      .set('Authorization', `Bearer ${accessToken}`)
+    const csrf: CsrfContext = await fetchCsrf(app);
+
+    const vehicleRes = await withCsrf(
+      request(app.getHttpServer())
+        .post('/vehicles')
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
       .send({
         brand: 'Toyota',
         model: 'Hilux',
@@ -83,9 +91,12 @@ describe('Critical delivery flow (e2e)', () => {
       })
       .expect(201);
 
-    const deliveryRes = await request(app.getHttpServer())
-      .post('/deliveries')
-      .set('Authorization', `Bearer ${accessToken}`)
+    const deliveryRes = await withCsrf(
+      request(app.getHttpServer())
+        .post('/deliveries')
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
       .send({
         title: `Critical delivery ${runId}`,
         pickupAddress: 'Warehouse A',
@@ -96,9 +107,12 @@ describe('Critical delivery flow (e2e)', () => {
 
     expect(deliveryRes.body.status).toBe(DeliveryStatus.pending);
 
-    const driverRes = await request(app.getHttpServer())
-      .post('/drivers')
-      .set('Authorization', `Bearer ${accessToken}`)
+    const driverRes = await withCsrf(
+      request(app.getHttpServer())
+        .post('/drivers')
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
       .send({
         firstName: 'Flow',
         lastName: 'Driver',
@@ -106,17 +120,23 @@ describe('Critical delivery flow (e2e)', () => {
       })
       .expect(201);
 
-    const assignedRes = await request(app.getHttpServer())
-      .patch(`/deliveries/${deliveryRes.body.id}`)
-      .set('Authorization', `Bearer ${accessToken}`)
+    const assignedRes = await withCsrf(
+      request(app.getHttpServer())
+        .patch(`/deliveries/${deliveryRes.body.id}`)
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
       .send({ driverId: driverRes.body.id })
       .expect(200);
 
     expect(assignedRes.body.driver.id).toBe(driverRes.body.id);
 
-    const statusRes = await request(app.getHttpServer())
-      .patch(`/deliveries/${deliveryRes.body.id}/status`)
-      .set('Authorization', `Bearer ${accessToken}`)
+    const statusRes = await withCsrf(
+      request(app.getHttpServer())
+        .patch(`/deliveries/${deliveryRes.body.id}/status`)
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
       .send({ status: DeliveryStatus.assigned })
       .expect(200);
 
@@ -133,9 +153,9 @@ describe('Critical delivery flow (e2e)', () => {
 
     expect(notification).toMatchObject({
       priority: NotificationPriority.medium,
-      title: `Delivery ${DeliveryStatus.assigned}`,
+      title: `Livraison ${DeliveryStatus.assigned}`,
       link: `/deliveries/${deliveryRes.body.id}`,
     });
-    expect(notification?.message).toContain('is now assigned');
+    expect(notification?.message).toContain('est maintenant assigned');
   });
 });

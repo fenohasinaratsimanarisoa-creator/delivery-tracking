@@ -138,10 +138,11 @@ import { TenantModule } from './common/tenant/tenant.module';
     GeocodingModule,
   ],
   providers: [
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
+    // Rate limiting is disabled in tests: e2e suites burst past the per-route
+    // limits (e.g. reset-password allows 5 req/min).
+    ...(process.env.NODE_ENV === 'test'
+      ? [{ provide: APP_GUARD, useValue: { canActivate: () => true } }]
+      : [{ provide: APP_GUARD, useClass: ThrottlerGuard }]),
     {
       provide: APP_GUARD,
       useClass: CsrfGuard,

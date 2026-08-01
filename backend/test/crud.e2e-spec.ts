@@ -1,14 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import * as cookieParser from 'cookie-parser';
 import * as request from 'supertest';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { AppModule } from '../src/app.module';
+import { CsrfContext, fetchCsrf, withCsrf } from './helpers/csrf';
 
 describe('CRUD Operations (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let companyId: string;
   let accessToken: string;
+  let csrf: CsrfContext;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -16,6 +20,7 @@ describe('CRUD Operations (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
@@ -25,11 +30,12 @@ describe('CRUD Operations (e2e)', () => {
     const company = await prisma.company.create({ data: { name: 'CRUD Test Company' } });
     companyId = company.id;
 
-    // Register and login
+    const passwordHash = await bcrypt.hash('StrongPass123', 1);
+
     const user = await prisma.user.create({
       data: {
         email: 'crud@test.com',
-        passwordHash: '$2b$12$LJ3m4ys3Lg3YOCwR1Di7Nu5pFJGxBhB8P4h5Vg5W5y3q5n5q5n5qO', // dummy hash
+        passwordHash,
         firstName: 'CRUD',
         lastName: 'Tester',
         role: 'admin',
@@ -45,17 +51,10 @@ describe('CRUD Operations (e2e)', () => {
     if (loginRes.status === 200) {
       accessToken = loginRes.body.accessToken;
     } else {
-      // Register a new user for testing
-      const regRes = await request(app.getHttpServer()).post('/auth/register').send({
-        email: 'crud2@test.com',
-        password: 'StrongPass123',
-        firstName: 'CRUD',
-        lastName: 'Tester',
-        role: 'admin',
-        companyId,
-      });
-      accessToken = regRes.body.accessToken;
+      throw new Error(`Login failed during CRUD e2e setup: ${JSON.stringify(loginRes.body)}`);
     }
+
+    csrf = await fetchCsrf(app);
   }, 15000);
 
   afterAll(async () => {
@@ -74,9 +73,12 @@ describe('CRUD Operations (e2e)', () => {
 
   describe('Vehicles', () => {
     it('POST /vehicles - should create a vehicle', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/vehicles')
-        .set('Authorization', `Bearer ${accessToken}`)
+      const res = await withCsrf(
+        request(app.getHttpServer())
+          .post('/vehicles')
+          .set('Authorization', `Bearer ${accessToken}`),
+        csrf,
+      )
         .send({
           brand: 'Toyota',
           model: 'Hilux',
@@ -110,9 +112,12 @@ describe('CRUD Operations (e2e)', () => {
     });
 
     it('PATCH /vehicles/:id - should update a vehicle', async () => {
-      const res = await request(app.getHttpServer())
-        .patch(`/vehicles/${vehicleId}`)
-        .set('Authorization', `Bearer ${accessToken}`)
+      const res = await withCsrf(
+        request(app.getHttpServer())
+          .patch(`/vehicles/${vehicleId}`)
+          .set('Authorization', `Bearer ${accessToken}`),
+        csrf,
+      )
         .send({ year: 2024 })
         .expect(200);
 
@@ -120,18 +125,23 @@ describe('CRUD Operations (e2e)', () => {
     });
 
     it('DELETE /vehicles/:id - should delete a vehicle', async () => {
-      await request(app.getHttpServer())
-        .delete(`/vehicles/00000000-0000-0000-0000-000000000000`)
-        .set('Authorization', `Bearer ${accessToken}`)
-        .expect(404);
+      await withCsrf(
+        request(app.getHttpServer())
+          .delete(`/vehicles/00000000-0000-0000-0000-000000000000`)
+          .set('Authorization', `Bearer ${accessToken}`),
+        csrf,
+      ).expect(404);
     });
   });
 
   describe('Drivers', () => {
     it('POST /drivers - should create a driver', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/drivers')
-        .set('Authorization', `Bearer ${accessToken}`)
+      const res = await withCsrf(
+        request(app.getHttpServer())
+          .post('/drivers')
+          .set('Authorization', `Bearer ${accessToken}`),
+        csrf,
+      )
         .send({ firstName: 'John', lastName: 'Driver', licenseNumber: 'LIC-CRUD-001' })
         .expect(201);
 
@@ -170,9 +180,12 @@ describe('CRUD Operations (e2e)', () => {
     });
 
     it('POST /deliveries - should create a delivery', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/deliveries')
-        .set('Authorization', `Bearer ${accessToken}`)
+      const res = await withCsrf(
+        request(app.getHttpServer())
+          .post('/deliveries')
+          .set('Authorization', `Bearer ${accessToken}`),
+        csrf,
+      )
         .send({
           title: 'Test Delivery',
           pickupAddress: '123 Pickup St',
@@ -187,9 +200,12 @@ describe('CRUD Operations (e2e)', () => {
     });
 
     it('PATCH /deliveries/:id/status - should transition pending -> assigned', async () => {
-      const res = await request(app.getHttpServer())
-        .patch(`/deliveries/${deliveryId}/status`)
-        .set('Authorization', `Bearer ${accessToken}`)
+      const res = await withCsrf(
+        request(app.getHttpServer())
+          .patch(`/deliveries/${deliveryId}/status`)
+          .set('Authorization', `Bearer ${accessToken}`),
+        csrf,
+      )
         .send({ status: 'assigned' })
         .expect(200);
 
@@ -209,9 +225,12 @@ describe('CRUD Operations (e2e)', () => {
         },
       });
 
-      await request(app.getHttpServer())
-        .patch(`/deliveries/${d.id}/status`)
-        .set('Authorization', `Bearer ${accessToken}`)
+      await withCsrf(
+        request(app.getHttpServer())
+          .patch(`/deliveries/${d.id}/status`)
+          .set('Authorization', `Bearer ${accessToken}`),
+        csrf,
+      )
         .send({ status: 'delivered' })
         .expect(400);
 
@@ -219,15 +238,21 @@ describe('CRUD Operations (e2e)', () => {
     });
 
     it('PATCH /deliveries/:id/status - should transition assigned -> in_progress -> delivered', async () => {
-      await request(app.getHttpServer())
-        .patch(`/deliveries/${deliveryId}/status`)
-        .set('Authorization', `Bearer ${accessToken}`)
+      await withCsrf(
+        request(app.getHttpServer())
+          .patch(`/deliveries/${deliveryId}/status`)
+          .set('Authorization', `Bearer ${accessToken}`),
+        csrf,
+      )
         .send({ status: 'in_progress' })
         .expect(200);
 
-      const res = await request(app.getHttpServer())
-        .patch(`/deliveries/${deliveryId}/status`)
-        .set('Authorization', `Bearer ${accessToken}`)
+      const res = await withCsrf(
+        request(app.getHttpServer())
+          .patch(`/deliveries/${deliveryId}/status`)
+          .set('Authorization', `Bearer ${accessToken}`),
+        csrf,
+      )
         .send({ status: 'delivered' })
         .expect(200);
 
@@ -236,9 +261,12 @@ describe('CRUD Operations (e2e)', () => {
     });
 
     it('PATCH /deliveries/:id/status - should reject transition from delivered', async () => {
-      await request(app.getHttpServer())
-        .patch(`/deliveries/${deliveryId}/status`)
-        .set('Authorization', `Bearer ${accessToken}`)
+      await withCsrf(
+        request(app.getHttpServer())
+          .patch(`/deliveries/${deliveryId}/status`)
+          .set('Authorization', `Bearer ${accessToken}`),
+        csrf,
+      )
         .send({ status: 'pending' })
         .expect(400);
     });

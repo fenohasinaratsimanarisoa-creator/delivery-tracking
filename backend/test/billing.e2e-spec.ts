@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import * as cookieParser from 'cookie-parser';
 import * as request from 'supertest';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { AppModule } from '../src/app.module';
+import { CsrfContext, fetchCsrf, withCsrf } from './helpers/csrf';
 
 describe('Billing Flow (e2e)', () => {
   let app: INestApplication;
@@ -10,14 +12,18 @@ describe('Billing Flow (e2e)', () => {
   let accessToken: string;
   let planId: string;
   let subscriptionId: string;
+  let csrf: CsrfContext;
   const testEmail = `billing-e2e-${Date.now()}@test.com`;
 
   beforeAll(async () => {
+    process.env.BILLING_ENABLED = 'true';
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
@@ -33,6 +39,19 @@ describe('Billing Flow (e2e)', () => {
     });
 
     accessToken = regRes.body.accessToken;
+
+    // Plans are not part of migrations/seed — create the standard set for the test.
+    await prisma.billingPlan.createMany({
+      data: [
+        { tier: 'free', name: 'Free', price: 0, interval: 'month' },
+        { tier: 'starter', name: 'Starter', price: 2900, interval: 'month' },
+        { tier: 'pro', name: 'Pro', price: 9900, interval: 'month' },
+        { tier: 'enterprise', name: 'Enterprise', price: 29900, interval: 'month' },
+      ],
+      skipDuplicates: true,
+    });
+
+    csrf = await fetchCsrf(app);
   }, 30000);
 
   afterAll(async () => {
@@ -46,6 +65,9 @@ describe('Billing Flow (e2e)', () => {
       await prisma.user.deleteMany({ where: { companyId: cid } });
       await prisma.company.delete({ where: { id: cid } });
     }
+    await prisma.billingPlan.deleteMany({
+      where: { tier: { in: ['free', 'starter', 'pro', 'enterprise'] } },
+    });
     await app.close();
   });
 
@@ -63,9 +85,12 @@ describe('Billing Flow (e2e)', () => {
   });
 
   it('POST /billing/subscription creates checkout with sessionUrl', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/billing/subscription')
-      .set('Authorization', `Bearer ${accessToken}`)
+    const res = await withCsrf(
+      request(app.getHttpServer())
+        .post('/billing/subscription')
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
       .send({ planId, provider: 'stripe' })
       .expect(201);
 
@@ -92,9 +117,12 @@ describe('Billing Flow (e2e)', () => {
       data: { status: 'canceled' },
     });
 
-    const res = await request(app.getHttpServer())
-      .post('/vehicles')
-      .set('Authorization', `Bearer ${accessToken}`)
+    const res = await withCsrf(
+      request(app.getHttpServer())
+        .post('/vehicles')
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
       .send({
         brand: 'Toyota',
         model: 'Hilux',
@@ -114,9 +142,12 @@ describe('Billing Flow (e2e)', () => {
       data: { status: 'active', canceledAt: null },
     });
 
-    const res = await request(app.getHttpServer())
-      .post('/vehicles')
-      .set('Authorization', `Bearer ${accessToken}`)
+    const res = await withCsrf(
+      request(app.getHttpServer())
+        .post('/vehicles')
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
       .send({
         brand: 'Toyota',
         model: 'Hilux',

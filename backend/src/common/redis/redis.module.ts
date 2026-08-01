@@ -12,10 +12,12 @@ export const REDIS_SUB_CLIENT = 'REDIS_SUB_CLIENT';
       provide: REDIS_CLIENT,
       useFactory: () => {
         if (!process.env.REDIS_URL) return null;
+        // Connects eagerly on boot: with lazyConnect the first command issued
+        // before the connection is ready throws instead of being retried
+        // (enableOfflineQueue is false), causing a 500 on first use.
         return new Redis(process.env.REDIS_URL, {
           maxRetriesPerRequest: null,
           enableOfflineQueue: false,
-          lazyConnect: true,
         });
       },
     },
@@ -26,7 +28,6 @@ export const REDIS_SUB_CLIENT = 'REDIS_SUB_CLIENT';
         return new Redis(process.env.REDIS_URL, {
           maxRetriesPerRequest: null,
           enableOfflineQueue: false,
-          lazyConnect: true,
         });
       },
     },
@@ -37,7 +38,6 @@ export const REDIS_SUB_CLIENT = 'REDIS_SUB_CLIENT';
         return new Redis(process.env.REDIS_URL, {
           maxRetriesPerRequest: null,
           enableOfflineQueue: false,
-          lazyConnect: true,
         });
       },
     },

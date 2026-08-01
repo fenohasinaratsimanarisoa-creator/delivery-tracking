@@ -43,6 +43,22 @@ describe('Authentication (e2e)', () => {
   let accessToken: string;
 
   describe('POST /auth/register', () => {
+    afterAll(async () => {
+      await prisma.auditLog.deleteMany({
+        where: { user: { email: 'new@example.com' } },
+      });
+      await prisma.userSession.deleteMany({
+        where: { user: { email: 'new@example.com' } },
+      });
+      await prisma.user.deleteMany({ where: { email: 'new@example.com' } });
+      const createdCompany = await prisma.company.findFirst({
+        where: { name: 'New Test Company' },
+      });
+      if (createdCompany) {
+        await prisma.company.delete({ where: { id: createdCompany.id } });
+      }
+    });
+
     it('should register a new user with company creation', async () => {
       const res = await request(app.getHttpServer())
         .post('/auth/register')
@@ -60,16 +76,6 @@ describe('Authentication (e2e)', () => {
       expect(res.body.user.email).toBe('new@example.com');
       expect(res.body.user.role).toBe('admin');
       accessToken = res.body.accessToken;
-
-      // Cleanup
-      await prisma.user.delete({ where: { email: 'new@example.com' } });
-      // The company was created — find it by name
-      const createdCompany = await prisma.company.findFirst({
-        where: { name: 'New Test Company' },
-      });
-      if (createdCompany) {
-        await prisma.company.delete({ where: { id: createdCompany.id } });
-      }
     });
 
     it('should reject duplicate email', async () => {
@@ -114,10 +120,6 @@ describe('Authentication (e2e)', () => {
       });
     });
 
-    afterAll(async () => {
-      await prisma.user.deleteMany({ where: { companyId } });
-    });
-
     it('should login and return tokens', async () => {
       const res = await request(app.getHttpServer())
         .post('/auth/login')
@@ -160,7 +162,7 @@ describe('Authentication (e2e)', () => {
         .send({ email: 'nonexistent@test.com' })
         .expect(200);
 
-      expect(res.body.message).toContain('Si un compte existe');
+      expect(res.body.message).toContain('If an account exists');
     });
 
     it('should return success even for existing user (no enumeration)', async () => {
@@ -169,7 +171,7 @@ describe('Authentication (e2e)', () => {
         .send({ email: testUser.email })
         .expect(200);
 
-      expect(res.body.message).toContain('Si un compte existe');
+      expect(res.body.message).toContain('If an account exists');
     });
 
     it('should create a reset token in database', async () => {
@@ -184,23 +186,29 @@ describe('Authentication (e2e)', () => {
   });
 
   describe('POST /auth/reset-password', () => {
-    let resetToken: string;
+    let combinedToken: string;
 
-    beforeAll(async () => {
-      // Create a reset token for the test user
-      resetToken = 'valid-reset-token-' + Date.now();
-      const hashedToken = await bcrypt.hash(resetToken, 10);
-      const expiry = new Date(Date.now() + 30 * 60 * 1000);
+    const seedResetToken = async (tokenId: string, secret: string, expiry: Date) => {
+      const hashed = await bcrypt.hash(secret, 10);
       await prisma.user.update({
         where: { email: testUser.email },
-        data: { resetTokenHash: hashedToken, resetTokenExpiry: expiry },
+        data: { resetTokenId: tokenId, resetTokenHash: hashed, resetTokenExpiry: expiry },
       });
+    };
+
+    beforeAll(async () => {
+      // Current format is "resetTokenId:rawSecret" — the resetTokenId is
+      // indexed on the user for O(1) lookup, rawSecret is bcrypt-hashed.
+      const resetTokenId = `valid-reset-id-${Date.now()}`;
+      const rawSecret = 'raw-secret-123';
+      combinedToken = `${resetTokenId}:${rawSecret}`;
+      await seedResetToken(resetTokenId, rawSecret, new Date(Date.now() + 30 * 60 * 1000));
     });
 
     afterAll(async () => {
       await prisma.user.update({
         where: { email: testUser.email },
-        data: { resetTokenHash: null, resetTokenExpiry: null },
+        data: { resetTokenId: null, resetTokenHash: null, resetTokenExpiry: null },
       });
     });
 
@@ -208,7 +216,7 @@ describe('Authentication (e2e)', () => {
       const newPassword = 'NewStrongPass123!';
       await request(app.getHttpServer())
         .post('/auth/reset-password')
-        .send({ token: resetToken, password: newPassword })
+        .send({ token: combinedToken, password: newPassword })
         .expect(200);
 
       // Verify new password works
@@ -221,17 +229,13 @@ describe('Authentication (e2e)', () => {
     });
 
     it('should reject expired token', async () => {
-      const expiredToken = 'expired-token';
-      const hashedToken = await bcrypt.hash(expiredToken, 10);
-      const expiry = new Date(Date.now() - 60 * 1000); // 1 minute ago
-      await prisma.user.update({
-        where: { email: testUser.email },
-        data: { resetTokenHash: hashedToken, resetTokenExpiry: expiry },
-      });
+      const tokenId = `expired-id-${Date.now()}`;
+      const secret = 'expired-secret';
+      await seedResetToken(tokenId, secret, new Date(Date.now() - 60 * 1000)); // 1 minute ago
 
       await request(app.getHttpServer())
         .post('/auth/reset-password')
-        .send({ token: expiredToken, password: 'NewStrongPass456!' })
+        .send({ token: `${tokenId}:${secret}`, password: 'NewStrongPass456!' })
         .expect(400);
     });
 
@@ -251,19 +255,14 @@ describe('Authentication (e2e)', () => {
       const refreshCookie = loginRes.headers['set-cookie'];
 
       // Reset password
-      const newToken = 'another-valid-token-' + Date.now();
-      const hashedToken = await bcrypt.hash(newToken, 10);
-      await prisma.user.update({
-        where: { email: testUser.email },
-        data: {
-          resetTokenHash: hashedToken,
-          resetTokenExpiry: new Date(Date.now() + 30 * 60 * 1000),
-        },
-      });
+      const tokenId = `invalidate-id-${Date.now()}`;
+      const secret = 'invalidate-secret';
+      await seedResetToken(tokenId, secret, new Date(Date.now() + 30 * 60 * 1000));
 
       await request(app.getHttpServer())
         .post('/auth/reset-password')
-        .send({ token: newToken, password: 'FinalPass123!' });
+        .send({ token: `${tokenId}:${secret}`, password: 'FinalPass123!' })
+        .expect(200);
 
       // Old refresh token should no longer work
       const refreshRes = await request(app.getHttpServer())

@@ -1,9 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import * as cookieParser from 'cookie-parser';
 import * as request from 'supertest';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { AppModule } from '../src/app.module';
+import { CsrfContext, fetchCsrf, withCsrf } from './helpers/csrf';
 
 describe('Fuel Consumption (e2e)', () => {
   let app: INestApplication;
@@ -11,6 +13,7 @@ describe('Fuel Consumption (e2e)', () => {
   let companyId: string;
   let accessToken: string;
   let vehicleId: string;
+  let csrf: CsrfContext;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -18,6 +21,7 @@ describe('Fuel Consumption (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
@@ -57,6 +61,7 @@ describe('Fuel Consumption (e2e)', () => {
       .post('/auth/login')
       .send({ email: 'fuel@test.com', password: 'StrongPass123' });
     accessToken = loginRes.body.accessToken;
+    csrf = await fetchCsrf(app);
   }, 15000);
 
   afterAll(async () => {
@@ -68,10 +73,23 @@ describe('Fuel Consumption (e2e)', () => {
     await app.close();
   });
 
+  async function waitForAnalysis(id: string, timeoutMs = 15000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const log = await prisma.fuelLog.findUnique({ where: { id } });
+      if (log && log.calculatedConsumption !== null) return log;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    throw new Error(`Timed out waiting for fuel analysis of ${id}`);
+  }
+
   it('POST /fuel-consumption - should create a fuel log and calculate consumption', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/fuel-consumption')
-      .set('Authorization', `Bearer ${accessToken}`)
+    const res = await withCsrf(
+      request(app.getHttpServer())
+        .post('/fuel-consumption')
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
       .send({
         liters: 50,
         kilometers: 600,
@@ -83,14 +101,19 @@ describe('Fuel Consumption (e2e)', () => {
 
     expect(res.body.liters).toBe(50);
     expect(res.body.kilometers).toBe(600);
-    expect(res.body.calculatedConsumption).toBeCloseTo(8.33, 1); // 50/600*100
-    expect(res.body.anomalyFlag).toBe(false);
+
+    const log = await waitForAnalysis(res.body.id);
+    expect(log.calculatedConsumption).toBeCloseTo(8.33, 1); // 50/600*100
+    expect(log.anomalyFlag).toBe(false);
   });
 
   it('POST /fuel-consumption - should flag anomaly when consumption deviates >20%', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/fuel-consumption')
-      .set('Authorization', `Bearer ${accessToken}`)
+    const res = await withCsrf(
+      request(app.getHttpServer())
+        .post('/fuel-consumption')
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
       .send({
         liters: 100,
         kilometers: 500,
@@ -101,15 +124,19 @@ describe('Fuel Consumption (e2e)', () => {
       .expect(201);
 
     // 100/500*100 = 20 L/100km, theoretical = 8, deviation = 150% > 20%
-    expect(res.body.calculatedConsumption).toBeCloseTo(20, 1);
-    expect(res.body.anomalyFlag).toBe(true);
-    expect(res.body.anomalyReason).toContain('20.0');
+    const log = await waitForAnalysis(res.body.id);
+    expect(log.calculatedConsumption).toBeCloseTo(20, 1);
+    expect(log.anomalyFlag).toBe(true);
+    expect(log.anomalyReason).toContain('20.0');
   });
 
   it('POST /fuel-consumption - should not flag anomaly when consumption is normal', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/fuel-consumption')
-      .set('Authorization', `Bearer ${accessToken}`)
+    const res = await withCsrf(
+      request(app.getHttpServer())
+        .post('/fuel-consumption')
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
       .send({
         liters: 30,
         kilometers: 400,
@@ -120,7 +147,8 @@ describe('Fuel Consumption (e2e)', () => {
       .expect(201);
 
     // 30/400*100 = 7.5 L/100km, theoretical = 8, deviation = 6.25% < 20%
-    expect(res.body.anomalyFlag).toBe(false);
+    const log = await waitForAnalysis(res.body.id);
+    expect(log.anomalyFlag).toBe(false);
   });
 
   it('GET /fuel-consumption - should list fuel logs with pagination', async () => {
