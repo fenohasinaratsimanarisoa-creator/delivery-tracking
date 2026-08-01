@@ -14,10 +14,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
 COPY package*.json ./
 ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
 ENV PRISMA_QUERY_ENGINE_BINARY=/app/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
 RUN chown -R node:node /app/node_modules/@prisma/engines /app/node_modules/.prisma
 USER node
 EXPOSE 3000
-CMD sh -c 'if [ "$RESET_DATABASE" = "true" ]; then npx prisma migrate reset --force; else npx prisma migrate deploy; fi && node dist/src/main'
+CMD sh -c 'if [ "$RESET_DATABASE" = "true" ]; then npx prisma migrate reset --force; else npx prisma migrate deploy; fi && if [ -n "$SEED_ADMIN_EMAIL" ]; then echo "[startup] SEED_ADMIN_EMAIL set — seeding super admin ($SEED_ADMIN_EMAIL)"; npx ts-node prisma/seed.ts || echo "[startup] WARNING: seed failed (continuing)"; else echo "[startup] SEED_ADMIN_EMAIL not set — seed skipped"; fi && node dist/src/main'
