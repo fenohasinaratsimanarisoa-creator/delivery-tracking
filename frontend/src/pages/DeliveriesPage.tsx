@@ -45,9 +45,13 @@ const deliveryFields: FieldDef<DeliveryFormValues>[] = [
   { name: 'deliveryLng', label: 'Longitude (livraison)', type: 'text', section: 'gps' },
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b', assigned: '#06b6d4', in_progress: '#3b82f6',
-  delivered: '#22c55e', failed: '#ef4444', cancelled: '#6b7280',
+const STATUS_BADGE: Record<string, string> = {
+  pending: styles.statusBadgePending,
+  assigned: styles.statusBadgeAssigned,
+  in_progress: styles.statusBadgeInProgress,
+  delivered: styles.statusBadgeDelivered,
+  failed: styles.statusBadgeFailed,
+  cancelled: styles.statusBadgeCancelled,
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -512,21 +516,20 @@ export default function DeliveriesPage() {
               setSelectedIds(ids);
             }}
             columns={[
-              { key: 'title', label: 'Titre', sortable: true },
+              {
+                key: 'title', label: 'Titre', sortable: true,
+                render: (r: Delivery) => <span className={styles.cellPrimary}>{r.title}</span>,
+              },
               {
                 key: 'status', label: 'Statut', sortable: true,
                 render: (r: Delivery) => (
                   <div className={styles.statusColumn}>
-                    <span className={styles.statusBadge}
-                      style={{
-                        background: `${STATUS_COLORS[r.status] || '#6b7280'}20`,
-                        color: STATUS_COLORS[r.status] || '#6b7280',
-                      }}>
+                    <span className={`${styles.statusBadge} ${STATUS_BADGE[r.status] || styles.statusBadgeDefault}`}>
                       {STATUS_LABELS[r.status] || r.status}
                     </span>
                     {r.locationMismatch && !r.mismatchResolved && (
                       <div className={styles.mismatchAlert}>
-                        <span style={{ fontSize: '0.75rem' }}>⚠️</span>
+                        <span>⚠️</span>
                         <span>{r.deliveryProofDistance != null ? `${r.deliveryProofDistance}m d'écart` : 'Écart détecté'}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); resolveMismatchMutation.mutate(r.id); }}
@@ -540,7 +543,10 @@ export default function DeliveriesPage() {
                   </div>
                 ),
               },
-              { key: 'deliveryAddress', label: 'Adresse de livraison' },
+              {
+                key: 'deliveryAddress', label: 'Adresse de livraison',
+                render: (r: Delivery) => <span className={styles.cellSecondary}>{r.deliveryAddress}</span>,
+              },
               {
                 key: 'driver', label: 'Chauffeur',
                 render: (r: Delivery) => (
@@ -771,19 +777,19 @@ export default function DeliveriesPage() {
             </h2>
             <div className={styles.importStatsRow}>
               <div className={styles.importStatCard}>
-                <div className={styles.importStatNumber} style={{ color: '#22c55e' }}>{importReport.created}</div>
+                <div className={styles.importStatNumber} style={{ color: 'var(--color-teal)' }}>{importReport.created}</div>
                 <div className={styles.importStatLabel}>{t('deliveries.import.stats.created')}</div>
               </div>
               <div className={styles.importStatCard}>
-                <div className={styles.importStatNumber} style={{ color: '#3b82f6' }}>{importReport.updated}</div>
+                <div className={styles.importStatNumber} style={{ color: 'var(--color-blue)' }}>{importReport.updated}</div>
                 <div className={styles.importStatLabel}>{t('deliveries.import.stats.updated')}</div>
               </div>
               <div className={styles.importStatCard}>
-                <div className={styles.importStatNumber} style={{ color: '#f59e0b' }}>{importReport.skipped.length}</div>
+                <div className={styles.importStatNumber} style={{ color: 'var(--color-accent)' }}>{importReport.skipped.length}</div>
                 <div className={styles.importStatLabel}>{t('deliveries.import.stats.skipped')}</div>
               </div>
               <div className={styles.importStatCard}>
-                <div className={styles.importStatNumber} style={{ color: '#ef4444' }}>{importReport.errors.length}</div>
+                <div className={styles.importStatNumber} style={{ color: 'var(--color-red)' }}>{importReport.errors.length}</div>
                 <div className={styles.importStatLabel}>{t('deliveries.import.stats.errors')}</div>
               </div>
             </div>
