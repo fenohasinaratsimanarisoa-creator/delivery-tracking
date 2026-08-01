@@ -586,10 +586,15 @@ describe('DeliveriesService - State Machine', () => {
       deliveryAddress: 'Ivato', assignedDriverId: 'user-1', clientId: null,
       driverId: 'driver-1',
     };
-    const expectJobAdded = (driverId: string) => {
+    const expectJobAdded = (driverId: string, status?: DeliveryStatus) => {
       expect(mockQueue.add).toHaveBeenCalledWith(
         'recompute-driver-report',
-        expect.objectContaining({ companyId: 'comp-1', driverId, date: expect.any(String) }),
+        expect.objectContaining({
+          companyId: 'comp-1',
+          driverId,
+          date: expect.any(String),
+          ...(status ? { status } : {}),
+        }),
       );
     };
     const expectNoJobAdded = () => expect(mockQueue.add).not.toHaveBeenCalled();
@@ -603,13 +608,13 @@ describe('DeliveriesService - State Machine', () => {
       expectJobAdded('driver-1');
     });
 
-    it('updateDriverStatus → failed does NOT enqueue a recompute job', async () => {
+    it('updateDriverStatus → failed enqueues a recompute job with the driverId and status', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
       mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'failed' });
 
       await service.updateDriverStatus('comp-1', 'del-1', 'user-1', { status: DeliveryStatus.failed } as any);
 
-      expectNoJobAdded();
+      expectJobAdded('driver-1', DeliveryStatus.failed);
     });
 
     it('updateDriverStatus → delivered with no driver does NOT enqueue a job', async () => {
@@ -628,16 +633,16 @@ describe('DeliveriesService - State Machine', () => {
 
       await service.updateStatus('comp-1', 'del-1', { status: DeliveryStatus.delivered } as any);
 
-      expectJobAdded('driver-1');
+      expectJobAdded('driver-1', DeliveryStatus.delivered);
     });
 
-    it('updateStatus → failed does NOT enqueue a recompute job', async () => {
+    it('updateStatus → failed enqueues a recompute job with the driverId and status', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
       mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'failed' });
 
       await service.updateStatus('comp-1', 'del-1', { status: DeliveryStatus.failed } as any);
 
-      expectNoJobAdded();
+      expectJobAdded('driver-1', DeliveryStatus.failed);
     });
 
     it('update → delivered enqueues a recompute job using the delivery driverId', async () => {
@@ -646,7 +651,16 @@ describe('DeliveriesService - State Machine', () => {
 
       await service.update('comp-1', 'del-1', { status: DeliveryStatus.delivered } as any);
 
-      expectJobAdded('driver-1');
+      expectJobAdded('driver-1', DeliveryStatus.delivered);
+    });
+
+    it('update → failed enqueues a recompute job using the delivery driverId', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
+      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'failed' });
+
+      await service.update('comp-1', 'del-1', { status: DeliveryStatus.failed } as any);
+
+      expectJobAdded('driver-1', DeliveryStatus.failed);
     });
 
     it('update → delivered enqueues a recompute job using the new driverId when reassigning simultaneously', async () => {
@@ -685,15 +699,15 @@ describe('DeliveriesService - State Machine', () => {
       expect(result.succeeded).toEqual(['del-a', 'del-b']);
       expect(mockQueue.add).toHaveBeenCalledWith(
         'recompute-driver-report',
-        expect.objectContaining({ companyId: 'comp-1', driverId: 'driver-1' }),
+        expect.objectContaining({ companyId: 'comp-1', driverId: 'driver-1', status: 'delivered' }),
       );
       expect(mockQueue.add).toHaveBeenCalledWith(
         'recompute-driver-report',
-        expect.objectContaining({ companyId: 'comp-1', driverId: 'driver-2' }),
+        expect.objectContaining({ companyId: 'comp-1', driverId: 'driver-2', status: 'delivered' }),
       );
     });
 
-    it('bulkAction updateStatus → failed does NOT enqueue a recompute job', async () => {
+    it('bulkAction updateStatus → failed enqueues a recompute job per affected delivery', async () => {
       mockPrisma.delivery.findMany.mockResolvedValue([
         { id: 'del-a', status: 'in_progress', companyId: 'comp-1', deletedAt: null, driverId: 'driver-1' },
       ]);
@@ -705,7 +719,7 @@ describe('DeliveriesService - State Machine', () => {
         status: 'failed',
       });
 
-      expectNoJobAdded();
+      expectJobAdded('driver-1', DeliveryStatus.failed);
     });
 
     it('still succeeds when the queue is not configured (@Optional) — job simply not dispatched', async () => {

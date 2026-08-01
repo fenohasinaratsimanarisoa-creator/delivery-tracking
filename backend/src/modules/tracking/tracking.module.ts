@@ -42,6 +42,6 @@ import { RedisModule } from '../../common/redis/redis.module';
     WsAuthService,
     ApiKeyOrJwtGuard,
   ],
-  exports: [TrackingService, GeofenceService, DeliveryProximityService, TraccarBridgeService],
+  exports: [TrackingService, GeofenceService, DeliveryProximityService, TraccarBridgeService, TrackingGateway],
 })
 export class TrackingModule {}

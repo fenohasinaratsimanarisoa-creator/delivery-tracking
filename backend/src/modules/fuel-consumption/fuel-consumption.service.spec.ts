@@ -47,6 +47,10 @@ const mockNotifications = {
   create: jest.fn(),
 };
 
+const mockTrackingGateway = {
+  broadcastDataUpdate: jest.fn(),
+};
+
 describe('FuelConsumptionService', () => {
   let service: FuelConsumptionService;
 
@@ -58,6 +62,7 @@ describe('FuelConsumptionService', () => {
       mockConfigService as unknown as ConfigService,
       mockNotifications as unknown as NotificationsService,
       mockQueue as unknown as any,
+      mockTrackingGateway as any,
     );
   });
 
@@ -615,6 +620,49 @@ describe('FuelConsumptionService', () => {
       await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
 
       expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
+    });
+
+    it('broadcasts a fuelReport dataUpdate to the company AFTER the upsert, with driverId and reportDate', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(1);
+      expect(mockTrackingGateway.broadcastDataUpdate).toHaveBeenCalledTimes(1);
+      expect(mockTrackingGateway.broadcastDataUpdate).toHaveBeenCalledWith(
+        'company-1',
+        'fuelReport',
+        expect.objectContaining({
+          entity: 'fuelReport',
+          driverId: 'driver-1',
+          reportDate: new Date('2026-07-20T00:00:00.000Z').toISOString(),
+        }),
+      );
+      // L'événement est diffusé APRÈS l'écriture en base, jamais avant.
+      const upsertCall = mockPrisma.dailyFuelReport.upsert.mock.invocationCallOrder[0];
+      const broadcastCall = mockTrackingGateway.broadcastDataUpdate.mock.invocationCallOrder[0];
+      expect(upsertCall).toBeLessThan(broadcastCall);
+    });
+
+    it('does NOT broadcast when the upsert fails (event only fires after a successful write)', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.dailyFuelReport.upsert.mockRejectedValue(new Error('DB down'));
+
+      await expect(
+        service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE),
+      ).rejects.toThrow('DB down');
+
+      expect(mockTrackingGateway.broadcastDataUpdate).not.toHaveBeenCalled();
+    });
+
+    it('does NOT broadcast when the driver has fewer than 2 GPS positions (no write happened)', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue([POSITIONS[0]]);
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
+      expect(mockTrackingGateway.broadcastDataUpdate).not.toHaveBeenCalled();
     });
   });
 });

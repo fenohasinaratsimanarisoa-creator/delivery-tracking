@@ -6,6 +6,7 @@ import { Queue } from 'bullmq';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TrackingGateway } from '../tracking/tracking.gateway';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
 import { UpdateFuelLogDto } from './dto/update-fuel-log.dto';
 import { FuelFilterDto } from './dto/fuel-filter.dto';
@@ -35,6 +36,7 @@ export class FuelConsumptionService {
     private configService: ConfigService,
     private notifications: NotificationsService,
     @Optional() @InjectQueue('fuel-analysis') private fuelAnalysisQueue: Queue,
+    private trackingGateway: TrackingGateway,
   ) {
     this.fallbackThresholdPercent = this.configService.get<number>(
       'FUEL_ANOMALY_THRESHOLD_PERCENT',
@@ -427,6 +429,16 @@ export class FuelConsumptionService {
         vehiclePlate: vehicle?.licensePlate || 'N/A',
         pricePerLiterUsed: pricePerLiter,
       },
+    });
+
+    // Notifie la company connectée UNIQUEMENT après l'écriture effective en base : réutilise
+    // le mécanisme 'dataUpdate' existant (broadcastDataUpdate → useDataUpdates côté front),
+    // qui invalide automatiquement les queries React Query de FuelPage. Asynchrone de nature
+    // (le job est déjà exécuté hors de la requête HTTP de complétion de livraison).
+    this.trackingGateway.broadcastDataUpdate(companyId, 'fuelReport', {
+      entity: 'fuelReport',
+      driverId: driver.id,
+      reportDate: reportDate.toISOString(),
     });
   }
 

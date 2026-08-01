@@ -16,6 +16,7 @@ interface RecomputeDriverReportJobData {
   companyId: string;
   driverId: string;
   date?: string;
+  status?: string;
 }
 
 @Processor('fuel-analysis')
@@ -50,7 +51,7 @@ export class FuelAnalysisProcessor extends WorkerHost {
    * jamais toute la company.
    */
   private async processDriverReport(job: Job<RecomputeDriverReportJobData>): Promise<void> {
-    const { companyId, driverId, date } = job.data;
+    const { companyId, driverId, date, status } = job.data;
 
     try {
       await this.fuelConsumption.generateDailyReportForSingleDriver(
@@ -59,7 +60,7 @@ export class FuelAnalysisProcessor extends WorkerHost {
         date ? new Date(date) : undefined,
       );
       this.logger.log(
-        `Driver fuel report recomputed for driver ${driverId} (company ${companyId})`,
+        `Driver fuel report recomputed for driver ${driverId} (company ${companyId})${status ? ` [delivery status: ${status}]` : ''}`,
       );
     } catch (error) {
       this.logger.error(

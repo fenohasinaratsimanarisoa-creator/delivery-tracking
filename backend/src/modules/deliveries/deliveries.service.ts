@@ -42,22 +42,39 @@ export class DeliveriesService {
   ) {}
 
   /**
+   * Uniquement les statuts finaux qui impliquent un trajet réel du chauffeur déclenchent
+   * le recalcul du DailyFuelReport : delivered ET failed (le chauffeur a roulé dans les
+   * deux cas, donc consommé). Exclut explicitement pending/assigned/in_progress/cancelled.
+   */
+  private isFuelReportTriggerStatus(status: DeliveryStatus): boolean {
+    return (
+      status === DeliveryStatus.delivered ||
+      status === DeliveryStatus.failed
+    );
+  }
+
+  /**
    * Ajoute un job 'recompute-driver-report' à la queue fuel-analysis pour recalculer le
    * DailyFuelReport du chauffeur concerné (temps réel, à chaque livraison terminée).
    * Strictement fire-and-forget : la réponse HTTP de complétion de livraison ne doit
    * JAMAIS attendre ce recalcul. @Optional() + try/catch : aucun plantage si Redis/BullMQ
    * n'est pas configuré (dev local sans Redis par exemple).
    */
-  private dispatchDailyFuelReportRecompute(companyId: string, driverId?: string | null): void {
+  private dispatchDailyFuelReportRecompute(
+    companyId: string,
+    driverId?: string | null,
+    status?: DeliveryStatus,
+  ): void {
     if (!driverId) return;
     const date = new Date().toISOString();
-    void this.enqueueDailyFuelReportRecompute(companyId, driverId, date);
+    void this.enqueueDailyFuelReportRecompute(companyId, driverId, date, status);
   }
 
   private async enqueueDailyFuelReportRecompute(
     companyId: string,
     driverId: string,
     date: string,
+    status?: DeliveryStatus,
   ): Promise<void> {
     try {
       if (this.fuelAnalysisQueue) {
@@ -65,6 +82,7 @@ export class DeliveriesService {
           companyId,
           driverId,
           date,
+          ...(status ? { status } : {}),
         });
       }
     } catch (e: any) {
@@ -195,9 +213,11 @@ export class DeliveriesService {
 
     const proofData = await this.verifyDeliveryLocation(companyId, delivery, dto, lang);
     const updateData: any = { ...proofData, status: dto.status };
-    if (dto.status === DeliveryStatus.delivered) {
-      updateData.completedAt = new Date();
-      this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId);
+    if (this.isFuelReportTriggerStatus(dto.status)) {
+      if (dto.status === DeliveryStatus.delivered) {
+        updateData.completedAt = new Date();
+      }
+      this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId, dto.status);
     }
 
     const updated = await this.prisma.delivery.update({
@@ -304,9 +324,11 @@ export class DeliveriesService {
       if (!allowed.includes(dto.status)) {
         throw new BadRequestException(`Cannot transition from ${delivery.status} to ${dto.status}`);
       }
-      if (dto.status === DeliveryStatus.delivered) {
-        updateData.completedAt = new Date();
-        this.dispatchDailyFuelReportRecompute(companyId, dto.driverId ?? delivery.driverId);
+      if (this.isFuelReportTriggerStatus(dto.status)) {
+        if (dto.status === DeliveryStatus.delivered) {
+          updateData.completedAt = new Date();
+        }
+        this.dispatchDailyFuelReportRecompute(companyId, dto.driverId ?? delivery.driverId, dto.status);
       }
     }
 
@@ -334,9 +356,11 @@ export class DeliveriesService {
 
     const proofData = await this.verifyDeliveryLocation(companyId, delivery, dto, lang);
     const updateData: any = { ...proofData, status: dto.status };
-    if (dto.status === DeliveryStatus.delivered) {
-      updateData.completedAt = new Date();
-      this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId);
+    if (this.isFuelReportTriggerStatus(dto.status)) {
+      if (dto.status === DeliveryStatus.delivered) {
+        updateData.completedAt = new Date();
+      }
+      this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId, dto.status);
     }
 
     const updated = await this.prisma.delivery.update({
@@ -573,9 +597,11 @@ export class DeliveriesService {
             continue;
           }
           const updateData: any = { status: targetStatus };
-          if (targetStatus === DeliveryStatus.delivered) {
-            updateData.completedAt = new Date();
-            this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId);
+          if (this.isFuelReportTriggerStatus(targetStatus)) {
+            if (targetStatus === DeliveryStatus.delivered) {
+              updateData.completedAt = new Date();
+            }
+            this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId, targetStatus);
           }
           await this.prisma.delivery.update({ where: { id }, data: updateData });
           this.webhooks.dispatch('delivery.status_changed', {
