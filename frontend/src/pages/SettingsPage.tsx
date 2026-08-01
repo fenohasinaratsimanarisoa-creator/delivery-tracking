@@ -27,7 +27,7 @@ function PasswordStrength({ password }: { password: string }) {
     [/[a-z]/, /[A-Z]/, /\d/, /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/].filter(r => r.test(password)).length
   );
   const bars = [0, 0, 0, 0].map((_, i) => i < score);
-  const colors = ['#ef4444', '#f59e0b', '#3b82f6', '#22c55e'];
+  const colors = ['var(--color-red)', 'var(--color-accent)', 'var(--color-blue)', 'var(--color-teal)'];
   const labels = [t('settingsSecurity.passwordVeryWeak'), t('settingsSecurity.passwordWeak'), t('settingsSecurity.passwordMedium'), t('settingsSecurity.passwordStrong')];
   return (
     <div className={styles.pwStrength}>
@@ -116,7 +116,7 @@ function ProfileSection({ user, updateUser, t, toast }: {
 
   return (
     <section className={styles.settingsSection}>
-      <h2 className={styles.sectionTitle} style={{ marginBottom: 16 }}>{t('settings.profile')}</h2>
+      <h2 className={styles.sectionTitle} style={{ marginBottom: 'var(--space-lg)' }}>{t('settings.profile')}</h2>
       <div className={styles.flexColumn}>
         <Field label={t('settings.firstName')}>
           <input className="dialog-input" value={firstName} onChange={e => setFirstName(e.target.value)} />
@@ -249,7 +249,7 @@ function SecuritySection({ t, toast }: {
             <Button variant="ghost" size="sm" onClick={() => sessionRevoke.mutate(s.id)} disabled={s.isCurrent}><LogOut size={12} /></Button>
           </div>
         ))}
-        {sessions.length > 1 && <Button variant="danger" size="sm" style={{ marginTop: 12 }} onClick={() => sessionRevokeAll.mutate()}>{t('settingsSecurity.revokeAll')}</Button>}
+        {sessions.length > 1 && <Button variant="danger" size="sm" style={{ marginTop: 'var(--space-md)' }} onClick={() => sessionRevokeAll.mutate()}>{t('settingsSecurity.revokeAll')}</Button>}
       </section>
     </div>
   );
@@ -302,7 +302,7 @@ function LanguageSection({ t }: { t: (key: string) => string }) {
   const [lang, setLang] = useState(getLanguage());
   return (
     <section className={styles.settingsSection}>
-      <h2 className={styles.sectionTitle} style={{ marginBottom: 16 }}>{t('settings.language')}</h2>
+      <h2 className={styles.sectionTitle} style={{ marginBottom: 'var(--space-lg)' }}>{t('settings.language')}</h2>
       <div className={styles.languageButtons}>
         {(['fr', 'en'] as const).map(l => (
           <Button key={l} variant={lang === l ? 'primary' : 'secondary'} size="sm" onClick={() => { setLang(l); setLanguage(l); }}>
