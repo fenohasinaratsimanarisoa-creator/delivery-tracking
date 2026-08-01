@@ -19,7 +19,16 @@ export class StripeService {
   // MobileMoneyService.validateSandbox() : interdit un checkout simulé silencieux
   // en production quand STRIPE_SECRET_KEY est absente. Le mode simulé ne reste
   // possible qu'en développement/test/CI.
+  //
+  // IMPORTANT : la garde ne s'applique QUE si la facturation est activée
+  // (BILLING_ENABLED='true'). En mode pilote / facturation désactivée, aucun
+  // checkout Stripe n'est possible, le mode simulé n'est jamais atteint et on ne
+  // doit pas bloquer le démarrage d'une production en pilot qui ne configure pas
+  // Stripe (c'est ce que conseille d'ailleurs le message d'erreur ci-dessous :
+  // « or set BILLING_ENABLED=false to disable billing »).
   static validateConfig(configService: ConfigService): void {
+    const billingEnabled = configService.get<string>('BILLING_ENABLED', 'false') === 'true';
+    if (!billingEnabled) return;
     const secretKey = configService.get<string>('STRIPE_SECRET_KEY');
     const nodeEnv = configService.get<string>('NODE_ENV', 'development');
     if (!secretKey && nodeEnv === 'production') {

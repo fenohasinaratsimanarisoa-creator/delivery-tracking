@@ -139,9 +139,10 @@ describe('StripeService', () => {
   });
 
   describe('validateConfig', () => {
-    it('throws in production when STRIPE_SECRET_KEY is missing', () => {
+    it('throws in production when STRIPE_SECRET_KEY is missing and billing is enabled', () => {
       (mockConfigService.get as jest.Mock).mockImplementation((key: string): string | undefined => {
         if (key === 'NODE_ENV') return 'production';
+        if (key === 'BILLING_ENABLED') return 'true';
         if (key === 'STRIPE_SECRET_KEY') return undefined;
         return undefined;
       });
@@ -149,6 +150,16 @@ describe('StripeService', () => {
       expect(() => StripeService.validateConfig(mockConfigService as unknown as ConfigService)).toThrow(
         'STRIPE_SECRET_KEY is required in production',
       );
+    });
+
+    it('does not throw in production when billing is disabled (pilot mode, no Stripe key)', () => {
+      (mockConfigService.get as jest.Mock).mockImplementation((key: string): string | undefined => {
+        if (key === 'NODE_ENV') return 'production';
+        if (key === 'STRIPE_SECRET_KEY') return undefined;
+        return undefined;
+      });
+
+      expect(() => StripeService.validateConfig(mockConfigService as unknown as ConfigService)).not.toThrow();
     });
 
     it('does not throw outside production without STRIPE_SECRET_KEY', () => {
@@ -164,6 +175,7 @@ describe('StripeService', () => {
     it('does not throw in production when STRIPE_SECRET_KEY is set', () => {
       (mockConfigService.get as jest.Mock).mockImplementation((key: string): string | undefined => {
         if (key === 'NODE_ENV') return 'production';
+        if (key === 'BILLING_ENABLED') return 'true';
         if (key === 'STRIPE_SECRET_KEY') return 'sk_live_123';
         return undefined;
       });
