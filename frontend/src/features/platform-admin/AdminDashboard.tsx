@@ -353,10 +353,10 @@ export default function AdminDashboard() {
                 <tbody>
                   {metrics.topCompanies.map((c) => (
                     <tr key={c.id} className={styles.tableRow}>
-                      <td className={styles.tableCell}>{c.name}</td>
+                      <td className={styles.tableCell}><span className={styles.cellPrimary}>{c.name}</span></td>
                       <td className={styles.tableCellCenter}>
                         <span className={styles.badge} style={{
-                          background: c.tier === 'enterprise' ? 'var(--color-accent-muted)' : c.tier === 'pro' ? 'var(--color-teal-muted, rgba(45,212,191,0.1))' : 'transparent',
+                          background: c.tier === 'enterprise' ? 'var(--color-accent-muted)' : c.tier === 'pro' ? 'var(--color-teal-muted)' : 'transparent',
                           color: c.tier === 'enterprise' ? 'var(--color-accent)' : c.tier === 'pro' ? 'var(--color-teal)' : 'var(--color-text-secondary)',
                         }}>
                           {c.tier === 'free' ? t('admin.dashboard.companyTable.freeTier') : c.plan}
@@ -408,14 +408,14 @@ export default function AdminDashboard() {
               <tbody>
                 {filteredTenants.map((tenant) => (
                   <tr key={tenant.id} className={styles.tableRow}>
-                    <td className={styles.tableCell}>{tenant.name}</td>
+                    <td className={styles.tableCell}><span className={styles.cellPrimary}>{tenant.name}</span></td>
                     <td className={`${styles.tableCellSecondary} ${styles.tableEllipsis}`}>
                       {tenant.email || tenant.users[0]?.email || '—'}
                     </td>
                     <td className={styles.tableCellCenter}>
                       <span className={styles.badge} style={{
                         background: tenant.subscription?.plan.tier === 'enterprise' ? 'var(--color-accent-muted)' :
-                          tenant.subscription?.plan.tier === 'pro' ? 'rgba(45,212,191,0.1)' : 'transparent',
+                          tenant.subscription?.plan.tier === 'pro' ? 'var(--color-teal-muted)' : 'transparent',
                         color: tenant.subscription?.plan.tier === 'enterprise' ? 'var(--color-accent)' :
                           tenant.subscription?.plan.tier === 'pro' ? 'var(--color-teal)' : 'var(--color-text-secondary)',
                       }}>
@@ -477,14 +477,12 @@ export default function AdminDashboard() {
               <tbody>
                 {auditLogs.data.map((log) => (
                   <tr key={log.id} className={styles.tableRow}>
-                    <td style={{ padding: '10px var(--space-lg)', color: 'var(--color-text)' }}>
-                      {log.admin.firstName} {log.admin.lastName}
-                    </td>
+                    <td className={styles.tableCell}><span className={styles.cellPrimary}>{log.admin.firstName} {log.admin.lastName}</span></td>
                     <td style={{ padding: '10px var(--space-md)' }}>
                       <span className={styles.badge} style={{
                         background: log.action === 'impersonate' ? 'var(--color-accent-muted)' :
-                          log.action === 'login' || log.action === 'login_success' ? 'rgba(45,212,191,0.1)' :
-                          log.action === 'tenant_toggle' ? 'rgba(251,146,60,0.1)' : 'transparent',
+                          log.action === 'login' || log.action === 'login_success' ? 'var(--color-teal-muted)' :
+                          log.action === 'tenant_toggle' ? 'var(--color-orange-muted)' : 'transparent',
                         color: log.action === 'impersonate' ? 'var(--color-accent)' :
                           log.action === 'login' || log.action === 'login_success' ? 'var(--color-teal)' :
                           log.action === 'tenant_toggle' ? 'var(--color-orange)' : 'var(--color-text-secondary)',
@@ -497,7 +495,7 @@ export default function AdminDashboard() {
                          log.action === 'logout' ? t('admin.dashboard.auditActions.logout') : log.action}
                       </span>
                     </td>
-                    <td style={{ padding: '10px var(--space-md)', color: 'var(--color-text-secondary)' }}>
+                    <td className={styles.tableCellSecondary}>
                       {log.targetCompany?.name || (log.metadata?.impersonatedAs ? `→ ${log.metadata.impersonatedAs}` : '—')}
                     </td>
                     <td className={styles.tableCellTiny}>
@@ -557,14 +555,14 @@ export default function AdminDashboard() {
                   {admins.map((a: Admin) => (
                     <tr key={a.id} className={styles.tableRow}>
                       <td className={styles.tableCell}>
-                        {a.firstName} {a.lastName}
+                        <span className={styles.cellPrimary}>{a.firstName} {a.lastName}</span>
                       </td>
                       <td className={styles.tableCellSecondary}>
                         {a.email}
                       </td>
                       <td className={styles.tableCellCenter}>
                         <span className={styles.badge} style={{
-                          background: a.totpEnabled ? 'rgba(45,212,191,0.1)' : 'rgba(251,146,60,0.1)',
+                          background: a.totpEnabled ? 'var(--color-teal-muted)' : 'var(--color-orange-muted)',
                           color: a.totpEnabled ? 'var(--color-teal)' : 'var(--color-orange)',
                         }}>
                           {a.totpEnabled ? t('admin.dashboard.adminsTab.tfaEnabled') : t('admin.dashboard.adminsTab.tfaDisabled')}
@@ -572,7 +570,7 @@ export default function AdminDashboard() {
                       </td>
                       <td className={styles.tableCellCenter}>
                         <span className={styles.badge} style={{
-                          background: a.isActive ? 'rgba(45,212,191,0.1)' : 'rgba(239,68,68,0.1)',
+                          background: a.isActive ? 'var(--color-teal-muted)' : 'var(--color-red-muted)',
                           color: a.isActive ? 'var(--color-teal)' : 'var(--color-red)',
                         }}>
                           {a.isActive ? t('admin.dashboard.adminsTab.isActiveYes') : t('admin.dashboard.adminsTab.isActiveNo')}
