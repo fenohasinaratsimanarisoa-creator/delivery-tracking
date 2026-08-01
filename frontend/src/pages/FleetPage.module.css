@@ -41,7 +41,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-xl);
 }
 
 .searchIcon {
@@ -106,7 +106,7 @@
   background: var(--color-skeleton);
   border-radius: 4px;
   animation: dt-shimmer 1.5s infinite linear;
-  background-image: linear-gradient(90deg, var(--color-skeleton) 25%, rgba(255,255,255,0.05) 50%, var(--color-skeleton) 75%);
+  background-image: linear-gradient(90deg, var(--color-skeleton) 25%, var(--color-surface-hover) 50%, var(--color-skeleton) 75%);
   background-size: 200% 100%;
 }
 
@@ -131,7 +131,7 @@
   align-items: center;
   justify-content: center;
   color: var(--color-accent);
-  font-size: 24px;
+  font-size: var(--text-xl);
 }
 
 .emptyStateTitle {
@@ -147,6 +147,52 @@
   font-size: var(--text-sm);
   color: var(--color-text-tertiary);
   text-align: center;
+}
+
+.cellPrimary {
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+.cellBody {
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.cellMuted {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.cellMono {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.statusCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.statusDotActive {
+  background: var(--color-teal);
+}
+
+.statusDotInactive {
+  background: var(--color-text-tertiary);
 }
 
 .formSelectWrapper {

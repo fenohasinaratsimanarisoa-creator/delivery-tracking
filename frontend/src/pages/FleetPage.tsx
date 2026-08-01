@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Power, PowerOff } from 'lucide-react';
 import Button from '../components/Button';
+import Input from '../components/Input';
 import api from '../services/api/client';
 import DataTable from '../components/DataTable';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -243,14 +244,12 @@ export default function FleetPage() {
       </div>
 
       <div className={styles.searchBarContainer}>
-        <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
-          <Search size={14} className={styles.searchIcon} style={{
-            position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-          }} />
-          <input
+        <div style={{ flex: 1, maxWidth: 320 }}>
+          <Input
             placeholder="Rechercher un véhicule…"
+            prefixIcon={<Search size={14} />}
             onChange={(e) => handleSearch(e.target.value)}
-            className={styles.searchInput}
+            fullWidth
           />
         </div>
       </div>
@@ -293,19 +292,39 @@ export default function FleetPage() {
         ) : (
           <DataTable
             columns={[
-              { key: 'brand', label: 'Marque', sortable: true },
-              { key: 'model', label: 'Modèle', sortable: true },
-              { key: 'year', label: 'Année', sortable: true },
-              { key: 'licensePlate', label: 'Plaque', sortable: true },
-              { key: 'fuelType', label: 'Carburant', sortable: true },
+              {
+                key: 'brand', label: 'Marque', sortable: true,
+                render: (r: Vehicle) => <span className={styles.cellPrimary}>{r.brand}</span>,
+              },
+              {
+                key: 'model', label: 'Modèle', sortable: true,
+                render: (r: Vehicle) => <span className={styles.cellBody}>{r.model}</span>,
+              },
+              {
+                key: 'year', label: 'Année', sortable: true,
+                render: (r: Vehicle) => <span className={styles.cellMuted}>{r.year}</span>,
+              },
+              {
+                key: 'licensePlate', label: 'Plaque', sortable: true,
+                render: (r: Vehicle) => <span className={styles.cellMono}>{r.licensePlate}</span>,
+              },
+              {
+                key: 'fuelType', label: 'Carburant', sortable: true,
+                render: (r: Vehicle) => <span className={styles.cellMuted}>{r.fuelType}</span>,
+              },
               {
                 key: 'driver', label: 'Chauffeur',
-                render: (r: Vehicle) => r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : '-',
+                render: (r: Vehicle) => r.driver
+                  ? <span className={styles.cellMuted}>{r.driver.firstName} {r.driver.lastName}</span>
+                  : <span className={styles.cellMuted}>-</span>,
               },
               {
                 key: 'isActive', label: 'Statut',
                 render: (r: Vehicle) => (
-                  <Button variant="ghost" size="sm" icon={r.isActive ? <Power size={14} /> : <PowerOff size={14} />} onClick={() => toggleMutation.mutate({ id: r.id, isActive: !r.isActive })} title={r.isActive ? 'Désactiver' : 'Activer'} />
+                  <div className={styles.statusCell}>
+                    <span className={`${styles.statusDot} ${r.isActive ? styles.statusDotActive : styles.statusDotInactive}`} />
+                    <Button variant="ghost" size="sm" icon={r.isActive ? <Power size={14} /> : <PowerOff size={14} />} onClick={() => toggleMutation.mutate({ id: r.id, isActive: !r.isActive })} title={r.isActive ? 'Désactiver' : 'Activer'} />
+                  </div>
                 ),
               },
             ]}
