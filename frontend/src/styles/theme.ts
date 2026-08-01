@@ -36,6 +36,15 @@ export const colors = {
     statusMoving: palette.amber,
     statusStatic: palette.teal,
     statusAlert: palette.red,
+    blue: '#3b82f6',
+    blueMuted: 'rgba(59, 130, 246, 0.15)',
+    purple: '#8b5cf6',
+    purpleMuted: 'rgba(139, 92, 246, 0.15)',
+    orange: '#f59e0b',
+    orangeMuted: 'rgba(245, 158, 11, 0.15)',
+    warning: '#f59e0b',
+    warningMuted: 'rgba(245, 158, 11, 0.12)',
+    warningSubtle: 'rgba(245, 158, 11, 0.08)',
     shadow: '0 4px 24px rgba(0,0,0,0.4)',
     shadowLg: '0 8px 40px rgba(0,0,0,0.5)',
     shadowDialog: '0 2px 8px rgba(0,0,0,0.3), 0 20px 60px rgba(0,0,0,0.4)',
@@ -70,6 +79,15 @@ export const colors = {
     statusMoving: '#D48B1E',
     statusStatic: '#2E8B7A',
     statusAlert: '#CC3D36',
+    blue: '#2563eb',
+    blueMuted: 'rgba(37, 99, 235, 0.1)',
+    purple: '#7c3aed',
+    purpleMuted: 'rgba(124, 58, 237, 0.1)',
+    orange: '#d97706',
+    orangeMuted: 'rgba(217, 119, 6, 0.1)',
+    warning: '#b45309',
+    warningMuted: 'rgba(180, 83, 9, 0.08)',
+    warningSubtle: 'rgba(180, 83, 9, 0.06)',
     shadow: '0 4px 24px rgba(0,0,0,0.08)',
     shadowLg: '0 8px 40px rgba(0,0,0,0.12)',
     shadowDialog: '0 2px 8px rgba(0,0,0,0.06), 0 20px 60px rgba(0,0,0,0.1)',
@@ -195,6 +213,15 @@ export function buildCssVars(mode: ThemeMode): string {
   --color-status-moving: ${c.statusMoving};
   --color-status-static: ${c.statusStatic};
   --color-status-alert: ${c.statusAlert};
+  --color-blue: ${c.blue};
+  --color-blue-muted: ${c.blueMuted};
+  --color-purple: ${c.purple};
+  --color-purple-muted: ${c.purpleMuted};
+  --color-orange: ${c.orange};
+  --color-orange-muted: ${c.orangeMuted};
+  --color-warning: ${c.warning};
+  --color-warning-muted: ${c.warningMuted};
+  --color-warning-subtle: ${c.warningSubtle};
   --shadow-sm: ${c.shadow};
   --shadow-lg: ${c.shadowLg};
   --shadow-dialog: ${c.shadowDialog};
