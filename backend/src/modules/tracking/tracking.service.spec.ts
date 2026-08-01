@@ -273,6 +273,41 @@ describe('TrackingService', () => {
       expect(result).toEqual({ id: 'gps-desync', suspect: true });
     });
 
+    it('does NOT call checkProximity for a suspect (teleportation) position', async () => {
+      const now = new Date('2026-07-21T10:00:00.000Z');
+      const fiveSecAgo = new Date(now.getTime() - 5000);
+
+      mockPrisma.gpsPosition.findFirst
+        .mockResolvedValueOnce(null) // dedup
+        .mockResolvedValueOnce({ latitude: 0, longitude: 0, timestamp: fiveSecAgo }); // detectTeleportation
+
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-suspect-prox', suspect: true });
+
+      const result = await service.savePosition(
+        '00000000-0000-4000-0000-000000000002',
+        { ...dto, latitude: 1, longitude: 1, timestamp: now.toISOString() },
+        'company-1',
+      );
+
+      expect(result).not.toBeNull();
+      expect(result!.suspect).toBe(true);
+      // Une position non fiable ne doit pas alimenter le chronomètre de proximité.
+      expect(mockDeliveryProximityService.checkProximity).not.toHaveBeenCalled();
+    });
+
+    it('calls checkProximity for a non-suspect position (no regression)', async () => {
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-ok-prox', suspect: false });
+
+      await service.savePosition(
+        '00000000-0000-4000-0000-000000000002',
+        dto,
+        'company-1',
+      );
+
+      expect(mockDeliveryProximityService.checkProximity).toHaveBeenCalledTimes(1);
+    });
+
     it('rejects positions for a soft-deleted vehicle — no GPS row inserted', async () => {
       // Le véhicule existe en base mais est soft-deleted (deletedAt = now) :
       // le filtre deletedAt:null l'exclut du findFirst → retour null, aucune insertion.

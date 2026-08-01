@@ -480,7 +480,12 @@ export class TrackingService {
       );
     }
 
-    if (companyId) {
+    // Cohérence avec generateAlerts() : une position jugée non fiable
+    // (suspect=true — téléportation / bruit GPS) ne doit pas non plus alimenter le
+    // chronomètre de proximité. Sinon un saut GPS fantôme pourrait déclencher ou
+    // faire progresser l'alerte "vous êtes arrivé" alors que la position n'est pas
+    // crédible.
+    if (companyId && !suspect) {
       this.deliveryProximityService
         .checkProximity(driverId, dto.vehicleId, companyId, dto.latitude, dto.longitude, ts)
         .catch((err) => this.logger.error(`Proximity check failed: ${err}`));
