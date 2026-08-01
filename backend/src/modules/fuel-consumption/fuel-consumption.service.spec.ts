@@ -24,6 +24,15 @@ const mockPrisma = {
   },
   fuelPriceHistory: {
     findFirst: jest.fn(),
+    findMany: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+    delete: jest.fn(),
+  },
+  companyFuelSettings: {
+    upsert: jest.fn(),
+    findUnique: jest.fn(),
   },
   dailyFuelReport: {
     aggregate: jest.fn(),
@@ -141,12 +150,18 @@ describe('FuelConsumptionService', () => {
 
     it('falls back to default when no price matches', async () => {
       mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.companyFuelSettings.upsert.mockResolvedValueOnce({ defaultFuelPrices: null });
 
       const result = await (service as any).getFuelPriceForDate(
         'company-1', 'essence', new Date('2025-01-01'),
       );
 
       expect(result).toBe(5000);
+      expect(mockPrisma.companyFuelSettings.upsert).toHaveBeenCalledWith({
+        where: { companyId: 'company-1' },
+        update: {},
+        create: expect.objectContaining({ companyId: 'company-1' }),
+      });
     });
 
     it('prefers the most recent effectiveFrom price that covers the date', async () => {
@@ -663,6 +678,80 @@ describe('FuelConsumptionService', () => {
 
       expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
       expect(mockTrackingGateway.broadcastDataUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // PRIX CARBURANT — modifiables et persistés (plus de prix en dur)
+  // ----------------------------------------------------------------
+  describe('fuel price management', () => {
+    it('getFuelPrices returns editable defaults + history', async () => {
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({ defaultFuelPrices: { diesel: 5200 } });
+      mockPrisma.fuelPriceHistory.findMany.mockResolvedValueOnce([{ id: 'fp-1', fuelType: 'diesel', pricePerLiter: 5200 }]);
+
+      const result = await service.getFuelPrices('company-1');
+
+      expect(result.defaults).toEqual({ diesel: 5200 });
+      expect(result.history).toHaveLength(1);
+    });
+
+    it('updateDefaultFuelPrices persists sanitized per-company defaults', async () => {
+      mockPrisma.companyFuelSettings.upsert.mockResolvedValueOnce({});
+
+      const result = await service.updateDefaultFuelPrices('company-1', { DIESEL: 5400, essence: 5200, bad: -5 });
+
+      expect(result.defaults).toEqual({ diesel: 5400, essence: 5200 });
+      expect(mockPrisma.companyFuelSettings.upsert).toHaveBeenCalledWith({
+        where: { companyId: 'company-1' },
+        update: { defaultFuelPrices: { diesel: 5400, essence: 5200 } },
+        create: { companyId: 'company-1', defaultFuelPrices: { diesel: 5400, essence: 5200 } },
+      });
+    });
+
+    it('createFuelPrice closes the previous open-ended entry of the same fuel type', async () => {
+      const effectiveFrom = new Date('2026-08-01T00:00:00.000Z');
+      mockPrisma.fuelPriceHistory.updateMany.mockResolvedValueOnce({ count: 1 });
+      mockPrisma.fuelPriceHistory.create.mockResolvedValueOnce({ id: 'fp-new' });
+
+      await service.createFuelPrice('company-1', {
+        fuelType: 'Diesel',
+        pricePerLiter: 5300,
+        effectiveFrom: '2026-08-01',
+      });
+
+      expect(mockPrisma.fuelPriceHistory.updateMany).toHaveBeenCalledWith({
+        where: { companyId: 'company-1', fuelType: 'diesel', effectiveUntil: null, effectiveFrom: { lt: effectiveFrom } },
+        data: { effectiveUntil: new Date(effectiveFrom.getTime() - 1) },
+      });
+      expect(mockPrisma.fuelPriceHistory.create).toHaveBeenCalledWith({
+        data: { companyId: 'company-1', fuelType: 'diesel', pricePerLiter: 5300, effectiveFrom },
+      });
+    });
+
+    it('updateFuelPrice throws NotFound when the price belongs to another company', async () => {
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.updateFuelPrice('company-a', 'fp-other', { pricePerLiter: 1 }),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrisma.fuelPriceHistory.update).not.toHaveBeenCalled();
+    });
+
+    it('deleteFuelPrice throws NotFound when the price belongs to another company', async () => {
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.deleteFuelPrice('company-a', 'fp-other'),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrisma.fuelPriceHistory.delete).not.toHaveBeenCalled();
+    });
+
+    it('deleteFuelPrice deletes a price that belongs to the company', async () => {
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce({ id: 'fp-1', companyId: 'company-1' });
+      mockPrisma.fuelPriceHistory.delete.mockResolvedValueOnce({ id: 'fp-1' });
+
+      await expect(service.deleteFuelPrice('company-1', 'fp-1')).resolves.toEqual({ message: 'Fuel price deleted' });
+      expect(mockPrisma.fuelPriceHistory.delete).toHaveBeenCalledWith({ where: { id: 'fp-1' } });
     });
   });
 });

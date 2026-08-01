@@ -10,8 +10,15 @@ import { TrackingGateway } from '../tracking/tracking.gateway';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
 import { UpdateFuelLogDto } from './dto/update-fuel-log.dto';
 import { FuelFilterDto } from './dto/fuel-filter.dto';
+import { CreateFuelPriceDto } from './dto/create-fuel-price.dto';
+import { UpdateFuelPriceDto } from './dto/update-fuel-price.dto';
 import { haversineDistance as haversineDistanceM } from '../../common/geo/geo.utils';
 
+// Valeurs initiales (seed) utilisées UNIQUEMENT tant que la company n'a pas configuré
+// ses propres prix via l'app. Dès qu'une company enregistre ses prix (page Carburant →
+// Prix carburant), ces valeurs sont persistées dans company_fuel_settings.default_fuel_prices
+// et la saisie manuelle n'est plus nécessaire. Elles ne sont plus « le prix » en dur :
+// elles ne servent que d'initialisation.
 const DEFAULT_FUEL_PRICES: Record<string, number> = {
   essence: 5000,
   gasoil: 4900,
@@ -66,7 +73,17 @@ export class FuelConsumptionService {
       orderBy: { effectiveFrom: 'desc' },
     });
     if (price) return price.pricePerLiter;
-    return DEFAULT_FUEL_PRICES[fuelType.toLowerCase()] || 5000;
+
+    // Pas de prix historique applicable → prix par défaut configurable de la company
+    // (company_fuel_settings.default_fuel_prices, modifiable et persisté via l'app).
+    // Upsert pour garantir une ligne de settings et un seed initial (valeurs héritées).
+    const settings = await this.prisma.companyFuelSettings.upsert({
+      where: { companyId },
+      update: {},
+      create: { companyId, defaultFuelPrices: DEFAULT_FUEL_PRICES },
+    });
+    const defaults = (settings.defaultFuelPrices as Record<string, number> | null) ?? DEFAULT_FUEL_PRICES;
+    return defaults[fuelType.toLowerCase()] ?? 0;
   }
 
   async create(companyId: string, dto: CreateFuelLogDto) {
@@ -263,6 +280,84 @@ export class FuelConsumptionService {
       orderBy: { reportDate: 'desc' },
       take: 100,
     });
+  }
+
+  // ----------------------------------------------------------------
+  // GESTION DES PRIX CARBURANT — modifiables et persistés (plus de prix en dur)
+  // ----------------------------------------------------------------
+
+  /** Liste les prix par défaut (éditables) + l'historique des prix par company. */
+  async getFuelPrices(companyId: string) {
+    const history = await this.prisma.fuelPriceHistory.findMany({
+      where: { companyId },
+      orderBy: [{ fuelType: 'asc' }, { effectiveFrom: 'desc' }],
+    });
+    const settings = await this.prisma.companyFuelSettings.findUnique({
+      where: { companyId },
+      select: { defaultFuelPrices: true },
+    });
+    const defaults = (settings?.defaultFuelPrices as Record<string, number> | null) ?? DEFAULT_FUEL_PRICES;
+    return { defaults, history };
+  }
+
+  /** Enregistre/remplace les prix par défaut de la company (par type de carburant). */
+  async updateDefaultFuelPrices(companyId: string, prices: Record<string, number>) {
+    const sanitized: Record<string, number> = {};
+    for (const [key, value] of Object.entries(prices)) {
+      const num = Number(value);
+      if (Number.isFinite(num) && num >= 0) sanitized[key.toLowerCase()] = num;
+    }
+    await this.prisma.companyFuelSettings.upsert({
+      where: { companyId },
+      update: { defaultFuelPrices: sanitized },
+      create: { companyId, defaultFuelPrices: sanitized },
+    });
+    return { defaults: sanitized };
+  }
+
+  /** Ajoute un prix dans l'historique et ferme l'entrée ouverte précédente du même type. */
+  async createFuelPrice(companyId: string, dto: CreateFuelPriceDto) {
+    const fuelType = dto.fuelType.toLowerCase();
+    const effectiveFrom = new Date(dto.effectiveFrom);
+
+    // Ferme l'entrée sans date de fin (effectiveUntil null) du même type qui précède ce prix,
+    // pour garder une chaîne d'historique propre (chaque prix mène au suivant).
+    await this.prisma.fuelPriceHistory.updateMany({
+      where: { companyId, fuelType, effectiveUntil: null, effectiveFrom: { lt: effectiveFrom } },
+      data: { effectiveUntil: new Date(effectiveFrom.getTime() - 1) },
+    });
+
+    return this.prisma.fuelPriceHistory.create({
+      data: {
+        companyId,
+        fuelType,
+        pricePerLiter: dto.pricePerLiter,
+        effectiveFrom,
+        ...(dto.effectiveUntil ? { effectiveUntil: new Date(dto.effectiveUntil) } : {}),
+      },
+    });
+  }
+
+  async updateFuelPrice(companyId: string, id: string, dto: UpdateFuelPriceDto) {
+    const existing = await this.prisma.fuelPriceHistory.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Fuel price not found');
+
+    const data: any = {};
+    if (dto.fuelType !== undefined) data.fuelType = dto.fuelType.toLowerCase();
+    if (dto.pricePerLiter !== undefined) data.pricePerLiter = dto.pricePerLiter;
+    if (dto.effectiveFrom !== undefined) data.effectiveFrom = new Date(dto.effectiveFrom);
+    if (dto.effectiveUntil !== undefined) {
+      data.effectiveUntil = dto.effectiveUntil ? new Date(dto.effectiveUntil) : null;
+    }
+
+    return this.prisma.fuelPriceHistory.update({ where: { id }, data });
+  }
+
+  async deleteFuelPrice(companyId: string, id: string) {
+    const existing = await this.prisma.fuelPriceHistory.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('Fuel price not found');
+    await this.prisma.fuelPriceHistory.delete({ where: { id } });
+    return { message: 'Fuel price deleted' };
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_10PM)

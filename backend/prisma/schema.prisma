@@ -183,6 +183,7 @@ model CompanyFuelSettings {
   company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   unit             FuelUnit @default(liters)
   anomalyThreshold Float?   @default(15) @map("anomaly_threshold")
+  defaultFuelPrices Json?   @map("default_fuel_prices")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
@@ -11,6 +11,16 @@ import type { FuelLog, Vehicle } from '../types';
 import styles from './FuelPage.module.css';
 
 type ApiError = { response?: { data?: { message?: string } } };
+
+interface FuelPrice {
+  id: string;
+  fuelType: string;
+  pricePerLiter: number;
+  effectiveFrom: string;
+  effectiveUntil: string | null;
+}
+
+const FUEL_TYPES = ['essence', 'gasoil', 'diesel', 'electric', 'hybrid'];
 
 const pageBtnStyle = (disabled: boolean): React.CSSProperties => ({
   padding: '6px 12px', border: '1px solid #ddd', borderRadius: 4,
@@ -30,7 +40,7 @@ export default function FuelPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [page, setPage] = useState(1);
-  const [tab, setTab] = useState<'manual' | 'gps'>('manual');
+  const [tab, setTab] = useState<'manual' | 'gps' | 'prices'>('manual');
   const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
   const [editing, setEditing] = useState<FuelLog | null>(null);
   const [creating, setCreating] = useState(false);
@@ -38,6 +48,16 @@ export default function FuelPage() {
   const [form, setForm] = useState({
     vehicleId: '', liters: '', kilometers: '', cost: '', fillDate: '', notes: '',
   });
+  const [priceForm, setPriceForm] = useState({
+    fuelType: 'diesel',
+    pricePerLiter: '',
+    effectiveFrom: new Date().toISOString().slice(0, 10),
+    effectiveUntil: '',
+  });
+  const [addingPrice, setAddingPrice] = useState(false);
+  const [editingPrice, setEditingPrice] = useState<FuelPrice | null>(null);
+  const [deletingPrice, setDeletingPrice] = useState<FuelPrice | null>(null);
+  const [defaultsDraft, setDefaultsDraft] = useState<Record<string, string>>({});
   const limit = 20;
 
   const { data, isLoading, error } = useQuery({
@@ -56,6 +76,24 @@ export default function FuelPage() {
     queryFn: () => api.get('/vehicles/list').then((r) => r.data),
     staleTime: 30000,
   });
+
+  const { data: pricesData, isLoading: pricesLoading } = useQuery({
+    queryKey: ['fuel-prices'],
+    queryFn: () => api.get('/fuel-consumption/prices').then((r) => r.data),
+    enabled: tab === 'prices',
+  });
+
+  const defaultsKey = JSON.stringify(pricesData?.defaults ?? null);
+
+  useEffect(() => {
+    if (!pricesData?.defaults) return;
+    const draft: Record<string, string> = {};
+    for (const ft of FUEL_TYPES) {
+      draft[ft] = String(pricesData.defaults[ft] ?? '');
+    }
+    setDefaultsDraft(draft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultsKey]);
 
   const generateMutation = useMutation({
     mutationFn: (date: string) =>
@@ -102,6 +140,59 @@ export default function FuelPage() {
     onError: (err: ApiError) => {
       toast(err?.response?.data?.message || t('fuel.deleteError'), 'error');
       setDeleting(null);
+    },
+  });
+
+  const saveDefaultsMutation = useMutation({
+    mutationFn: (payload: Record<string, number>) =>
+      api.put('/fuel-consumption/prices/defaults', payload).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fuel-prices'] });
+      toast(t('fuel.defaultsSaved'));
+    },
+    onError: (err: ApiError) => {
+      toast(err?.response?.data?.message || t('fuel.defaultsError'), 'error');
+    },
+  });
+
+  const createPriceMutation = useMutation({
+    mutationFn: (payload: Record<string, unknown>) =>
+      api.post('/fuel-consumption/prices', payload).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fuel-prices'] });
+      toast(t('fuel.priceSaved'));
+      setAddingPrice(false);
+      setEditingPrice(null);
+    },
+    onError: (err: ApiError) => {
+      toast(err?.response?.data?.message || t('fuel.priceError'), 'error');
+    },
+  });
+
+  const updatePriceMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) =>
+      api.patch(`/fuel-consumption/prices/${id}`, payload).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fuel-prices'] });
+      toast(t('fuel.priceUpdated'));
+      setAddingPrice(false);
+      setEditingPrice(null);
+    },
+    onError: (err: ApiError) => {
+      toast(err?.response?.data?.message || t('fuel.priceError'), 'error');
+    },
+  });
+
+  const deletePriceMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/fuel-consumption/prices/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fuel-prices'] });
+      toast(t('fuel.priceDeleted'));
+      setDeletingPrice(null);
+    },
+    onError: (err: ApiError) => {
+      toast(err?.response?.data?.message || t('fuel.priceDeleteError'), 'error');
+      setDeletingPrice(null);
     },
   });
 
@@ -165,6 +256,65 @@ export default function FuelPage() {
     createMutation.mutate(payload);
   };
 
+  const saveDefaults = () => {
+    const payload: Record<string, number> = {};
+    for (const ft of FUEL_TYPES) {
+      const num = Number(defaultsDraft[ft]);
+      if (Number.isFinite(num) && num >= 0) payload[ft] = num;
+    }
+    if (Object.keys(payload).length === 0) {
+      toast(t('fuel.invalidPrice'), 'error');
+      return;
+    }
+    saveDefaultsMutation.mutate(payload);
+  };
+
+  const openAddPrice = () => {
+    setEditingPrice(null);
+    setAddingPrice(true);
+    setPriceForm({
+      fuelType: 'diesel',
+      pricePerLiter: '',
+      effectiveFrom: new Date().toISOString().slice(0, 10),
+      effectiveUntil: '',
+    });
+  };
+
+  const openEditPrice = (p: FuelPrice) => {
+    setAddingPrice(false);
+    setEditingPrice(p);
+    setPriceForm({
+      fuelType: p.fuelType,
+      pricePerLiter: String(p.pricePerLiter),
+      effectiveFrom: p.effectiveFrom.slice(0, 10),
+      effectiveUntil: p.effectiveUntil ? p.effectiveUntil.slice(0, 10) : '',
+    });
+  };
+
+  const closePriceDialog = () => {
+    setAddingPrice(false);
+    setEditingPrice(null);
+  };
+
+  const savePrice = () => {
+    const price = Number(priceForm.pricePerLiter);
+    if (!priceForm.fuelType || !Number.isFinite(price) || price < 0 || !priceForm.effectiveFrom) {
+      toast(t('fuel.invalidPrice'), 'error');
+      return;
+    }
+    const payload: Record<string, unknown> = {
+      fuelType: priceForm.fuelType,
+      pricePerLiter: price,
+      effectiveFrom: priceForm.effectiveFrom,
+    };
+    if (priceForm.effectiveUntil) payload.effectiveUntil = priceForm.effectiveUntil;
+    if (editingPrice) {
+      updatePriceMutation.mutate({ id: editingPrice.id, payload });
+    } else {
+      createPriceMutation.mutate(payload);
+    }
+  };
+
   const entries: FuelLog[] = data?.data ?? [];
   const meta = data?.meta ?? { total: 0, page: 1, limit, totalPages: 1 };
   interface FuelReport {
@@ -177,14 +327,16 @@ export default function FuelPage() {
     reportDate?: string;
   }
   const reportList: FuelReport[] = reports ?? [];
+  const priceHistory: FuelPrice[] = pricesData?.history ?? [];
 
-  if (isLoading || reportsLoading) {
+  if (isLoading || reportsLoading || pricesLoading) {
     return (
       <div className={styles.pageContainer}>
         <h1>{t('fuel.title')}</h1>
         <div className={styles.tabsRow}>
           <button style={tabStyle(tab === 'manual')} onClick={() => setTab('manual')}>{t('fuel.tabManual')}</button>
           <button style={tabStyle(tab === 'gps')} onClick={() => setTab('gps')}>{t('fuel.tabGps')}</button>
+          <button style={tabStyle(tab === 'prices')} onClick={() => setTab('prices')}>{t('fuel.tabPrices')}</button>
         </div>
         <div className={styles.skeleton} />
       </div>
@@ -207,6 +359,7 @@ export default function FuelPage() {
       <div className={styles.tabsRow}>
         <button style={tabStyle(tab === 'manual')} onClick={() => setTab('manual')}>{t('fuel.tabManual')}</button>
         <button style={tabStyle(tab === 'gps')} onClick={() => setTab('gps')}>{t('fuel.tabGps')}</button>
+        <button style={tabStyle(tab === 'prices')} onClick={() => setTab('prices')}>{t('fuel.tabPrices')}</button>
       </div>
 
       {/* Saisie manuelle */}
@@ -385,6 +538,103 @@ export default function FuelPage() {
         </div>
       )}
 
+      {/* Prix carburant */}
+      {tab === 'prices' && (
+        <div>
+          <p className={styles.helpText}>
+            {t('fuel.pricesHelp')}
+          </p>
+
+          <div className={styles.pricesSection}>
+            <h3 className={styles.pricesTitle}>{t('fuel.defaultPricesTitle')}</h3>
+            <p className={styles.helpText}>{t('fuel.defaultPricesHelp')}</p>
+            <div className={styles.defaultsGrid}>
+              {FUEL_TYPES.map((ft) => (
+                <div key={ft} className={styles.defaultsField}>
+                  <label className={styles.label}>{t(`fuel.types.${ft}`)}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    className={styles.dateInput}
+                    value={defaultsDraft[ft] ?? ''}
+                    onChange={(e) => setDefaultsDraft((d) => ({ ...d, [ft]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              className={styles.addBtn}
+              onClick={saveDefaults}
+              disabled={saveDefaultsMutation.isPending}
+            >
+              {saveDefaultsMutation.isPending ? '…' : t('fuel.saveDefaults')}
+            </button>
+          </div>
+
+          <div className={styles.pricesSection}>
+            <div className={styles.historyHeader}>
+              <h3 className={styles.pricesTitle}>{t('fuel.historyTitle')}</h3>
+              <button type="button" className={styles.addBtn} onClick={openAddPrice}>
+                <Plus size={16} /> {t('fuel.addPrice')}
+              </button>
+            </div>
+            <p className={styles.helpText}>{t('fuel.historyHelp')}</p>
+
+            {priceHistory.length === 0 && (
+              <p className={styles.emptyText}>{t('fuel.noPrices')}</p>
+            )}
+
+            {priceHistory.length > 0 && (
+              <table className={styles.table}>
+                <thead>
+                  <tr className={styles.headerRow}>
+                    <th className={styles.th}>{t('fuel.fuelType')}</th>
+                    <th className={styles.th}>{t('fuel.pricePerLiter')}</th>
+                    <th className={styles.th}>{t('fuel.effectiveFrom')}</th>
+                    <th className={styles.th}>{t('fuel.effectiveUntil')}</th>
+                    <th className={styles.thActions}>{t('common.actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {priceHistory.map((p) => (
+                    <tr key={p.id} className={styles.dataRow}>
+                      <td className={styles.td}>{t(`fuel.types.${p.fuelType}`, { defaultValue: p.fuelType })}</td>
+                      <td className={styles.td}>{formatAriary(p.pricePerLiter)}</td>
+                      <td className={styles.td}>{new Date(p.effectiveFrom).toLocaleDateString(i18n.language)}</td>
+                      <td className={styles.td}>{p.effectiveUntil ? new Date(p.effectiveUntil).toLocaleDateString(i18n.language) : '—'}</td>
+                      <td className={styles.td}>
+                        <div className={styles.actionsRow}>
+                          <button
+                            type="button"
+                            className={styles.actionBtn}
+                            onClick={() => openEditPrice(p)}
+                            title={t('common.edit')}
+                            aria-label={t('common.edit')}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.actionBtn} ${styles.danger}`}
+                            onClick={() => setDeletingPrice(p)}
+                            title={t('common.delete')}
+                            aria-label={t('common.delete')}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
       <EntityDialog
         open={!!editing || creating}
         onClose={closeDialog}
@@ -465,6 +715,79 @@ export default function FuelPage() {
           </DialogSection>
         </form>
       </EntityDialog>
+
+      <EntityDialog
+        open={addingPrice || !!editingPrice}
+        onClose={closePriceDialog}
+        title={editingPrice ? t('fuel.editPriceTitle') : t('fuel.addPriceTitle')}
+        footer={
+          <DialogSubmitBar
+            loading={createPriceMutation.isPending || updatePriceMutation.isPending}
+            onCancel={closePriceDialog}
+            submitLabel={editingPrice ? t('common.save') : t('fuel.addPrice')}
+            form="fuel-price-form"
+          />
+        }
+      >
+        <form
+          id="fuel-price-form"
+          onSubmit={(e) => { e.preventDefault(); savePrice(); }}
+        >
+          <DialogSection title={editingPrice ? t('fuel.editPriceTitle') : t('fuel.addPriceTitle')}>
+            <DialogField label={t('fuel.fuelType')} required>
+              <select
+                className="dialog-select"
+                value={priceForm.fuelType}
+                onChange={(e) => setPriceForm({ ...priceForm, fuelType: e.target.value })}
+              >
+                {FUEL_TYPES.map((ft) => (
+                  <option key={ft} value={ft}>{t(`fuel.types.${ft}`)}</option>
+                ))}
+              </select>
+            </DialogField>
+            <DialogField label={t('fuel.pricePerLiter')} required>
+              <input
+                className="dialog-input"
+                type="number"
+                min="0"
+                step="any"
+                value={priceForm.pricePerLiter}
+                onChange={(e) => setPriceForm({ ...priceForm, pricePerLiter: e.target.value })}
+              />
+            </DialogField>
+            <DialogField label={t('fuel.effectiveFrom')} required>
+              <input
+                className="dialog-input"
+                type="date"
+                value={priceForm.effectiveFrom}
+                onChange={(e) => setPriceForm({ ...priceForm, effectiveFrom: e.target.value })}
+              />
+            </DialogField>
+            <DialogField label={t('fuel.effectiveUntil')}>
+              <input
+                className="dialog-input"
+                type="date"
+                value={priceForm.effectiveUntil}
+                onChange={(e) => setPriceForm({ ...priceForm, effectiveUntil: e.target.value })}
+              />
+            </DialogField>
+          </DialogSection>
+        </form>
+      </EntityDialog>
+
+      <ConfirmDialog
+        open={!!deletingPrice}
+        title={t('fuel.confirmDeletePriceTitle')}
+        message={
+          deletingPrice
+            ? `${t('fuel.fuelType')} : ${t(`fuel.types.${deletingPrice.fuelType}`, { defaultValue: deletingPrice.fuelType })} — ${formatAriary(deletingPrice.pricePerLiter)}`
+            : ''
+        }
+        variant="danger"
+        confirmLabel={t('common.delete')}
+        onConfirm={() => deletingPrice && deletePriceMutation.mutate(deletingPrice.id)}
+        onCancel={() => setDeletingPrice(null)}
+      />
 
       <ConfirmDialog
         open={!!deleting}

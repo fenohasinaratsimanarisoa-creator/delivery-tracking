@@ -178,3 +178,33 @@
   color: #666;
   line-height: 1.5;
 }
+
+.pricesSection {
+  margin-bottom: 24px;
+}
+
+.pricesTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.historyHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.defaultsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.defaultsField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

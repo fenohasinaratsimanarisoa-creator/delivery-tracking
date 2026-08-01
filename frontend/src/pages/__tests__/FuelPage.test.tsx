@@ -55,6 +55,9 @@ describe('FuelPage', () => {
       if (queryKey[0] === 'fuel-daily-reports') {
         return { data: [], isLoading: false };
       }
+      if (queryKey[0] === 'fuel-prices') {
+        return { data: { defaults: { diesel: 5200 }, history: [] }, isLoading: false };
+      }
       if (queryKey[0] === 'vehicles') {
         return { data: [{ id: 'veh-1', brand: 'Toyota', model: 'Hilux', licensePlate: 'AB-123-CD' }], isLoading: false };
       }
@@ -78,5 +81,17 @@ describe('FuelPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: 'Ajouter un relevé' })).toBeInTheDocument();
     });
+  });
+
+  it('renders the fuel prices tab with editable default prices', async () => {
+    render(<FuelPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Prix carburant' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Prix par défaut (par type de carburant)')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Enregistrer les prix par défaut')).toBeInTheDocument();
+    expect(screen.getByText('Diesel')).toBeInTheDocument();
   });
 });
