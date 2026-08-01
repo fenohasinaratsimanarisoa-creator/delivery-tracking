@@ -367,14 +367,31 @@ export class TrackingService {
       return null;
     }
 
-    const vehicle = await this.prisma.vehicle.findUnique({
-      where: { id: dto.vehicleId },
+    // Ne garde que les véhicules actifs et non soft-deletés : un véhicule désactivé
+    // ou supprimé ne doit plus pouvoir stocker de positions GPS (sinon données
+    // orphelines invisibles dans l'UI qui polluent la base et les métriques).
+    // Alignement sur assertVehicleOwnership() + getLivePositions().
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: dto.vehicleId, deletedAt: null, isActive: true },
       select: { companyId: true },
     });
     if (!vehicle) {
-      this.logger.warn(
-        `savePosition rejected: vehicle ${dto.vehicleId} not found (driverId=${driverId})`,
-      );
+      // Distingue dans les logs "véhicule inexistant" de "véhicule trouvé mais
+      // inactif/supprimé" (utile pour le débogage terrain). Retour toujours null
+      // dans les deux cas pour ne pas changer le contrat de la fonction.
+      const existingVehicle = await this.prisma.vehicle.findUnique({
+        where: { id: dto.vehicleId },
+        select: { isActive: true, deletedAt: true },
+      });
+      if (!existingVehicle) {
+        this.logger.warn(
+          `savePosition rejected: vehicle ${dto.vehicleId} not found (driverId=${driverId})`,
+        );
+      } else {
+        this.logger.warn(
+          `savePosition rejected: vehicle ${dto.vehicleId} inactive or soft-deleted (isActive=${existingVehicle.isActive}, deletedAt=${existingVehicle.deletedAt ? 'set' : 'null'}, driverId=${driverId})`,
+        );
+      }
       return null;
     }
     if (companyId && vehicle.companyId !== companyId) {
@@ -482,6 +499,26 @@ export class TrackingService {
     }
 
     const vehicleIds = [...new Set(positions.map((p) => p.vehicleId).filter((x): x is string => !!x))];
+    // Distinction des deux cas demandée par le diagnostic :
+    //  - Le chargement des DERNIÈRES positions existantes (map lastPositions ci-dessous)
+    //    sert UNIQUEMENT de référence pour le dédoublonnage/téléportation. Une position
+    //    déjà en base pour un véhicule aujourd'hui désactivé n'est PAS une nouvelle
+    //    écriture : on ne filtre donc pas lastPositions par deletedAt/isActive (le faire
+    //    dégraderait la détection en supprimant une baseline légitime).
+    //  - En revanche, une NOUVELLE position insérée pour un véhicule inactif/supprimé
+    //    est le vrai risque de pollution. On pré-valide donc les véhicules du lot et on
+    //    rejette les positions dont le véhicule n'est pas actif / est soft-deleted.
+    const validVehicleIds = new Set<string>();
+    if (vehicleIds.length > 0) {
+      const vehicleWhere: any = { id: { in: vehicleIds }, deletedAt: null, isActive: true };
+      if (companyId) vehicleWhere.companyId = companyId;
+      const validVehicles = await this.prisma.vehicle.findMany({
+        where: vehicleWhere,
+        select: { id: true },
+      });
+      validVehicles.forEach((v) => validVehicleIds.add(v.id));
+    }
+
     const lastPositions = new Map<string, { latitude: number; longitude: number; timestamp: Date; speed: number | null }>();
     if (vehicleIds.length > 0) {
       const rows = await this.prisma.gpsPosition.findMany({
@@ -508,6 +545,11 @@ export class TrackingService {
 
       if (!pos.vehicleId || pos.vehicleId.length < 16) continue;
       if (pos.deliveryId !== undefined && pos.deliveryId !== null && pos.deliveryId.length < 16) continue;
+
+      if (!validVehicleIds.has(pos.vehicleId)) {
+        this.logger.warn(`Batch position rejected: vehicle ${pos.vehicleId} not found, inactive or soft-deleted (driver=${driverId})`);
+        continue;
+      }
 
       const ts = new Date(pos.timestamp);
       const last = lastPositions.get(pos.vehicleId);

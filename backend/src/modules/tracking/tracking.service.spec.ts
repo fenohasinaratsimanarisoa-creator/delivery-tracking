@@ -9,6 +9,7 @@ const mockPrisma = {
   vehicle: {
     findUnique: jest.fn(),
     findFirst: jest.fn(),
+    findMany: jest.fn(),
   },
   $executeRawUnsafe: jest.fn(),
   $queryRaw: jest.fn(),
@@ -65,7 +66,8 @@ describe('TrackingService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockPrisma.vehicle.findUnique.mockResolvedValue({ companyId: 'company-1' });
+    // savePosition() résout désormais le véhicule via findFirst (filtre deletedAt:null + isActive:true)
+    mockPrisma.vehicle.findFirst.mockResolvedValue({ companyId: 'company-1' });
     service = new TrackingService(
       mockPrisma as unknown as PrismaService,
       mockNotifications as any,
@@ -270,6 +272,38 @@ describe('TrackingService', () => {
 
       expect(result).toEqual({ id: 'gps-desync', suspect: true });
     });
+
+    it('rejects positions for a soft-deleted vehicle — no GPS row inserted', async () => {
+      // Le véhicule existe en base mais est soft-deleted (deletedAt = now) :
+      // le filtre deletedAt:null l'exclut du findFirst → retour null, aucune insertion.
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce({
+        companyId: 'company-1',
+        isActive: true,
+        deletedAt: new Date(),
+      });
+
+      const result = await service.savePosition('00000000-0000-4000-0000-000000000002', dto);
+
+      expect(result).toBeNull();
+      expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects positions for a disabled (inactive) vehicle — no GPS row inserted', async () => {
+      // Le véhicule existe en base mais est désactivé (isActive = false) :
+      // le filtre isActive:true l'exclut du findFirst → retour null, aucune insertion.
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce({
+        companyId: 'company-1',
+        isActive: false,
+        deletedAt: null,
+      });
+
+      const result = await service.savePosition('00000000-0000-4000-0000-000000000002', dto);
+
+      expect(result).toBeNull();
+      expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('teleportation detection — real-world scenarios', () => {
@@ -278,7 +312,7 @@ describe('TrackingService', () => {
     const baseTs = new Date('2026-07-21T10:00:00.000Z');
 
     function setupLastPos(lat: number, lng: number, secondsAgo: number) {
-      mockPrisma.vehicle.findUnique.mockResolvedValue({ companyId: 'company-1' });
+      mockPrisma.vehicle.findFirst.mockResolvedValue({ companyId: 'company-1' });
       mockPrisma.gpsPosition.findFirst
         .mockReset()
         .mockResolvedValueOnce(null)
@@ -468,8 +502,8 @@ describe('TrackingService', () => {
 
     it('rejects cross-tenant vehicle (companyId mismatch) — security isolation', async () => {
       const VID = '00000000-0000-4000-0000-000000000001';
-      mockPrisma.vehicle.findUnique.mockReset();
-      mockPrisma.vehicle.findUnique.mockResolvedValueOnce({ companyId: 'company-B' });
+      mockPrisma.vehicle.findFirst.mockReset();
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ companyId: 'company-B' });
 
       const result = await service.savePosition(DRIVER, {
         latitude: -18.8792,
@@ -654,6 +688,12 @@ describe('TrackingService', () => {
         { id: DID1, assignedDriverId: 'user-1', driverId: null },
       ]);
 
+      // saveBatch() pré-valide désormais les véhicules actifs/non-supprimés du lot
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([
+        { id: VID1 },
+        { id: VID2 },
+      ]);
+
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
       mockPrisma.gpsPosition.createMany.mockResolvedValueOnce({ count: 1 });
 
@@ -665,6 +705,30 @@ describe('TrackingService', () => {
 
       expect(saved).toHaveLength(1);
       expect(mockPrisma.gpsPosition.createMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips positions whose vehicle is inactive or soft-deleted (no insert)', async () => {
+      const positions = [
+        {
+          latitude: 1,
+          longitude: 2,
+          timestamp: '2026-07-21T10:00:00.000Z',
+          deliveryId: DID1,
+          vehicleId: VID1,
+        },
+      ];
+
+      mockPrisma.delivery.findMany.mockResolvedValue([
+        { id: DID1, assignedDriverId: 'user-1', driverId: null },
+      ]);
+      // Le véhicule n'est pas dans la liste des actifs (inactif ou supprimé)
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([]);
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
+
+      const saved = await service.saveBatch('user-1', 'driver-1', positions);
+
+      expect(saved).toHaveLength(0);
+      expect(mockPrisma.gpsPosition.createMany).not.toHaveBeenCalled();
     });
   });
 

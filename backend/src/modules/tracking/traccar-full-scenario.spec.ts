@@ -69,7 +69,8 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
       },
       vehicle: {
         findUnique: jest.fn().mockResolvedValue({ companyId: COMPANY_ID }),
-        findFirst: jest.fn(),
+        // savePosition() résout le véhicule via findFirst (filtre actif/non supprimé)
+        findFirst: jest.fn().mockResolvedValue({ companyId: COMPANY_ID }),
         findMany: jest.fn(),
       },
       delivery: {
