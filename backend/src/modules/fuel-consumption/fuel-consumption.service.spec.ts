@@ -205,6 +205,45 @@ describe('FuelConsumptionService', () => {
 
       expect(mockPrisma.fuelLog.update).not.toHaveBeenCalled();
     });
+
+    it('includes the full day of a mid-day previous fill (14h30) — no false anomaly', async () => {
+      // Scénario du bug : plein précédent à 14h30 le jour J, dailyFuelReport du jour J
+      // stocké à minuit UTC (reportDate). AVANT correction, la période gte=07-15T14:30Z
+      // excluait le reportDate du jour J (minuit, antérieur à 14h30) → gpsKm sous-estimé
+      // (seuls jours 16+17 comptés) → ratio > 3 → FAUSSE anomalie.
+      // APRÈS correction, les bornes sont tronquées au jour UTC : le jour J est inclus.
+      const fuelLog = {
+        id: 'fuel-log-midday',
+        vehicleId: 'vehicle-a',
+        kilometers: 400,
+        fillDate: new Date('2026-07-18T09:00:00.000Z'),
+        vehicle: { licensePlate: 'TRK-A' },
+      };
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({
+        fillDate: new Date('2026-07-15T14:30:00.000Z'),
+      });
+      // Somme post-correction : jours 15 (200km) + 16 (50km) + 17 (50km) = 300km
+      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({
+        _sum: { distanceKm: 300 },
+      });
+
+      await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
+
+      expect(mockPrisma.dailyFuelReport.aggregate).toHaveBeenCalledWith({
+        where: {
+          companyId: 'company-1',
+          vehicleId: 'vehicle-a',
+          reportDate: {
+            gte: new Date('2026-07-15T00:00:00.000Z'),
+            lte: new Date('2026-07-18T00:00:00.000Z'),
+          },
+        },
+        _sum: { distanceKm: true },
+      });
+      // ratio = 400/300 = 1.33 < 3 → aucun flag d'anomalie, aucune notification
+      expect(mockPrisma.fuelLog.update).not.toHaveBeenCalled();
+      expect(mockNotifications.create).not.toHaveBeenCalled();
+    });
   });
 
   // ----------------------------------------------------------------

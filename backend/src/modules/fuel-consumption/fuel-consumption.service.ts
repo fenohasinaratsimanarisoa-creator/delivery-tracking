@@ -390,8 +390,20 @@ export class FuelConsumptionService {
       select: { fillDate: true },
     });
 
-    const periodStart = prevLog?.fillDate || new Date(fuelLog.fillDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const periodEnd = fuelLog.fillDate;
+    const rawStart = prevLog?.fillDate || new Date(fuelLog.fillDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const rawEnd = fuelLog.fillDate;
+
+    // Normalisation des bornes au jour UTC (minuit), alignée sur dailyFuelReport.reportDate
+    // qui est TOUJOURS minuit UTC (voir generateDailyReportForCompany, ligne ~350 :
+    // new Date(Date.UTC(year, month, date))). Sans cette troncature, un plein précédent à
+    // 14h30 exclurait le reportDate du jour J (minuit, antérieur à 14h30) de la période
+    // gte/lte : la distance GPS de ce jour serait ignorée, sous-estimant gpsKm et risquant
+    // une fausse anomalie sur un plein pourtant légitime. Inclure le jour entier du plein
+    // précédent ET du plein courant sur-estime légèrement la distance GPS, ce qui est le
+    // comportement le plus sûr : mieux vaut inclure un peu plus que déclencher une fausse
+    // anomalie. (Même logique de commentaire documenté que GPS_NOISE_THRESHOLD_M ci-dessus.)
+    const periodStart = new Date(Date.UTC(rawStart.getUTCFullYear(), rawStart.getUTCMonth(), rawStart.getUTCDate()));
+    const periodEnd = new Date(Date.UTC(rawEnd.getUTCFullYear(), rawEnd.getUTCMonth(), rawEnd.getUTCDate()));
 
     const gpsDistance = await this.prisma.dailyFuelReport.aggregate({
       where: {
