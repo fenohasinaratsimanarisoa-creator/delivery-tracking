@@ -1,11 +1,9 @@
 import { ConfigService } from '@nestjs/config';
-import { HttpException } from '@nestjs/common';
 import { RoutingService } from './routing.service';
 
 const mockConfigService = {
   get: jest.fn((key: string) => {
     if (key === 'OSRM_BASE_URL') return 'http://localhost:5000';
-    if (key === 'GOOGLE_MAPS_API_KEY') return 'test-google-key';
     return undefined;
   }),
 };
@@ -62,50 +60,39 @@ describe('RoutingService', () => {
       expect(result.duration).toBe(300);
     });
 
-    it('falls back to public OSRM when local fails', async () => {
-      mockFetchOnce(null, false);
-      mockFetchOnce({
-        code: 'Ok',
-        routes: [osrmRoute],
-      }, true);
+    it('throws 422 on OSRM NoRoute without calling the public OSRM demo server', async () => {
+      mockFetchOnce({ code: 'NoRoute', routes: [] }, true);
 
-      const result = await service.getDirections(dto);
+      await expect(service.getDirections(dto)).rejects.toMatchObject({
+        status: 422,
+        response: 'Aucun itinéraire trouvé pour ces coordonnées',
+      });
 
-      expect(result.provider).toBe('osrm');
-      expect(result.distance).toBe(5000);
+      // Un seul appel réseau, vers l'OSRM local uniquement.
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+      expect(url).toContain('localhost:5000');
+      expect(url).not.toContain('project-osrm.org');
+      expect(url).not.toContain('googleapis.com');
     });
 
-    it('falls back to Google Directions when both OSRM servers fail', async () => {
+    it('throws 503 on local OSRM network failure without any external fallback', async () => {
       mockFetchOnce(null, false);
-      mockFetchOnce(null, false);
-      mockFetchOnce({
-        status: 'OK',
-        routes: [{
-          legs: [{
-            distance: { value: 5200 },
-            duration: { value: 310 },
-            steps: [],
-          }],
-          overview_polyline: { points: '_p~iF~ps|U_ulLnnqC_mqNvxq`@' },
-        }],
-      }, true);
 
-      const result = await service.getDirections(dto);
+      await expect(service.getDirections(dto)).rejects.toMatchObject({ status: 503 });
 
-      expect(result.provider).toBe('google');
-      expect(result.distance).toBe(5200);
-      expect(result.duration).toBe(310);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+      expect(url).toContain('localhost:5000');
+      expect(url).not.toContain('project-osrm.org');
+      expect(url).not.toContain('googleapis.com');
     });
 
-    it('throws when all providers fail and no Google key', async () => {
-      const noKeyService = new RoutingService(
-        { get: jest.fn((key: string) => key === 'OSRM_BASE_URL' ? 'http://localhost:5000' : undefined) } as unknown as ConfigService,
-      );
+    it('throws 422 on OSRM InvalidQuery without any fallback', async () => {
+      mockFetchOnce({ code: 'InvalidQuery', routes: [] }, true);
 
-      mockFetchOnce(null, false);
-      mockFetchOnce(null, false);
-
-      await expect(noKeyService.getDirections(dto)).rejects.toThrow(HttpException);
+      await expect(service.getDirections(dto)).rejects.toMatchObject({ status: 422 });
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
     it('includes alternatives when requested', async () => {
@@ -145,8 +132,7 @@ describe('RoutingService', () => {
       expect(result.originalPolyline).toBeDefined();
     });
 
-    it('returns original trace with 0 confidence when OSRM fails', async () => {
-      mockFetchOnce(null, false);
+    it('returns original trace with 0 confidence on local OSRM failure (no external call)', async () => {
       mockFetchOnce(null, false);
 
       const result = await service.matchToRoad(dto);
@@ -155,6 +141,12 @@ describe('RoutingService', () => {
       expect(result.matchedPolyline).toEqual(
         expect.arrayContaining([[expect.any(Number), expect.any(Number)]]),
       );
+
+      // Un seul appel réseau, vers l'OSRM local uniquement (aucun fallback public).
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+      expect(url).toContain('localhost:5000');
+      expect(url).not.toContain('project-osrm.org');
     });
   });
 });

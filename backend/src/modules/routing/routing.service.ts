@@ -12,42 +12,27 @@ import {
 export class RoutingService {
   private readonly logger = new Logger(RoutingService.name);
   private readonly osrmBaseUrl: string;
-  private readonly osrmPublicUrl = 'https://router.project-osrm.org';
-  private readonly googleApiKey: string | undefined;
 
   constructor(private configService: ConfigService) {
     this.osrmBaseUrl = this.configService.get<string>('OSRM_BASE_URL') || 'http://localhost:5000';
-    this.googleApiKey = this.configService.get<string>('GOOGLE_MAPS_API_KEY');
   }
 
   async getDirections(dto: DirectionsRequestDto): Promise<DirectionsResponse> {
-    // Try local OSRM first
+    // Un seul fournisseur : l'OSRM auto-hébergé. Conformité DPA (LEGAL.md §8,
+    // DPA.md §5.4 — liste fermée de sous-traitants, hébergement UE, préavis 30j) :
+    // AUCUN fallback vers des sous-traitants non déclarés (OSRM public
+    // router.project-osrm.org, Google Directions). Les données de routage ne
+    // sortent jamais de l'infrastructure auto-hébergée.
     try {
       return await this.getOsrmDirections(dto, this.osrmBaseUrl);
-    } catch (localErr) {
-      this.logger.warn(`Local OSRM failed: ${(localErr as Error).message}`);
+    } catch (err: any) {
+      // Réponse OSRM valide mais sans itinéraire (NoRoute/InvalidQuery) : erreur
+      // 422 claire remontée telle quelle au client — pas une panne, pas de fallback.
+      if (err instanceof HttpException) throw err;
+      // Vraie panne de l'OSRM local (timeout / connexion refusée / HTTP >= 400).
+      this.logger.error(`Local OSRM failed: ${err.message}`);
+      throw new HttpException('Routing unavailable', HttpStatus.SERVICE_UNAVAILABLE);
     }
-
-    // Try public OSRM demo server
-    try {
-      this.logger.log('Trying public OSRM demo server');
-      return await this.getOsrmDirections(dto, this.osrmPublicUrl);
-    } catch (publicErr) {
-      this.logger.warn(`Public OSRM failed: ${(publicErr as Error).message}`);
-    }
-
-    // Fallback to Google Directions
-    if (this.googleApiKey) {
-      try {
-        this.logger.log('Trying Google Directions API');
-        return await this.getGoogleDirections(dto);
-      } catch (googleErr) {
-        this.logger.error(`Google Directions also failed: ${(googleErr as Error).message}`);
-        throw new HttpException('Routing unavailable', HttpStatus.SERVICE_UNAVAILABLE);
-      }
-    }
-
-    throw new HttpException('All routing providers failed', HttpStatus.SERVICE_UNAVAILABLE);
   }
 
   private extractRouteData(route: {
@@ -136,7 +121,13 @@ export class RoutingService {
     };
 
     if (data.code !== 'Ok' || !data.routes?.length) {
-      throw new Error(`OSRM no route found: ${data.code}`);
+      // Réponse OSRM valide mais sans itinéraire (NoRoute/InvalidQuery) : ce n'est
+      // pas une panne mais une absence de route pour ces coordonnées. Erreur 422
+      // claire au client, aucun fallback externe déclenché.
+      throw new HttpException(
+        'Aucun itinéraire trouvé pour ces coordonnées',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
     }
 
     const main = this.extractRouteData(data.routes[0]);
@@ -159,74 +150,6 @@ export class RoutingService {
       steps: main.steps,
       alternatives: alternatives.length > 0 ? alternatives : undefined,
       provider: 'osrm',
-    };
-  }
-
-  private async getGoogleDirections(dto: DirectionsRequestDto): Promise<DirectionsResponse> {
-    const origin = `${dto.originLat},${dto.originLng}`;
-    const destination = `${dto.destinationLat},${dto.destinationLng}`;
-    const mode = dto.profile === 'walking' ? 'walking' : 'driving';
-    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=${mode}&units=metric&key=${this.googleApiKey}`;
-
-    this.logger.debug(`Google Directions request`);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-
-    const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      throw new Error(`Google Directions HTTP ${response.status}`);
-    }
-
-    const data = (await response.json()) as {
-      status: string;
-      routes: Array<{
-        legs: Array<{
-          distance: { value: number };
-          duration: { value: number };
-          steps: Array<{
-            distance: { value: number };
-            duration: { value: number };
-            html_instructions: string;
-            maneuver?: string;
-            polyline: { points: string };
-          }>;
-        }>;
-        overview_polyline: { points: string };
-      }>;
-    };
-
-    if (data.status !== 'OK' || !data.routes?.length) {
-      throw new Error(`Google Directions no route: ${data.status}`);
-    }
-
-    const route = data.routes[0];
-    const leg = route.legs[0];
-
-    const polyline = this.decodePolyline(route.overview_polyline.points);
-
-    const steps: RouteStep[] = [];
-    for (const step of leg.steps) {
-      const stepPoints = this.decodePolyline(step.polyline.points);
-      const instruction = step.html_instructions?.replace(/<[^>]*>/g, '') || '';
-      steps.push({
-        distance: step.distance.value,
-        duration: step.duration.value,
-        instruction,
-        waypoints: stepPoints,
-        maneuverType: step.maneuver,
-        streetName: instruction.split(' sur ')[1]?.split(',')[0]?.trim(),
-      });
-    }
-
-    return {
-      polyline,
-      distance: leg.distance.value,
-      duration: leg.duration.value,
-      steps,
-      provider: 'google',
     };
   }
 
@@ -284,59 +207,19 @@ export class RoutingService {
 
     try {
       return await tryMatch(this.osrmBaseUrl);
-    } catch (err) {
+    } catch (err: any) {
       lastError = err as Error;
       this.logger.warn(`Local OSRM match failed: ${lastError.message}`);
     }
 
-    try {
-      return await tryMatch(this.osrmPublicUrl);
-    } catch (err) {
-      lastError = err as Error;
-      this.logger.warn(`Public OSRM match also failed: ${lastError.message}`);
-    }
-
-    // Fallback: return original trace with 0 confidence (no matching available)
+    // Pas de matching disponible : on renvoie la trace originale avec confidence 0.
+    // Aucune donnée externe n'est appelée (conformité DPA — pas de fallback vers
+    // l'OSRM public ni Google).
     this.logger.warn('Map matching unavailable — returning original trace');
     return {
       matchedPolyline: dto.coordinates.map((c) => [c[0], c[1]] as [number, number]),
       confidence: 0,
       originalPolyline: dto.coordinates.map((c) => [c[0], c[1]] as [number, number]),
     };
-  }
-
-  private decodePolyline(encoded: string): [number, number][] {
-    const points: [number, number][] = [];
-    let index = 0;
-    const len = encoded.length;
-    let lat = 0;
-    let lng = 0;
-
-    while (index < len) {
-      let b: number;
-      let shift = 0;
-      let result = 0;
-      do {
-        b = encoded.charCodeAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      const dlat = result & 1 ? ~(result >> 1) : result >> 1;
-      lat += dlat;
-
-      shift = 0;
-      result = 0;
-      do {
-        b = encoded.charCodeAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      const dlng = result & 1 ? ~(result >> 1) : result >> 1;
-      lng += dlng;
-
-      points.push([lat / 1e5, lng / 1e5]);
-    }
-
-    return points;
   }
 }
