@@ -2,6 +2,7 @@ import { PlatformAdminService } from './platform-admin.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { AuditAction } from '@prisma/client';
 
 const PASSWORD = 'mandriMena45!';
 const passwordHash = bcrypt.hashSync(PASSWORD, 12);
@@ -12,6 +13,15 @@ const mockPrisma = {
     update: jest.fn(),
   },
   platformAuditLog: {
+    create: jest.fn(),
+  },
+  company: {
+    findUnique: jest.fn(),
+  },
+  user: {
+    findFirst: jest.fn(),
+  },
+  auditLog: {
     create: jest.fn(),
   },
 };
@@ -84,6 +94,43 @@ describe('PlatformAdminService.login — 2FA optionnelle', () => {
 
     await expect(service.login({ email: 'admin@test.com', password: 'wrong' })).rejects.toThrow(
       'Invalid credentials',
+    );
+  });
+
+  it('impersonate() writes the target tenant AuditLog with action=admin_impersonation (not profile_update)', async () => {
+    mockPrisma.company.findUnique.mockResolvedValueOnce({ id: 'company-1', name: 'Tenant A' });
+    mockPrisma.user.findFirst.mockResolvedValueOnce({
+      id: 'user-admin',
+      email: 'admin@tenant.com',
+      role: 'admin',
+      companyId: 'company-1',
+      firstName: 'Admin',
+      lastName: 'Tenant',
+    });
+    mockPrisma.auditLog.create.mockResolvedValue({});
+
+    await service.impersonate('company-1', 'platform-admin-1', 'platform@admin.com', '1.2.3.4');
+
+    console.log(
+      `[impersonate] auditLog.create appelé avec action = ${mockPrisma.auditLog.create.mock.calls[0][0].data.action}`,
+    );
+
+    expect(mockPrisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: 'user-admin',
+          companyId: 'company-1',
+          action: AuditAction.admin_impersonation,
+          metadata: { impersonatedBy: 'platform-admin-1', platformAdminEmail: 'platform@admin.com' },
+          ip: '1.2.3.4',
+        }),
+      }),
+    );
+    // L'ancien libellé générique ne doit plus être utilisé pour l'impersonation.
+    expect(mockPrisma.auditLog.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'profile_update' }),
+      }),
     );
   });
 });

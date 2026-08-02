@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
+import { AuditAction } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TotpService } from '../auth/totp.service';
 import { PlatformAdminLoginDto } from './dto/login.dto';
@@ -251,7 +252,7 @@ export class PlatformAdminService {
       data: {
         userId: adminUser.id,
         companyId,
-        action: 'profile_update',
+        action: AuditAction.admin_impersonation,
         metadata: { impersonatedBy: adminId, platformAdminEmail: adminEmail },
         ip,
       },
