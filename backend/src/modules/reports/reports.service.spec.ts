@@ -108,7 +108,113 @@ describe('ReportsService', () => {
       expect(result.vehicles[0].vehicleName).toBe('Toyota Hilux');
       expect(result.vehicles[0].fuelLiters).toBe(50);
       expect(result.vehicles[0].distanceKm).toBe(500);
+      expect(result.vehicles[0].fuelLitersIncludingAnomalies).toBe(50);
+      expect(result.vehicles[0].anomalyCount).toBe(0);
       expect(mockCache.set).toHaveBeenCalled();
+    });
+
+    it('excludes anomalous fills from fuelLiters but keeps them in fuelLitersIncludingAnomalies', async () => {
+      mockCache.get.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([
+        {
+          id: 'vehicle-1',
+          brand: 'Toyota',
+          model: 'Hilux',
+          licensePlate: 'TRK-001',
+          isActive: true,
+          deliveries: [],
+          gpsPositions: [{ latitude: -18.91, longitude: 47.52, timestamp: new Date(), speed: 30 }],
+        },
+      ]);
+      mockPrisma.fuelLog.findMany.mockResolvedValueOnce([
+        // 2 pleins normaux (50 + 40 L)
+        { liters: 50, kilometers: 500, vehicleId: 'vehicle-1', consumptionAnomalyFlag: false, gpsAnomalyFlag: false },
+        { liters: 40, kilometers: 400, vehicleId: 'vehicle-1', consumptionAnomalyFlag: false, gpsAnomalyFlag: false },
+        // 1 plein anormal (100 L) : anomalie de consommation
+        { liters: 100, kilometers: 200, vehicleId: 'vehicle-1', consumptionAnomalyFlag: true, gpsAnomalyFlag: false },
+      ]);
+
+      const result = await service.getFleetReport('company-1');
+      const v = result.vehicles[0];
+
+      console.log(
+        `[fleet] fuelLiters=${v.fuelLiters} L, distanceKm=${v.distanceKm} km, ` +
+          `avgConsumption=${v.avgConsumption} L/100km, ` +
+          `fuelLitersIncludingAnomalies=${v.fuelLitersIncludingAnomalies} L, anomalyCount=${v.anomalyCount}`,
+      );
+      console.log(
+        `[fleet] totalFuel=${result.totalFuel} L, totalFuelIncludingAnomalies=${result.totalFuelIncludingAnomalies} L, anomalyCount=${result.anomalyCount}`,
+      );
+
+      // fuelLiters exclut le plein anormal : 50 + 40 = 90
+      expect(v.fuelLiters).toBe(90);
+      expect(v.distanceKm).toBe(900);
+      expect(v.avgConsumption).toBe(10); // 90 / 900 * 100
+      // fuelLitersIncludingAnomalies inclut le plein anormal : 50 + 40 + 100 = 190
+      expect(v.fuelLitersIncludingAnomalies).toBe(190);
+      expect(v.anomalyCount).toBe(1);
+      // Totaux flotte
+      expect(result.totalFuel).toBe(90);
+      expect(result.totalFuelIncludingAnomalies).toBe(190);
+      expect(result.anomalyCount).toBe(1);
+    });
+  });
+
+  describe('fleet export transparency (validated fuel vs excluded anomalies)', () => {
+    const fleetMocks = () => {
+      mockCache.get.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([
+        {
+          id: 'vehicle-1',
+          brand: 'Toyota',
+          model: 'Hilux',
+          licensePlate: 'TRK-001',
+          isActive: true,
+          deliveries: [],
+          gpsPositions: [{ latitude: -18.91, longitude: 47.52, timestamp: new Date(), speed: 30 }],
+        },
+      ]);
+      mockPrisma.fuelLog.findMany.mockResolvedValueOnce([
+        // 1 normal (50 L) + 1 anormal (100 L) → validé=50, exclu=100, pleins=1
+        { liters: 50, kilometers: 500, vehicleId: 'vehicle-1', consumptionAnomalyFlag: false, gpsAnomalyFlag: false },
+        { liters: 100, kilometers: 200, vehicleId: 'vehicle-1', consumptionAnomalyFlag: true, gpsAnomalyFlag: false },
+      ]);
+    };
+
+    it('exportExcel fleet sheet shows "Carburant validé" and the excluded-anomaly line', async () => {
+      fleetMocks();
+
+      const buf = await service.exportExcel('fleet', 'company-1');
+      const ExcelJS = await import('exceljs');
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buf as any);
+      const ws = wb.getWorksheet('Flotte');
+      const texts: string[] = [];
+      ws.eachRow((row: any) => {
+        const values = Array.isArray(row.values) ? row.values : Object.values(row.values);
+        for (const val of values) {
+          const v = val && typeof val === 'object' ? (val as any).value : val;
+          if (typeof v === 'string') texts.push(v);
+        }
+      });
+
+      console.log(
+        `[excel] lignes de synthèse : ${texts
+          .filter((t) => t.includes('Carburant') || t.includes('anomalies'))
+          .join(' | ')}`,
+      );
+
+      expect(texts).toContain('Carburant validé');
+      expect(texts.some((t) => t.includes('dont anomalies exclues, 100 L / 1 pleins'))).toBe(true);
+    });
+
+    it('exportPdf fleet renders without error (validated fuel + excluded anomalies lines)', async () => {
+      fleetMocks();
+
+      const buf = await service.exportPdf('fleet', 'company-1');
+
+      expect(Buffer.isBuffer(buf)).toBe(true);
+      expect(buf.length).toBeGreaterThan(1000);
     });
   });
 

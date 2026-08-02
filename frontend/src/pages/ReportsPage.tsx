@@ -29,6 +29,8 @@ interface FleetVehicle {
   distanceKm: number;
   fuelLiters: number;
   avgConsumption: number;
+  fuelLitersIncludingAnomalies?: number;
+  anomalyCount?: number;
   isOnline: boolean;
 }
 
@@ -37,6 +39,8 @@ interface FleetReport {
   onlineCount: number;
   totalDistance: number;
   totalFuel: number;
+  totalFuelIncludingAnomalies?: number;
+  anomalyCount?: number;
   vehicles: FleetVehicle[];
 }
 

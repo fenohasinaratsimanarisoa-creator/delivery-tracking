@@ -110,8 +110,13 @@ export class ReportsService {
 
     const vehicleData = vehicles.map((v) => {
       const vFuel = fuelLogs.filter((f) => f.vehicleId === v.id);
-      const totalLiters = vFuel.reduce((s, f) => s + f.liters, 0);
-      const totalKm = vFuel.reduce((s, f) => s + f.kilometers, 0);
+      // Logs "valides" : les pleins anormaux (consommation ou GPS) sont EXCLUS
+      // des métriques de consommation (fuelLiters/distanceKm/avgConsumption).
+      const vFuelValid = vFuel.filter((f) => !hasFuelAnomaly(f));
+      const validLiters = vFuelValid.reduce((s, f) => s + f.liters, 0);
+      const validKm = vFuelValid.reduce((s, f) => s + f.kilometers, 0);
+      // Total brut non filtré, pour transparence (inclut les anomalies).
+      const allLiters = vFuel.reduce((s, f) => s + f.liters, 0);
       const positionCount = v.gpsPositions.length;
       const hasRecentPosition =
         positionCount > 0 && v.gpsPositions[0].timestamp > new Date(Date.now() - 3600000);
@@ -122,9 +127,10 @@ export class ReportsService {
         licensePlate: v.licensePlate,
         isActive: v.isActive,
         deliveriesCount: v.deliveries.length,
-        fuelLiters: Math.round(totalLiters * 100) / 100,
-        distanceKm: Math.round(totalKm * 100) / 100,
-        avgConsumption: totalKm > 0 ? Math.round((totalLiters / totalKm) * 10000) / 100 : 0,
+        fuelLiters: Math.round(validLiters * 100) / 100,
+        distanceKm: Math.round(validKm * 100) / 100,
+        avgConsumption: validKm > 0 ? Math.round((validLiters / validKm) * 10000) / 100 : 0,
+        fuelLitersIncludingAnomalies: Math.round(allLiters * 100) / 100,
         anomalyCount: vFuel.filter((f) => hasFuelAnomaly(f)).length,
         isOnline: hasRecentPosition,
       };
@@ -132,11 +138,18 @@ export class ReportsService {
 
     const totalDistance = vehicleData.reduce((s, v) => s + v.distanceKm, 0);
     const totalFuel = vehicleData.reduce((s, v) => s + v.fuelLiters, 0);
+    const totalFuelIncludingAnomalies = vehicleData.reduce(
+      (s, v) => s + v.fuelLitersIncludingAnomalies,
+      0,
+    );
+    const anomalyCount = vehicleData.reduce((s, v) => s + v.anomalyCount, 0);
 
     const result = {
       vehicles: vehicleData,
       totalDistance: Math.round(totalDistance * 100) / 100,
       totalFuel: Math.round(totalFuel * 100) / 100,
+      totalFuelIncludingAnomalies: Math.round(totalFuelIncludingAnomalies * 100) / 100,
+      anomalyCount,
       activeCount: vehicles.filter((v) => v.isActive).length,
       onlineCount: vehicleData.filter((v) => v.isOnline).length,
     };
@@ -273,7 +286,7 @@ export class ReportsService {
     });
     y -= 30;
     draw(`Type: ${reportType}`, 11);
-    draw(`Période: ${from || 'Début'} → ${to || "Aujourd'hui"}`, 10);
+    draw(`Période: ${from || 'Début'} -> ${to || "Aujourd'hui"}`, 10);
     y -= 10;
 
     if (reportType === 'delivery' || reportType === 'all') {
@@ -292,10 +305,13 @@ export class ReportsService {
 
     if (reportType === 'fleet' || reportType === 'all') {
       const fleet = await this.getFleetReport(companyId, from, to);
+      const excludedLiters =
+        Math.round((fleet.totalFuelIncludingAnomalies - fleet.totalFuel) * 100) / 100;
       draw('Rapport Flotte', 14, true);
       y -= 4;
       draw(`Distance totale : ${fleet.totalDistance} km`);
-      draw(`Carburant total : ${fleet.totalFuel} L`);
+      draw(`Carburant validé : ${fleet.totalFuel} L`);
+      draw(`dont anomalies exclues, ${excludedLiters} L / ${fleet.anomalyCount} pleins`);
       draw(`Véhicules actifs : ${fleet.activeCount}`);
       for (const v of fleet.vehicles) {
         draw(
@@ -365,6 +381,14 @@ export class ReportsService {
           active: v.isActive ? 'Oui' : 'Non',
         });
       }
+      // Transparence : carburant validé (anomalies exclues) vs total brut.
+      const excludedLiters =
+        Math.round((fleet.totalFuelIncludingAnomalies - fleet.totalFuel) * 100) / 100;
+      ws.addRow({});
+      ws.addRow({ vehicle: 'Carburant validé', fuel: fleet.totalFuel });
+      ws.addRow({
+        vehicle: `dont anomalies exclues, ${excludedLiters} L / ${fleet.anomalyCount} pleins`,
+      });
     }
 
     if (reportType === 'driver' || reportType === 'all') {
