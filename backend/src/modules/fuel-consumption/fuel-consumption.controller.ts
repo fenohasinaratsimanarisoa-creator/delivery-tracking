@@ -5,6 +5,7 @@ import { UpdateFuelLogDto } from './dto/update-fuel-log.dto';
 import { FuelFilterDto } from './dto/fuel-filter.dto';
 import { CreateFuelPriceDto } from './dto/create-fuel-price.dto';
 import { UpdateFuelPriceDto } from './dto/update-fuel-price.dto';
+import { UpdateDefaultFuelPricesDto } from './dto/update-default-fuel-prices.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -66,9 +67,9 @@ export class FuelConsumptionController {
   @Put('prices/defaults')
   updateDefaultFuelPrices(
     @CurrentUser('companyId') companyId: string,
-    @Body() body: Record<string, number>,
+    @Body() dto: UpdateDefaultFuelPricesDto,
   ) {
-    return this.fuelService.updateDefaultFuelPrices(companyId, body);
+    return this.fuelService.updateDefaultFuelPrices(companyId, dto);
   }
 
   @Roles('admin', 'dispatcher')

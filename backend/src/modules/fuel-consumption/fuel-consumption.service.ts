@@ -12,6 +12,7 @@ import { UpdateFuelLogDto } from './dto/update-fuel-log.dto';
 import { FuelFilterDto } from './dto/fuel-filter.dto';
 import { CreateFuelPriceDto } from './dto/create-fuel-price.dto';
 import { UpdateFuelPriceDto } from './dto/update-fuel-price.dto';
+import { UpdateDefaultFuelPricesDto } from './dto/update-default-fuel-prices.dto';
 import { haversineDistance as haversineDistanceM } from '../../common/geo/geo.utils';
 import {
   hasFuelAnomaly,
@@ -331,11 +332,12 @@ export class FuelConsumptionService {
   }
 
   /** Enregistre/remplace les prix par défaut de la company (par type de carburant). */
-  async updateDefaultFuelPrices(companyId: string, prices: Record<string, number>) {
+  async updateDefaultFuelPrices(companyId: string, prices: UpdateDefaultFuelPricesDto) {
+    // Clés et valeurs déjà validées par le DTO (whitelist des types de carburant +
+    // bornes @Min(0)/@Max(50000)) : le filtrage manuel Object.entries est retiré.
     const sanitized: Record<string, number> = {};
     for (const [key, value] of Object.entries(prices)) {
-      const num = Number(value);
-      if (Number.isFinite(num) && num >= 0) sanitized[key.toLowerCase()] = num;
+      if (value !== undefined) sanitized[key] = value;
     }
     await this.prisma.companyFuelSettings.upsert({
       where: { companyId },

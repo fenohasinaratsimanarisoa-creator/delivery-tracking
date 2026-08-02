@@ -183,4 +183,50 @@ describe('Fuel Consumption (e2e)', () => {
 
     expect(res.body.logCount).toBeGreaterThanOrEqual(3);
   });
+
+  it('PUT /fuel-consumption/prices/defaults - persists valid per-type default prices', async () => {
+    const res = await withCsrf(
+      request(app.getHttpServer())
+        .put('/fuel-consumption/prices/defaults')
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
+      .send({ essence: 5000, gasoil: 4900, diesel: 4900, electric: 0, hybrid: 3000 })
+      .expect(200);
+
+    expect(res.body.defaults).toEqual({ essence: 5000, gasoil: 4900, diesel: 4900, electric: 0, hybrid: 3000 });
+
+    const settings = await prisma.companyFuelSettings.findUnique({ where: { companyId } });
+    expect(settings?.defaultFuelPrices).toMatchObject({ essence: 5000, diesel: 4900 });
+  });
+
+  it('PUT /fuel-consumption/prices/defaults - rejects an unknown key with 400', async () => {
+    const res = await withCsrf(
+      request(app.getHttpServer())
+        .put('/fuel-consumption/prices/defaults')
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
+      .send({ mazout: 100 })
+      .expect(400);
+
+    console.log(`[e2e unknown key] ${res.status}: ${JSON.stringify(res.body.message)}`);
+    expect(res.body.message.some((m: string) => m.includes('mazout should not exist'))).toBe(true);
+  });
+
+  it('PUT /fuel-consumption/prices/defaults - rejects an out-of-bounds value with 400', async () => {
+    const res = await withCsrf(
+      request(app.getHttpServer())
+        .put('/fuel-consumption/prices/defaults')
+        .set('Authorization', `Bearer ${accessToken}`),
+      csrf,
+    )
+      .send({ diesel: 60000 })
+      .expect(400);
+
+    console.log(`[e2e out of bounds] ${res.status}: ${JSON.stringify(res.body.message)}`);
+    expect(
+      res.body.message.some((m: string) => m.includes('diesel must not be greater than 50000')),
+    ).toBe(true);
+  });
 });

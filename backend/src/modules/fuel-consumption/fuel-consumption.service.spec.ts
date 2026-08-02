@@ -835,7 +835,7 @@ describe('FuelConsumptionService', () => {
     it('updateDefaultFuelPrices persists sanitized per-company defaults', async () => {
       mockPrisma.companyFuelSettings.upsert.mockResolvedValueOnce({});
 
-      const result = await service.updateDefaultFuelPrices('company-1', { DIESEL: 5400, essence: 5200, bad: -5 });
+      const result = await service.updateDefaultFuelPrices('company-1', { diesel: 5400, essence: 5200 });
 
       expect(result.defaults).toEqual({ diesel: 5400, essence: 5200 });
       expect(mockPrisma.companyFuelSettings.upsert).toHaveBeenCalledWith({
