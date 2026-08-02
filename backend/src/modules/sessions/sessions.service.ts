@@ -84,14 +84,15 @@ export class SessionsService {
   }
 
   async getLoginHistory(userId: string, limit = 50) {
-    // This could be from audit logs or a separate login history table
-    return this.prisma.auditLog.findMany({
-      where: {
-        userId,
-        action: { in: [AuditAction.session_revoke] }, // We'll expand this
-      },
+    // Historique de connexions : chaque UserSession correspond à une session
+    // ouverte à la connexion, avec createdAt/ip/device. L'AuditLog ne convient pas
+    // ici — aucune valeur AuditAction ne représente un événement de connexion
+    // (session_revoke est une déconnexion, pas une connexion).
+    return this.prisma.userSession.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
       take: limit,
+      select: { createdAt: true, ip: true, device: true, lastActivity: true },
     });
   }
 }
