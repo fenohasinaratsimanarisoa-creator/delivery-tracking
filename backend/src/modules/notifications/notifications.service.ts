@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { NotificationType, NotificationPriority } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -37,8 +37,8 @@ export class NotificationsService {
     });
     if (result.count === 0) {
       const existing = await this.prisma.notification.findUnique({ where: { id }, select: { id: true } });
-      if (existing) throw new Error('Notification belongs to another user');
-      throw new Error('Notification not found');
+      if (existing) throw new ForbiddenException('Notification belongs to another user');
+      throw new NotFoundException('Notification not found');
     }
     return result;
   }
@@ -62,8 +62,8 @@ export class NotificationsService {
     const result = await this.prisma.notification.deleteMany({ where });
     if (result.count === 0) {
       const existing = await this.prisma.notification.findUnique({ where: { id }, select: { id: true } });
-      if (existing) throw new Error('Notification belongs to another user');
-      throw new Error('Notification not found');
+      if (existing) throw new ForbiddenException('Notification belongs to another user');
+      throw new NotFoundException('Notification not found');
     }
     return result;
   }

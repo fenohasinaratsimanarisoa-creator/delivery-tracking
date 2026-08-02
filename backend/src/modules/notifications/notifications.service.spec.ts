@@ -1,3 +1,4 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { NotificationPriority, NotificationType } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsGateway } from './notifications.gateway';
@@ -59,6 +60,55 @@ describe('NotificationsService', () => {
       where: { id: 'notif-1', companyId: 'company-1' },
       data: { readAt: expect.any(Date) },
     });
+  });
+
+  it('markRead() on another user\'s notification throws 403 ForbiddenException (not 500)', async () => {
+    mockPrisma.notification.updateMany.mockResolvedValueOnce({ count: 0 });
+    // La notification existe mais appartient à un autre utilisateur.
+    mockPrisma.notification.findUnique.mockResolvedValueOnce({ id: 'notif-1' });
+
+    let thrown: any;
+    try {
+      await service.markRead('notif-1', 'company-1', 'other-user');
+    } catch (e) {
+      thrown = e;
+    }
+    console.log(
+      `[markRead other user] ${thrown.constructor.name} statusCode=${thrown.getStatus?.() ?? thrown.status} message="${thrown.message}"`,
+    );
+    expect(thrown).toBeInstanceOf(ForbiddenException);
+    expect(thrown.getStatus()).toBe(403);
+  });
+
+  it('markRead() on a missing notification throws 404 NotFoundException', async () => {
+    mockPrisma.notification.updateMany.mockResolvedValueOnce({ count: 0 });
+    mockPrisma.notification.findUnique.mockResolvedValueOnce(null);
+
+    await expect(service.markRead('missing', 'company-1')).rejects.toThrow(NotFoundException);
+  });
+
+  it('remove() on another user\'s notification throws 403 ForbiddenException (not 500)', async () => {
+    mockPrisma.notification.deleteMany.mockResolvedValueOnce({ count: 0 });
+    mockPrisma.notification.findUnique.mockResolvedValueOnce({ id: 'notif-1' });
+
+    let thrown: any;
+    try {
+      await service.remove('notif-1', 'company-1', 'other-user');
+    } catch (e) {
+      thrown = e;
+    }
+    console.log(
+      `[remove other user] ${thrown.constructor.name} statusCode=${thrown.getStatus?.() ?? thrown.status} message="${thrown.message}"`,
+    );
+    expect(thrown).toBeInstanceOf(ForbiddenException);
+    expect(thrown.getStatus()).toBe(403);
+  });
+
+  it('remove() on a missing notification throws 404 NotFoundException', async () => {
+    mockPrisma.notification.deleteMany.mockResolvedValueOnce({ count: 0 });
+    mockPrisma.notification.findUnique.mockResolvedValueOnce(null);
+
+    await expect(service.remove('missing', 'company-1')).rejects.toThrow(NotFoundException);
   });
 
   it('marks all unread user notifications as read', async () => {
