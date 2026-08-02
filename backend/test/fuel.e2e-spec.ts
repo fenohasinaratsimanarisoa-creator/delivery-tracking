@@ -104,7 +104,8 @@ describe('Fuel Consumption (e2e)', () => {
 
     const log = await waitForAnalysis(res.body.id);
     expect(log.calculatedConsumption).toBeCloseTo(8.33, 1); // 50/600*100
-    expect(log.anomalyFlag).toBe(false);
+    expect(log.consumptionAnomalyFlag).toBe(false);
+    expect(log.gpsAnomalyFlag).toBe(false);
   });
 
   it('POST /fuel-consumption - should flag anomaly when consumption deviates >20%', async () => {
@@ -126,8 +127,8 @@ describe('Fuel Consumption (e2e)', () => {
     // 100/500*100 = 20 L/100km, theoretical = 8, deviation = 150% > 20%
     const log = await waitForAnalysis(res.body.id);
     expect(log.calculatedConsumption).toBeCloseTo(20, 1);
-    expect(log.anomalyFlag).toBe(true);
-    expect(log.anomalyReason).toContain('20.0');
+    expect(log.consumptionAnomalyFlag).toBe(true);
+    expect(log.consumptionAnomalyReason).toContain('20.0');
   });
 
   it('POST /fuel-consumption - should not flag anomaly when consumption is normal', async () => {
@@ -148,7 +149,8 @@ describe('Fuel Consumption (e2e)', () => {
 
     // 30/400*100 = 7.5 L/100km, theoretical = 8, deviation = 6.25% < 20%
     const log = await waitForAnalysis(res.body.id);
-    expect(log.anomalyFlag).toBe(false);
+    expect(log.consumptionAnomalyFlag).toBe(false);
+    expect(log.gpsAnomalyFlag).toBe(false);
   });
 
   it('GET /fuel-consumption - should list fuel logs with pagination', async () => {

@@ -493,9 +493,15 @@ model FuelLog {
   fuelUnit              FuelUnit @default(liters) @map("fuel_unit")
   fillDate              DateTime @map("fill_date")
   notes                 String?
-  anomalyFlag           Boolean  @default(false) @map("anomaly_flag")
-  anomalyReason         String?  @map("anomaly_reason")
-  calculatedConsumption Float?   @map("calculated_consumption") // L/100km auto-calculated
+  // Deux paires de champs indépendantes : chaque détecteur écrit sa propre paire
+  // sans jamais écraser l'autre. anomalyFlag/anomalyReason NE sont PLUS stockés :
+  // ils sont dérivés en lecture (consumption OR gps) et exposés en lecture seule
+  // dans les DTOs de réponse (voir common/fuel/fuel-anomaly.utils.ts).
+  consumptionAnomalyFlag   Boolean  @default(false) @map("consumption_anomaly_flag")
+  consumptionAnomalyReason String?  @map("consumption_anomaly_reason")
+  gpsAnomalyFlag           Boolean  @default(false) @map("gps_anomaly_flag")
+  gpsAnomalyReason         String?  @map("gps_anomaly_reason")
+  calculatedConsumption    Float?   @map("calculated_consumption") // L/100km auto-calculated
   createdAt             DateTime @default(now()) @map("created_at")
 
   companyId String  @map("company_id") @db.Uuid

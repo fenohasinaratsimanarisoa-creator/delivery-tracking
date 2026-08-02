@@ -93,7 +93,13 @@ describe('ReportsService', () => {
         },
       ]);
       mockPrisma.fuelLog.findMany.mockResolvedValueOnce([
-        { liters: 50, kilometers: 500, vehicleId: 'vehicle-1', anomalyFlag: false },
+        {
+          liters: 50,
+          kilometers: 500,
+          vehicleId: 'vehicle-1',
+          consumptionAnomalyFlag: false,
+          gpsAnomalyFlag: false,
+        },
       ]);
 
       const result = await service.getFleetReport('company-1');

@@ -117,6 +117,11 @@ export interface FuelLog {
   cost: number;
   fillDate: string;
   anomalyFlag: boolean;
+  anomalyReason?: string | null;
+  consumptionAnomalyFlag?: boolean;
+  consumptionAnomalyReason?: string | null;
+  gpsAnomalyFlag?: boolean;
+  gpsAnomalyReason?: string | null;
   calculatedConsumption: number | null;
   notes?: string;
   vehicleId?: string;

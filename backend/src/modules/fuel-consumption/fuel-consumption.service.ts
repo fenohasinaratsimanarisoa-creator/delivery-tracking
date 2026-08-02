@@ -13,6 +13,10 @@ import { FuelFilterDto } from './dto/fuel-filter.dto';
 import { CreateFuelPriceDto } from './dto/create-fuel-price.dto';
 import { UpdateFuelPriceDto } from './dto/update-fuel-price.dto';
 import { haversineDistance as haversineDistanceM } from '../../common/geo/geo.utils';
+import {
+  hasFuelAnomaly,
+  withDerivedAnomaly,
+} from '../../common/fuel/fuel-anomaly.utils';
 
 // Valeurs initiales (seed) utilisées UNIQUEMENT tant que la company n'a pas configuré
 // ses propres prix via l'app. Dès qu'une company enregistre ses prix (page Carburant →
@@ -124,10 +128,13 @@ export class FuelConsumptionService {
       this.logger.warn(`Cross-check failed for fuel log ${fuelLog.id}: ${e.message}`);
     }
 
-    return this.prisma.fuelLog.findUnique({
+    // anomalyFlag/anomalyReason sont dérivés en lecture (consumption OR gps) :
+    // jamais stockés, jamais écrits par les détecteurs.
+    const enriched = await this.prisma.fuelLog.findUnique({
       where: { id: fuelLog.id },
       include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
     });
+    return withDerivedAnomaly(enriched);
   }
 
   async findAll(companyId: string, filter: FuelFilterDto) {
@@ -152,7 +159,7 @@ export class FuelConsumptionService {
     ]);
 
     return {
-      data,
+      data: data.map((l) => withDerivedAnomaly(l)),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -163,7 +170,7 @@ export class FuelConsumptionService {
       include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
     });
     if (!log) throw new NotFoundException('Fuel log not found');
-    return log;
+    return withDerivedAnomaly(log)!;
   }
 
   async update(companyId: string, id: string, dto: UpdateFuelLogDto) {
@@ -190,12 +197,16 @@ export class FuelConsumptionService {
         new Date(dto.fillDate).getTime() !== existing.fillDate.getTime()) ||
       (dto.vehicleId !== undefined && dto.vehicleId !== existing.vehicleId);
 
-    // On efface l'ancien flag avant relance du cross-check : crossCheckFuelLogWithGps()
-    // ne fait que POSER anomalyFlag à true si anomalie. Sans remise à zéro, un flag
-    // obsolète resterait affiché après correction d'une erreur de saisie.
+    // On efface les anciens flags avant relance du cross-check : les détecteurs ne
+    // font que POSER leur flag à true si anomalie. Sans remise à zéro, un flag
+    // obsolète resterait affiché après correction d'une erreur de saisie. Chaque
+    // paire (consommation / GPS) est remise à zéro indépendamment — le champ dérivé
+    // anomalyFlag est recalculé en lecture et ne se manipule jamais ici.
     if (measuredChanged) {
-      data.anomalyFlag = false;
-      data.anomalyReason = null;
+      data.consumptionAnomalyFlag = false;
+      data.consumptionAnomalyReason = null;
+      data.gpsAnomalyFlag = false;
+      data.gpsAnomalyReason = null;
     }
 
     const updated = await this.prisma.fuelLog.update({
@@ -204,7 +215,7 @@ export class FuelConsumptionService {
       include: { vehicle: true },
     });
 
-    // Recalcule l'anomalyFlag à partir du nouveau kilométrage/distance GPS.
+    // Recalcule le cross-check GPS à partir du nouveau kilométrage/distance GPS.
     try {
       if (measuredChanged) {
         await this.crossCheckFuelLogWithGps(updated, companyId);
@@ -213,10 +224,11 @@ export class FuelConsumptionService {
       this.logger.warn(`Cross-check failed for fuel log ${updated.id}: ${e.message}`);
     }
 
-    return this.prisma.fuelLog.findUnique({
+    const enriched = await this.prisma.fuelLog.findUnique({
       where: { id: updated.id },
       include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
     });
+    return withDerivedAnomaly(enriched);
   }
 
   async remove(companyId: string, id: string) {
@@ -254,7 +266,9 @@ export class FuelConsumptionService {
     const totalLiters = logs.reduce((sum, l) => sum + l.liters, 0);
     const totalKm = logs.reduce((sum, l) => sum + l.kilometers, 0);
     const totalCost = logs.reduce((sum, l) => sum + l.cost, 0);
-    const anomalies = logs.filter((l) => l.anomalyFlag);
+    const anomalies = logs
+      .filter((l) => hasFuelAnomaly(l))
+      .map((l) => withDerivedAnomaly(l));
 
     return {
       totalLiters,
@@ -580,11 +594,14 @@ export class FuelConsumptionService {
     // Seuil de tolérance : si le kilométrage saisi est > 3x la distance GPS, c'est suspect
     const CROSS_CHECK_THRESHOLD = 3;
     if (ratio > CROSS_CHECK_THRESHOLD) {
+      // Ce détecteur n'écrit QUE sa propre paire (gpsAnomalyFlag/gpsAnomalyReason).
+      // Il ne touche jamais aux champs consommation ni au champ dérivé anomalyFlag :
+      // sinon il écraserait la détection concurrente du job 'analyze' (write-loss).
       await this.prisma.fuelLog.update({
         where: { id: fuelLog.id },
         data: {
-          anomalyFlag: true,
-          anomalyReason: `Distance saisie (${manualKm}km) très supérieure à la distance GPS (${gpsKm.toFixed(1)}km) sur la période — rapport ×${ratio.toFixed(1)}`,
+          gpsAnomalyFlag: true,
+          gpsAnomalyReason: `Distance saisie (${manualKm}km) très supérieure à la distance GPS (${gpsKm.toFixed(1)}km) sur la période — rapport ×${ratio.toFixed(1)}`,
         },
       });
       await this.notifications.create(companyId, {

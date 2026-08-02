@@ -210,21 +210,24 @@ describe('DigestService', () => {
       const fuelAnomalies = [
         {
           id: 'f1',
-          anomalyFlag: true,
+          consumptionAnomalyFlag: true,
+          consumptionAnomalyReason: 'Consumption 20.00 L/100km deviates 150.0%',
           liters: 100,
           fillDate: new Date('2026-07-20'),
           vehicle: { licensePlate: 'AB-123-CD' },
         },
         {
           id: 'f2',
-          anomalyFlag: true,
+          gpsAnomalyFlag: true,
+          gpsAnomalyReason: 'Distance saisie (400km) très supérieure à la distance GPS (100.0km)',
           liters: 50,
           fillDate: new Date('2026-07-19'),
           vehicle: { licensePlate: 'EF-456-GH' },
         },
         {
           id: 'f3',
-          anomalyFlag: false,
+          consumptionAnomalyFlag: false,
+          gpsAnomalyFlag: false,
           liters: 60,
           fillDate: new Date('2026-07-18'),
           vehicle: { licensePlate: 'IJ-789-KL' },
@@ -275,8 +278,8 @@ describe('DigestService', () => {
       expect(mockPrisma.fuelLog.findMany).toHaveBeenCalledWith({
         where: {
           companyId: 'comp-1',
-          anomalyFlag: true,
           createdAt: { gte: new Date('2026-07-14T12:00:00.000Z') },
+          OR: [{ consumptionAnomalyFlag: true }, { gpsAnomalyFlag: true }],
         },
         include: { vehicle: { select: { licensePlate: true } } },
       });

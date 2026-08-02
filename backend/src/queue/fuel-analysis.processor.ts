@@ -93,8 +93,8 @@ export class FuelAnalysisProcessor extends WorkerHost {
       const calculatedConsumption =
         fuelLog.kilometers > 0 ? (fuelLog.liters / fuelLog.kilometers) * 100 : null;
 
-      let anomalyFlag = false;
-      let anomalyReason: string | null = null;
+      let consumptionAnomalyFlag = false;
+      let consumptionAnomalyReason: string | null = null;
       const theoretical = fuelLog.vehicle.theoreticalConsumption;
 
       const defaultThreshold = parseInt(process.env.FUEL_ANOMALY_THRESHOLD_PERCENT || '20', 10);
@@ -105,22 +105,26 @@ export class FuelAnalysisProcessor extends WorkerHost {
           const deviation = (Math.abs(calculatedConsumption - theoretical) / theoretical) * 100;
 
           if (deviation > threshold) {
-            anomalyFlag = true;
-            anomalyReason = `Consumption ${calculatedConsumption.toFixed(2)} L/100km deviates ${deviation.toFixed(1)}% from theoretical ${theoretical} L/100km (threshold: ${threshold}%)`;
+            consumptionAnomalyFlag = true;
+            consumptionAnomalyReason = `Consumption ${calculatedConsumption.toFixed(2)} L/100km deviates ${deviation.toFixed(1)}% from theoretical ${theoretical} L/100km (threshold: ${threshold}%)`;
           }
         }
       }
 
+      // Ce détecteur n'écrit QUE sa propre paire de champs (consumptionAnomalyFlag/
+      // consumptionAnomalyReason). Il ne touche jamais aux champs GPS ni au champ
+      // dérivé anomalyFlag (calculé en lecture) : sinon il écraserait la détection
+      // GPS concurrente (write-loss).
       await this.prisma.fuelLog.update({
         where: { id: fuelLogId },
-        data: { calculatedConsumption, anomalyFlag, anomalyReason },
+        data: { calculatedConsumption, consumptionAnomalyFlag, consumptionAnomalyReason },
       });
 
       this.logger.log(
-        `FuelLog ${fuelLogId}: consumption=${calculatedConsumption?.toFixed(2)} L/100km, anomaly=${anomalyFlag}`,
+        `FuelLog ${fuelLogId}: consumption=${calculatedConsumption?.toFixed(2)} L/100km, anomaly=${consumptionAnomalyFlag}`,
       );
 
-      if (anomalyFlag && calculatedConsumption !== null) {
+      if (consumptionAnomalyFlag && calculatedConsumption !== null) {
         await this.notifications.create(companyId, {
           type: NotificationType.fuel_anomaly,
           priority: NotificationPriority.high,

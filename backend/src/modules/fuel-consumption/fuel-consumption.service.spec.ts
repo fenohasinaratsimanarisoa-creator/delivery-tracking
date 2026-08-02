@@ -114,7 +114,11 @@ describe('FuelConsumptionService', () => {
         fillDate: '2026-07-21T00:00:00.000Z',
         vehicleId: 'vehicle-1',
         notes: 'Full tank',
-      })).resolves.toEqual(enriched);
+      })).resolves.toEqual({
+        ...enriched,
+        anomalyFlag: false,
+        anomalyReason: null,
+      });
     });
   });
 
@@ -268,6 +272,39 @@ describe('FuelConsumptionService', () => {
       expect(mockPrisma.fuelLog.update).not.toHaveBeenCalled();
       expect(mockNotifications.create).not.toHaveBeenCalled();
     });
+
+    it('writes ONLY the gps anomaly pair when the manual km is >3x the GPS distance', async () => {
+      const fuelLog = {
+        id: 'fuel-log-gps',
+        vehicleId: 'vehicle-a',
+        kilometers: 400,
+        fillDate: new Date('2026-07-25'),
+        vehicle: { licensePlate: 'TRK-A' },
+      };
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({
+        fillDate: new Date('2026-07-15'),
+      });
+      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({
+        _sum: { distanceKm: 100 },
+      });
+
+      await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
+
+      // Le détecteur GPS ne doit JAMAIS écrire les champs consommation ni les
+      // champs legacy anomalyFlag/anomalyReason (sinon write-loss).
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith({
+        where: { id: 'fuel-log-gps' },
+        data: {
+          gpsAnomalyFlag: true,
+          gpsAnomalyReason: expect.stringContaining('Distance saisie (400km)'),
+        },
+      });
+      const updateData = mockPrisma.fuelLog.update.mock.calls[0][0].data;
+      expect(updateData).not.toHaveProperty('consumptionAnomalyFlag');
+      expect(updateData).not.toHaveProperty('consumptionAnomalyReason');
+      expect(updateData).not.toHaveProperty('anomalyFlag');
+      expect(updateData).not.toHaveProperty('anomalyReason');
+    });
   });
 
   // ----------------------------------------------------------------
@@ -290,7 +327,11 @@ describe('FuelConsumptionService', () => {
       mockPrisma.fuelLog.create.mockResolvedValueOnce(created);
       mockPrisma.fuelLog.findUnique.mockResolvedValueOnce(enriched);
 
-      await expect(service.create('company-1', dto)).resolves.toEqual(enriched);
+      await expect(service.create('company-1', dto)).resolves.toEqual({
+        ...enriched,
+        anomalyFlag: false,
+        anomalyReason: null,
+      });
       expect(mockPrisma.fuelLog.create).toHaveBeenCalledWith({
         data: {
           liters: 60,
@@ -336,7 +377,7 @@ describe('FuelConsumptionService', () => {
     await expect(
       service.findAll('company-1', { vehicleId: 'vehicle-1', page: 2, limit: 5 }),
     ).resolves.toEqual({
-      data: [{ id: 'fuel-1' }],
+      data: [{ id: 'fuel-1', anomalyFlag: false, anomalyReason: null }],
       meta: { total: 6, page: 2, limit: 5, totalPages: 2 },
     });
     expect(mockPrisma.fuelLog.findMany).toHaveBeenCalledWith({
@@ -364,7 +405,10 @@ describe('FuelConsumptionService', () => {
       liters: 30,
       kilometers: 100,
       cost: 80,
-      anomalyFlag: true,
+      consumptionAnomalyFlag: true,
+      consumptionAnomalyReason: 'Consumption 30.00 L/100km deviates from theoretical',
+      gpsAnomalyFlag: false,
+      gpsAnomalyReason: null,
     };
     mockPrisma.fuelLog.findMany.mockResolvedValueOnce([
       {
@@ -372,7 +416,8 @@ describe('FuelConsumptionService', () => {
         liters: 50,
         kilometers: 500,
         cost: 100,
-        anomalyFlag: false,
+        consumptionAnomalyFlag: false,
+        gpsAnomalyFlag: false,
       },
       anomaly,
     ]);
@@ -383,7 +428,13 @@ describe('FuelConsumptionService', () => {
       totalCost: 180,
       averageConsumption: (80 / 600) * 100,
       anomalyCount: 1,
-      anomalies: [anomaly],
+      anomalies: [
+        {
+          ...anomaly,
+          anomalyFlag: true,
+          anomalyReason: 'Consumption 30.00 L/100km deviates from theoretical',
+        },
+      ],
       logCount: 2,
     });
   });
@@ -400,8 +451,10 @@ describe('FuelConsumptionService', () => {
       fillDate: new Date('2026-07-21T00:00:00.000Z'),
       vehicleId: 'vehicle-1',
       companyId: 'company-1',
-      anomalyFlag: false,
-      anomalyReason: null,
+      consumptionAnomalyFlag: false,
+      consumptionAnomalyReason: null,
+      gpsAnomalyFlag: false,
+      gpsAnomalyReason: null,
       notes: 'Full tank',
     };
 
@@ -413,7 +466,11 @@ describe('FuelConsumptionService', () => {
       mockPrisma.fuelLog.update.mockResolvedValueOnce(updated);
       mockPrisma.fuelLog.findUnique.mockResolvedValueOnce(enriched);
 
-      await expect(service.update('company-1', 'fuel-1', { notes: 'Corrected note' })).resolves.toEqual(enriched);
+      await expect(service.update('company-1', 'fuel-1', { notes: 'Corrected note' })).resolves.toEqual({
+        ...enriched,
+        anomalyFlag: false,
+        anomalyReason: null,
+      });
 
       expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith({
         where: { id: 'fuel-1' },
@@ -448,9 +505,22 @@ describe('FuelConsumptionService', () => {
       expect(mockPrisma.fuelLog.update).not.toHaveBeenCalled();
     });
 
-    it('resets a stale anomalyFlag and re-runs the GPS cross-check when measured fields change', async () => {
-      const flagged = { ...existing, anomalyFlag: true, anomalyReason: 'Old anomaly' };
-      const corrected = { ...flagged, kilometers: 120, anomalyFlag: false, anomalyReason: null };
+    it('resets a stale anomaly flag (both pairs) and re-runs the GPS cross-check when measured fields change', async () => {
+      const flagged = {
+        ...existing,
+        consumptionAnomalyFlag: true,
+        consumptionAnomalyReason: 'Old consumption anomaly',
+        gpsAnomalyFlag: true,
+        gpsAnomalyReason: 'Old GPS anomaly',
+      };
+      const corrected = {
+        ...flagged,
+        kilometers: 120,
+        consumptionAnomalyFlag: false,
+        consumptionAnomalyReason: null,
+        gpsAnomalyFlag: false,
+        gpsAnomalyReason: null,
+      };
       const enriched = { ...corrected, vehicle: { id: 'vehicle-1', brand: 'X', model: 'Y', licensePlate: 'TRK-001' } };
 
       // findOne() puis look-up du plein précédent dans crossCheckFuelLogWithGps()
@@ -467,8 +537,10 @@ describe('FuelConsumptionService', () => {
         where: { id: 'fuel-1' },
         data: {
           kilometers: 120,
-          anomalyFlag: false,
-          anomalyReason: null,
+          consumptionAnomalyFlag: false,
+          consumptionAnomalyReason: null,
+          gpsAnomalyFlag: false,
+          gpsAnomalyReason: null,
         },
         include: { vehicle: true },
       });

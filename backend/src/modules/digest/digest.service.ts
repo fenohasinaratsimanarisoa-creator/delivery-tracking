@@ -4,6 +4,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { formatDate, type Language } from '../../common/i18n';
+import { hasFuelAnomaly } from '../../common/fuel/fuel-anomaly.utils';
 
 @Injectable()
 export class DigestService {
@@ -50,7 +51,11 @@ export class DigestService {
             where: { companyId: company.id, createdAt: { gte: since } },
           }),
           this.prisma.fuelLog.findMany({
-            where: { companyId: company.id, anomalyFlag: true, createdAt: { gte: since } },
+            where: {
+              companyId: company.id,
+              createdAt: { gte: since },
+              OR: [{ consumptionAnomalyFlag: true }, { gpsAnomalyFlag: true }],
+            },
             include: { vehicle: { select: { licensePlate: true } } },
           }),
           this.notificationsService.getDigestNotifications(company.id, since),
@@ -61,7 +66,7 @@ export class DigestService {
         const failed = deliveries.filter((d) => d.status === 'failed').length;
         const punctuality = totalDeliveries > 0 ? Math.round((delivered / totalDeliveries) * 100) : 100;
 
-        const pendingAnomalies = fuelAnomalies.filter((a) => a.anomalyFlag);
+        const pendingAnomalies = fuelAnomalies.filter((a) => hasFuelAnomaly(a));
 
         for (const user of company.users) {
           const lang: Language = (user as any).lang || 'fr';

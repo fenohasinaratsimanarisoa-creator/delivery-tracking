@@ -142,14 +142,16 @@ describe('DashboardService', () => {
         liters: 40,
         kilometers: 400,
         vehicle: { licensePlate: 'TRK-001' },
-        anomalyFlag: false,
+        consumptionAnomalyFlag: false,
+        gpsAnomalyFlag: false,
       },
       {
         fillDate: new Date('2026-07-22T08:30:00.000Z'),
         liters: 10,
         kilometers: 0,
         vehicle: { licensePlate: 'TRK-002' },
-        anomalyFlag: true,
+        consumptionAnomalyFlag: false,
+        gpsAnomalyFlag: true,
       },
     ]);
 

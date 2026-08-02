@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
+import { hasFuelAnomaly } from '../../common/fuel/fuel-anomaly.utils';
 
 @Injectable()
 export class ReportsService {
@@ -98,7 +99,13 @@ export class ReportsService {
 
     const fuelLogs = await this.prisma.fuelLog.findMany({
       where: { companyId, fillDate: { gte: periodStart, lte: periodEnd } },
-      select: { liters: true, kilometers: true, vehicleId: true, anomalyFlag: true },
+      select: {
+        liters: true,
+        kilometers: true,
+        vehicleId: true,
+        consumptionAnomalyFlag: true,
+        gpsAnomalyFlag: true,
+      },
     });
 
     const vehicleData = vehicles.map((v) => {
@@ -118,7 +125,7 @@ export class ReportsService {
         fuelLiters: Math.round(totalLiters * 100) / 100,
         distanceKm: Math.round(totalKm * 100) / 100,
         avgConsumption: totalKm > 0 ? Math.round((totalLiters / totalKm) * 10000) / 100 : 0,
-        anomalyCount: vFuel.filter((f) => f.anomalyFlag).length,
+        anomalyCount: vFuel.filter((f) => hasFuelAnomaly(f)).length,
         isOnline: hasRecentPosition,
       };
     });
