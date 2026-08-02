@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NotificationType, NotificationPriority } from '@prisma/client';
+import { NotificationType, NotificationPriority, GpsDataQuality } from '@prisma/client';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -490,6 +490,10 @@ export class FuelConsumptionService {
     companyId: string,
     targetDate: Date,
   ) {
+    // SEUL cas où on saute la création : le chauffeur n'a pas de véhicule assigné.
+    const vehicle = driver.vehicle;
+    if (!vehicle) return;
+
     const bounds = this.getMadagascarDayBounds(targetDate);
 
     const positions = await this.prisma.gpsPosition.findMany({
@@ -502,24 +506,32 @@ export class FuelConsumptionService {
       select: { latitude: true, longitude: true },
     });
 
-    if (positions.length < 2) return;
+    let distanceKm = 0;
+    let gpsDataQuality: GpsDataQuality = GpsDataQuality.insufficient;
 
-    let totalDistance = 0;
-    for (let i = 1; i < positions.length; i++) {
-      const segDist = haversineDistanceM(
-        positions[i - 1].latitude, positions[i - 1].longitude,
-        positions[i].latitude, positions[i].longitude,
-      );
-      if (segDist >= GPS_NOISE_THRESHOLD_M) {
-        totalDistance += segDist;
+    if (positions.length >= 2) {
+      let totalDistance = 0;
+      for (let i = 1; i < positions.length; i++) {
+        const segDist = haversineDistanceM(
+          positions[i - 1].latitude, positions[i - 1].longitude,
+          positions[i].latitude, positions[i].longitude,
+        );
+        if (segDist >= GPS_NOISE_THRESHOLD_M) {
+          totalDistance += segDist;
+        }
+      }
+      const computedKm = Math.round(totalDistance / 1000 * 100) / 100;
+      // Données GPS exploitables uniquement si un déplacement est mesurable (>= 0.1 km).
+      if (computedKm >= 0.1) {
+        distanceKm = computedKm;
+        gpsDataQuality = GpsDataQuality.sufficient;
       }
     }
 
-    const distanceKm = Math.round(totalDistance / 1000 * 100) / 100;
-    if (distanceKm < 0.1) return;
-
-    const vehicle = driver.vehicle;
-    if (!vehicle) return;
+    // Sinon (positions.length < 2 OU distance < 0.1 km) : le rapport est CRÉÉ quand
+    // même avec distanceKm=0 et gpsDataQuality='insufficient'. Sans cette création,
+    // le jour serait absent du référentiel GPS agrégé par crossCheckFuelLogWithGps,
+    // réduisant silencieusement le kilométrage de référence de la période.
     const fuelType = vehicle.fuelType?.toLowerCase() || 'essence';
     const consumption = vehicle?.theoreticalConsumption || 8;
     const pricePerLiter = await this.getFuelPriceForDate(companyId, fuelType, targetDate);
@@ -541,6 +553,7 @@ export class FuelConsumptionService {
         vehiclePlate: vehicle?.licensePlate || 'N/A',
         fuelType: fuelType,
         distanceKm,
+        gpsDataQuality,
         consumptionLPer100Km: consumption,
         estimatedCost,
         pricePerLiterUsed: pricePerLiter,
@@ -548,6 +561,7 @@ export class FuelConsumptionService {
       },
       update: {
         distanceKm,
+        gpsDataQuality,
         estimatedCost,
         fuelType: fuelType,
         consumptionLPer100Km: consumption,

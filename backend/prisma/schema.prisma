@@ -29,6 +29,15 @@ enum FuelUnit {
   gallons
 }
 
+// Qualité des données GPS ayant servi au calcul du DailyFuelReport.
+// 'insufficient' : pas assez de positions (ou déplacement non mesurable < 0.1 km)
+// → le rapport est quand même créé avec distanceKm=0 pour ne pas créer de trou
+// silencieux dans le référentiel utilisé par crossCheckFuelLogWithGps.
+enum GpsDataQuality {
+  sufficient
+  insufficient
+}
+
 enum NotificationType {
   delivery_status
   fuel_anomaly
@@ -540,19 +549,20 @@ model MaintenanceRecord {
 /// Données comptables — jamais supprimées (soft-delete), conservées pour fiscalité.
 /// Anonymisées via le job company-purge après délai de grâce.
 model DailyFuelReport {
-  id                   String   @id @default(uuid()) @db.Uuid
-  reportDate           DateTime @map("report_date")
-  driverId             String   @map("driver_id") @db.Uuid
-  driverName           String   @map("driver_name")
-  vehicleId            String   @map("vehicle_id") @db.Uuid
-  vehicle              Vehicle  @relation(fields: [vehicleId], references: [id])
-  vehiclePlate         String   @map("vehicle_plate")
-  fuelType             String   @map("fuel_type")
-  distanceKm           Float    @map("distance_km")
-  consumptionLPer100Km Float?   @map("consumption_l_per_100km")
-  estimatedCost        Float    @map("estimated_cost")
-  pricePerLiterUsed    Float?   @map("price_per_liter_used")
-  createdAt            DateTime @default(now()) @map("created_at")
+  id                   String         @id @default(uuid()) @db.Uuid
+  reportDate           DateTime       @map("report_date")
+  driverId             String         @map("driver_id") @db.Uuid
+  driverName           String         @map("driver_name")
+  vehicleId            String         @map("vehicle_id") @db.Uuid
+  vehicle              Vehicle        @relation(fields: [vehicleId], references: [id])
+  vehiclePlate         String         @map("vehicle_plate")
+  fuelType             String         @map("fuel_type")
+  distanceKm           Float          @map("distance_km")
+  gpsDataQuality       GpsDataQuality @default(sufficient) @map("gps_data_quality")
+  consumptionLPer100Km Float?         @map("consumption_l_per_100km")
+  estimatedCost        Float          @map("estimated_cost")
+  pricePerLiterUsed    Float?         @map("price_per_liter_used")
+  createdAt            DateTime       @default(now()) @map("created_at")
 
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)

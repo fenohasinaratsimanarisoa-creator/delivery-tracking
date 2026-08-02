@@ -322,6 +322,7 @@ export default function FuelPage() {
     driverName?: string;
     vehiclePlate?: string;
     distanceKm?: number;
+    gpsDataQuality?: 'sufficient' | 'insufficient';
     consumptionLPer100Km?: number;
     estimatedCost?: number;
     reportDate?: string;

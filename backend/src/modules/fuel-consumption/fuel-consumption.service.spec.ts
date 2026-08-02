@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NotificationPriority, NotificationType } from '@prisma/client';
+import { NotificationPriority, NotificationType, GpsDataQuality } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FuelConsumptionService } from './fuel-consumption.service';
@@ -645,6 +645,7 @@ describe('FuelConsumptionService', () => {
         vehiclePlate: 'TRK-001',
         fuelType: 'diesel',
         distanceKm: 2.22,
+        gpsDataQuality: GpsDataQuality.sufficient,
         consumptionLPer100Km: 10,
         estimatedCost: 1087.8,
         pricePerLiterUsed: 4900,
@@ -652,6 +653,7 @@ describe('FuelConsumptionService', () => {
       },
       update: {
         distanceKm: 2.22,
+        gpsDataQuality: GpsDataQuality.sufficient,
         estimatedCost: 1087.8,
         fuelType: 'diesel',
         consumptionLPer100Km: 10,
@@ -723,21 +725,49 @@ describe('FuelConsumptionService', () => {
       expect(mockPrisma.gpsPosition.findMany).not.toHaveBeenCalled();
     });
 
-    it('does nothing when the driver has fewer than 2 GPS positions', async () => {
+    it('creates an insufficient report (distanceKm=0) when the driver has fewer than 2 GPS positions', async () => {
       mockPrisma.driver.findFirst.mockResolvedValue(driver);
       mockPrisma.gpsPosition.findMany.mockResolvedValue([POSITIONS[0]]);
 
       await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
 
-      expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(1);
+      const payload = mockPrisma.dailyFuelReport.upsert.mock.calls[0][0] as any;
+      expect(payload.create.distanceKm).toBe(0);
+      expect(payload.create.gpsDataQuality).toBe(GpsDataQuality.insufficient);
     });
 
-    it('does nothing when the driver has no vehicle', async () => {
+    it('creates a DailyFuelReport with distanceKm=0 and gpsDataQuality=insufficient when there is NO GPS data (0 positions)', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue([]);
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      console.log(
+        `[0 positions] upsert appelé : ${mockPrisma.dailyFuelReport.upsert.mock.calls.length} fois`,
+      );
+      const payload = mockPrisma.dailyFuelReport.upsert.mock.calls[0][0] as any;
+      console.log(
+        `[0 positions] distanceKm=${payload.create.distanceKm}, gpsDataQuality=${payload.create.gpsDataQuality}`,
+      );
+
+      // Le rapport est BIEN créé (pas absent) : distanceKm=0 + gpsDataQuality='insufficient'.
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(1);
+      expect(payload.create.distanceKm).toBe(0);
+      expect(payload.create.gpsDataQuality).toBe(GpsDataQuality.insufficient);
+      expect(payload.create.driverId).toBe('driver-1');
+      expect(payload.create.reportDate).toEqual(new Date('2026-07-20T00:00:00.000Z'));
+    });
+
+    it('does nothing when the driver has no vehicle (ONLY case that skips the report creation)', async () => {
       mockPrisma.driver.findFirst.mockResolvedValue({ ...driver, vehicle: null });
 
       await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
 
       expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
+      // Le contrôle du véhicule précède même la requête GPS.
+      expect(mockPrisma.gpsPosition.findMany).not.toHaveBeenCalled();
+      expect(mockTrackingGateway.broadcastDataUpdate).not.toHaveBeenCalled();
     });
 
     it('broadcasts a fuelReport dataUpdate to the company AFTER the upsert, with driverId and reportDate', async () => {
@@ -773,14 +803,18 @@ describe('FuelConsumptionService', () => {
       expect(mockTrackingGateway.broadcastDataUpdate).not.toHaveBeenCalled();
     });
 
-    it('does NOT broadcast when the driver has fewer than 2 GPS positions (no write happened)', async () => {
+    it('broadcasts a fuelReport dataUpdate even when GPS data is insufficient (report still created)', async () => {
       mockPrisma.driver.findFirst.mockResolvedValue(driver);
       mockPrisma.gpsPosition.findMany.mockResolvedValue([POSITIONS[0]]);
 
       await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
 
-      expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
-      expect(mockTrackingGateway.broadcastDataUpdate).not.toHaveBeenCalled();
+      // Le rapport est créé (distanceKm=0) → l'événement est diffusé, jamais avant.
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(1);
+      expect(mockTrackingGateway.broadcastDataUpdate).toHaveBeenCalledTimes(1);
+      const upsertCall = mockPrisma.dailyFuelReport.upsert.mock.invocationCallOrder[0];
+      const broadcastCall = mockTrackingGateway.broadcastDataUpdate.mock.invocationCallOrder[0];
+      expect(upsertCall).toBeLessThan(broadcastCall);
     });
   });
 
