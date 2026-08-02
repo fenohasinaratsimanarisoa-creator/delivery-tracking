@@ -233,7 +233,7 @@ export class UsersService {
     });
   }
 
-  async update(companyId: string, id: string, dto: UpdateUserDto) {
+  async update(companyId: string, id: string, dto: UpdateUserDto, currentUserId: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, companyId, deletedAt: null },
     });
@@ -244,6 +244,34 @@ export class UsersService {
         where: { email: dto.email },
       });
       if (existing) throw new ConflictException('Email already in use');
+    }
+
+    // Garde-fou 1 : un admin ne peut pas rétrograder ni désactiver SON PROPRE compte
+    // admin (même logique que remove() qui bloque déjà l'auto-suppression).
+    if (id === currentUserId && user.role === 'admin') {
+      const demotingSelf = dto.role !== undefined && dto.role !== 'admin';
+      const deactivatingSelf = dto.isActive === false;
+      if (demotingSelf || deactivatingSelf) {
+        throw new ConflictException(
+          'You cannot demote or deactivate your own admin account — ask another admin to do it',
+        );
+      }
+    }
+
+    // Garde-fou 2 : il doit toujours rester au moins un admin actif dans la société.
+    // Si l'utilisateur ciblé est un admin actif sur le point d'être rétrogradé ou
+    // désactivé, on compte les autres admins actifs — 0 => refus.
+    if (user.role === 'admin' && user.isActive) {
+      const demoting = dto.role !== undefined && dto.role !== 'admin';
+      const deactivating = dto.isActive === false;
+      if (demoting || deactivating) {
+        const otherActiveAdmins = await this.prisma.user.count({
+          where: { companyId, role: 'admin', isActive: true, deletedAt: null, id: { not: id } },
+        });
+        if (otherActiveAdmins === 0) {
+          throw new BadRequestException('Cannot remove the last active admin of this company');
+        }
+      }
     }
 
     const targetRole = dto.role || user.role;
@@ -563,6 +591,17 @@ export class UsersService {
       where: { id, companyId, deletedAt: null },
     });
     if (!user) throw new NotFoundException('User not found');
+
+    // Garde-fou : on ne peut pas supprimer le dernier admin actif de la société
+    // (l'auto-suppression est déjà bloquée séparément ci-dessus).
+    if (user.role === 'admin' && user.isActive) {
+      const otherActiveAdmins = await this.prisma.user.count({
+        where: { companyId, role: 'admin', isActive: true, deletedAt: null, id: { not: id } },
+      });
+      if (otherActiveAdmins === 0) {
+        throw new BadRequestException('Cannot remove the last active admin of this company');
+      }
+    }
 
     return this.prisma.user.update({
       where: { id },

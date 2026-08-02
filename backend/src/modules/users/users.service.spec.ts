@@ -384,7 +384,7 @@ describe('UsersService', () => {
         createdAt: new Date(),
       });
 
-      const result = await service.update('comp-1', 'user-1', updateDto);
+      const result = await service.update('comp-1', 'user-1', updateDto, 'current-user');
 
       expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
         where: { id: 'user-1', companyId: 'comp-1', deletedAt: null },
@@ -400,7 +400,7 @@ describe('UsersService', () => {
     it('should throw NotFoundException when user not found', async () => {
       mockPrisma.user.findFirst.mockResolvedValueOnce(null);
 
-      await expect(service.update('comp-1', 'user-1', updateDto)).rejects.toThrow(
+      await expect(service.update('comp-1', 'user-1', updateDto, 'current-user')).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -415,7 +415,7 @@ describe('UsersService', () => {
       mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
       mockPrisma.user.findUnique.mockResolvedValueOnce({ id: 'other-user' });
 
-      await expect(service.update('comp-1', 'user-1', updateDto)).rejects.toThrow(
+      await expect(service.update('comp-1', 'user-1', updateDto, 'current-user')).rejects.toThrow(
         ConflictException,
       );
     });
@@ -441,7 +441,7 @@ describe('UsersService', () => {
         createdAt: new Date(),
       });
 
-      await service.update('comp-1', 'user-1', { ...updateDto, password: 'NewPass123!' });
+      await service.update('comp-1', 'user-1', { ...updateDto, password: 'NewPass123!' }, 'current-user');
 
       expect(bcrypt.hash).toHaveBeenCalledWith('NewPass123!', 10);
       expect(mockPrisma.user.update).toHaveBeenCalledWith(
@@ -476,7 +476,7 @@ describe('UsersService', () => {
       mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-1', userId: 'user-drv', companyId: 'comp-1' });
       mockPrisma.driver.update.mockResolvedValueOnce({ id: 'driver-1', vehicleId: 'vehicle-1' });
 
-      const result = await service.update('comp-1', 'user-drv', { vehicleId: 'vehicle-1' });
+      const result = await service.update('comp-1', 'user-drv', { vehicleId: 'vehicle-1' }, 'current-user');
 
       expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(mockPrisma.driver.update).toHaveBeenCalledWith({
@@ -511,7 +511,7 @@ describe('UsersService', () => {
       mockPrisma.driver.findFirst.mockResolvedValueOnce(null);
       mockPrisma.driver.create.mockResolvedValueOnce({ id: 'driver-new', userId: 'user-new-drv', vehicleId: 'vehicle-2' });
 
-      const result = await service.update('comp-1', 'user-new-drv', { role: 'driver', vehicleId: 'vehicle-2' });
+      const result = await service.update('comp-1', 'user-new-drv', { role: 'driver', vehicleId: 'vehicle-2' }, 'current-user');
 
       expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(mockPrisma.driver.create).toHaveBeenCalledWith(
@@ -535,7 +535,7 @@ describe('UsersService', () => {
       mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'other-driver', userId: 'other-user', vehicleId: 'vehicle-1' });
 
       await expect(
-        service.update('comp-1', 'user-drv-2', { vehicleId: 'vehicle-1' }),
+        service.update('comp-1', 'user-drv-2', { vehicleId: 'vehicle-1' }, 'current-user'),
       ).rejects.toThrow(ConflictException);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
@@ -552,7 +552,7 @@ describe('UsersService', () => {
       mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'other-driver-lic', userId: 'other-user', licenseNumber: 'LIC-999' });
 
       await expect(
-        service.update('comp-1', 'user-drv-3', { licenseNumber: 'LIC-999' }),
+        service.update('comp-1', 'user-drv-3', { licenseNumber: 'LIC-999' }, 'current-user'),
       ).rejects.toThrow(ConflictException);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
@@ -581,7 +581,7 @@ describe('UsersService', () => {
       mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-4', userId: 'user-drv-4', companyId: 'comp-1' });
       mockPrisma.driver.update.mockResolvedValueOnce({ id: 'driver-4', licenseNumber: 'LIC-777' });
 
-      const result = await service.update('comp-1', 'user-drv-4', { licenseNumber: 'LIC-777' });
+      const result = await service.update('comp-1', 'user-drv-4', { licenseNumber: 'LIC-777' }, 'current-user');
 
       expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(mockPrisma.driver.update).toHaveBeenCalledWith({
@@ -589,6 +589,97 @@ describe('UsersService', () => {
         data: { licenseNumber: 'LIC-777' },
       });
       expect(result).toBeDefined();
+    });
+
+    it('(a) rejects an admin deactivating their own account (last active admin)', async () => {
+      const admin = {
+        id: 'admin-1',
+        email: 'admin@test.com',
+        companyId: 'comp-1',
+        deletedAt: null,
+        role: 'admin',
+        isActive: true,
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(admin);
+
+      let thrown: any;
+      try {
+        await service.update('comp-1', 'admin-1', { isActive: false }, 'admin-1');
+      } catch (e) {
+        thrown = e;
+      }
+      console.log(`[self deactivate] ${thrown.constructor.name}: ${thrown.message}`);
+
+      expect(thrown).toBeInstanceOf(ConflictException);
+      expect(thrown.message).toContain('You cannot demote or deactivate your own admin account');
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('(b) rejects demoting the ONLY other active admin of the company', async () => {
+      const otherAdmin = {
+        id: 'admin-2',
+        email: 'admin2@test.com',
+        companyId: 'comp-1',
+        deletedAt: null,
+        role: 'admin',
+        isActive: true,
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(otherAdmin);
+      // Aucun autre admin actif dans la société.
+      mockPrisma.user.count.mockResolvedValueOnce(0);
+
+      let thrown: any;
+      try {
+        await service.update('comp-1', 'admin-2', { role: 'dispatcher' }, 'admin-1');
+      } catch (e) {
+        thrown = e;
+      }
+      console.log(`[last admin demote] ${thrown.constructor.name}: ${thrown.message}`);
+
+      expect(thrown).toBeInstanceOf(BadRequestException);
+      expect(thrown.message).toContain('Cannot remove the last active admin of this company');
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('(c) allows demoting one admin when another active admin remains', async () => {
+      const targetAdmin = {
+        id: 'admin-2',
+        email: 'admin2@test.com',
+        companyId: 'comp-1',
+        deletedAt: null,
+        role: 'admin',
+        isActive: true,
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(targetAdmin);
+      // Il reste 1 autre admin actif → rétrogradation autorisée.
+      mockPrisma.user.count.mockResolvedValueOnce(1);
+      mockPrisma.user.update.mockResolvedValueOnce({
+        id: 'admin-2',
+        email: 'admin2@test.com',
+        firstName: 'Admin',
+        lastName: 'Two',
+        phone: null,
+        role: 'dispatcher',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+      });
+
+      const result = await service.update('comp-1', 'admin-2', { role: 'dispatcher' }, 'admin-1');
+
+      console.log(
+        `[demote with remaining admin] user.update appelé, count()=1 → role final=${result.role}`,
+      );
+      expect(mockPrisma.user.count).toHaveBeenCalledWith({
+        where: {
+          companyId: 'comp-1',
+          role: 'admin',
+          isActive: true,
+          deletedAt: null,
+          id: { not: 'admin-2' },
+        },
+      });
+      expect(result.role).toBe('dispatcher');
     });
   });
 
@@ -813,6 +904,30 @@ describe('UsersService', () => {
       await expect(service.remove('comp-1', 'user-1', 'other-user')).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('should reject removing the last active admin of the company', async () => {
+      const lastAdmin = {
+        id: 'admin-1',
+        companyId: 'comp-1',
+        deletedAt: null,
+        role: 'admin',
+        isActive: true,
+      };
+      mockPrisma.user.findFirst.mockResolvedValueOnce(lastAdmin);
+      mockPrisma.user.count.mockResolvedValueOnce(0);
+
+      let thrown: any;
+      try {
+        await service.remove('comp-1', 'admin-1', 'other-admin');
+      } catch (e) {
+        thrown = e;
+      }
+      console.log(`[remove last admin] ${thrown.constructor.name}: ${thrown.message}`);
+
+      expect(thrown).toBeInstanceOf(BadRequestException);
+      expect(thrown.message).toContain('Cannot remove the last active admin of this company');
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
   });
 });

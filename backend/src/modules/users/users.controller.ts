@@ -142,8 +142,9 @@ export class UsersController {
     @CurrentUser('companyId') companyId: string,
     @Param('id') id: string,
     @Body() dto: UpdateUserDto,
+    @CurrentUser('id') currentUserId: string,
   ) {
-    return this.usersService.update(companyId, id, dto);
+    return this.usersService.update(companyId, id, dto, currentUserId);
   }
 
   @UseGuards(RolesGuard)
