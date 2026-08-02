@@ -389,7 +389,7 @@ export default function FuelPage() {
                   <tr className={styles.headerRow}>
                     <th className={styles.th}>{t('fuel.table.vehicle')}</th>
                     <th className={styles.th}>{t('fuel.table.liters')}</th>
-                    <th className={styles.th}>{t('fuel.table.km')}</th>
+                    <th className={styles.th}>{t('fuel.table.kmHeader')}</th>
                     <th className={styles.th}>{t('fuel.table.consumption')}</th>
                     <th className={styles.th}>{t('fuel.table.cost')}</th>
                     <th className={styles.th}>{t('fuel.table.date')}</th>
@@ -677,7 +677,7 @@ export default function FuelPage() {
                 onChange={(e) => setForm({ ...form, liters: e.target.value })}
               />
             </DialogField>
-            <DialogField label={t('fuel.table.km')} required>
+            <DialogField label={t('fuel.table.km')} hint={t('fuel.kmHelper')} required>
               <input
                 className="dialog-input"
                 type="number"

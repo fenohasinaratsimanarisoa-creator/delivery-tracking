@@ -201,8 +201,8 @@ export default function EntityDialog({ open, onClose, title, subtitle, children,
   );
 }
 
-export function DialogField({ label, error, children, required }: {
-  label: string; error?: string | null; children: ReactNode; required?: boolean;
+export function DialogField({ label, hint, error, children, required }: {
+  label: string; hint?: string; error?: string | null; children: ReactNode; required?: boolean;
 }) {
   const id = `df-${label.replace(/\s+/g, '-').toLowerCase()}`;
   return (
@@ -223,6 +223,11 @@ export function DialogField({ label, error, children, required }: {
         }
         return child;
       })}
+      {hint && !error && (
+        <p className={styles.hintText}>
+          {hint}
+        </p>
+      )}
       {error && (
         <p className={styles.errorText}>
           {error}

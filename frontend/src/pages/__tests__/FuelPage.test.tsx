@@ -83,6 +83,25 @@ describe('FuelPage', () => {
     });
   });
 
+  it('shows the explicit distance label and the "odometer" helper in the create dialog', async () => {
+    render(<FuelPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Nouveau plein' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'Ajouter un relevé' })).toBeInTheDocument();
+    });
+
+    // Label explicite du champ kilométrage : distance depuis le dernier plein.
+    const label = screen.getByText(/Distance depuis le dernier plein \(km\)/);
+    const hint = screen.getByText('Ne pas saisir le kilométrage au compteur');
+    console.log(`[dialog] label = "${label.textContent}"`);
+    console.log(`[dialog] hint  = "${hint.textContent}"`);
+
+    expect(label).toBeInTheDocument();
+    expect(hint).toBeInTheDocument();
+  });
+
   it('renders the fuel prices tab with editable default prices', async () => {
     render(<FuelPage />);
 
