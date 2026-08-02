@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NotificationType, NotificationPriority, GpsDataQuality } from '@prisma/client';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -349,6 +349,7 @@ export class FuelConsumptionService {
   async createFuelPrice(companyId: string, dto: CreateFuelPriceDto) {
     const fuelType = dto.fuelType.toLowerCase();
     const effectiveFrom = new Date(dto.effectiveFrom);
+    const effectiveUntil = dto.effectiveUntil ? new Date(dto.effectiveUntil) : null;
 
     // Ferme l'entrée sans date de fin (effectiveUntil null) du même type qui précède ce prix,
     // pour garder une chaîne d'historique propre (chaque prix mène au suivant).
@@ -357,13 +358,39 @@ export class FuelConsumptionService {
       data: { effectiveUntil: new Date(effectiveFrom.getTime() - 1) },
     });
 
+    // Garde-fou anti-chevauchement : toute entrée existante (même déjà fermée) dont la plage
+    // [effectiveFrom, effectiveUntil ?? +∞] chevauche [effectiveFrom, effectiveUntil ?? +∞] du
+    // nouveau prix est refusée. Deux plages [a,b] et [c,d] se chevauchent si a <= d ET c <= b
+    // (borne nulle = +∞). L'entrée ouverte qui précède a déjà été fermée ci-dessus à
+    // effectiveFrom - 1ms : elle n'est donc pas comptée comme chevauchement.
+    const overlapping = await this.prisma.fuelPriceHistory.findFirst({
+      where: {
+        companyId,
+        fuelType,
+        // existing.effectiveFrom <= nouveau effectiveUntil (null = +∞ → condition toujours vraie)
+        ...(effectiveUntil ? { effectiveFrom: { lte: effectiveUntil } } : {}),
+        // existing.effectiveUntil >= nouveau effectiveFrom (null = +∞ → toujours vrai)
+        OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: effectiveFrom } }],
+      },
+    });
+
+    if (overlapping) {
+      const existingRange = `${overlapping.effectiveFrom.toISOString()} → ${
+        overlapping.effectiveUntil ? overlapping.effectiveUntil.toISOString() : '∞'
+      }`;
+      throw new BadRequestException(
+        `Fuel price for "${fuelType}" overlaps the existing range [${existingRange}]. ` +
+          `Close or remove it before creating an overlapping price.`,
+      );
+    }
+
     return this.prisma.fuelPriceHistory.create({
       data: {
         companyId,
         fuelType,
         pricePerLiter: dto.pricePerLiter,
         effectiveFrom,
-        ...(dto.effectiveUntil ? { effectiveUntil: new Date(dto.effectiveUntil) } : {}),
+        ...(effectiveUntil ? { effectiveUntil } : {}),
       },
     });
   }

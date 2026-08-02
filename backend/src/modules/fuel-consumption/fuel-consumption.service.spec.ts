@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NotificationPriority, NotificationType, GpsDataQuality } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -848,6 +848,8 @@ describe('FuelConsumptionService', () => {
     it('createFuelPrice closes the previous open-ended entry of the same fuel type', async () => {
       const effectiveFrom = new Date('2026-08-01T00:00:00.000Z');
       mockPrisma.fuelPriceHistory.updateMany.mockResolvedValueOnce({ count: 1 });
+      // Aucun chevauchement avec une entrée déjà fermée → création autorisée.
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(null);
       mockPrisma.fuelPriceHistory.create.mockResolvedValueOnce({ id: 'fp-new' });
 
       await service.createFuelPrice('company-1', {
@@ -860,8 +862,82 @@ describe('FuelConsumptionService', () => {
         where: { companyId: 'company-1', fuelType: 'diesel', effectiveUntil: null, effectiveFrom: { lt: effectiveFrom } },
         data: { effectiveUntil: new Date(effectiveFrom.getTime() - 1) },
       });
+      // La garde-fou anti-chevauchement interroge bien la même company/fuelType.
+      expect(mockPrisma.fuelPriceHistory.findFirst).toHaveBeenCalledWith({
+        where: {
+          companyId: 'company-1',
+          fuelType: 'diesel',
+          OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: effectiveFrom } }],
+        },
+      });
       expect(mockPrisma.fuelPriceHistory.create).toHaveBeenCalledWith({
         data: { companyId: 'company-1', fuelType: 'diesel', pricePerLiter: 5300, effectiveFrom },
+      });
+    });
+
+    it('rejects a price that overlaps an already-closed range with a 400', async () => {
+      mockPrisma.fuelPriceHistory.updateMany.mockResolvedValueOnce({ count: 0 });
+      // Entrée existante DÉJÀ FERMÉE : [2026-01-01 → 2026-01-15].
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce({
+        id: 'fp-overlap',
+        fuelType: 'diesel',
+        effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+        effectiveUntil: new Date('2026-01-15T00:00:00.000Z'),
+      });
+
+      await expect(
+        service.createFuelPrice('company-1', {
+          fuelType: 'Diesel',
+          pricePerLiter: 5300,
+          effectiveFrom: '2026-01-10',
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      // Rien n'est inséré : le chevauchement est refusé avant la création.
+      expect(mockPrisma.fuelPriceHistory.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an open-ended price whose start falls inside a closed range (no create)', async () => {
+      mockPrisma.fuelPriceHistory.updateMany.mockResolvedValueOnce({ count: 0 });
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce({
+        id: 'fp-overlap-2',
+        fuelType: 'diesel',
+        effectiveFrom: new Date('2026-02-01T00:00:00.000Z'),
+        effectiveUntil: new Date('2026-02-28T00:00:00.000Z'),
+      });
+
+      let errorMessage = '';
+      try {
+        await service.createFuelPrice('company-1', {
+          fuelType: 'diesel',
+          pricePerLiter: 5200,
+          effectiveFrom: '2026-02-15',
+        });
+      } catch (e: any) {
+        errorMessage = e.message;
+        console.log(
+          `[overlap] plage existante fermée [2026-02-01 → 2026-02-28], nouveau prix à 2026-02-15 → ${e.constructor.name}: ${e.message}`,
+        );
+      }
+
+      expect(errorMessage).toContain('overlaps');
+      expect(errorMessage).toContain('2026-02-28');
+      expect(mockPrisma.fuelPriceHistory.create).not.toHaveBeenCalled();
+    });
+
+    it('allows a price entirely AFTER a closed range (no overlap)', async () => {
+      mockPrisma.fuelPriceHistory.updateMany.mockResolvedValueOnce({ count: 0 });
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.fuelPriceHistory.create.mockResolvedValueOnce({ id: 'fp-after' });
+
+      await service.createFuelPrice('company-1', {
+        fuelType: 'diesel',
+        pricePerLiter: 5300,
+        effectiveFrom: '2026-03-01',
+      });
+
+      expect(mockPrisma.fuelPriceHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ effectiveFrom: new Date('2026-03-01T00:00:00.000Z') }),
       });
     });
 
