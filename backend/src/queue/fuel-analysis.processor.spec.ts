@@ -224,4 +224,133 @@ describe('FuelAnalysisProcessor', () => {
       expect(store['log-1'].consumptionAnomalyFlag || store['log-1'].gpsAnomalyFlag).toBe(true);
     });
   });
+
+  // ----------------------------------------------------------------
+  // update() doit RE-DÉCLENCHER le job 'analyze' quand un champ mesuré change,
+  // sinon calculatedConsumption reste figé après une correction de saisie.
+  // Cycle complet : create() → 1er passage du job → update() → 2e passage du job.
+  // ----------------------------------------------------------------
+  describe('update() re-dispatches the analyze job (recompute calculatedConsumption)', () => {
+    let store: Record<string, any>;
+    let jobs: Array<{ name: string; data: any }>;
+    let queue: any;
+    let service: FuelConsumptionService;
+    let processor: FuelAnalysisProcessor;
+    let prisma: any;
+    const lifecycleNotifications = { create: jest.fn() };
+    const lifecycleConfig = { get: jest.fn(() => 25) };
+    const lifecycleGateway = { broadcastDataUpdate: jest.fn() };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      store = {};
+      jobs = [];
+      queue = {
+        add: jest.fn(async (name: string, data: any) => {
+          jobs.push({ name, data });
+        }),
+      };
+      prisma = {
+        vehicle: {
+          findFirst: jest.fn(async () => ({ id: 'vehicle-1', companyId: 'comp-1' })),
+        },
+        fuelLog: {
+          create: jest.fn(async (args: any) => {
+            const log = {
+              id: 'log-1',
+              vehicleId: 'vehicle-1',
+              companyId: 'comp-1',
+              vehicle: { licensePlate: 'TRK-1', theoreticalConsumption: 8 },
+              consumptionAnomalyFlag: false,
+              consumptionAnomalyReason: null,
+              gpsAnomalyFlag: false,
+              gpsAnomalyReason: null,
+              ...args.data,
+            };
+            store['log-1'] = log;
+            return log;
+          }),
+          // findFirst(id) → le log courant ; findFirst(sans id) → plein précédent (null).
+          findFirst: jest.fn(async (args: any) => store[args?.where?.id] || null),
+          findUnique: jest.fn(async (args: any) => store[args?.where?.id]),
+          update: jest.fn(async (args: any) => {
+            store[args.where.id] = { ...store[args.where.id], ...args.data };
+            return store[args.where.id];
+          }),
+        },
+        dailyFuelReport: {
+          aggregate: jest.fn(async () => ({ _sum: { distanceKm: 0 } })),
+        },
+        companyFuelSettings: {
+          findUnique: jest.fn(async () => ({ anomalyThreshold: 20 })),
+        },
+      };
+      service = new FuelConsumptionService(
+        prisma as unknown as PrismaService,
+        lifecycleConfig as unknown as ConfigService,
+        lifecycleNotifications as unknown as NotificationsService,
+        queue,
+        lifecycleGateway as any,
+      );
+      processor = new FuelAnalysisProcessor(
+        prisma as unknown as PrismaService,
+        lifecycleNotifications as unknown as NotificationsService,
+        service,
+      );
+    });
+
+    // Simule le worker BullMQ qui consomme les jobs 'analyze' en attente.
+    const runPendingAnalysisJobs = async (label: string) => {
+      const pending = jobs.splice(0);
+      for (const job of pending) {
+        await processor.process(job as any);
+        console.log(
+          `[analyze #${label}] log=${store[job.data.fuelLogId].id} ` +
+            `calculatedConsumption=${store[job.data.fuelLogId].calculatedConsumption} L/100km ` +
+            `consumptionAnomalyFlag=${store[job.data.fuelLogId].consumptionAnomalyFlag}`,
+        );
+      }
+    };
+
+    it('recomputes calculatedConsumption after liters/kilometers are corrected via update()', async () => {
+      // Véhicule : theoreticalConsumption = 8. 40L/400km → 10.0 L/100km (déviation 25% > 20%)
+      await service.create('comp-1', {
+        liters: 40,
+        kilometers: 400,
+        cost: 100,
+        fillDate: '2026-07-21T00:00:00.000Z',
+        vehicleId: 'vehicle-1',
+      } as any);
+      console.log(`[create] job 'analyze' enqueued (${jobs.length} job en attente)`);
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].name).toBe('analyze');
+
+      // 1er passage du job (le worker consomme le job issu de create()).
+      await runPendingAnalysisJobs('1st pass (from create)');
+      expect(store['log-1'].calculatedConsumption).toBe(10);
+      expect(store['log-1'].consumptionAnomalyFlag).toBe(true);
+      const afterFirst = store['log-1'].calculatedConsumption;
+
+      // Correction de saisie : 40L/500km → 8.0 L/100km (déviation 0%). update() doit
+      // re-déclencher le job 'analyze'.
+      await service.update('comp-1', 'log-1', { kilometers: 500 });
+      console.log(
+        `[update] job 'analyze' re-enqueued (${jobs.length} job en attente), ` +
+          `calculatedConsumption encore stale=${store['log-1'].calculatedConsumption} L/100km`,
+      );
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].name).toBe('analyze');
+
+      // 2e passage du job : calculatedConsumption doit être recalculé.
+      await runPendingAnalysisJobs('2nd pass (from update)');
+      expect(store['log-1'].calculatedConsumption).toBe(8);
+      expect(store['log-1'].consumptionAnomalyFlag).toBe(false);
+
+      // Preuve exigée : la valeur a bien changé après le second passage du job.
+      console.log(
+        `[assert] calculatedConsumption avant=${afterFirst} L/100km → après=${store['log-1'].calculatedConsumption} L/100km`,
+      );
+      expect(store['log-1'].calculatedConsumption).not.toBe(afterFirst);
+    });
+  });
 });

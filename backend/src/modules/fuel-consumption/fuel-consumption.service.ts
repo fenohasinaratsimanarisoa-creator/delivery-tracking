@@ -215,6 +215,22 @@ export class FuelConsumptionService {
       include: { vehicle: true },
     });
 
+    // Re-déclenche le job 'analyze' pour recalculer calculatedConsumption et
+    // l'anomalie de consommation théorique à partir des valeurs corrigées (même
+    // pattern que create()). Sans ce ré-enqueue, calculatedConsumption resterait
+    // figé sur l'ancienne saisie après une correction.
+    try {
+      if (measuredChanged && this.fuelAnalysisQueue) {
+        await this.fuelAnalysisQueue.add('analyze', {
+          fuelLogId: updated.id,
+          vehicleId: updated.vehicleId,
+          companyId,
+        });
+      }
+    } catch (e: any) {
+      this.logger.warn(`Failed to dispatch fuel analysis job: ${e.message}`);
+    }
+
     // Recalcule le cross-check GPS à partir du nouveau kilométrage/distance GPS.
     try {
       if (measuredChanged) {

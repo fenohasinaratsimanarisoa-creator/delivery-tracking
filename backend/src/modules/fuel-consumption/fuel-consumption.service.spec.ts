@@ -477,8 +477,9 @@ describe('FuelConsumptionService', () => {
         data: { notes: 'Corrected note' },
         include: { vehicle: true },
       });
-      // Aucun champ mesuré changé : le cross-check ne doit PAS être relancé.
+      // Aucun champ mesuré changé : ni le cross-check ni le job 'analyze' ne sont relancés.
       expect(mockPrisma.dailyFuelReport.aggregate).not.toHaveBeenCalled();
+      expect(mockQueue.add).not.toHaveBeenCalled();
     });
 
     it('throws NotFound when the fuel log belongs to another company', async () => {
@@ -546,6 +547,36 @@ describe('FuelConsumptionService', () => {
       });
       // Le cross-check a été relancé après la correction de saisie.
       expect(mockPrisma.dailyFuelReport.aggregate).toHaveBeenCalled();
+    });
+
+    it('re-dispatches the analyze job when measured fields change (recompute calculatedConsumption)', async () => {
+      const stale = { ...existing, calculatedConsumption: 10 };
+      const updated = {
+        ...stale,
+        kilometers: 120,
+        consumptionAnomalyFlag: false,
+        consumptionAnomalyReason: null,
+        gpsAnomalyFlag: false,
+        gpsAnomalyReason: null,
+      };
+      const enriched = { ...updated, vehicle: { id: 'vehicle-1', brand: 'X', model: 'Y', licensePlate: 'TRK-001' } };
+
+      mockPrisma.fuelLog.findFirst
+        .mockResolvedValueOnce(stale)
+        .mockResolvedValueOnce({ fillDate: new Date('2026-07-10T00:00:00.000Z') });
+      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({ _sum: { distanceKm: 0 } });
+      mockPrisma.fuelLog.update.mockResolvedValueOnce(updated);
+      mockPrisma.fuelLog.findUnique.mockResolvedValueOnce(enriched);
+
+      await service.update('company-1', 'fuel-1', { kilometers: 120 });
+
+      // Même payload que dans create() : un nouveau job 'analyze' recalcule
+      // calculatedConsumption à partir des valeurs corrigées.
+      expect(mockQueue.add).toHaveBeenCalledWith('analyze', {
+        fuelLogId: 'fuel-1',
+        vehicleId: 'vehicle-1',
+        companyId: 'company-1',
+      });
     });
   });
 
