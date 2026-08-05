@@ -600,6 +600,15 @@
   },
   "myDeliveries": {
     "title": "My Deliveries",
+    "subtitle": "Your deliveries, newest first.",
+    "summary": {
+      "toTake": "To take",
+      "inProgress": "In progress",
+      "done": "Completed"
+    },
+    "pickup": "Pickup",
+    "dropoff": "Destination",
+    "scheduled": "Scheduled for",
     "empty": "No deliveries assigned yet.",
     "status": {
       "pending": "Pending",

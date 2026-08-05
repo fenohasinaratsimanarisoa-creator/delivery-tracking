@@ -600,6 +600,15 @@
   },
   "myDeliveries": {
     "title": "Mes livraisons",
+    "subtitle": "Vos livraisons, la plus récente en premier.",
+    "summary": {
+      "toTake": "À prendre en charge",
+      "inProgress": "En cours",
+      "done": "Terminées"
+    },
+    "pickup": "Départ",
+    "dropoff": "Destination",
+    "scheduled": "Planifiée le",
     "empty": "Aucune livraison assignée pour le moment.",
     "status": {
       "pending": "En attente",
