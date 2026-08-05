@@ -5,11 +5,24 @@ import { TrackingService } from './tracking.service';
 import { TrackingGateway } from './tracking.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 
-const mockRedis = { call: jest.fn(), expire: jest.fn(), get: jest.fn(), del: jest.fn(), set: jest.fn() };
+const mockRedis = {
+  call: jest.fn(),
+  expire: jest.fn(),
+  get: jest.fn(),
+  del: jest.fn(),
+  set: jest.fn(),
+};
 const mockPrisma = {
   vehicle: { findMany: jest.fn(), findFirst: jest.fn() },
   delivery: { findFirst: jest.fn() },
-  gpsPosition: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), createMany: jest.fn() },
+  gpsPosition: {
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    create: jest.fn(),
+    createMany: jest.fn(),
+  },
+  vehicleAssignmentHistory: { findFirst: jest.fn() },
+  driver: { findUnique: jest.fn() },
 };
 const mockTrackingService = {
   savePosition: jest.fn().mockResolvedValue({ id: 'gps-1', suspect: false }),
@@ -20,10 +33,16 @@ const mockGateway = { broadcastDataUpdate: jest.fn(), broadcastToCompany: jest.f
 const mockNotifications = { create: jest.fn() };
 
 function createService() {
-  const config = { get: jest.fn((key: string, d?: string) => {
-    const m: Record<string, string> = { TRACCAR_URL: 'http://traccar-prod:8082', TRACCAR_USER: 'test', TRACCAR_PASSWORD: 'test' };
-    return m[key] ?? (d as any);
-  })};
+  const config = {
+    get: jest.fn((key: string, d?: string) => {
+      const m: Record<string, string> = {
+        TRACCAR_URL: 'http://traccar-prod:8082',
+        TRACCAR_USER: 'test',
+        TRACCAR_PASSWORD: 'test',
+      };
+      return m[key] ?? (d as any);
+    }),
+  };
   return new TraccarBridgeService(
     config as unknown as ConfigService,
     mockPrisma as unknown as PrismaService,
@@ -52,21 +71,29 @@ describe('TraccarBridgeService — Champ valid', () => {
   it('should reject position when valid=false (LBS/cellulaire)', async () => {
     const VEHICLE_ID = '00000000-0000-4000-a000-000000000001';
     mockPrisma.vehicle.findFirst.mockResolvedValue({
-      id: VEHICLE_ID, companyId: 'c1',
+      id: VEHICLE_ID,
+      companyId: 'c1',
       driver: { id: 'd1', userId: 'u1', user: { firstName: 'A', lastName: 'B' } },
     });
     mockPrisma.delivery.findFirst.mockResolvedValue(null);
 
     await (service as any).handlePosition({
-      id: 1, deviceId: 42,
-      latitude: -18.87, longitude: 47.52,
-      speed: 10, course: 90, altitude: 0, accuracy: 15,
+      id: 1,
+      deviceId: 42,
+      latitude: -18.87,
+      longitude: 47.52,
+      speed: 10,
+      course: 90,
+      altitude: 0,
+      accuracy: 15,
       valid: false,
       fixTime: new Date().toISOString(),
       deviceTime: new Date().toISOString(),
     });
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Position LBS rejetée (valid=false)'));
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Position LBS rejetée (valid=false)'),
+    );
     expect(mockTrackingService.savePosition).not.toHaveBeenCalled();
   });
 
@@ -74,15 +101,26 @@ describe('TraccarBridgeService — Champ valid', () => {
     const VEHICLE_ID = '00000000-0000-4000-a000-000000000001';
     const DRIVER_ID = '00000000-0000-4000-a000-000000000002';
     mockPrisma.vehicle.findFirst.mockResolvedValue({
-      id: VEHICLE_ID, companyId: 'c1',
+      id: VEHICLE_ID,
+      companyId: 'c1',
       driver: { id: DRIVER_ID, userId: 'u1', user: { firstName: 'A', lastName: 'B' } },
+    });
+    // L'affectation couvre le moment du fix → driverId résolu depuis l'historique.
+    mockPrisma.vehicleAssignmentHistory.findFirst.mockResolvedValue({ driverId: DRIVER_ID });
+    mockPrisma.driver.findUnique.mockResolvedValue({
+      user: { firstName: 'A', lastName: 'B' },
     });
     mockPrisma.delivery.findFirst.mockResolvedValue(null);
 
     await (service as any).handlePosition({
-      id: 2, deviceId: 42,
-      latitude: -18.87, longitude: 47.52,
-      speed: 30, course: 180, altitude: 0, accuracy: 5,
+      id: 2,
+      deviceId: 42,
+      latitude: -18.87,
+      longitude: 47.52,
+      speed: 30,
+      course: 180,
+      altitude: 0,
+      accuracy: 5,
       valid: true,
       fixTime: new Date().toISOString(),
       deviceTime: new Date().toISOString(),
@@ -91,13 +129,63 @@ describe('TraccarBridgeService — Champ valid', () => {
     expect(mockTrackingService.savePosition).toHaveBeenCalled();
   });
 
+  it('should RECORD a real-time position when the vehicle has NO driver assigned at fix time (driverId null)', async () => {
+    const VEHICLE_ID = '00000000-0000-4000-a000-000000000001';
+    mockPrisma.vehicle.findFirst.mockResolvedValue({
+      id: VEHICLE_ID,
+      companyId: 'c1',
+    });
+    // Aucune ligne VehicleAssignmentHistory ne couvre l'instant du fix.
+    mockPrisma.vehicleAssignmentHistory.findFirst.mockResolvedValue(null);
+    mockPrisma.delivery.findFirst.mockResolvedValue(null);
+    mockTrackingService.savePosition.mockImplementation(
+      async (driverId: string | null, dto: any) => ({
+        id: 'gps-nodriver',
+        suspect: false,
+        driverId,
+        vehicleId: dto.vehicleId,
+      }),
+    );
+
+    await (service as any).handlePosition({
+      id: 3,
+      deviceId: 42,
+      latitude: -18.87,
+      longitude: 47.52,
+      speed: 10,
+      course: 90,
+      altitude: 0,
+      accuracy: 5,
+      valid: true,
+      fixTime: new Date().toISOString(),
+      deviceTime: new Date().toISOString(),
+    });
+
+    // La position est ENREGISTRÉE (pas droppée) : driverId null, vehicleId présent.
+    expect(mockTrackingService.savePosition).toHaveBeenCalledTimes(1);
+    const callArgs = mockTrackingService.savePosition.mock.calls[0];
+    expect(callArgs[0]).toBeNull();
+    expect(callArgs[1].vehicleId).toBe(VEHICLE_ID);
+    expect(mockPrisma.driver.findUnique).not.toHaveBeenCalled();
+  });
+
   it('should reject LBS position in backfill path', async () => {
     mockRedis.call.mockResolvedValue('OK');
     mockPrisma.gpsPosition.findMany.mockResolvedValue([]);
 
     const toInsert: any[] = [];
     const positions = [
-      { latitude: -18.87, longitude: 47.52, speed: 0, course: 0, altitude: 0, accuracy: 50, valid: false, fixTime: new Date().toISOString(), deviceTime: new Date().toISOString() },
+      {
+        latitude: -18.87,
+        longitude: 47.52,
+        speed: 0,
+        course: 0,
+        altitude: 0,
+        accuracy: 50,
+        valid: false,
+        fixTime: new Date().toISOString(),
+        deviceTime: new Date().toISOString(),
+      },
     ];
 
     for (const pos of positions) {

@@ -474,8 +474,14 @@ model GpsPosition {
   vehicleId String  @map("vehicle_id") @db.Uuid
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
 
-  driverId String @map("driver_id") @db.Uuid
-  driver   Driver @relation(fields: [driverId], references: [id])
+  // driverId NULLABLE : une position peut être enregistrée même si AUCUN chauffeur
+  // n'était assigné au véhicule au moment du fix GPS (résolu via
+  // VehicleAssignmentHistory au timestamp de la position, pas via l'affectation
+  // courante). Les positions null-driver restent utilisées pour les calculs par
+  // véhicule / carte live / rapports carburant par véhicule, mais sont exclues des
+  // calculs par-chauffeur.
+  driverId String? @map("driver_id") @db.Uuid
+  driver   Driver? @relation(fields: [driverId], references: [id])
 
   // Source d'émission de la position ('phone' | 'physical_tracker'). NOT NULL sans
   // défaut : le générateur Prisma force donc TypeScript à exiger sa présence dans

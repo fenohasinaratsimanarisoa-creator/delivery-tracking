@@ -596,15 +596,24 @@ export class FuelConsumptionService {
 
     if (positions.length === 0) return;
 
-    const lastPos = positions[positions.length - 1];
+    // driverId est NULLABLE depuis 20260805183000 : une position peut exister sans
+    // chauffeur assigné au moment du fix. Pour le DailyFuelReport (driverId NOT NULL),
+    // on attribue le rapport au dernier driver NON NULL présent sur le véhicule ce
+    // jour ; si TOUTES les positions sont null-driver, aucun rapport ne peut être
+    // rattaché à un chauffeur (ligne DailyFuelReport impossible) → on saute. La
+    // distance GPS du véhicule est calculée sur TOUTES ses positions (y compris
+    // null-driver) : elles restent donc comptées dans le référentiel par-véhicule.
+    const reportDriverId = [...positions].reverse().find((p) => p.driverId)?.driverId ?? null;
+    if (!reportDriverId) return;
+
     const lastDriver = await this.prisma.driver.findUnique({
-      where: { id: lastPos.driverId },
+      where: { id: reportDriverId },
       select: { firstName: true, lastName: true },
     });
 
     await this.upsertDailyReportForVehicleGroup(
       {
-        id: lastPos.driverId,
+        id: reportDriverId,
         firstName: lastDriver?.firstName ?? '',
         lastName: lastDriver?.lastName ?? '',
       },

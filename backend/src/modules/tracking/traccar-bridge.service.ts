@@ -1,4 +1,11 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+  Inject,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { plainToInstance } from 'class-transformer';
@@ -78,7 +85,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     this.traccarPassword = this.configService.get<string>('TRACCAR_PASSWORD', 'admin');
 
     if (this.traccarUser === 'admin' && this.traccarPassword === 'admin') {
-      this.logger.warn('TRACCAR_USER/TRACCAR_PASSWORD not configured — using default credentials, change in production');
+      this.logger.warn(
+        'TRACCAR_USER/TRACCAR_PASSWORD not configured — using default credentials, change in production',
+      );
     }
   }
 
@@ -97,7 +106,10 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     }
 
     const nodeEnv = process.env.NODE_ENV || 'development';
-    if (nodeEnv === 'production' && (this.traccarUser === 'admin' || this.traccarPassword === 'admin')) {
+    if (
+      nodeEnv === 'production' &&
+      (this.traccarUser === 'admin' || this.traccarPassword === 'admin')
+    ) {
       throw new Error(
         'TRACCAR_USER/TRACCAR_PASSWORD doivent être configurés en production quand TRACCAR_URL est actif',
       );
@@ -112,7 +124,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       await this.tryBecomeLeader();
       this.leaderRetryTimer = setInterval(() => this.tryBecomeLeader(), LEADER_RETRY_INTERVAL_MS);
     } else {
-      this.logger.warn('Traccar bridge: Redis not available — running without leader election (single instance mode)');
+      this.logger.warn(
+        'Traccar bridge: Redis not available — running without leader election (single instance mode)',
+      );
       await this.connect();
     }
   }
@@ -125,7 +139,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         await this.alertService.send({
           level: 'warning',
           title: 'Pont Traccar non configuré',
-          message: 'TRACCAR_URL n\'est pas défini — le pont Traccar est inactif. Les traceurs GPS physiques ne transmettront aucune position.',
+          message:
+            "TRACCAR_URL n'est pas défini — le pont Traccar est inactif. Les traceurs GPS physiques ne transmettront aucune position.",
           metadata: { service: 'traccar-bridge' },
         });
       } else {
@@ -147,10 +162,16 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                 level: 'critical',
                 title: 'Pont Traccar hors ligne prolongé',
                 message: `Le pont Traccar est déconnecté depuis ${Math.round(elapsedMin)} minutes (${this.reconnectAttempts} tentatives)`,
-                metadata: { service: 'traccar-bridge', reconnectAttempts: this.reconnectAttempts, elapsedMinutes: Math.round(elapsedMin) },
+                metadata: {
+                  service: 'traccar-bridge',
+                  reconnectAttempts: this.reconnectAttempts,
+                  elapsedMinutes: Math.round(elapsedMin),
+                },
               });
             } else {
-              this.logger.warn(`[PLATFORM ALERT] Pont Traccar hors ligne depuis ${Math.round(elapsedMin)} min`);
+              this.logger.warn(
+                `[PLATFORM ALERT] Pont Traccar hors ligne depuis ${Math.round(elapsedMin)} min`,
+              );
             }
           } catch (err: any) {
             this.logger.error('Failed to send platform alert: Traccar disconnected', err);
@@ -166,7 +187,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const pid = String(process.pid);
-      const acquired = await this.redis.call('SET', LEADER_KEY, pid, 'NX', 'EX', String(LEADER_TTL_S));
+      const acquired = await this.redis.call(
+        'SET',
+        LEADER_KEY,
+        pid,
+        'NX',
+        'EX',
+        String(LEADER_TTL_S),
+      );
       if (acquired === 'OK') {
         this.isLeader = true;
         this.logger.log(`Traccar bridge: became leader (pid=${pid})`);
@@ -189,7 +217,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         const current = await this.redis.get(LEADER_KEY);
         if (current !== String(process.pid)) {
           this.isLeader = false;
-          this.logger.warn('Traccar bridge: lock repris par un autre process — perte réelle de leadership');
+          this.logger.warn(
+            'Traccar bridge: lock repris par un autre process — perte réelle de leadership',
+          );
           this.disconnect();
           this.stopLeaderRenew();
           return;
@@ -266,47 +296,47 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private async checkNeverConnectedDevices() {
     try {
       const vehiclesWithTrackers = await this.prisma.vehicle.findMany({
-          where: {
-            positionSource: 'physical_tracker',
-            isActive: true,
-            deletedAt: null,
-            driver: { isActive: true, deletedAt: null },
-          },
-          select: {
-            id: true,
-            companyId: true,
-            createdAt: true,
-            traccarDeviceId: true,
-            driver: { select: { id: true, userId: true } },
-          },
-        });
+        where: {
+          positionSource: 'physical_tracker',
+          isActive: true,
+          deletedAt: null,
+          driver: { isActive: true, deletedAt: null },
+        },
+        select: {
+          id: true,
+          companyId: true,
+          createdAt: true,
+          traccarDeviceId: true,
+          driver: { select: { id: true, userId: true } },
+        },
+      });
 
-        for (const vehicle of vehiclesWithTrackers) {
-          if (!vehicle.driver?.userId) continue;
-          if (!vehicle.traccarDeviceId) continue;
+      for (const vehicle of vehiclesWithTrackers) {
+        if (!vehicle.driver?.userId) continue;
+        if (!vehicle.traccarDeviceId) continue;
 
-          const creationAgeMin = (Date.now() - vehicle.createdAt.getTime()) / 60000;
+        const creationAgeMin = (Date.now() - vehicle.createdAt.getTime()) / 60000;
 
-          if (creationAgeMin < NEVER_CONNECTED_GRACE_PERIOD_MS / 60000) continue;
+        if (creationAgeMin < NEVER_CONNECTED_GRACE_PERIOD_MS / 60000) continue;
 
-          const lastPos = await this.trackingService.getLastPosition(vehicle.id);
-          if (lastPos) continue;
+        const lastPos = await this.trackingService.getLastPosition(vehicle.id);
+        if (lastPos) continue;
 
-          const cooldownKey = `never_connected_alert:${vehicle.id}`;
-          if (this.redis) {
-            const existing = await this.redis.get(cooldownKey);
-            if (existing) continue;
-            await this.redis.setex(cooldownKey, 86400, '1');
-          }
-
-          await this.notifications.create(vehicle.companyId, {
-            type: NotificationType.device_offline,
-            priority: NotificationPriority.high,
-            title: 'Traceur physique : jamais connecté',
-            message: `Le traceur "${vehicle.traccarDeviceId}" n'a encore jamais envoyé de position (créé il y a ${Math.round(creationAgeMin)} min). Vérifiez : (1) SIM active et APN correct, (2) protocole activé dans traccar.xml, (3) port ouvert sur le firewall, (4) device créé dans Traccar avec le bon IMEI.`,
-            userId: vehicle.driver.userId,
-          });
+        const cooldownKey = `never_connected_alert:${vehicle.id}`;
+        if (this.redis) {
+          const existing = await this.redis.get(cooldownKey);
+          if (existing) continue;
+          await this.redis.setex(cooldownKey, 86400, '1');
         }
+
+        await this.notifications.create(vehicle.companyId, {
+          type: NotificationType.device_offline,
+          priority: NotificationPriority.high,
+          title: 'Traceur physique : jamais connecté',
+          message: `Le traceur "${vehicle.traccarDeviceId}" n'a encore jamais envoyé de position (créé il y a ${Math.round(creationAgeMin)} min). Vérifiez : (1) SIM active et APN correct, (2) protocole activé dans traccar.xml, (3) port ouvert sur le firewall, (4) device créé dans Traccar avec le bon IMEI.`,
+          userId: vehicle.driver.userId,
+        });
+      }
     } catch (err: any) {
       this.logger.error(`Never-connected check error: ${err.message}`);
     }
@@ -495,6 +525,28 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     this.sessionCookie = null;
   }
 
+  /**
+   * Résout le driverId EN VIGUEUR au moment du fix GPS via VehicleAssignmentHistory :
+   * ligne (vehicleId = ce véhicule) telle que assignedAt <= fix_time <= (unassignedAt ?? now()).
+   * Retourne null si AUCUNE affectation ne couvre cet instant — la position est alors
+   * enregistrée avec driverId null (trace GPS jamais perdue) plutôt que d'être droppée.
+   */
+  private async resolveDriverIdAtTimestamp(
+    vehicleId: string,
+    timestamp: Date,
+  ): Promise<string | null> {
+    const assignment = await this.prisma.vehicleAssignmentHistory.findFirst({
+      where: {
+        vehicleId,
+        assignedAt: { lte: timestamp },
+        OR: [{ unassignedAt: null }, { unassignedAt: { gte: timestamp } }],
+      },
+      orderBy: { assignedAt: 'desc' },
+      select: { driverId: true },
+    });
+    return assignment?.driverId ?? null;
+  }
+
   private async performBackfill() {
     if (!this.sessionCookie) return;
 
@@ -510,7 +562,6 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           id: true,
           traccarDeviceId: true,
           companyId: true,
-          driver: { select: { id: true } },
         },
       });
 
@@ -519,7 +570,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       const now = new Date();
 
       for (const vehicle of vehiclesWithTrackers) {
-        if (!vehicle.traccarDeviceId || !vehicle.driver?.id) continue;
+        if (!vehicle.traccarDeviceId) continue;
 
         let lastTs: Date | null = null;
         if (this.redis) {
@@ -553,29 +604,48 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           });
 
           if (!response.ok) {
-            this.logger.warn(`Backfill fetch failed for device ${vehicle.traccarDeviceId}: HTTP ${response.status}`);
+            this.logger.warn(
+              `Backfill fetch failed for device ${vehicle.traccarDeviceId}: HTTP ${response.status}`,
+            );
             continue;
           }
 
           const positions: TraccarPosition[] = await response.json();
           if (positions.length === 0) continue;
 
-          this.logger.log(`Backfill: ${positions.length} positions for device ${vehicle.traccarDeviceId}`);
+          this.logger.log(
+            `Backfill: ${positions.length} positions for device ${vehicle.traccarDeviceId}`,
+          );
 
           const toInsert: Array<{
-            latitude: number; longitude: number; speed: number; heading: number;
-            altitude: number; accuracy: number; suspect: boolean; location: string;
-            timestamp: Date; companyId: string; deliveryId: string | null | undefined;
-            vehicleId: string; driverId: string; source: 'physical_tracker';
+            latitude: number;
+            longitude: number;
+            speed: number;
+            heading: number;
+            altitude: number;
+            accuracy: number;
+            suspect: boolean;
+            location: string;
+            timestamp: Date;
+            companyId: string;
+            deliveryId: string | null | undefined;
+            vehicleId: string;
+            driverId: string | null;
+            source: 'physical_tracker';
           }> = [];
 
-          let lastBackfillPos: { latitude: number; longitude: number; timestamp: Date } | null = null;
+          let lastBackfillPos: { latitude: number; longitude: number; timestamp: Date } | null =
+            null;
           if (this.redis) {
             const stored = await this.redis.get(`traccar:last_position:${vehicle.traccarDeviceId}`);
             if (stored) {
               const lastDbPos = await this.trackingService.getLastPosition(vehicle.id);
               if (lastDbPos) {
-                lastBackfillPos = { latitude: lastDbPos.latitude, longitude: lastDbPos.longitude, timestamp: lastDbPos.timestamp };
+                lastBackfillPos = {
+                  latitude: lastDbPos.latitude,
+                  longitude: lastDbPos.longitude,
+                  timestamp: lastDbPos.timestamp,
+                };
               }
             }
           }
@@ -584,7 +654,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             const timestamp = this.parseTimestamp(pos);
             if (!this.isValidCoordinates(pos.latitude, pos.longitude)) continue;
             if (pos.valid === false) {
-              this.logger.warn(`Backfill: position LBS rejetée (valid=false) pour device ${pos.deviceId}`);
+              this.logger.warn(
+                `Backfill: position LBS rejetée (valid=false) pour device ${pos.deviceId}`,
+              );
               continue;
             }
 
@@ -593,11 +665,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
             let suspect = false;
             if (lastBackfillPos) {
-              const timeDiffSec = (timestamp.getTime() - lastBackfillPos.timestamp.getTime()) / 1000;
+              const timeDiffSec =
+                (timestamp.getTime() - lastBackfillPos.timestamp.getTime()) / 1000;
               if (timeDiffSec > 0) {
                 const distance = haversineDistance(
-                  lastBackfillPos.latitude, lastBackfillPos.longitude,
-                  pos.latitude, pos.longitude,
+                  lastBackfillPos.latitude,
+                  lastBackfillPos.longitude,
+                  pos.latitude,
+                  pos.longitude,
                 );
                 const detectedSpeedMs = distance / timeDiffSec;
                 const accuracyScale = accuracy ? Math.max(1, accuracy / 10) : 1;
@@ -621,7 +696,10 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               companyId: vehicle.companyId,
               deliveryId: null,
               vehicleId: vehicle.id,
-              driverId: vehicle.driver.id,
+              // DriverId au moment de CE fix GPS (pas l'affectation courante) :
+              // sur un backfill, les positions antérieures à un changement de
+              // chauffeur gardent l'ANCIEN driverId, les postérieures le NOUVEAU.
+              driverId: await this.resolveDriverIdAtTimestamp(vehicle.id, timestamp),
               source: 'physical_tracker',
             });
           }
@@ -645,14 +723,21 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
             if (uniqueToInsert.length > 0) {
               await this.prisma.gpsPosition.createMany({ data: uniqueToInsert });
-              this.logger.log(`Backfill: inserted ${uniqueToInsert.length} positions for device ${vehicle.traccarDeviceId} (no alerts generated — historical data)`);
+              this.logger.log(
+                `Backfill: inserted ${uniqueToInsert.length} positions for device ${vehicle.traccarDeviceId} (no alerts generated — historical data)`,
+              );
 
               if (this.redis) {
                 const lastTs = uniqueToInsert[uniqueToInsert.length - 1].timestamp;
-                await this.redis.set(`traccar:last_position:${vehicle.traccarDeviceId}`, lastTs.toISOString());
+                await this.redis.set(
+                  `traccar:last_position:${vehicle.traccarDeviceId}`,
+                  lastTs.toISOString(),
+                );
               }
             } else {
-              this.logger.log(`Backfill: 0 new positions for device ${vehicle.traccarDeviceId} (${toInsert.length} filtered as duplicates)`);
+              this.logger.log(
+                `Backfill: 0 new positions for device ${vehicle.traccarDeviceId} (${toInsert.length} filtered as duplicates)`,
+              );
             }
           }
         } catch (err: any) {
@@ -677,7 +762,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       if (pos.valid === false) {
         this.logger.warn(
           `Position LBS rejetée (valid=false) pour device ${pos.deviceId} ` +
-          `à ${pos.latitude},${pos.longitude} — seul un fix GPS réel est accepté`,
+            `à ${pos.latitude},${pos.longitude} — seul un fix GPS réel est accepté`,
         );
         return;
       }
@@ -692,36 +777,49 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         select: {
           id: true,
           companyId: true,
-          driver: {
-            select: {
-              id: true,
-              userId: true,
-              user: { select: { firstName: true, lastName: true } },
-            },
-          },
         },
       });
 
       if (!vehicleMapping) return;
 
-      const driver = vehicleMapping.driver;
-      if (!driver?.userId) return;
+      // Résolution du chauffeur AU MOMENT du fix GPS (VehicleAssignmentHistory),
+      // jamais l'affectation COURANTE (driver.vehicleId) : sur un backfill, un
+      // changement de chauffeur pendant la fenêtre ne doit pas faire hériter les
+      // positions antérieures du nouveau driverId. Si AUCUNE affectation ne couvre
+      // cet instant, la position est ENREGISTRÉE quand même avec driverId null
+      // (jamais perdue) — GpsPosition.driverId est nullable depuis la migration
+      // 20260805183000_gps_position_driver_id_nullable.
+      const driverId = await this.resolveDriverIdAtTimestamp(vehicleMapping.id, timestamp);
 
-      const driverUser = driver.user;
-      const driverName = driverUser
-        ? `${driverUser.firstName} ${driverUser.lastName}`
-        : 'Traccar GPS';
+      // Nom du chauffeur pour le broadcast : celui du driver RÉSOLU (au moment du
+      // fix), pas le chauffeur courant du véhicule.
+      let driverName = 'Traccar GPS';
+      if (driverId) {
+        const resolvedDriver = await this.prisma.driver.findUnique({
+          where: { id: driverId },
+          select: { user: { select: { firstName: true, lastName: true } } },
+        });
+        const driverUser = resolvedDriver?.user;
+        if (driverUser) {
+          driverName = `${driverUser.firstName} ${driverUser.lastName}`;
+        }
+      }
 
-      const currentDelivery = await this.prisma.delivery.findFirst({
-        where: {
-          driverId: driver.id,
-          status: 'in_progress',
-          deletedAt: null,
-        },
-        select: { id: true },
-      });
+      const currentDelivery = driverId
+        ? await this.prisma.delivery.findFirst({
+            where: {
+              driverId,
+              status: 'in_progress',
+              deletedAt: null,
+            },
+            select: { id: true },
+          })
+        : null;
 
-      const { accuracy: derivedAccuracy, hdopInfo } = computeCombinedAccuracy(pos.accuracy, pos.attributes);
+      const { accuracy: derivedAccuracy, hdopInfo } = computeCombinedAccuracy(
+        pos.accuracy,
+        pos.attributes,
+      );
       this.logger.debug(`Traccar device ${pos.deviceId}: ${hdopInfo}`);
 
       const updateDto = {
@@ -748,7 +846,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       let position;
       try {
         position = await this.trackingService.savePosition(
-          driver.id,
+          driverId,
           validated,
           vehicleMapping.companyId,
           // Le pont Traccar est toujours une source 'physical_tracker'.
@@ -756,13 +854,12 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         );
 
         if (this.redis) {
-          await this.redis.set(
-            `traccar:last_position:${pos.deviceId}`,
-            timestamp.toISOString(),
-          );
+          await this.redis.set(`traccar:last_position:${pos.deviceId}`, timestamp.toISOString());
         }
       } catch (saveErr: any) {
-        this.logger.error(`Save position failed for device ${pos.deviceId}: ${saveErr.message} — queueing`);
+        this.logger.error(
+          `Save position failed for device ${pos.deviceId}: ${saveErr.message} — queueing`,
+        );
         await this.queuePendingPosition(pos);
         return;
       }
@@ -770,14 +867,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       if (position) {
         this.lastPositionReceivedAt = Date.now();
         this.trackingGateway.broadcastDataUpdate(vehicleMapping.companyId, 'position', {
-          driverId: driver.id,
+          driverId: driverId ?? undefined,
           latitude: pos.latitude,
           longitude: pos.longitude,
           timestamp: updateDto.timestamp,
         });
 
         const broadcast = {
-          driverId: driver.id,
+          driverId: driverId ?? undefined,
           driverName,
           latitude: pos.latitude,
           longitude: pos.longitude,
@@ -786,13 +883,22 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           altitude: updateDto.altitude,
           accuracy: updateDto.accuracy,
           suspect: position.suspect,
-          confidence: computeConfidence(updateDto.accuracy, position.suspect, updateDto.speed, updateDto.heading),
+          confidence: computeConfidence(
+            updateDto.accuracy,
+            position.suspect,
+            updateDto.speed,
+            updateDto.heading,
+          ),
           timestamp: updateDto.timestamp,
           deliveryId: updateDto.deliveryId ?? undefined,
           vehicleId: vehicleMapping.id,
         };
 
-        this.trackingGateway.broadcastToCompany(vehicleMapping.companyId, 'positionUpdate', broadcast);
+        this.trackingGateway.broadcastToCompany(
+          vehicleMapping.companyId,
+          'positionUpdate',
+          broadcast,
+        );
       }
     } catch (err: any) {
       this.logger.error(`Traccar position handling error: ${err.message}`);
@@ -802,12 +908,16 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private parseTimestamp(pos: TraccarPosition): Date {
     const raw = pos.fixTime || pos.deviceTime;
     if (!raw) {
-      this.logger.warn(`Traccar device ${pos.deviceId}: missing fixTime/deviceTime — using server time`);
+      this.logger.warn(
+        `Traccar device ${pos.deviceId}: missing fixTime/deviceTime — using server time`,
+      );
       return new Date();
     }
     const date = new Date(raw);
     if (isNaN(date.getTime())) {
-      this.logger.warn(`Traccar device ${pos.deviceId}: invalid timestamp "${raw}" — using server time`);
+      this.logger.warn(
+        `Traccar device ${pos.deviceId}: invalid timestamp "${raw}" — using server time`,
+      );
       return new Date();
     }
     return date;
@@ -860,7 +970,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         const pos = JSON.parse(entry);
         if (now - (pos._queuedAt || 0) > PENDING_POSITIONS_RETENTION_MS) {
           toPurge.push(entry);
-          this.logger.warn(`Purging stale pending position from device ${pos.deviceId} (queued >1h)`);
+          this.logger.warn(
+            `Purging stale pending position from device ${pos.deviceId} (queued >1h)`,
+          );
           continue;
         }
         toRetry.push(entry);

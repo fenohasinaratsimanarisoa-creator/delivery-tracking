@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+  ConflictException,
+} from '@nestjs/common';
 import { NotificationType, NotificationPriority } from '@prisma/client';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -116,7 +122,14 @@ export class TrackingService {
     return this.prisma.gpsPosition.findFirst({
       where: { vehicleId },
       orderBy: { timestamp: 'desc' },
-      select: { id: true, latitude: true, longitude: true, timestamp: true, speed: true },
+      select: {
+        id: true,
+        latitude: true,
+        longitude: true,
+        timestamp: true,
+        speed: true,
+        source: true,
+      },
     });
   }
 
@@ -130,11 +143,44 @@ export class TrackingService {
     timestamp: Date,
     vehicleId: string,
     accuracy?: number,
+    source?: PositionSource,
   ): Promise<boolean> {
     const last = await this.getLastPosition(vehicleId);
     if (!last) return false;
 
-    const timeDiffSec = (timestamp.getTime() - last.timestamp.getTime()) / 1000;
+    // --- Exemption changement de source (documenté, prompt 4/4) ---
+    // Le PREMIER point GPS après un basculement de source (phone → physical_tracker
+    // ou l'inverse) sur un même véhicule peut légitimement représenter un vrai
+    // déplacement : les deux flux ne sont pas raccordés. Le dernier point de l'AUTRE
+    // source peut être vieux (le flux précédent était inactif — ex. un traceur
+    // installé/activé après avoir roulé en mode phone) ou à une position très
+    // différente (le véhicule a bougé pendant l'interruption). Comparer ce point au
+    // dernier point de l'AUTRE source déclencherait un FAUX suspect de téléportation.
+    // On compare donc uniquement AU SEIN DE LA MÊME SOURCE si un changement de source
+    // a eu lieu dans les 5 dernières minutes ; sans position intra-source, le point
+    // passe (aucune référence fiable pour le qualifier de téléportation). La détection
+    // de téléportation n'est PAS désactivée : un vrai saut dans la même source reste
+    // suspecté exactement comme avant.
+    let reference: { latitude: number; longitude: number; timestamp: Date } = last;
+    if (source && last.source !== undefined && last.source !== source) {
+      const gapSec = (timestamp.getTime() - last.timestamp.getTime()) / 1000;
+      if (gapSec > 0 && gapSec <= 300) {
+        const sameSourceLast = await this.prisma.gpsPosition.findFirst({
+          where: { vehicleId, source },
+          orderBy: { timestamp: 'desc' },
+          select: { latitude: true, longitude: true, timestamp: true },
+        });
+        if (!sameSourceLast) {
+          this.logger.debug(
+            `Teleportation exempted: changement de source détecté (${last.source} → ${source}) — aucun historique intra-source pour comparer`,
+          );
+          return false;
+        }
+        reference = sameSourceLast;
+      }
+    }
+
+    const timeDiffSec = (timestamp.getTime() - reference.timestamp.getTime()) / 1000;
     if (timeDiffSec <= 0) {
       this.logger.warn(
         `Timestamp non croissant reçu: vehicle=${vehicleId} diff=${timeDiffSec.toFixed(1)}s — marqué suspect`,
@@ -142,7 +188,12 @@ export class TrackingService {
       return true;
     }
 
-    const distance = haversineDistance(last.latitude, last.longitude, latitude, longitude);
+    const distance = haversineDistance(
+      reference.latitude,
+      reference.longitude,
+      latitude,
+      longitude,
+    );
     const speedMs = distance / timeDiffSec;
 
     // If accuracy is poor, the apparent teleportation could be just GPS noise
@@ -203,7 +254,7 @@ export class TrackingService {
   private async generateAlerts(
     dto: UpdatePositionDto,
     companyId: string,
-    driverId: string,
+    driverId: string | null,
     savedPosition: { id: string; suspect: boolean },
   ) {
     const settings = await this.getCompanySettings(companyId);
@@ -270,7 +321,9 @@ export class TrackingService {
         );
         // Use smoothed average speed over last N positions to avoid false delay alerts
         // on momentary slowdowns (traffic light, yield)
-        const avgSpeedMs = dto.deliveryId ? await this.getAverageSpeed(dto.vehicleId, dto.deliveryId) : null;
+        const avgSpeedMs = dto.deliveryId
+          ? await this.getAverageSpeed(dto.vehicleId, dto.deliveryId)
+          : null;
         const effectiveSpeed = avgSpeedMs ?? dto.speed;
         if (effectiveSpeed > 0) {
           const etaSec = distanceRemaining / effectiveSpeed;
@@ -358,7 +411,7 @@ export class TrackingService {
    * brutes reçues ici, pas sur des coordonnées filtrées.
    */
   async savePosition(
-    driverId: string,
+    driverId: string | null,
     dto: UpdatePositionDto,
     companyId?: string,
     source: PositionSource = 'phone',
@@ -443,6 +496,7 @@ export class TrackingService {
       ts,
       dto.vehicleId,
       dto.accuracy,
+      source,
     );
     if (suspect) this.metrics.teleported++;
 
@@ -485,8 +539,9 @@ export class TrackingService {
     // (suspect=true — téléportation / bruit GPS) ne doit pas non plus alimenter le
     // chronomètre de proximité. Sinon un saut GPS fantôme pourrait déclencher ou
     // faire progresser l'alerte "vous êtes arrivé" alors que la position n'est pas
-    // crédible.
-    if (companyId && !suspect) {
+    // crédible. La proximité est UN calcul par-chauffeur : sans driverId (position
+    // d'un véhicule sans chauffeur assigné à cet instant), on l'exclut simplement.
+    if (companyId && !suspect && driverId) {
       this.deliveryProximityService
         .checkProximity(driverId, dto.vehicleId, companyId, dto.latitude, dto.longitude, ts)
         .catch((err) => this.logger.error(`Proximity check failed: ${err}`));
@@ -520,7 +575,9 @@ export class TrackingService {
       source: 'phone';
     }> = [];
 
-    const deliveryIds = [...new Set(positions.map((p) => p.deliveryId).filter((x): x is string => !!x))];
+    const deliveryIds = [
+      ...new Set(positions.map((p) => p.deliveryId).filter((x): x is string => !!x)),
+    ];
     const verifiedDeliveries = new Set<string>();
     if (deliveryIds.length > 0) {
       const validDeliveries = await this.prisma.delivery.findMany({
@@ -530,7 +587,9 @@ export class TrackingService {
       validDeliveries.forEach((d) => verifiedDeliveries.add(d.id));
     }
 
-    const vehicleIds = [...new Set(positions.map((p) => p.vehicleId).filter((x): x is string => !!x))];
+    const vehicleIds = [
+      ...new Set(positions.map((p) => p.vehicleId).filter((x): x is string => !!x)),
+    ];
     // Distinction des deux cas demandée par le diagnostic :
     //  - Le chargement des DERNIÈRES positions existantes (map lastPositions ci-dessous)
     //    sert UNIQUEMENT de référence pour le dédoublonnage/téléportation. Une position
@@ -546,7 +605,12 @@ export class TrackingService {
       // (TrackingGateway.handleBatchPosition). Même isolation stricte que savePosition :
       // seuls les véhicules 'phone' acceptent des positions batch ; les véhicules
       // 'physical_tracker' sont gérés exclusivement par le pont Traccar.
-      const vehicleWhere: any = { id: { in: vehicleIds }, deletedAt: null, isActive: true, positionSource: 'phone' };
+      const vehicleWhere: any = {
+        id: { in: vehicleIds },
+        deletedAt: null,
+        isActive: true,
+        positionSource: 'phone',
+      };
       if (companyId) vehicleWhere.companyId = companyId;
       const validVehicles = await this.prisma.vehicle.findMany({
         where: vehicleWhere,
@@ -555,7 +619,10 @@ export class TrackingService {
       validVehicles.forEach((v) => validVehicleIds.add(v.id));
     }
 
-    const lastPositions = new Map<string, { latitude: number; longitude: number; timestamp: Date; speed: number | null }>();
+    const lastPositions = new Map<
+      string,
+      { latitude: number; longitude: number; timestamp: Date; speed: number | null }
+    >();
     if (vehicleIds.length > 0) {
       const rows = await this.prisma.gpsPosition.findMany({
         where: { vehicleId: { in: vehicleIds } },
@@ -571,19 +638,26 @@ export class TrackingService {
     for (const pos of positions) {
       try {
         if (pos.deliveryId && !verifiedDeliveries.has(pos.deliveryId)) {
-          this.logger.warn(`Batch position rejected (wrong driver): delivery=${pos.deliveryId} driver=${driverId}`);
+          this.logger.warn(
+            `Batch position rejected (wrong driver): delivery=${pos.deliveryId} driver=${driverId}`,
+          );
           continue;
         }
       } catch {
-        this.logger.warn(`Batch position rejected (wrong driver): delivery=${pos.deliveryId} driver=${driverId}`);
+        this.logger.warn(
+          `Batch position rejected (wrong driver): delivery=${pos.deliveryId} driver=${driverId}`,
+        );
         continue;
       }
 
       if (!pos.vehicleId || pos.vehicleId.length < 16) continue;
-      if (pos.deliveryId !== undefined && pos.deliveryId !== null && pos.deliveryId.length < 16) continue;
+      if (pos.deliveryId !== undefined && pos.deliveryId !== null && pos.deliveryId.length < 16)
+        continue;
 
       if (!validVehicleIds.has(pos.vehicleId)) {
-        this.logger.warn(`Batch position rejected: vehicle ${pos.vehicleId} not found, inactive or soft-deleted (driver=${driverId})`);
+        this.logger.warn(
+          `Batch position rejected: vehicle ${pos.vehicleId} not found, inactive or soft-deleted (driver=${driverId})`,
+        );
         continue;
       }
 
@@ -594,13 +668,20 @@ export class TrackingService {
 
       if (timeDiffSec <= DEDUP_CLOCK_SKEW_S) {
         this.metrics.deduped++;
-        this.logger.debug(`Batch duplicate rejected (timestamp): vehicle=${pos.vehicleId} ts=${pos.timestamp}`);
+        this.logger.debug(
+          `Batch duplicate rejected (timestamp): vehicle=${pos.vehicleId} ts=${pos.timestamp}`,
+        );
         continue;
       }
 
       let suspect = false;
       if (last && timeDiffSec > 0) {
-        const distance = haversineDistance(last.latitude, last.longitude, pos.latitude, pos.longitude);
+        const distance = haversineDistance(
+          last.latitude,
+          last.longitude,
+          pos.latitude,
+          pos.longitude,
+        );
         const speedMs = distance / timeDiffSec;
         const accuracyScale = pos.accuracy ? Math.max(1, pos.accuracy / 10) : 1;
         if (speedMs > TELEPORT_SPEED_THRESHOLD_MS * accuracyScale) {
@@ -609,7 +690,12 @@ export class TrackingService {
         }
       }
 
-      lastPositions.set(pos.vehicleId, { latitude: pos.latitude, longitude: pos.longitude, timestamp: ts, speed: pos.speed ?? null });
+      lastPositions.set(pos.vehicleId, {
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        timestamp: ts,
+        speed: pos.speed ?? null,
+      });
 
       toInsert.push({
         latitude: pos.latitude,
@@ -674,7 +760,14 @@ export class TrackingService {
     if (companyId && inserted.length > 0) {
       const last = inserted[inserted.length - 1];
       this.deliveryProximityService
-        .checkProximity(driverId, last.vehicleId, companyId, last.latitude, last.longitude, last.timestamp)
+        .checkProximity(
+          driverId,
+          last.vehicleId,
+          companyId,
+          last.latitude,
+          last.longitude,
+          last.timestamp,
+        )
         .catch((err) => this.logger.error(`Proximity check failed: ${err}`));
     }
 
@@ -811,7 +904,14 @@ export class TrackingService {
         traccarDeviceId,
         positionSource: 'physical_tracker',
       },
-      select: { id: true, brand: true, model: true, licensePlate: true, traccarDeviceId: true, positionSource: true },
+      select: {
+        id: true,
+        brand: true,
+        model: true,
+        licensePlate: true,
+        traccarDeviceId: true,
+        positionSource: true,
+      },
     });
   }
 
@@ -902,20 +1002,22 @@ export class TrackingService {
   }
 
   async getLivePositions(companyId: string) {
-    const positions = await this.prisma.$queryRaw<Array<{
-      driver_id: string;
-      driver_first_name: string;
-      driver_last_name: string;
-      latitude: number;
-      longitude: number;
-      speed: number | null;
-      heading: number | null;
-      accuracy: number | null;
-      timestamp: Date;
-      vehicle_id: string;
-      delivery_id: string | null;
-      minutes_ago: number;
-    }>>`
+    const positions = await this.prisma.$queryRaw<
+      Array<{
+        driver_id: string;
+        driver_first_name: string;
+        driver_last_name: string;
+        latitude: number;
+        longitude: number;
+        speed: number | null;
+        heading: number | null;
+        accuracy: number | null;
+        timestamp: Date;
+        vehicle_id: string;
+        delivery_id: string | null;
+        minutes_ago: number;
+      }>
+    >`
       SELECT DISTINCT ON (gp.vehicle_id)
         gp.driver_id,
         d.first_name AS driver_first_name,
@@ -980,7 +1082,9 @@ export class TrackingService {
    * {@link archivePositionsBefore} instead.
    */
   async archiveAllCompaniesPositionsBefore(date: Date): Promise<number> {
-    this.logger.warn('archiveAllCompaniesPositionsBefore called — this archives positions for ALL companies');
+    this.logger.warn(
+      'archiveAllCompaniesPositionsBefore called — this archives positions for ALL companies',
+    );
     const cutoff = date.toISOString();
     const result = await this.prisma.$executeRawUnsafe(
       `
@@ -1004,7 +1108,9 @@ export class TrackingService {
     // de produire les rapports quotidiens avant que les données GPS soient purgées.
     const minAge = new Date(Date.now() - 48 * 60 * 60 * 1000);
     if (date > minAge) {
-      this.logger.warn(`archivePositionsBefore refused: date ${date.toISOString()} is less than 48h old`);
+      this.logger.warn(
+        `archivePositionsBefore refused: date ${date.toISOString()} is less than 48h old`,
+      );
       return 0;
     }
     const cutoff = date.toISOString();
@@ -1071,5 +1177,4 @@ export class TrackingService {
     const buf = await doc.save();
     return Buffer.from(buf);
   }
-
 }

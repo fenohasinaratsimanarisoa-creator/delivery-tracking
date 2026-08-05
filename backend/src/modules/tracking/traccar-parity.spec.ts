@@ -59,7 +59,8 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
   function addVehicleMock(vehicleId: string) {
     mockPrisma.vehicle.findUnique.mockResolvedValue({ companyId: COMPANY_ID });
     mockPrisma.vehicle.findFirst.mockResolvedValue({
-      id: vehicleId, companyId: COMPANY_ID,
+      id: vehicleId,
+      companyId: COMPANY_ID,
       driver: { id: DRIVER_ID, userId: USER_ID },
     });
   }
@@ -84,24 +85,31 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
 
     mockDataUpdateBus = { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() } as any;
 
-    mockGeofence = { checkGeofences: jest.fn().mockResolvedValue([]), findForDelivery: jest.fn() } as any;
+    mockGeofence = {
+      checkGeofences: jest.fn().mockResolvedValue([]),
+      findForDelivery: jest.fn(),
+    } as any;
 
-    const mockConfig = { get: jest.fn((key: string) => {
-      if (key === 'JWT_ACCESS_SECRET') return 'test-secret';
-      if (key === 'TRACCAR_URL') return 'http://traccar:8082';
-      if (key === 'TRACCAR_USER') return 'admin';
-      if (key === 'TRACCAR_PASSWORD') return 'admin';
-      return null;
-    })};
+    const mockConfig = {
+      get: jest.fn((key: string) => {
+        if (key === 'JWT_ACCESS_SECRET') return 'test-secret';
+        if (key === 'TRACCAR_URL') return 'http://traccar:8082';
+        if (key === 'TRACCAR_USER') return 'admin';
+        if (key === 'TRACCAR_PASSWORD') return 'admin';
+        return null;
+      }),
+    };
 
     const mockPrismaService = {
       gpsPosition: {
         findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
-        create: jest.fn().mockImplementation(({ data }: any) =>
-          Promise.resolve({ id: 'pos-1', suspect: data.suspect === true })
-        ),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }: any) =>
+            Promise.resolve({ id: 'pos-1', suspect: data.suspect === true }),
+          ),
       },
       vehicle: {
         findFirst: jest.fn().mockImplementation(() => Promise.resolve(null)),
@@ -116,6 +124,9 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       },
       driver: {
         findUnique: jest.fn().mockResolvedValue(null),
+      },
+      vehicleAssignmentHistory: {
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       companySettings: {
         findUnique: jest.fn().mockResolvedValue(null),
@@ -173,7 +184,11 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
     });
 
     it('détecte la téléportation pour une position traceur physique', async () => {
-      const result = await runTeleportTest(VEHICLE_ID_TRACKER, DELIVERY_LAT + 1.5, DELIVERY_LNG + 1.5);
+      const result = await runTeleportTest(
+        VEHICLE_ID_TRACKER,
+        DELIVERY_LAT + 1.5,
+        DELIVERY_LNG + 1.5,
+      );
       expect(result).not.toBeNull();
       expect(result!.suspect).toBe(true);
     });
@@ -186,7 +201,10 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
       mockPrisma.delivery.findFirst.mockResolvedValue({ id: DELIVERY_ID, title: 'Test' });
       mockPrisma.delivery.findUnique.mockResolvedValue({
-        id: DELIVERY_ID, scheduledDate: new Date(), deliveryLat: DELIVERY_LAT, deliveryLng: DELIVERY_LNG,
+        id: DELIVERY_ID,
+        scheduledDate: new Date(),
+        deliveryLat: DELIVERY_LAT,
+        deliveryLng: DELIVERY_LNG,
       });
       mockPrisma.companySettings.findUnique.mockResolvedValue({
         speedAlertThreshold: 40,
@@ -202,14 +220,14 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
     it('déclenche alerte vitesse pour position téléphone quand seuil dépassé', async () => {
       const result = await runSpeedAlertTest(VEHICLE_ID, 13.89);
       expect(result).not.toBeNull();
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
       expect(mockNotifications.create.mock.calls.length).toBeGreaterThan(0);
     });
 
     it('déclenche alerte vitesse pour position traceur physique pareil', async () => {
       const result = await runSpeedAlertTest(VEHICLE_ID_TRACKER, 15.0);
       expect(result).not.toBeNull();
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
       expect(mockNotifications.create.mock.calls.length).toBeGreaterThan(0);
     });
 
@@ -222,7 +240,10 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
       mockPrisma.delivery.findFirst.mockResolvedValue({ id: DELIVERY_ID, title: 'Test' });
       mockPrisma.delivery.findUnique.mockResolvedValue({
-        id: DELIVERY_ID, scheduledDate: new Date(), deliveryLat: DELIVERY_LAT, deliveryLng: DELIVERY_LNG,
+        id: DELIVERY_ID,
+        scheduledDate: new Date(),
+        deliveryLat: DELIVERY_LAT,
+        deliveryLng: DELIVERY_LNG,
       });
       mockPrisma.companySettings.findUnique.mockResolvedValue({
         speedAlertThreshold: 140,
@@ -236,7 +257,7 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       );
 
       expect(result).not.toBeNull();
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
       expect(mockNotifications.create.mock.calls.length).toBeGreaterThan(0);
     });
   });
@@ -272,7 +293,7 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
   });
 
   // ─── 4.4 File d'attente en cas de coupure ────────────────────────────
-  describe('4.4 File d\'attente coupure réseau', () => {
+  describe("4.4 File d'attente coupure réseau", () => {
     it('queue Redis pour positions Traccar quand savePosition échoue', async () => {
       const mockRedis = {
         lpush: jest.fn().mockResolvedValue(1),
@@ -281,12 +302,14 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
         lrange: jest.fn().mockResolvedValue([]),
       };
 
-      const bridgeConfig = { get: jest.fn((key: string) => {
-        if (key === 'TRACCAR_URL') return 'http://traccar:8082';
-        if (key === 'TRACCAR_USER') return 'admin';
-        if (key === 'TRACCAR_PASSWORD') return 'admin';
-        return null;
-      })};
+      const bridgeConfig = {
+        get: jest.fn((key: string) => {
+          if (key === 'TRACCAR_URL') return 'http://traccar:8082';
+          if (key === 'TRACCAR_USER') return 'admin';
+          if (key === 'TRACCAR_PASSWORD') return 'admin';
+          return null;
+        }),
+      };
 
       const bridge = new TraccarBridgeService(
         bridgeConfig as any,
@@ -309,7 +332,8 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       mockRedis.llen = jest.fn().mockResolvedValue(0);
 
       mockPrisma.vehicle.findFirst.mockResolvedValue({
-        id: VEHICLE_ID_TRACKER, companyId: COMPANY_ID,
+        id: VEHICLE_ID_TRACKER,
+        companyId: COMPANY_ID,
         driver: { id: DRIVER_ID, userId: USER_ID },
       });
 
@@ -324,15 +348,14 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
       mockPrisma.delivery.findFirst.mockResolvedValue({ id: DELIVERY_ID, title: 'Test' });
       mockPrisma.delivery.findUnique.mockResolvedValue({
-        id: DELIVERY_ID, scheduledDate: new Date(), deliveryLat: DELIVERY_LAT, deliveryLng: DELIVERY_LNG,
+        id: DELIVERY_ID,
+        scheduledDate: new Date(),
+        deliveryLat: DELIVERY_LAT,
+        deliveryLng: DELIVERY_LNG,
       });
       mockPrisma.companySettings.findUnique.mockResolvedValue({ offlineTimeoutMinutes: 15 });
 
-      const result = await trackingService.savePosition(
-        DRIVER_ID,
-        basePosition(),
-        COMPANY_ID,
-      );
+      const result = await trackingService.savePosition(DRIVER_ID, basePosition(), COMPANY_ID);
 
       expect(mockPrisma.gpsPosition.create).toHaveBeenCalled();
       expect(result).toBeDefined();
