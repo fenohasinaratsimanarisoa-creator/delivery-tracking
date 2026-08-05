@@ -566,7 +566,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             latitude: number; longitude: number; speed: number; heading: number;
             altitude: number; accuracy: number; suspect: boolean; location: string;
             timestamp: Date; companyId: string; deliveryId: string | null | undefined;
-            vehicleId: string; driverId: string;
+            vehicleId: string; driverId: string; source: 'physical_tracker';
           }> = [];
 
           let lastBackfillPos: { latitude: number; longitude: number; timestamp: Date } | null = null;
@@ -622,6 +622,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               deliveryId: null,
               vehicleId: vehicle.id,
               driverId: vehicle.driver.id,
+              source: 'physical_tracker',
             });
           }
 

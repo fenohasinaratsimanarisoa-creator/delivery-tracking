@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
+import { VehicleAssignmentHistoryService } from '../../common/vehicle-assignment/vehicle-assignment-history.service';
 import { DriversService } from './drivers.service';
 
 const mockPrisma = {
@@ -12,9 +13,23 @@ const mockPrisma = {
     create: jest.fn(),
     update: jest.fn(),
   },
+  vehicle: {
+    findFirst: jest.fn(),
+  },
   delivery: {
     findFirst: jest.fn(),
   },
+  vehicleAssignmentHistory: {
+    findFirst: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+    create: jest.fn(),
+  },
+  $transaction: jest.fn().mockImplementation((arg: any) => {
+    if (typeof arg === 'function') return arg(mockPrisma);
+    if (Array.isArray(arg)) return Promise.all(arg);
+    return Promise.resolve(arg);
+  }),
 };
 
 describe('DriversService', () => {
@@ -22,7 +37,11 @@ describe('DriversService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new DriversService(mockPrisma as unknown as PrismaService, { emitUpdate: jest.fn() } as any);
+    service = new DriversService(
+      mockPrisma as unknown as PrismaService,
+      { emitUpdate: jest.fn() } as any,
+      new VehicleAssignmentHistoryService(),
+    );
   });
 
   describe('create', () => {

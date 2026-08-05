@@ -226,6 +226,7 @@ describe('TrackingService', () => {
           deliveryId: DID,
           vehicleId: VID,
           driverId: '00000000-0000-4000-0000-000000000002',
+          source: 'phone',
         },
       });
     });

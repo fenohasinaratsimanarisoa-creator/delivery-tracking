@@ -3,6 +3,7 @@ import { ConflictException, NotFoundException, BadRequestException } from '@nest
 import * as bcrypt from 'bcrypt';
 import { UsersService } from './users.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { VehicleAssignmentHistoryService } from '../../common/vehicle-assignment/vehicle-assignment-history.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import {
@@ -46,6 +47,12 @@ const mockPrisma = {
   vehicle: {
     findFirst: jest.fn(),
   },
+  vehicleAssignmentHistory: {
+    findFirst: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+    create: jest.fn(),
+  },
   userSession: {
     deleteMany: jest.fn(),
   },
@@ -66,7 +73,11 @@ describe('UsersService', () => {
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [UsersService, { provide: PrismaService, useValue: mockPrisma }],
+      providers: [
+        UsersService,
+        { provide: PrismaService, useValue: mockPrisma },
+        VehicleAssignmentHistoryService,
+      ],
     }).compile();
 
     service = module.get<UsersService>(UsersService);

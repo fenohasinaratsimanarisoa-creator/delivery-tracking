@@ -38,6 +38,15 @@ enum GpsDataQuality {
   insufficient
 }
 
+// Source d'émission d'une position GPS. Renseigné obligatoirement à l'insertion
+// (NOT NULL sans défaut) pour pouvoir déterminer rétroactivement, sur n'importe
+// quelle position historique, si elle provient de l'app mobile chauffeur ('phone')
+// ou du traceur physique Traccar ('physical_tracker').
+enum GpsPositionSource {
+  phone
+  physical_tracker
+}
+
 enum NotificationType {
   delivery_status
   fuel_anomaly
@@ -125,6 +134,7 @@ model Company {
   fuelPriceHistory   FuelPriceHistory[]
   gpsPositions       GpsPosition[]
   dailyFuelReports   DailyFuelReport[]
+  vehicleAssignments VehicleAssignmentHistory[]
 
   @@map("companies")
 }
@@ -188,14 +198,14 @@ model GeofenceEvent {
 }
 
 model CompanyFuelSettings {
-  id               String   @id @default(uuid()) @db.Uuid
-  companyId        String   @unique @map("company_id") @db.Uuid
-  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  unit             FuelUnit @default(liters)
-  anomalyThreshold Float?   @default(15) @map("anomaly_threshold")
-  defaultFuelPrices Json?   @map("default_fuel_prices")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(uuid()) @db.Uuid
+  companyId         String   @unique @map("company_id") @db.Uuid
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  unit              FuelUnit @default(liters)
+  anomalyThreshold  Float?   @default(15) @map("anomaly_threshold")
+  defaultFuelPrices Json?    @map("default_fuel_prices")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   @@map("company_fuel_settings")
 }
@@ -336,6 +346,7 @@ model Vehicle {
   gpsPositions       GpsPosition[]
   geofenceEvents     GeofenceEvent[]
   dailyFuelReports   DailyFuelReport[]
+  vehicleAssignments VehicleAssignmentHistory[]
 
   @@unique([companyId, licensePlate])
   @@index([companyId])
@@ -363,8 +374,9 @@ model Driver {
   vehicleId String?  @unique @map("vehicle_id") @db.Uuid
   vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
 
-  deliveries   Delivery[]
-  gpsPositions GpsPosition[]
+  deliveries         Delivery[]
+  gpsPositions       GpsPosition[]
+  vehicleAssignments VehicleAssignmentHistory[]
 
   @@unique([companyId, licenseNumber])
   @@index([companyId])
@@ -460,6 +472,11 @@ model GpsPosition {
   driverId String @map("driver_id") @db.Uuid
   driver   Driver @relation(fields: [driverId], references: [id])
 
+  // Source d'émission de la position ('phone' | 'physical_tracker'). NOT NULL sans
+  // défaut : le générateur Prisma force donc TypeScript à exiger sa présence dans
+  // tout gpsPosition.create()/createMany() (aucun défaut silencieux possible).
+  source GpsPositionSource
+
   @@index([companyId, timestamp])
   @@index([deliveryId])
   @@index([vehicleId])
@@ -492,17 +509,47 @@ model GpsPositionArchive {
   @@map("gps_positions_archive")
 }
 
+/// Historique d'affectation conducteur ↔ véhicule (append-only).
+///
+/// INVARIANT (documenté, voir la migration SQL) : à un instant T donné, il existe
+/// au plus une ligne OUVERTE (unassignedAt IS NULL) par vehicleId ET au plus une
+/// ligne ouverte par driverId. Cette contrainte est appliquée :
+///  1. en base, par deux index uniques partiels (SQL brut dans la migration —
+///     Prisma ne sait pas représenter un index partiel dans le schéma) ;
+///  2. en code applicatif : toute réaffectation se fait dans UNE transaction
+///     qui ferme (unassignedAt = now()) la ligne ouverte concernée avant d'ouvrir
+///     la suivante (jamais l'une sans l'autre).
+model VehicleAssignmentHistory {
+  id           String    @id @default(uuid()) @db.Uuid
+  companyId    String    @map("company_id") @db.Uuid
+  vehicleId    String    @map("vehicle_id") @db.Uuid
+  driverId     String    @map("driver_id") @db.Uuid
+  assignedAt   DateTime  @map("assigned_at")
+  // null = affectation en cours. Renseigné par une transaction qui ferme
+  // l'affectation avant d'en ouvrir une nouvelle.
+  unassignedAt DateTime? @map("unassigned_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+  driver  Driver  @relation(fields: [driverId], references: [id])
+
+  @@index([vehicleId, assignedAt])
+  @@index([driverId, assignedAt])
+  @@index([companyId])
+  @@map("vehicle_assignment_history")
+}
+
 /// Données comptables — jamais supprimées (soft-delete), conservées pour fiscalité.
 /// Seule l'entreprise peut être soft-deleted (deletedAt), les lignes FuelLog
 /// sont anonymisées via le job company-purge (BullMQ) après le délai de grâce.
 model FuelLog {
-  id                    String   @id @default(uuid()) @db.Uuid
-  liters                Float
-  kilometers            Float
-  cost                  Float
-  fuelUnit              FuelUnit @default(liters) @map("fuel_unit")
-  fillDate              DateTime @map("fill_date")
-  notes                 String?
+  id                       String   @id @default(uuid()) @db.Uuid
+  liters                   Float
+  kilometers               Float
+  cost                     Float
+  fuelUnit                 FuelUnit @default(liters) @map("fuel_unit")
+  fillDate                 DateTime @map("fill_date")
+  notes                    String?
   // Deux paires de champs indépendantes : chaque détecteur écrit sa propre paire
   // sans jamais écraser l'autre. anomalyFlag/anomalyReason NE sont PLUS stockés :
   // ils sont dérivés en lecture (consumption OR gps) et exposés en lecture seule
@@ -512,7 +559,7 @@ model FuelLog {
   gpsAnomalyFlag           Boolean  @default(false) @map("gps_anomaly_flag")
   gpsAnomalyReason         String?  @map("gps_anomaly_reason")
   calculatedConsumption    Float?   @map("calculated_consumption") // L/100km auto-calculated
-  createdAt             DateTime @default(now()) @map("created_at")
+  createdAt                DateTime @default(now()) @map("created_at")
 
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])

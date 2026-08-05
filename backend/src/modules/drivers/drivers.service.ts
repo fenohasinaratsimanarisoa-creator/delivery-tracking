@@ -6,12 +6,17 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
+import { VehicleAssignmentHistoryService } from '../../common/vehicle-assignment/vehicle-assignment-history.service';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
 
 @Injectable()
 export class DriversService {
-  constructor(private prisma: PrismaService, private dataUpdateBus: DataUpdateBus) {}
+  constructor(
+    private prisma: PrismaService,
+    private dataUpdateBus: DataUpdateBus,
+    private assignmentHistory: VehicleAssignmentHistoryService,
+  ) {}
 
   async create(companyId: string, dto: CreateDriverDto) {
     const existing = await this.prisma.driver.findFirst({
@@ -35,9 +40,19 @@ export class DriversService {
       }
     }
 
-    const driver = await this.prisma.driver.create({
-      data: { ...dto, companyId },
-      include: { vehicle: { select: { id: true, brand: true, model: true, year: true, licensePlate: true, fuelType: true, positionSource: true } } },
+    const driver = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.driver.create({
+        data: { ...dto, companyId },
+        include: { vehicle: { select: { id: true, brand: true, model: true, year: true, licensePlate: true, fuelType: true, positionSource: true } } },
+      });
+      if (dto.vehicleId) {
+        await this.assignmentHistory.assign(tx, {
+          companyId,
+          driverId: created.id,
+          vehicleId: dto.vehicleId,
+        });
+      }
+      return created;
     });
     this.dataUpdateBus.emitUpdate({ companyId, entity: 'driver', action: 'created', payload: { id: driver.id } });
     return driver;
@@ -108,10 +123,24 @@ export class DriversService {
       }
     }
 
-    const driver = await this.prisma.driver.update({
-      where: { id },
-      data: dto,
-      include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
+    const driver = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.driver.update({
+        where: { id },
+        data: dto,
+        include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
+      });
+      if (dto.vehicleId !== undefined) {
+        if (dto.vehicleId === null) {
+          await this.assignmentHistory.unassign(tx, { driverId: id });
+        } else {
+          await this.assignmentHistory.assign(tx, {
+            companyId,
+            driverId: id,
+            vehicleId: dto.vehicleId,
+          });
+        }
+      }
+      return updated;
     });
     this.dataUpdateBus.emitUpdate({ companyId, entity: 'driver', action: 'updated', payload: { id: driver.id } });
     return driver;

@@ -465,6 +465,7 @@ export class TrackingService {
         deliveryId: dto.deliveryId,
         vehicleId: dto.vehicleId,
         driverId,
+        source,
       },
     });
 
@@ -516,6 +517,7 @@ export class TrackingService {
       deliveryId: string | null | undefined;
       vehicleId: string;
       driverId: string;
+      source: 'phone';
     }> = [];
 
     const deliveryIds = [...new Set(positions.map((p) => p.deliveryId).filter((x): x is string => !!x))];
@@ -623,6 +625,7 @@ export class TrackingService {
         deliveryId: pos.deliveryId,
         vehicleId: pos.vehicleId,
         driverId,
+        source: 'phone',
       });
     }
 

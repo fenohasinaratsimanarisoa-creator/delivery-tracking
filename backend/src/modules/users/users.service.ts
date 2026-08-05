@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { VehicleAssignmentHistoryService } from '../../common/vehicle-assignment/vehicle-assignment-history.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import {
@@ -18,7 +19,10 @@ import {
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private assignmentHistory: VehicleAssignmentHistoryService,
+  ) {}
 
   async create(companyId: string, dto: CreateUserDto) {
     dto.email = dto.email.toLowerCase().trim();
@@ -86,6 +90,13 @@ export class UsersService {
             where: { id: existingDriver.id },
             data: updateData,
           });
+          if (dto.vehicleId) {
+            await this.assignmentHistory.assign(tx, {
+              companyId,
+              driverId: existingDriver.id,
+              vehicleId: dto.vehicleId,
+            });
+          }
         } else {
           const driverData: any = {
             firstName: dto.firstName,
@@ -97,7 +108,14 @@ export class UsersService {
             userId: user.id,
           };
           if (dto.vehicleId) driverData.vehicleId = dto.vehicleId;
-          await tx.driver.create({ data: driverData });
+          const createdDriver = await tx.driver.create({ data: driverData });
+          if (dto.vehicleId) {
+            await this.assignmentHistory.assign(tx, {
+              companyId,
+              driverId: createdDriver.id,
+              vehicleId: dto.vehicleId,
+            });
+          }
         }
       }
 
@@ -337,8 +355,19 @@ export class UsersService {
             where: { id: existingDriver.id },
             data: driverData,
           });
+          if (dto.vehicleId !== undefined) {
+            if (dto.vehicleId === null) {
+              await this.assignmentHistory.unassign(tx, { driverId: existingDriver.id });
+            } else {
+              await this.assignmentHistory.assign(tx, {
+                companyId,
+                driverId: existingDriver.id,
+                vehicleId: dto.vehicleId,
+              });
+            }
+          }
         } else {
-          await tx.driver.create({
+          const createdDriver = await tx.driver.create({
             data: {
               firstName: updatedUser.firstName,
               lastName: updatedUser.lastName,
@@ -350,6 +379,13 @@ export class UsersService {
               ...(dto.vehicleId ? { vehicleId: dto.vehicleId } : {}),
             },
           });
+          if (dto.vehicleId) {
+            await this.assignmentHistory.assign(tx, {
+              companyId,
+              driverId: createdDriver.id,
+              vehicleId: dto.vehicleId,
+            });
+          }
         }
       }
 
