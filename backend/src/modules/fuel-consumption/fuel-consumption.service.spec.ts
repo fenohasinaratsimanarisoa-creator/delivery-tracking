@@ -12,6 +12,8 @@ const mockQueue = {
 const mockPrisma = {
   vehicle: {
     findFirst: jest.fn(),
+    findUnique: jest.fn(),
+    findMany: jest.fn(),
   },
   fuelLog: {
     create: jest.fn(),
@@ -42,6 +44,7 @@ const mockPrisma = {
   driver: {
     findMany: jest.fn(),
     findFirst: jest.fn(),
+    findUnique: jest.fn(),
   },
   gpsPosition: {
     findMany: jest.fn(),
@@ -91,9 +94,7 @@ describe('FuelConsumptionService', () => {
     it('rejects a vehicle that belongs to another company', async () => {
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
 
-      await expect(
-        service.create('company-a', dto),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.create('company-a', dto)).rejects.toThrow(NotFoundException);
 
       expect(mockPrisma.vehicle.findFirst).toHaveBeenCalledWith({
         where: { id: 'vehicle-other-company', companyId: 'company-a', deletedAt: null },
@@ -103,18 +104,23 @@ describe('FuelConsumptionService', () => {
     it('accepts a vehicle that belongs to the company', async () => {
       const created = { id: 'fuel-ok', vehicleId: 'vehicle-1' };
       const enriched = { ...created, vehicle: { licensePlate: 'TRK-001' } };
-      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1', companyId: 'company-1' });
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        id: 'vehicle-1',
+        companyId: 'company-1',
+      });
       mockPrisma.fuelLog.create.mockResolvedValueOnce(created);
       mockPrisma.fuelLog.findUnique.mockResolvedValueOnce(enriched);
 
-      await expect(service.create('company-1', {
-        liters: 60,
-        kilometers: 500,
-        cost: 120,
-        fillDate: '2026-07-21T00:00:00.000Z',
-        vehicleId: 'vehicle-1',
-        notes: 'Full tank',
-      })).resolves.toEqual({
+      await expect(
+        service.create('company-1', {
+          liters: 60,
+          kilometers: 500,
+          cost: 120,
+          fillDate: '2026-07-21T00:00:00.000Z',
+          vehicleId: 'vehicle-1',
+          notes: 'Full tank',
+        }),
+      ).resolves.toEqual({
         ...enriched,
         anomalyFlag: false,
         anomalyReason: null,
@@ -130,11 +136,12 @@ describe('FuelConsumptionService', () => {
       const oldPrice = { pricePerLiter: 4500 };
       const newPrice = { pricePerLiter: 5200 };
 
-      mockPrisma.fuelPriceHistory.findFirst
-        .mockResolvedValueOnce(oldPrice);
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(oldPrice);
 
       const result = await (service as any).getFuelPriceForDate(
-        'company-1', 'gasoil', new Date('2026-05-15'),
+        'company-1',
+        'gasoil',
+        new Date('2026-05-15'),
       );
 
       expect(result).toBe(4500);
@@ -143,10 +150,7 @@ describe('FuelConsumptionService', () => {
           companyId: 'company-1',
           fuelType: 'gasoil',
           effectiveFrom: { lte: new Date('2026-05-15') },
-          OR: [
-            { effectiveUntil: null },
-            { effectiveUntil: { gte: new Date('2026-05-15') } },
-          ],
+          OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: new Date('2026-05-15') } }],
         },
         orderBy: { effectiveFrom: 'desc' },
       });
@@ -157,7 +161,9 @@ describe('FuelConsumptionService', () => {
       mockPrisma.companyFuelSettings.upsert.mockResolvedValueOnce({ defaultFuelPrices: null });
 
       const result = await (service as any).getFuelPriceForDate(
-        'company-1', 'essence', new Date('2025-01-01'),
+        'company-1',
+        'essence',
+        new Date('2025-01-01'),
       );
 
       expect(result).toBe(5000);
@@ -173,7 +179,9 @@ describe('FuelConsumptionService', () => {
       mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(newerPrice);
 
       const result = await (service as any).getFuelPriceForDate(
-        'company-1', 'diesel', new Date('2026-07-20'),
+        'company-1',
+        'diesel',
+        new Date('2026-07-20'),
       );
 
       expect(result).toBe(5300);
@@ -238,7 +246,7 @@ describe('FuelConsumptionService', () => {
       // Scénario du bug : plein précédent à 14h30 le jour J, dailyFuelReport du jour J
       // stocké à minuit UTC (reportDate). AVANT correction, la période gte=07-15T14:30Z
       // excluait le reportDate du jour J (minuit, antérieur à 14h30) → gpsKm sous-estimé
-      // (seuls jours 16+17 comptés) → ratio > 3 → FAUSSE anomalie.
+      // (seuls jours 16+17 comptés) → ratio > seuil → FAUSSE anomalie.
       // APRÈS correction, les bornes sont tronquées au jour UTC : le jour J est inclus.
       const fuelLog = {
         id: 'fuel-log-midday',
@@ -254,6 +262,11 @@ describe('FuelConsumptionService', () => {
       mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({
         _sum: { distanceKm: 300 },
       });
+      // Seuil explicitement configuré à 3 pour isoler la logique des bornes de date
+      // (la normalisation du jour entier) de la logique de seuil, testée séparément.
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({
+        crossCheckThreshold: 3,
+      });
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
@@ -268,9 +281,69 @@ describe('FuelConsumptionService', () => {
         },
         _sum: { distanceKm: true },
       });
-      // ratio = 400/300 = 1.33 < 3 → aucun flag d'anomalie, aucune notification
+      // ratio = 400/300 = 1.33 < 3 (seuil configuré ici) → aucun flag d'anomalie
       expect(mockPrisma.fuelLog.update).not.toHaveBeenCalled();
       expect(mockNotifications.create).not.toHaveBeenCalled();
+    });
+
+    it('uses the CONFIGURABLE crossCheckThreshold (CompanyFuelSettings, défaut 1.3) au lieu du seuil en dur de 3', async () => {
+      const fuelLog = {
+        id: 'fuel-log-threshold',
+        vehicleId: 'vehicle-a',
+        kilometers: 200,
+        fillDate: new Date('2026-07-25'),
+        vehicle: { licensePlate: 'TRK-A' },
+      };
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({
+        fillDate: new Date('2026-07-15'),
+      });
+      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({
+        _sum: { distanceKm: 100 },
+      });
+      // ratio = 200/100 = 2 : INVISIBLE avec l'ancien seuil de 3 (300%), visible à 1.3.
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({
+        crossCheckThreshold: 1.3,
+      });
+
+      await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
+
+      // 2 > 1.3 → anomalie détectée (avant la migration, 2 < 3 → aucun flag : jusqu'à
+      // 2.9x de survalorisation passaient silencieusement).
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith({
+        where: { id: 'fuel-log-threshold' },
+        data: expect.objectContaining({
+          gpsAnomalyFlag: true,
+          gpsAnomalyReason: expect.stringContaining('Distance saisie (200km)'),
+        }),
+      });
+      expect(mockNotifications.create).toHaveBeenCalled();
+    });
+
+    it('falls back to the DEFAULT threshold 1.3 when CompanyFuelSettings has no crossCheckThreshold', async () => {
+      const fuelLog = {
+        id: 'fuel-log-default-threshold',
+        vehicleId: 'vehicle-a',
+        kilometers: 200,
+        fillDate: new Date('2026-07-25'),
+        vehicle: { licensePlate: 'TRK-A' },
+      };
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({
+        fillDate: new Date('2026-07-15'),
+      });
+      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({
+        _sum: { distanceKm: 100 },
+      });
+      // Pas de ligne companyFuelSettings (ou champ null) → défaut 1.3.
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce(null);
+
+      await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
+
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'fuel-log-default-threshold' },
+          data: expect.objectContaining({ gpsAnomalyFlag: true }),
+        }),
+      );
     });
 
     it('writes ONLY the gps anomaly pair when the manual km is >3x the GPS distance', async () => {
@@ -323,7 +396,10 @@ describe('FuelConsumptionService', () => {
     it('creates a fuel log, enqueues analysis, and returns the enriched record', async () => {
       const created = { id: 'fuel-1', vehicleId: 'vehicle-1' };
       const enriched = { ...created, vehicle: { licensePlate: 'TRK-001' } };
-      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1', companyId: 'company-1' });
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        id: 'vehicle-1',
+        companyId: 'company-1',
+      });
       mockPrisma.fuelLog.create.mockResolvedValueOnce(created);
       mockPrisma.fuelLog.findUnique.mockResolvedValueOnce(enriched);
 
@@ -353,7 +429,10 @@ describe('FuelConsumptionService', () => {
 
     it('enqueues analysis with the correct payload and logs regardless of anomaly', async () => {
       const created = { id: 'fuel-2', vehicleId: 'vehicle-2' };
-      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-2', companyId: 'company-1' });
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        id: 'vehicle-2',
+        companyId: 'company-1',
+      });
       mockPrisma.fuelLog.create.mockResolvedValueOnce(created);
       mockPrisma.fuelLog.findUnique.mockResolvedValueOnce({
         ...created,
@@ -460,13 +539,18 @@ describe('FuelConsumptionService', () => {
 
     it('updates a fuel log that belongs to the company (notes only, no cross-check re-run)', async () => {
       const updated = { ...existing, notes: 'Corrected note' };
-      const enriched = { ...updated, vehicle: { id: 'vehicle-1', brand: 'X', model: 'Y', licensePlate: 'TRK-001' } };
+      const enriched = {
+        ...updated,
+        vehicle: { id: 'vehicle-1', brand: 'X', model: 'Y', licensePlate: 'TRK-001' },
+      };
 
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce(existing);
       mockPrisma.fuelLog.update.mockResolvedValueOnce(updated);
       mockPrisma.fuelLog.findUnique.mockResolvedValueOnce(enriched);
 
-      await expect(service.update('company-1', 'fuel-1', { notes: 'Corrected note' })).resolves.toEqual({
+      await expect(
+        service.update('company-1', 'fuel-1', { notes: 'Corrected note' }),
+      ).resolves.toEqual({
         ...enriched,
         anomalyFlag: false,
         anomalyReason: null,
@@ -522,7 +606,10 @@ describe('FuelConsumptionService', () => {
         gpsAnomalyFlag: false,
         gpsAnomalyReason: null,
       };
-      const enriched = { ...corrected, vehicle: { id: 'vehicle-1', brand: 'X', model: 'Y', licensePlate: 'TRK-001' } };
+      const enriched = {
+        ...corrected,
+        vehicle: { id: 'vehicle-1', brand: 'X', model: 'Y', licensePlate: 'TRK-001' },
+      };
 
       // findOne() puis look-up du plein précédent dans crossCheckFuelLogWithGps()
       mockPrisma.fuelLog.findFirst
@@ -559,7 +646,10 @@ describe('FuelConsumptionService', () => {
         gpsAnomalyFlag: false,
         gpsAnomalyReason: null,
       };
-      const enriched = { ...updated, vehicle: { id: 'vehicle-1', brand: 'X', model: 'Y', licensePlate: 'TRK-001' } };
+      const enriched = {
+        ...updated,
+        vehicle: { id: 'vehicle-1', brand: 'X', model: 'Y', licensePlate: 'TRK-001' },
+      };
 
       mockPrisma.fuelLog.findFirst
         .mockResolvedValueOnce(stale)
@@ -597,7 +687,9 @@ describe('FuelConsumptionService', () => {
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce(existing);
       mockPrisma.fuelLog.delete.mockResolvedValueOnce(existing);
 
-      await expect(service.remove('company-1', 'fuel-1')).resolves.toEqual({ message: 'Fuel log deleted' });
+      await expect(service.remove('company-1', 'fuel-1')).resolves.toEqual({
+        message: 'Fuel log deleted',
+      });
 
       expect(mockPrisma.fuelLog.delete).toHaveBeenCalledWith({ where: { id: 'fuel-1' } });
     });
@@ -605,7 +697,9 @@ describe('FuelConsumptionService', () => {
     it('throws NotFound when the fuel log belongs to another company', async () => {
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce(null);
 
-      await expect(service.remove('company-a', 'fuel-other-company')).rejects.toThrow(NotFoundException);
+      await expect(service.remove('company-a', 'fuel-other-company')).rejects.toThrow(
+        NotFoundException,
+      );
 
       expect(mockPrisma.fuelLog.delete).not.toHaveBeenCalled();
     });
@@ -620,20 +714,26 @@ describe('FuelConsumptionService', () => {
       id: 'driver-1',
       firstName: 'Jean',
       lastName: 'Rakoto',
-      vehicle: { id: 'vehicle-1', licensePlate: 'TRK-001', fuelType: 'Diesel', theoreticalConsumption: 10 },
+    };
+    const VEHICLE_V1 = {
+      id: 'vehicle-1',
+      licensePlate: 'TRK-001',
+      fuelType: 'Diesel',
+      theoreticalConsumption: 10,
     };
     // 4 points : le 2e est du bruit GPS (< 5m depuis le 1er, doit être ignoré), puis
     // deux segments ~1111.95m → distanceKm = 2.22.
     const POSITIONS = [
-      { latitude: 0, longitude: 0 },
-      { latitude: 0, longitude: 0.00004 },
-      { latitude: 0, longitude: 0.01004 },
-      { latitude: 0, longitude: 0.02004 },
+      { latitude: 0, longitude: 0, vehicleId: 'vehicle-1' },
+      { latitude: 0, longitude: 0.00004, vehicleId: 'vehicle-1' },
+      { latitude: 0, longitude: 0.01004, vehicleId: 'vehicle-1' },
+      { latitude: 0, longitude: 0.02004, vehicleId: 'vehicle-1' },
     ];
     const expectedUpsertPayload = {
       where: {
-        driverId_reportDate: {
+        driverId_vehicleId_reportDate: {
           driverId: 'driver-1',
+          vehicleId: 'vehicle-1',
           reportDate: new Date('2026-07-20T00:00:00.000Z'),
         },
       },
@@ -665,6 +765,8 @@ describe('FuelConsumptionService', () => {
     beforeEach(() => {
       mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 4900 });
       mockPrisma.gpsPosition.findMany.mockResolvedValue(POSITIONS);
+      mockPrisma.vehicle.findUnique.mockResolvedValue(VEHICLE_V1);
+      mockPrisma.vehicle.findMany.mockResolvedValue([]);
       mockPrisma.dailyFuelReport.upsert.mockImplementation(async (args: any) => args);
     });
 
@@ -695,7 +797,7 @@ describe('FuelConsumptionService', () => {
       expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(2);
       const singleDriverPayload = mockPrisma.dailyFuelReport.upsert.mock.calls[0][0];
       const companyPayload = mockPrisma.dailyFuelReport.upsert.mock.calls[1][0];
-      // Refactor neutre : le calcul (et donc l'upsert) doit être strictement identique.
+      // Le calcul (et donc l'upsert) doit être strictement identique.
       expect(singleDriverPayload).toEqual(companyPayload);
     });
 
@@ -735,9 +837,10 @@ describe('FuelConsumptionService', () => {
       const payload = mockPrisma.dailyFuelReport.upsert.mock.calls[0][0] as any;
       expect(payload.create.distanceKm).toBe(0);
       expect(payload.create.gpsDataQuality).toBe(GpsDataQuality.insufficient);
+      expect(payload.create.vehicleId).toBe('vehicle-1');
     });
 
-    it('creates a DailyFuelReport with distanceKm=0 and gpsDataQuality=insufficient when there is NO GPS data (0 positions)', async () => {
+    it('creates NO report when there is NO GPS data (0 positions → no vehicle group to attribute)', async () => {
       mockPrisma.driver.findFirst.mockResolvedValue(driver);
       mockPrisma.gpsPosition.findMany.mockResolvedValue([]);
 
@@ -746,27 +849,18 @@ describe('FuelConsumptionService', () => {
       console.log(
         `[0 positions] upsert appelé : ${mockPrisma.dailyFuelReport.upsert.mock.calls.length} fois`,
       );
-      const payload = mockPrisma.dailyFuelReport.upsert.mock.calls[0][0] as any;
-      console.log(
-        `[0 positions] distanceKm=${payload.create.distanceKm}, gpsDataQuality=${payload.create.gpsDataQuality}`,
-      );
-
-      // Le rapport est BIEN créé (pas absent) : distanceKm=0 + gpsDataQuality='insufficient'.
-      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(1);
-      expect(payload.create.distanceKm).toBe(0);
-      expect(payload.create.gpsDataQuality).toBe(GpsDataQuality.insufficient);
-      expect(payload.create.driverId).toBe('driver-1');
-      expect(payload.create.reportDate).toEqual(new Date('2026-07-20T00:00:00.000Z'));
+      // Aucun vehicleId réellement présent dans les positions → aucun groupe → aucun rapport.
+      expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
+      expect(mockTrackingGateway.broadcastDataUpdate).not.toHaveBeenCalled();
     });
 
-    it('does nothing when the driver has no vehicle (ONLY case that skips the report creation)', async () => {
-      mockPrisma.driver.findFirst.mockResolvedValue({ ...driver, vehicle: null });
+    it('does nothing when the driver has no GPS positions for the day (no vehicle group to attribute)', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue([]);
 
       await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
 
       expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
-      // Le contrôle du véhicule précède même la requête GPS.
-      expect(mockPrisma.gpsPosition.findMany).not.toHaveBeenCalled();
       expect(mockTrackingGateway.broadcastDataUpdate).not.toHaveBeenCalled();
     });
 
@@ -819,12 +913,164 @@ describe('FuelConsumptionService', () => {
   });
 
   // ----------------------------------------------------------------
+  // BUG RACINE : changement de véhicule en cours de journée (V1 matin → V2 après-midi)
+  // ----------------------------------------------------------------
+  describe('generateDailyReportForSingleDriver — changement de véhicule en cours de journée', () => {
+    const TARGET_DATE = new Date('2026-07-20T12:00:00.000Z');
+    const driver = { id: 'driver-1', firstName: 'Jean', lastName: 'Rakoto' };
+    const V1 = {
+      id: 'vehicle-1',
+      licensePlate: 'TRK-001',
+      fuelType: 'Diesel',
+      theoreticalConsumption: 10,
+    };
+    const V2 = {
+      id: 'vehicle-2',
+      licensePlate: 'TRK-002',
+      fuelType: 'Essence',
+      theoreticalConsumption: 6,
+    };
+
+    beforeEach(() => {
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 4900 });
+      mockPrisma.vehicle.findMany.mockResolvedValue([]);
+      mockPrisma.vehicle.findUnique.mockImplementation(async ({ where }: any) =>
+        where.id === V1.id ? V1 : V2,
+      );
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (args: any) => args);
+    });
+
+    it('produit DEUX DailyFuelReport distincts (un par vehicleId), chacun avec les km ET les caractéristiques du BON véhicule', async () => {
+      // Matin sur V1 : 2 segments ~1111.95m → 2.22 km. Après-midi sur V2 : 1 segment → 1.11 km.
+      mockPrisma.gpsPosition.findMany.mockResolvedValue([
+        { latitude: 0, longitude: 0, vehicleId: 'vehicle-1' },
+        { latitude: 0, longitude: 0.01004, vehicleId: 'vehicle-1' },
+        { latitude: 0, longitude: 0.02004, vehicleId: 'vehicle-1' },
+        { latitude: 0, longitude: 0.02004, vehicleId: 'vehicle-2' },
+        { latitude: 0, longitude: 0.03004, vehicleId: 'vehicle-2' },
+      ]);
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(2);
+      const upserts = mockPrisma.dailyFuelReport.upsert.mock.calls.map((c: any) => c[0]);
+      const vehicleKeys = upserts.map((u: any) => u.where.driverId_vehicleId_reportDate.vehicleId);
+      expect(vehicleKeys.sort()).toEqual(['vehicle-1', 'vehicle-2']);
+
+      const reportV1 = upserts.find((u: any) => u.create.vehicleId === 'vehicle-1');
+      const reportV2 = upserts.find((u: any) => u.create.vehicleId === 'vehicle-2');
+      expect(reportV1).toBeDefined();
+      expect(reportV2).toBeDefined();
+
+      // distanceKm du BON groupe de positions (V1 matin / V2 après-midi)
+      expect(reportV1.create.distanceKm).toBeCloseTo(2.23, 1);
+      expect(reportV2.create.distanceKm).toBeCloseTo(1.11, 1);
+
+      // Caractéristiques du BON véhicule (jamais driver.vehicle — ici le driver n'a
+      // d'ailleurs AUCUN véhicule courant, donc l'ancien code aurait planté/ignoré V2).
+      expect(reportV1.create.fuelType).toBe('diesel');
+      expect(reportV2.create.fuelType).toBe('essence');
+      expect(reportV1.create.consumptionLPer100Km).toBe(10);
+      expect(reportV2.create.consumptionLPer100Km).toBe(6);
+      expect(reportV1.create.vehiclePlate).toBe('TRK-001');
+      expect(reportV2.create.vehiclePlate).toBe('TRK-002');
+
+      // estimatedCost avec la consommation/prix du bon véhicule (4900 le litre).
+      expect(reportV1.create.estimatedCost).toBe(
+        Math.round(((reportV1.create.distanceKm * 10) / 100) * 4900 * 100) / 100,
+      );
+      expect(reportV2.create.estimatedCost).toBe(
+        Math.round(((reportV2.create.distanceKm * 6) / 100) * 4900 * 100) / 100,
+      );
+      // Les km de V1 ne sont PAS chiffrés avec les caractéristiques de V2.
+      expect(reportV1.create.estimatedCost).not.toBe(reportV2.create.estimatedCost);
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // Véhicule SANS chauffeur assigné → generateDailyReportForCompany
+  // ----------------------------------------------------------------
+  describe('generateDailyReportForCompany — véhicules actifs sans chauffeur assigné', () => {
+    const TARGET_DATE = new Date('2026-07-20T12:00:00.000Z');
+
+    beforeEach(() => {
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 4900 });
+      mockPrisma.vehicle.findUnique.mockResolvedValue({
+        id: 'vehicle-orphan',
+        licensePlate: 'TRK-O',
+        fuelType: 'Diesel',
+        theoreticalConsumption: 10,
+      });
+      mockPrisma.driver.findUnique.mockResolvedValue({
+        id: 'driver-x',
+        firstName: 'X',
+        lastName: 'Y',
+      });
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (args: any) => args);
+    });
+
+    it('crée un DailyFuelReport pour un véhicule sans chauffeur (gpsKm > 0) → cross-check détectable', async () => {
+      // Aucun chauffeur actif : seule la boucle "véhicules sans chauffeur" tourne.
+      mockPrisma.driver.findMany.mockResolvedValue([]);
+      mockPrisma.vehicle.findMany.mockResolvedValue([{ id: 'vehicle-orphan' }]);
+      // 2 positions sur ce véhicule (driverId quelconque) → ~1.11 km.
+      mockPrisma.gpsPosition.findMany.mockResolvedValue([
+        { latitude: 0, longitude: 0, driverId: 'driver-x' },
+        { latitude: 0, longitude: 0.01004, driverId: 'driver-x' },
+      ]);
+
+      await (service as any).generateDailyReportForCompany('company-1', TARGET_DATE);
+
+      // La boucle interroge bien les véhicules actifs SANS chauffeur.
+      expect(mockPrisma.vehicle.findMany).toHaveBeenCalledWith({
+        where: { companyId: 'company-1', deletedAt: null, isActive: true, driver: { is: null } },
+        select: { id: true },
+      });
+      // Le rapport du véhicule orphelin est bien créé avec une distance GPS > 0.
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(1);
+      const payload = mockPrisma.dailyFuelReport.upsert.mock.calls[0][0] as any;
+      expect(payload.create.vehicleId).toBe('vehicle-orphan');
+      expect(payload.create.distanceKm).toBeGreaterThan(0);
+
+      // crossCheckFuelLogWithGps peut alors agréger gpsKm > 0 pour ce véhicule et détecter.
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({ fillDate: new Date('2026-07-18') });
+      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({ _sum: { distanceKm: 1.11 } });
+      const fuelLog = {
+        id: 'fuel-orphan',
+        vehicleId: 'vehicle-orphan',
+        kilometers: 500,
+        fillDate: new Date('2026-07-25'),
+        vehicle: { licensePlate: 'TRK-O' },
+      };
+      await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
+
+      expect(mockPrisma.dailyFuelReport.aggregate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ vehicleId: 'vehicle-orphan' }),
+        }),
+      );
+      // 500 / 1.11 ≈ 450 >> 1.3 → anomalie GPS flaggée (détection rendue possible).
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'fuel-orphan' },
+          data: expect.objectContaining({ gpsAnomalyFlag: true }),
+        }),
+      );
+    });
+  });
+
+  // ----------------------------------------------------------------
   // PRIX CARBURANT — modifiables et persistés (plus de prix en dur)
   // ----------------------------------------------------------------
   describe('fuel price management', () => {
     it('getFuelPrices returns editable defaults + history', async () => {
-      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({ defaultFuelPrices: { diesel: 5200 } });
-      mockPrisma.fuelPriceHistory.findMany.mockResolvedValueOnce([{ id: 'fp-1', fuelType: 'diesel', pricePerLiter: 5200 }]);
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({
+        defaultFuelPrices: { diesel: 5200 },
+      });
+      mockPrisma.fuelPriceHistory.findMany.mockResolvedValueOnce([
+        { id: 'fp-1', fuelType: 'diesel', pricePerLiter: 5200 },
+      ]);
 
       const result = await service.getFuelPrices('company-1');
 
@@ -835,7 +1081,10 @@ describe('FuelConsumptionService', () => {
     it('updateDefaultFuelPrices persists sanitized per-company defaults', async () => {
       mockPrisma.companyFuelSettings.upsert.mockResolvedValueOnce({});
 
-      const result = await service.updateDefaultFuelPrices('company-1', { diesel: 5400, essence: 5200 });
+      const result = await service.updateDefaultFuelPrices('company-1', {
+        diesel: 5400,
+        essence: 5200,
+      });
 
       expect(result.defaults).toEqual({ diesel: 5400, essence: 5200 });
       expect(mockPrisma.companyFuelSettings.upsert).toHaveBeenCalledWith({
@@ -859,7 +1108,12 @@ describe('FuelConsumptionService', () => {
       });
 
       expect(mockPrisma.fuelPriceHistory.updateMany).toHaveBeenCalledWith({
-        where: { companyId: 'company-1', fuelType: 'diesel', effectiveUntil: null, effectiveFrom: { lt: effectiveFrom } },
+        where: {
+          companyId: 'company-1',
+          fuelType: 'diesel',
+          effectiveUntil: null,
+          effectiveFrom: { lt: effectiveFrom },
+        },
         data: { effectiveUntil: new Date(effectiveFrom.getTime() - 1) },
       });
       // La garde-fou anti-chevauchement interroge bien la même company/fuelType.
@@ -953,17 +1207,22 @@ describe('FuelConsumptionService', () => {
     it('deleteFuelPrice throws NotFound when the price belongs to another company', async () => {
       mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(null);
 
-      await expect(
-        service.deleteFuelPrice('company-a', 'fp-other'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.deleteFuelPrice('company-a', 'fp-other')).rejects.toThrow(
+        NotFoundException,
+      );
       expect(mockPrisma.fuelPriceHistory.delete).not.toHaveBeenCalled();
     });
 
     it('deleteFuelPrice deletes a price that belongs to the company', async () => {
-      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce({ id: 'fp-1', companyId: 'company-1' });
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce({
+        id: 'fp-1',
+        companyId: 'company-1',
+      });
       mockPrisma.fuelPriceHistory.delete.mockResolvedValueOnce({ id: 'fp-1' });
 
-      await expect(service.deleteFuelPrice('company-1', 'fp-1')).resolves.toEqual({ message: 'Fuel price deleted' });
+      await expect(service.deleteFuelPrice('company-1', 'fp-1')).resolves.toEqual({
+        message: 'Fuel price deleted',
+      });
       expect(mockPrisma.fuelPriceHistory.delete).toHaveBeenCalledWith({ where: { id: 'fp-1' } });
     });
   });

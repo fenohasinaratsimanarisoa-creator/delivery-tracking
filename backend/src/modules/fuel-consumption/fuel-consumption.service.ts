@@ -1,4 +1,10 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NotificationType, NotificationPriority, GpsDataQuality } from '@prisma/client';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -14,10 +20,7 @@ import { CreateFuelPriceDto } from './dto/create-fuel-price.dto';
 import { UpdateFuelPriceDto } from './dto/update-fuel-price.dto';
 import { UpdateDefaultFuelPricesDto } from './dto/update-default-fuel-prices.dto';
 import { haversineDistance as haversineDistanceM } from '../../common/geo/geo.utils';
-import {
-  hasFuelAnomaly,
-  withDerivedAnomaly,
-} from '../../common/fuel/fuel-anomaly.utils';
+import { hasFuelAnomaly, withDerivedAnomaly } from '../../common/fuel/fuel-anomaly.utils';
 
 // Valeurs initiales (seed) utilisées UNIQUEMENT tant que la company n'a pas configuré
 // ses propres prix via l'app. Dès qu'une company enregistre ses prix (page Carburant →
@@ -64,16 +67,17 @@ export class FuelConsumptionService {
     return settings?.anomalyThreshold ?? this.fallbackThresholdPercent;
   }
 
-  private async getFuelPriceForDate(companyId: string, fuelType: string, date: Date): Promise<number> {
+  private async getFuelPriceForDate(
+    companyId: string,
+    fuelType: string,
+    date: Date,
+  ): Promise<number> {
     const price = await this.prisma.fuelPriceHistory.findFirst({
       where: {
         companyId,
         fuelType: fuelType.toLowerCase(),
         effectiveFrom: { lte: date },
-        OR: [
-          { effectiveUntil: null },
-          { effectiveUntil: { gte: date } },
-        ],
+        OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: date } }],
       },
       orderBy: { effectiveFrom: 'desc' },
     });
@@ -87,7 +91,8 @@ export class FuelConsumptionService {
       update: {},
       create: { companyId, defaultFuelPrices: DEFAULT_FUEL_PRICES },
     });
-    const defaults = (settings.defaultFuelPrices as Record<string, number> | null) ?? DEFAULT_FUEL_PRICES;
+    const defaults =
+      (settings.defaultFuelPrices as Record<string, number> | null) ?? DEFAULT_FUEL_PRICES;
     return defaults[fuelType.toLowerCase()] ?? 0;
   }
 
@@ -283,9 +288,7 @@ export class FuelConsumptionService {
     const totalLiters = logs.reduce((sum, l) => sum + l.liters, 0);
     const totalKm = logs.reduce((sum, l) => sum + l.kilometers, 0);
     const totalCost = logs.reduce((sum, l) => sum + l.cost, 0);
-    const anomalies = logs
-      .filter((l) => hasFuelAnomaly(l))
-      .map((l) => withDerivedAnomaly(l));
+    const anomalies = logs.filter((l) => hasFuelAnomaly(l)).map((l) => withDerivedAnomaly(l));
 
     return {
       totalLiters,
@@ -327,7 +330,8 @@ export class FuelConsumptionService {
       where: { companyId },
       select: { defaultFuelPrices: true },
     });
-    const defaults = (settings?.defaultFuelPrices as Record<string, number> | null) ?? DEFAULT_FUEL_PRICES;
+    const defaults =
+      (settings?.defaultFuelPrices as Record<string, number> | null) ?? DEFAULT_FUEL_PRICES;
     return { defaults, history };
   }
 
@@ -462,17 +466,26 @@ export class FuelConsumptionService {
 
     const drivers = await this.prisma.driver.findMany({
       where: { companyId, deletedAt: null, isActive: true },
-      select: {
-        id: true, firstName: true, lastName: true,
-        vehicle: { select: { id: true, licensePlate: true, fuelType: true, theoreticalConsumption: true } },
-      },
+      select: { id: true, firstName: true, lastName: true },
     });
 
-    // Comportement du cron de 22h strictement inchangé : boucle sur TOUS les chauffeurs
-    // actifs de la company, chacun recalculé via generateDailyReportForDriver() (même
-    // logique que l'ancien corps de boucle, extrait sans modification de comportement).
     for (const driver of drivers) {
       await this.generateDailyReportForDriver(driver, companyId, targetDate);
+    }
+
+    // Boucle AUSSI sur les véhicules actifs SANS chauffeur actuellement assigné :
+    // sans cette boucle, un véhicule temporairement désassigné n'aurait JAMAIS de
+    // DailyFuelReport et crossCheckFuelLogWithGps() ne pourrait jamais détecter
+    // d'anomalie sur ses pleins (la somme distanceKm du véhicule serait nulle).
+    // Pour ces véhicules, le rapport est généré depuis les positions par vehicleId
+    // directement (peu importe le driverId présent dessus).
+    const unassignedVehicles = await this.prisma.vehicle.findMany({
+      where: { companyId, deletedAt: null, isActive: true, driver: { is: null } },
+      select: { id: true },
+    });
+
+    for (const vehicle of unassignedVehicles) {
+      await this.generateDailyReportForVehicle(vehicle.id, companyId, targetDate);
     }
   }
 
@@ -488,14 +501,13 @@ export class FuelConsumptionService {
 
     const driver = await this.prisma.driver.findFirst({
       where: { id: driverId, companyId, deletedAt: null },
-      select: {
-        id: true, firstName: true, lastName: true,
-        vehicle: { select: { id: true, licensePlate: true, fuelType: true, theoreticalConsumption: true } },
-      },
+      select: { id: true, firstName: true, lastName: true },
     });
 
     if (!driver) {
-      this.logger.warn(`generateDailyReportForSingleDriver: driver ${driverId} not found in company ${companyId}`);
+      this.logger.warn(
+        `generateDailyReportForSingleDriver: driver ${driverId} not found in company ${companyId}`,
+      );
       return;
     }
 
@@ -503,38 +515,117 @@ export class FuelConsumptionService {
   }
 
   /**
-   * Calcule et upsert le DailyFuelReport d'un seul chauffeur (corps extrait de l'ancienne
-   * boucle de generateDailyReportForCompany — refactor interne, résultat strictement
-   * identique). Le upsert Prisma sur driverId_reportDate recalcule TOUJOURS la totalité
-   * du jour : deux livraisons du même chauffeur terminées quasi simultanément produisent
+   * Calcule et upsert les DailyFuelReport d'un chauffeur pour la journée donnée,
+   * UN rapport PAR (driverId, vehicleId, reportDate).
+   *
+   * Avant cette réécriture, TOUT le kilométrage GPS du jour était attribué au
+   * véhicule COURANT du chauffeur (driver.vehicle), même si des positions avaient
+   * été enregistrées avec un vehicleId différent (changement de véhicule en cours
+   * de journée). Désormais les positions sont GROUPÉES par vehicleId réellement
+   * présent sur chaque ligne gps_positions, et chaque groupe produit son propre
+   * rapport avec les caractéristiques (fuelType, consommation théorique, prix) du
+   * VÉHICULE DU GROUPE — jamais celles de driver.vehicle si celui-ci diffère.
+   * Le upsert sur driverId_vehicleId_reportDate recalcule TOUJOURS la totalité du
+   * jour : deux livraisons du même chauffeur terminées quasi simultanément produisent
    * deux jobs qui se recouvrent sans jamais accumuler de distance en double.
    */
   private async generateDailyReportForDriver(
-    driver: {
-      id: string;
-      firstName: string;
-      lastName: string;
-      vehicle: { id: string; licensePlate: string; fuelType: string; theoreticalConsumption: number | null } | null;
-    },
+    driver: { id: string; firstName: string; lastName: string },
     companyId: string,
     targetDate: Date,
   ) {
-    // SEUL cas où on saute la création : le chauffeur n'a pas de véhicule assigné.
-    const vehicle = driver.vehicle;
-    if (!vehicle) return;
-
     const bounds = this.getMadagascarDayBounds(targetDate);
 
     const positions = await this.prisma.gpsPosition.findMany({
       where: {
         driverId: driver.id,
+        companyId,
         suspect: false,
         timestamp: { gte: bounds.start, lte: bounds.end },
       },
       orderBy: { timestamp: 'asc' },
-      select: { latitude: true, longitude: true },
+      select: { latitude: true, longitude: true, vehicleId: true },
     });
 
+    // GROUP BY vehicleId côté applicatif : chaque véhicule réellement utilisé ce
+    // jour produit son propre rapport (un chauffeur peut changer de véhicule à
+    // midi : les km du matin restent attribués au véhicule du matin).
+    const byVehicle = new Map<string, Array<{ latitude: number; longitude: number }>>();
+    for (const pos of positions) {
+      const group = byVehicle.get(pos.vehicleId) ?? [];
+      group.push({ latitude: pos.latitude, longitude: pos.longitude });
+      byVehicle.set(pos.vehicleId, group);
+    }
+
+    for (const [vehicleId, vehiclePositions] of byVehicle) {
+      await this.upsertDailyReportForVehicleGroup(
+        driver,
+        companyId,
+        targetDate,
+        vehicleId,
+        vehiclePositions,
+      );
+    }
+  }
+
+  /**
+   * Génère le DailyFuelReport d'un véhicule SANS chauffeur actuellement assigné,
+   * à partir de ses positions GPS du jour par vehicleId directement. Le driverId
+   * présent sur les positions n'importe pas ici : le but est que le référentiel
+   * GPS du véhicule reste complet pour crossCheckFuelLogWithGps(). Le driverId du
+   * rapport est celui de la position la plus récente du groupe (le rapport reste
+   * attribué à un driver réel, la FK l'exige).
+   */
+  private async generateDailyReportForVehicle(
+    vehicleId: string,
+    companyId: string,
+    targetDate: Date,
+  ) {
+    const bounds = this.getMadagascarDayBounds(targetDate);
+
+    const positions = await this.prisma.gpsPosition.findMany({
+      where: {
+        vehicleId,
+        companyId,
+        suspect: false,
+        timestamp: { gte: bounds.start, lte: bounds.end },
+      },
+      orderBy: { timestamp: 'asc' },
+      select: { latitude: true, longitude: true, driverId: true },
+    });
+
+    if (positions.length === 0) return;
+
+    const lastPos = positions[positions.length - 1];
+    const lastDriver = await this.prisma.driver.findUnique({
+      where: { id: lastPos.driverId },
+      select: { firstName: true, lastName: true },
+    });
+
+    await this.upsertDailyReportForVehicleGroup(
+      {
+        id: lastPos.driverId,
+        firstName: lastDriver?.firstName ?? '',
+        lastName: lastDriver?.lastName ?? '',
+      },
+      companyId,
+      targetDate,
+      vehicleId,
+      positions.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
+    );
+  }
+
+  /**
+   * Corps commun : calcule la distance d'un groupe de positions d'un (driver, vehicle, jour)
+   * puis upsert le DailyFuelReport correspondant.
+   */
+  private async upsertDailyReportForVehicleGroup(
+    driver: { id: string; firstName: string; lastName: string },
+    companyId: string,
+    targetDate: Date,
+    vehicleId: string,
+    positions: Array<{ latitude: number; longitude: number }>,
+  ) {
     let distanceKm = 0;
     let gpsDataQuality: GpsDataQuality = GpsDataQuality.insufficient;
 
@@ -542,14 +633,16 @@ export class FuelConsumptionService {
       let totalDistance = 0;
       for (let i = 1; i < positions.length; i++) {
         const segDist = haversineDistanceM(
-          positions[i - 1].latitude, positions[i - 1].longitude,
-          positions[i].latitude, positions[i].longitude,
+          positions[i - 1].latitude,
+          positions[i - 1].longitude,
+          positions[i].latitude,
+          positions[i].longitude,
         );
         if (segDist >= GPS_NOISE_THRESHOLD_M) {
           totalDistance += segDist;
         }
       }
-      const computedKm = Math.round(totalDistance / 1000 * 100) / 100;
+      const computedKm = Math.round((totalDistance / 1000) * 100) / 100;
       // Données GPS exploitables uniquement si un déplacement est mesurable (>= 0.1 km).
       if (computedKm >= 0.1) {
         distanceKm = computedKm;
@@ -559,18 +652,32 @@ export class FuelConsumptionService {
 
     // Sinon (positions.length < 2 OU distance < 0.1 km) : le rapport est CRÉÉ quand
     // même avec distanceKm=0 et gpsDataQuality='insufficient'. Sans cette création,
-    // le jour serait absent du référentiel GPS agrégé par crossCheckFuelLogWithGps,
-    // réduisant silencieusement le kilométrage de référence de la période.
-    const fuelType = vehicle.fuelType?.toLowerCase() || 'essence';
-    const consumption = vehicle?.theoreticalConsumption || 8;
-    const pricePerLiter = await this.getFuelPriceForDate(companyId, fuelType, targetDate);
-    const estimatedCost = Math.round(distanceKm * consumption / 100 * pricePerLiter * 100) / 100;
+    // le (vehicle, jour) serait absent du référentiel GPS agrégé par
+    // crossCheckFuelLogWithGps, réduisant silencieusement le kilométrage de référence.
+    //
+    // Caractéristiques du VÉHICULE DE CE GROUPE (jamais driver.vehicle) : si un
+    // chauffeur a roulé sur V1 le matin puis V2 l'après-midi, les km de V1 sont
+    // chiffrés avec le fuelType/consommation/prix de V1, pas avec ceux de V2.
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      select: { licensePlate: true, fuelType: true, theoreticalConsumption: true },
+    });
+    if (!vehicle) return;
 
-    const reportDate = new Date(Date.UTC(targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate()));
+    const fuelType = vehicle.fuelType?.toLowerCase() || 'essence';
+    const consumption = vehicle.theoreticalConsumption || 8;
+    const pricePerLiter = await this.getFuelPriceForDate(companyId, fuelType, targetDate);
+    const estimatedCost =
+      Math.round(((distanceKm * consumption) / 100) * pricePerLiter * 100) / 100;
+
+    const reportDate = new Date(
+      Date.UTC(targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate()),
+    );
     await this.prisma.dailyFuelReport.upsert({
       where: {
-        driverId_reportDate: {
+        driverId_vehicleId_reportDate: {
           driverId: driver.id,
+          vehicleId,
           reportDate,
         },
       },
@@ -578,9 +685,9 @@ export class FuelConsumptionService {
         reportDate,
         driverId: driver.id,
         driverName: `${driver.firstName} ${driver.lastName}`,
-        vehicleId: vehicle.id,
-        vehiclePlate: vehicle?.licensePlate || 'N/A',
-        fuelType: fuelType,
+        vehicleId,
+        vehiclePlate: vehicle.licensePlate || 'N/A',
+        fuelType,
         distanceKm,
         gpsDataQuality,
         consumptionLPer100Km: consumption,
@@ -592,9 +699,9 @@ export class FuelConsumptionService {
         distanceKm,
         gpsDataQuality,
         estimatedCost,
-        fuelType: fuelType,
+        fuelType,
         consumptionLPer100Km: consumption,
-        vehiclePlate: vehicle?.licensePlate || 'N/A',
+        vehiclePlate: vehicle.licensePlate || 'N/A',
         pricePerLiterUsed: pricePerLiter,
       },
     });
@@ -606,6 +713,7 @@ export class FuelConsumptionService {
     this.trackingGateway.broadcastDataUpdate(companyId, 'fuelReport', {
       entity: 'fuelReport',
       driverId: driver.id,
+      vehicleId,
       reportDate: reportDate.toISOString(),
     });
   }
@@ -620,7 +728,8 @@ export class FuelConsumptionService {
       select: { fillDate: true },
     });
 
-    const rawStart = prevLog?.fillDate || new Date(fuelLog.fillDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const rawStart =
+      prevLog?.fillDate || new Date(fuelLog.fillDate.getTime() - 30 * 24 * 60 * 60 * 1000);
     const rawEnd = fuelLog.fillDate;
 
     // Normalisation des bornes au jour UTC (minuit), alignée sur dailyFuelReport.reportDate
@@ -632,8 +741,12 @@ export class FuelConsumptionService {
     // précédent ET du plein courant sur-estime légèrement la distance GPS, ce qui est le
     // comportement le plus sûr : mieux vaut inclure un peu plus que déclencher une fausse
     // anomalie. (Même logique de commentaire documenté que GPS_NOISE_THRESHOLD_M ci-dessus.)
-    const periodStart = new Date(Date.UTC(rawStart.getUTCFullYear(), rawStart.getUTCMonth(), rawStart.getUTCDate()));
-    const periodEnd = new Date(Date.UTC(rawEnd.getUTCFullYear(), rawEnd.getUTCMonth(), rawEnd.getUTCDate()));
+    const periodStart = new Date(
+      Date.UTC(rawStart.getUTCFullYear(), rawStart.getUTCMonth(), rawStart.getUTCDate()),
+    );
+    const periodEnd = new Date(
+      Date.UTC(rawEnd.getUTCFullYear(), rawEnd.getUTCMonth(), rawEnd.getUTCDate()),
+    );
 
     const gpsDistance = await this.prisma.dailyFuelReport.aggregate({
       where: {
@@ -650,9 +763,23 @@ export class FuelConsumptionService {
     const manualKm = fuelLog.kilometers;
     const ratio = manualKm / gpsKm;
 
-    // Seuil de tolérance : si le kilométrage saisi est > 3x la distance GPS, c'est suspect
-    const CROSS_CHECK_THRESHOLD = 3;
-    if (ratio > CROSS_CHECK_THRESHOLD) {
+    // Seuil de tolérance configurable : CompanyFuelSettings.crossCheckThreshold
+    // (ratio kilométrage saisi / distance GPS), défaut 1.3 = 130%.
+    //
+    // Pourquoi l'ancien seuil en dur de 3 (= 300%) était bien trop permissif :
+    // il autorisait une distance saisie jusqu'à 3x la distance GPS avant d'être
+    // signalée, soit jusqu'à 2.9x de survalorisation INVISIBLE (un ratio de 2.99
+    // passait sans alerte). Une telle marge correspond en pratique à des litres
+    // non comptabilisés / kilométrages fictifs qui restaient silencieux. 1.3 laisse
+    // une marge réaliste pour les imprécisions GPS (±30%) sans laisser passer les
+    // écarts manifestes (à 2x, l'anomalie est désormais flaggée).
+    const settings = await this.prisma.companyFuelSettings.findUnique({
+      where: { companyId },
+      select: { crossCheckThreshold: true },
+    });
+    const crossCheckThreshold = settings?.crossCheckThreshold ?? 1.3;
+
+    if (ratio > crossCheckThreshold) {
       // Ce détecteur n'écrit QUE sa propre paire (gpsAnomalyFlag/gpsAnomalyReason).
       // Il ne touche jamais aux champs consommation ni au champ dérivé anomalyFlag :
       // sinon il écraserait la détection concurrente du job 'analyze' (write-loss).
@@ -672,4 +799,5 @@ export class FuelConsumptionService {
         deliveryId: undefined,
       });
     }
-  }}
+  }
+}

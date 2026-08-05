@@ -198,14 +198,19 @@ model GeofenceEvent {
 }
 
 model CompanyFuelSettings {
-  id                String   @id @default(uuid()) @db.Uuid
-  companyId         String   @unique @map("company_id") @db.Uuid
-  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  unit              FuelUnit @default(liters)
-  anomalyThreshold  Float?   @default(15) @map("anomaly_threshold")
-  defaultFuelPrices Json?    @map("default_fuel_prices")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id                  String   @id @default(uuid()) @db.Uuid
+  companyId           String   @unique @map("company_id") @db.Uuid
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  unit                FuelUnit @default(liters)
+  anomalyThreshold    Float?   @default(15) @map("anomaly_threshold")
+  // Seuil de tolérance du cross-check GPS (ratio kilométrage saisi / distance GPS).
+  // Défaut 1.3 = 130% : une distance saisie ne peut dépasser la distance GPS que de
+  // 30% avant d'être signalée. L'ancien seuil en dur de 3 (300%) permettait jusqu'à
+  // 2.9x de survalorisation invisible (voir crossCheckFuelLogWithGps).
+  crossCheckThreshold Float?   @default(1.3) @map("cross_check_threshold")
+  defaultFuelPrices   Json?    @map("default_fuel_prices")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   @@map("company_fuel_settings")
 }
@@ -615,10 +620,15 @@ model DailyFuelReport {
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  @@unique([driverId, reportDate])
+  // Un rapport par (driverId, vehicleId, reportDate) : un chauffeur qui change de
+  // véhicule en cours de journée produit un DailyFuelReport PAR véhicule utilisé,
+  // chacun avec les caractéristiques (fuelType/theoreticalConsumption/prix) du
+  // véhicule concerné par ce groupe de positions GPS.
+  @@unique([driverId, vehicleId, reportDate])
   @@index([companyId, reportDate])
   @@index([driverId, reportDate])
   @@index([vehicleId])
+  @@index([vehicleId, reportDate])
   @@map("daily_fuel_reports")
 }
 
