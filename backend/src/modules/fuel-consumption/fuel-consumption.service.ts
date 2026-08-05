@@ -19,7 +19,10 @@ import { FuelFilterDto } from './dto/fuel-filter.dto';
 import { CreateFuelPriceDto } from './dto/create-fuel-price.dto';
 import { UpdateFuelPriceDto } from './dto/update-fuel-price.dto';
 import { UpdateDefaultFuelPricesDto } from './dto/update-default-fuel-prices.dto';
-import { haversineDistance as haversineDistanceM } from '../../common/geo/geo.utils';
+import {
+  haversineDistance as haversineDistanceM,
+  GPS_NOISE_THRESHOLD_M,
+} from '../../common/geo/geo.utils';
 import { hasFuelAnomaly, withDerivedAnomaly } from '../../common/fuel/fuel-anomaly.utils';
 
 // Valeurs initiales (seed) utilisées UNIQUEMENT tant que la company n'a pas configuré
@@ -34,12 +37,6 @@ const DEFAULT_FUEL_PRICES: Record<string, number> = {
   electric: 0,
   hybrid: 3000,
 };
-
-// Seuil de bruit GPS : en dessous de 5m entre deux positions consécutives, on considère
-// qu'il s'agit de bruit de réception (dérive à l'arrêt) et non d'un déplacement réel.
-// Ce seuil est cohérent avec le scale d'accuracy utilisé dans detectTeleportation
-// (backend tracking.service.ts) où une accuracy de 10m donne un scale de 1.
-const GPS_NOISE_THRESHOLD_M = 5;
 
 @Injectable()
 export class FuelConsumptionService {

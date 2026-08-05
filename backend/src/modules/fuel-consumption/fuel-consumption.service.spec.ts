@@ -785,6 +785,21 @@ describe('FuelConsumptionService', () => {
       expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledWith(expectedUpsertPayload);
     });
 
+    it('filtre suspect=true ET applique le seuil de bruit < 5m (parité avec le rapport de trajet)', async () => {
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(POSITIONS);
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      // La requête GPS du rapport carburant exclut les positions suspectes (suspect=false),
+      // même filtre que getAllPositionsByDelivery() du rapport de trajet (par défaut true).
+      const findManyArgs = mockPrisma.gpsPosition.findMany.mock.calls[0][0];
+      expect(findManyArgs.where.suspect).toBe(false);
+      // Le 2e point (< 5m, bruit GPS) n'est PAS compté : distanceKm = 2.22, jamais 2.23.
+      const payload = mockPrisma.dailyFuelReport.upsert.mock.calls[0][0] as any;
+      expect(payload.create.distanceKm).toBe(2.22);
+    });
+
     it('produces an IDENTICAL report to generateDailyReportForCompany for that same driver', async () => {
       mockPrisma.driver.findFirst.mockResolvedValue(driver);
       mockPrisma.driver.findMany.mockResolvedValue([driver]);

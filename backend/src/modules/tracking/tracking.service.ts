@@ -14,7 +14,7 @@ import { DeliveryProximityService } from './delivery-proximity.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { UpdatePositionDto } from './dto/update-position.dto';
-import { haversineDistance } from '../../common/geo/geo.utils';
+import { haversineDistance, GPS_NOISE_THRESHOLD_M } from '../../common/geo/geo.utils';
 
 const TELEPORT_SPEED_THRESHOLD_MS = 55.56;
 const TELEPORT_DISTANCE_THRESHOLD_M = 5000;
@@ -801,15 +801,28 @@ export class TrackingService {
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
-  async getAllPositionsByDelivery(deliveryId: string, companyId: string) {
-    const total = await this.prisma.gpsPosition.count({
-      where: { deliveryId, delivery: { companyId } },
-    });
+  /**
+   * Positions d'une livraison.
+   *
+   * @param excludeSuspect exclut les positions suspectes (suspect=true — téléportation /
+   *                       bruit GPS) de la requête. Défaut TRUE : changement de comportement
+   *                       assumé — le rapport de trajet (PDF/dispatcher) doit désormais
+   *                       matcher le rapport carburant (generateDailyReportForDriver), qui
+   *                       filtre suspect=false par défaut. Passer false pour récupérer la
+   *                       trace brute complète (ex. carte live publique).
+   */
+  async getAllPositionsByDelivery(deliveryId: string, companyId: string, excludeSuspect = true) {
+    const where = {
+      deliveryId,
+      delivery: { companyId },
+      ...(excludeSuspect ? { suspect: false } : {}),
+    };
+    const total = await this.prisma.gpsPosition.count({ where });
     if (total > 10000) {
       this.logger.warn(`Delivery ${deliveryId} has ${total} positions — truncating to 10000`);
     }
     return this.prisma.gpsPosition.findMany({
-      where: { deliveryId, delivery: { companyId } },
+      where,
       orderBy: { timestamp: 'asc' },
       take: 10000,
     });
@@ -845,12 +858,19 @@ export class TrackingService {
 
     let totalDistance = 0;
     for (let i = 1; i < positions.length; i++) {
-      totalDistance += haversineDistance(
+      const segDist = haversineDistance(
         positions[i - 1].latitude,
         positions[i - 1].longitude,
         positions[i].latitude,
         positions[i].longitude,
       );
+      // Même seuil de bruit que le rapport carburant (GPS_NOISE_THRESHOLD_M, source
+      // unique dans geo.utils) : les segments < 5m (dérive GPS à l'arrêt) ne sont PAS
+      // comptés. Sans ce filtre, le rapport de trajet gonflait la distance par rapport
+      // au DailyFuelReport pour le même trajet (même écart que le bug du point 4).
+      if (segDist >= GPS_NOISE_THRESHOLD_M) {
+        totalDistance += segDist;
+      }
     }
     return {
       meters: Math.round(totalDistance),
@@ -978,21 +998,37 @@ export class TrackingService {
     deliveryId: string,
     companyId: string,
   ): Promise<{ meters: number; kilometers: number }> {
+    // Mêmes filtres que calculateDistance()/generateDailyReportForDriver() :
+    //  - suspect=false exclu dans le WHERE du sous-select (les points suspects sont
+    //    entièrement écartés du fenêtrage LAG) ;
+    //  - seuil de bruit GPS (< GPS_NOISE_THRESHOLD_M m) appliqué en CASE WHEN sur la
+    //    distance de chaque paire LAG, dans la SELECT AGRÉGANTE (après le calcul LAG
+    //    par-paire) : un point de bruit reste dans la fenêtre LAG, sinon le segment
+    //    suivant sauterait un point et sur-évaluerait la distance entre points
+    //    non-consécutifs.
+    // NOTE : LAG (window function) ne peut pas être imbriqué dans un agrégat — on
+    // calcule les distances par-paire dans un sous-select puis on agrège au-dessus.
     const raw = await this.prisma.$queryRaw<Array<{ total_meters: number }>>`
       SELECT COALESCE(SUM(
-        ST_DistanceSphere(
+        CASE
+          WHEN seg_distance < ${GPS_NOISE_THRESHOLD_M} THEN 0
+          ELSE seg_distance
+        END
+      ), 0) AS total_meters
+      FROM (
+        SELECT ST_DistanceSphere(
           ST_MakePoint(gp.longitude, gp.latitude),
           ST_MakePoint(
             LAG(gp.longitude) OVER (ORDER BY gp.timestamp),
             LAG(gp.latitude) OVER (ORDER BY gp.timestamp)
           )
-        )
-      ), 0) AS total_meters
-      FROM gps_positions gp
-      JOIN deliveries d ON d.id = gp.delivery_id
-      WHERE gp.delivery_id = CAST(${deliveryId} AS uuid)
-        AND d.company_id = CAST(${companyId} AS uuid)
-      ORDER BY gp.timestamp
+        ) AS seg_distance
+        FROM gps_positions gp
+        JOIN deliveries d ON d.id = gp.delivery_id
+        WHERE gp.delivery_id = CAST(${deliveryId} AS uuid)
+          AND d.company_id = CAST(${companyId} AS uuid)
+          AND gp.suspect = false
+      ) sub
     `;
     const meters = Math.round(raw[0]?.total_meters ?? 0);
     return {

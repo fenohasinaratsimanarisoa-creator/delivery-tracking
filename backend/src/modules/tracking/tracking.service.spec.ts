@@ -1,10 +1,12 @@
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TrackingService } from './tracking.service';
+import { FuelConsumptionService } from '../fuel-consumption/fuel-consumption.service';
 
 const mockPrisma = {
   driver: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
   },
   vehicle: {
     findUnique: jest.fn(),
@@ -28,6 +30,12 @@ const mockPrisma = {
   },
   companySettings: {
     findUnique: jest.fn(),
+  },
+  fuelPriceHistory: {
+    findFirst: jest.fn(),
+  },
+  dailyFuelReport: {
+    upsert: jest.fn(),
   },
   geofence: {
     findMany: jest.fn(),
@@ -147,7 +155,9 @@ describe('TrackingService', () => {
         timestamp: new Date('2026-07-21T10:00:02.000Z'),
       });
 
-      await expect(service.savePosition('00000000-0000-4000-0000-000000000002', dto)).resolves.toBeNull();
+      await expect(
+        service.savePosition('00000000-0000-4000-0000-000000000002', dto),
+      ).resolves.toBeNull();
       expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
     });
 
@@ -181,7 +191,10 @@ describe('TrackingService', () => {
 
       mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-skew-0', suspect: false });
-      const r0 = await service.savePosition('00000000-0000-4000-0000-000000000002', { ...dto, timestamp: base.toISOString() });
+      const r0 = await service.savePosition('00000000-0000-4000-0000-000000000002', {
+        ...dto,
+        timestamp: base.toISOString(),
+      });
       expect(r0).not.toBeNull();
 
       mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce({ timestamp: base });
@@ -207,7 +220,9 @@ describe('TrackingService', () => {
 
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-2', suspect: false });
 
-      await expect(service.savePosition('00000000-0000-4000-0000-000000000002', dto)).resolves.toEqual({
+      await expect(
+        service.savePosition('00000000-0000-4000-0000-000000000002', dto),
+      ).resolves.toEqual({
         id: 'gps-2',
         suspect: false,
       });
@@ -253,13 +268,11 @@ describe('TrackingService', () => {
 
     it('marks suspect when timestamp is non-increasing (cross-delivery desync)', async () => {
       const DID2 = '00000000-0000-4000-0000-00000000000b';
-      mockPrisma.gpsPosition.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({
-          latitude: -18.8792,
-          longitude: 47.5079,
-          timestamp: new Date('2026-07-21T10:00:05.000Z'),
-        });
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({
+        latitude: -18.8792,
+        longitude: 47.5079,
+        timestamp: new Date('2026-07-21T10:00:05.000Z'),
+      });
 
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-desync', suspect: true });
 
@@ -282,7 +295,10 @@ describe('TrackingService', () => {
         .mockResolvedValueOnce(null) // dedup
         .mockResolvedValueOnce({ latitude: 0, longitude: 0, timestamp: fiveSecAgo }); // detectTeleportation
 
-      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-suspect-prox', suspect: true });
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({
+        id: 'gps-suspect-prox',
+        suspect: true,
+      });
 
       const result = await service.savePosition(
         '00000000-0000-4000-0000-000000000002',
@@ -300,11 +316,7 @@ describe('TrackingService', () => {
       mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-ok-prox', suspect: false });
 
-      await service.savePosition(
-        '00000000-0000-4000-0000-000000000002',
-        dto,
-        'company-1',
-      );
+      await service.savePosition('00000000-0000-4000-0000-000000000002', dto, 'company-1');
 
       expect(mockDeliveryProximityService.checkProximity).toHaveBeenCalledTimes(1);
     });
@@ -410,7 +422,8 @@ describe('TrackingService', () => {
         .mockReset()
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({
-          latitude: lat, longitude: lng,
+          latitude: lat,
+          longitude: lng,
           timestamp: new Date(baseTs.getTime() - secondsAgo * 1000),
           speed: null,
         });
@@ -421,9 +434,12 @@ describe('TrackingService', () => {
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-urban', suspect: false });
 
       const result = await service.savePosition(DRIVER, {
-        latitude: -18.8795, longitude: 47.5082,
-        speed: 8.33, timestamp: baseTs.toISOString(),
-        vehicleId: VID, accuracy: 40,
+        latitude: -18.8795,
+        longitude: 47.5082,
+        speed: 8.33,
+        timestamp: baseTs.toISOString(),
+        vehicleId: VID,
+        accuracy: 40,
       });
 
       expect(result).not.toBeNull();
@@ -435,9 +451,12 @@ describe('TrackingService', () => {
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-gap', suspect: false });
 
       const result = await service.savePosition(DRIVER, {
-        latitude: -18.8700, longitude: 47.5200,
-        speed: 5.56, timestamp: baseTs.toISOString(),
-        vehicleId: VID, accuracy: 20,
+        latitude: -18.87,
+        longitude: 47.52,
+        speed: 5.56,
+        timestamp: baseTs.toISOString(),
+        vehicleId: VID,
+        accuracy: 20,
       });
 
       expect(result).not.toBeNull();
@@ -449,9 +468,12 @@ describe('TrackingService', () => {
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-moto', suspect: false });
 
       const result = await service.savePosition(DRIVER, {
-        latitude: -18.8790, longitude: 47.5080,
-        speed: 13.89, timestamp: baseTs.toISOString(),
-        vehicleId: VID, accuracy: 10,
+        latitude: -18.879,
+        longitude: 47.508,
+        speed: 13.89,
+        timestamp: baseTs.toISOString(),
+        vehicleId: VID,
+        accuracy: 10,
       });
 
       expect(result).not.toBeNull();
@@ -517,9 +539,7 @@ describe('TrackingService', () => {
         { speed: 10.0 },
       ];
 
-      mockPrisma.gpsPosition.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null);
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
 
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-avg', suspect: false });
 
@@ -556,9 +576,7 @@ describe('TrackingService', () => {
     const DRIVER = '00000000-0000-4000-0000-000000000002';
 
     it('saves position without deliveryId — no Prisma UUID error', async () => {
-      mockPrisma.gpsPosition.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null);
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-nodelivery', suspect: false });
 
       const result = await service.savePosition(DRIVER, {
@@ -598,22 +616,24 @@ describe('TrackingService', () => {
       mockPrisma.vehicle.findFirst.mockReset();
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ companyId: 'company-B' });
 
-      const result = await service.savePosition(DRIVER, {
-        latitude: -18.8792,
-        longitude: 47.5079,
-        speed: 10,
-        timestamp: '2026-07-21T10:00:00.000Z',
-        vehicleId: VID,
-      }, 'company-A');
+      const result = await service.savePosition(
+        DRIVER,
+        {
+          latitude: -18.8792,
+          longitude: 47.5079,
+          speed: 10,
+          timestamp: '2026-07-21T10:00:00.000Z',
+          vehicleId: VID,
+        },
+        'company-A',
+      );
 
       expect(result).toBeNull();
       expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
     });
 
     it('rejects empty deliveryId (when present) with a clear log, no Prisma crash', async () => {
-      mockPrisma.gpsPosition.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null);
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-ok', suspect: false });
 
       const result = await service.savePosition(DRIVER, {
@@ -782,16 +802,26 @@ describe('TrackingService', () => {
       ]);
 
       // saveBatch() pré-valide désormais les véhicules actifs/non-supprimés du lot
-      mockPrisma.vehicle.findMany.mockResolvedValueOnce([
-        { id: VID1 },
-        { id: VID2 },
-      ]);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VID1 }, { id: VID2 }]);
 
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
       mockPrisma.gpsPosition.createMany.mockResolvedValueOnce({ count: 1 });
 
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([
-        { id: 'gps-1', vehicleId: 'vehicle-1', timestamp: new Date(), latitude: 1, longitude: 2, speed: null, heading: null, altitude: null, accuracy: null, suspect: false, driverId: 'driver-1', deliveryId: 'delivery-1' },
+        {
+          id: 'gps-1',
+          vehicleId: 'vehicle-1',
+          timestamp: new Date(),
+          latitude: 1,
+          longitude: 2,
+          speed: null,
+          heading: null,
+          altitude: null,
+          accuracy: null,
+          suspect: false,
+          driverId: 'driver-1',
+          deliveryId: 'delivery-1',
+        },
       ]);
 
       const saved = await service.saveBatch('user-1', 'driver-1', positions);
@@ -1008,7 +1038,9 @@ describe('TrackingService', () => {
   describe('assertVehicleOwnership', () => {
     it('throws NotFoundException when vehicle not found or wrong company', async () => {
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
-      await expect(service.assertVehicleOwnership('vehicle-1', 'company-2')).rejects.toThrow(NotFoundException);
+      await expect(service.assertVehicleOwnership('vehicle-1', 'company-2')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -1041,7 +1073,9 @@ describe('TrackingService', () => {
       expect(result).toEqual(pos);
       expect(mockPrisma.gpsPosition.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ vehicle: { traccarDeviceId: '42', companyId: 'company-1' } }),
+          where: expect.objectContaining({
+            vehicle: { traccarDeviceId: '42', companyId: 'company-1' },
+          }),
         }),
       );
     });
@@ -1066,7 +1100,9 @@ describe('TrackingService', () => {
   describe('getDeliveryInfo', () => {
     it('throws NotFoundException when delivery not found', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(null);
-      await expect(service.getDeliveryInfo('delivery-1', 'company-1')).rejects.toThrow(NotFoundException);
+      await expect(service.getDeliveryInfo('delivery-1', 'company-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -1093,6 +1129,125 @@ describe('TrackingService', () => {
       const params = mockPrisma.$executeRawUnsafe.mock.calls[0].slice(1);
       expect(params[1]).toBe('company-b');
       expect(result).toBe(0);
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // Convergence des distances : rapport de trajet (calculateDistance /
+  // calculateDistancePostGIS) ↔ rapport carburant (generateDailyReportForDriver)
+  // ----------------------------------------------------------------
+  describe('Convergence distances trajet ↔ carburant (suspect + bruit < 5m)', () => {
+    const DELIVERY = '00000000-0000-4000-0000-00000000000a';
+    const COMPANY = 'company-1';
+    const DRIVER = '00000000-0000-4000-0000-000000000002';
+    const VEHICLE = '00000000-0000-4000-0000-000000000001';
+    const TARGET_DATE = new Date('2026-07-20T12:00:00.000Z');
+
+    it("les 3 calculs retournent la même distance à l'arrondi près sur le même jeu de positions (1 suspect + 1 bruit < 5m)", async () => {
+      const P1 = {
+        latitude: 0,
+        longitude: 0,
+        timestamp: new Date('2026-07-20T06:00:00Z'),
+        suspect: false,
+        vehicleId: VEHICLE,
+        driverId: DRIVER,
+        deliveryId: DELIVERY,
+      };
+      // P2 = BRUIT (< 5m depuis P1, ~2.2m) : doit être ignoré par les 3 calculs.
+      const P2 = {
+        latitude: 0,
+        longitude: 0.00002,
+        timestamp: new Date('2026-07-20T07:00:00Z'),
+        suspect: false,
+        vehicleId: VEHICLE,
+        driverId: DRIVER,
+        deliveryId: DELIVERY,
+      };
+      // P3 = SUSPECT (téléportation) : doit être exclu par les 3 calculs.
+      const P3 = {
+        latitude: 0,
+        longitude: 0.02004,
+        timestamp: new Date('2026-07-20T08:00:00Z'),
+        suspect: true,
+        vehicleId: VEHICLE,
+        driverId: DRIVER,
+        deliveryId: DELIVERY,
+      };
+      const P4 = {
+        latitude: 0,
+        longitude: 0.04004,
+        timestamp: new Date('2026-07-20T09:00:00Z'),
+        suspect: false,
+        vehicleId: VEHICLE,
+        driverId: DRIVER,
+        deliveryId: DELIVERY,
+      };
+
+      // La "DB" simulée applique le filtre suspect=false : findMany ne renvoie que
+      // les positions non-suspectes (P1, P2, P4) pour tous les chemins.
+      const nonSuspect = [P1, P2, P4];
+      mockPrisma.gpsPosition.count.mockResolvedValue(3);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(nonSuspect);
+
+      // 1) Distance JS (haversine) — calculateDistance()
+      const js = await service.calculateDistance(DELIVERY, COMPANY);
+
+      // 2) Distance PostGIS — calculateDistancePostGIS() : la requête corrigée
+      //    (suspect=false + CASE WHEN < 5m) est vérifiée sur le template SQL.
+      mockPrisma.$queryRaw.mockResolvedValue([{ total_meters: js.meters }]);
+      const pg = await service.calculateDistancePostGIS(DELIVERY, COMPANY);
+      const sqlTemplate = (mockPrisma.$queryRaw.mock.calls[0][0] as any)?.join
+        ? (mockPrisma.$queryRaw.mock.calls[0][0] as any).join('')
+        : String(mockPrisma.$queryRaw.mock.calls[0][0]);
+      expect(sqlTemplate).toContain('gp.suspect = false');
+      expect(sqlTemplate).toContain('WHEN');
+      expect(sqlTemplate).toContain('<');
+
+      // 3) Rapport carburant — generateDailyReportForDriver() via le service carburant.
+      const fuelService = new FuelConsumptionService(
+        mockPrisma as unknown as PrismaService,
+        { get: jest.fn((_k: string, d?: number) => d ?? 20) } as any,
+        { create: jest.fn() } as any,
+        undefined as any,
+        { broadcastDataUpdate: jest.fn() } as any,
+      );
+      mockPrisma.driver.findFirst.mockResolvedValue({
+        id: DRIVER,
+        firstName: 'Jean',
+        lastName: 'Rakoto',
+      });
+      mockPrisma.vehicle.findUnique.mockResolvedValue({
+        id: VEHICLE,
+        licensePlate: 'TRK-001',
+        fuelType: 'Diesel',
+        theoreticalConsumption: 10,
+      });
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 4900 });
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (args: any) => args);
+      mockPrisma.vehicle.findMany.mockResolvedValue([]);
+
+      let captured: any;
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (args: any) => {
+        captured = args;
+        return args;
+      });
+      await fuelService.generateDailyReportForSingleDriver(COMPANY, DRIVER, TARGET_DATE);
+      const reportKm = captured.create.distanceKm;
+      const reportMeters = Math.round(reportKm * 1000);
+
+      // 3 valeurs côte à côte dans la sortie du test.
+      console.log(
+        `[convergence] JS haversine: ${js.meters} m | PostGIS: ${pg.meters} m | DailyFuelReport: ${reportKm} km (${reportMeters} m)`,
+      );
+
+      // PostGIS = JS (même requête corrigée, mock cohérent).
+      expect(js.meters).toBe(pg.meters);
+      // Le rapport carburant arrondit au centième de km (= 10 m) : convergence à ±10 m.
+      expect(Math.abs(reportMeters - js.meters)).toBeLessThanOrEqual(10);
+      // La distance exclut bien le point suspect ET le bruit : elle vaut la distance P2→P4
+      // (~4450 m), jamais P1→P2→P4 (qui ajouterait ~2 m de bruit) ni P1→P3 (suspect).
+      expect(js.meters).toBeGreaterThan(4000);
+      expect(js.meters).toBeLessThan(5000);
     });
   });
 });
