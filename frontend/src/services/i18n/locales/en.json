@@ -374,6 +374,18 @@
   },
   "fuel": {
     "title": "Fuel",
+    "subtitle": "Track fuel refills, estimated consumption and prices across your fleet.",
+    "stats": {
+      "totalLiters": "Total liters",
+      "totalKm": "Total km",
+      "totalCost": "Total cost",
+      "avgConsumption": "Avg. consumption",
+      "anomalies": "Anomalies",
+      "logs": "logs"
+    },
+    "unitLiters": "L",
+    "unitKm": "km",
+    "unitPer100": "L/100km",
     "error": "Error loading fuel data",
     "empty": "No fuel records yet.",
  "tabManual": "Manual Entry",

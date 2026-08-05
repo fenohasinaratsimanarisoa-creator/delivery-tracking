@@ -1,7 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+  Pencil,
+  Plus,
+  Trash2,
+  Fuel,
+  Droplets,
+  Wallet,
+  Gauge,
+  AlertTriangle,
+  PenLine,
+  Radar,
+  CircleDollarSign,
+  RefreshCw,
+  CalendarDays,
+  Info,
+  Inbox,
+  CheckCircle2,
+} from 'lucide-react';
 import api from '../services/api/client';
 import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -20,20 +37,16 @@ interface FuelPrice {
   effectiveUntil: string | null;
 }
 
-const FUEL_TYPES = ['essence', 'gasoil', 'diesel', 'electric', 'hybrid'];
+interface ConsumptionStats {
+  totalLiters: number;
+  totalKilometers: number;
+  totalCost: number;
+  averageConsumption: number;
+  anomalyCount: number;
+  logCount: number;
+}
 
-const pageBtnStyle = (disabled: boolean): React.CSSProperties => ({
-  padding: '6px 12px', border: '1px solid #ddd', borderRadius: 4,
-  cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
-  background: '#fff',
-});
-const tabStyle = (active: boolean): React.CSSProperties => ({
-  padding: '8px 20px', border: 'none', cursor: 'pointer',
-  fontWeight: active ? 700 : 400,
-  borderBottom: active ? '2px solid #007bff' : '2px solid transparent',
-  color: active ? '#000' : '#666',
-  background: 'none', fontSize: '0.9rem',
-});
+const FUEL_TYPES = ['essence', 'gasoil', 'diesel', 'electric', 'hybrid'];
 
 export default function FuelPage() {
   const { t, i18n } = useTranslation();
@@ -63,6 +76,12 @@ export default function FuelPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['fuel-consumption', page],
     queryFn: () => api.get(`/fuel-consumption?page=${page}&limit=${limit}`).then((r) => r.data),
+  });
+
+  const { data: stats } = useQuery({
+    queryKey: ['fuel-consumption-stats'],
+    queryFn: () => api.get('/fuel-consumption/stats').then((r) => r.data),
+    staleTime: 15000,
   });
 
   const { data: reports, isLoading: reportsLoading } = useQuery({
@@ -108,6 +127,7 @@ export default function FuelPage() {
       api.patch(`/fuel-consumption/${id}`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fuel-consumption'] });
+      queryClient.invalidateQueries({ queryKey: ['fuel-consumption-stats'] });
       toast(t('fuel.updateSuccess'));
       setEditing(null);
     },
@@ -121,6 +141,7 @@ export default function FuelPage() {
       api.post('/fuel-consumption', payload).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fuel-consumption'] });
+      queryClient.invalidateQueries({ queryKey: ['fuel-consumption-stats'] });
       toast(t('fuel.addSuccess'));
       setCreating(false);
       setPage(1);
@@ -134,6 +155,7 @@ export default function FuelPage() {
     mutationFn: (id: string) => api.delete(`/fuel-consumption/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fuel-consumption'] });
+      queryClient.invalidateQueries({ queryKey: ['fuel-consumption-stats'] });
       toast(t('fuel.deleteSuccess'));
       setDeleting(null);
     },
@@ -329,17 +351,69 @@ export default function FuelPage() {
   }
   const reportList: FuelReport[] = reports ?? [];
   const priceHistory: FuelPrice[] = pricesData?.history ?? [];
+  const s: Partial<ConsumptionStats> = stats ?? {};
+
+  const tabButtons = [
+    { key: 'manual' as const, label: t('fuel.tabManual'), icon: <PenLine size={15} /> },
+    { key: 'gps' as const, label: t('fuel.tabGps'), icon: <Radar size={15} /> },
+    { key: 'prices' as const, label: t('fuel.tabPrices'), icon: <CircleDollarSign size={15} /> },
+  ];
+
+  const statCards = [
+    {
+      label: t('fuel.stats.totalLiters'),
+      value: s.totalLiters ?? 0,
+      unit: t('fuel.unitLiters'),
+      icon: <Droplets size={18} />,
+      variant: 'teal' as const,
+      mono: true,
+    },
+    {
+      label: t('fuel.stats.totalKm'),
+      value: s.totalKilometers ?? 0,
+      unit: t('fuel.unitKm'),
+      icon: <Gauge size={18} />,
+      variant: 'accent' as const,
+      mono: true,
+    },
+    {
+      label: t('fuel.stats.totalCost'),
+      value: formatAriary(s.totalCost ?? 0),
+      unit: '',
+      icon: <Wallet size={18} />,
+      variant: 'blue' as const,
+      mono: false,
+    },
+    {
+      label: t('fuel.stats.avgConsumption'),
+      value: (s.averageConsumption ?? 0).toFixed(1),
+      unit: t('fuel.unitPer100'),
+      icon: <Fuel size={18} />,
+      variant: 'accent' as const,
+      mono: true,
+    },
+    {
+      label: t('fuel.stats.anomalies'),
+      value: s.anomalyCount ?? 0,
+      unit: '',
+      icon: <AlertTriangle size={18} />,
+      variant: 'red' as const,
+      mono: true,
+    },
+  ];
 
   if (isLoading || reportsLoading || pricesLoading) {
     return (
       <div className={styles.pageContainer}>
-        <h1>{t('fuel.title')}</h1>
-        <div className={styles.tabsRow}>
-          <button style={tabStyle(tab === 'manual')} onClick={() => setTab('manual')}>{t('fuel.tabManual')}</button>
-          <button style={tabStyle(tab === 'gps')} onClick={() => setTab('gps')}>{t('fuel.tabGps')}</button>
-          <button style={tabStyle(tab === 'prices')} onClick={() => setTab('prices')}>{t('fuel.tabPrices')}</button>
+        <div className={`${styles.skeleton} ${styles.skeletonHeader}`} />
+        <div className={`${styles.skeleton} ${styles.skeletonTabs}`} />
+        <div className={styles.skeletonStats}>
+          <div className={`${styles.skeleton} ${styles.skeletonStat}`} />
+          <div className={`${styles.skeleton} ${styles.skeletonStat}`} />
+          <div className={`${styles.skeleton} ${styles.skeletonStat}`} />
+          <div className={`${styles.skeleton} ${styles.skeletonStat}`} />
         </div>
-        <div className={styles.skeleton} />
+        <div className={`${styles.skeleton} ${styles.skeletonTable}`} />
       </div>
     );
   }
@@ -347,7 +421,11 @@ export default function FuelPage() {
   if (error) {
     return (
       <div className={styles.pageContainer}>
-        <h1>{t('fuel.title')}</h1>
+        <div className={styles.pageHeader}>
+          <div className={styles.headerTitleWrap}>
+            <h1 className={styles.pageTitle}>{t('fuel.title')}</h1>
+          </div>
+        </div>
         <p className={styles.errorText}>{t('fuel.error')}</p>
       </div>
     );
@@ -355,18 +433,57 @@ export default function FuelPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <h1>{t('fuel.title')}</h1>
+      <div className={styles.pageHeader}>
+        <div className={styles.headerTitleWrap}>
+          <h1 className={styles.pageTitle}>{t('fuel.title')}</h1>
+          <p className={styles.pageSubtitle}>{t('fuel.subtitle')}</p>
+        </div>
+        <span className={styles.headerBadge}>
+          <Fuel size={13} />
+          {s.logCount ?? 0} {t('fuel.stats.logs')}
+        </span>
+      </div>
 
       <div className={styles.tabsRow}>
-        <button style={tabStyle(tab === 'manual')} onClick={() => setTab('manual')}>{t('fuel.tabManual')}</button>
-        <button style={tabStyle(tab === 'gps')} onClick={() => setTab('gps')}>{t('fuel.tabGps')}</button>
-        <button style={tabStyle(tab === 'prices')} onClick={() => setTab('prices')}>{t('fuel.tabPrices')}</button>
+        {tabButtons.map((b) => (
+          <button
+            key={b.key}
+            type="button"
+            className={`${styles.tabBtn} ${tab === b.key ? styles.tabBtnActive : styles.tabBtnInactive}`}
+            onClick={() => setTab(b.key)}
+          >
+            {b.icon}
+            {b.label}
+          </button>
+        ))}
       </div>
 
       {/* Saisie manuelle */}
       {tab === 'manual' && (
         <>
           <div className={styles.toolbarRow}>
+            <div className={styles.statsGrid}>
+              {statCards.map((c) => (
+                <div key={c.label} className={styles.statCard}>
+                  <div className={`${styles.statIcon} ${
+                    c.variant === 'teal' ? styles.statIconTeal
+                      : c.variant === 'red' ? styles.statIconRed
+                        : c.variant === 'blue' ? styles.statIconBlue
+                          : ''
+                  }`}>
+                    {c.icon}
+                  </div>
+                  <div className={styles.statBody}>
+                    <span className={styles.statLabel}>{c.label}</span>
+                    <span className={styles.statValue}>
+                      {c.value}
+                      {c.unit && <span className={styles.statUnit}>{c.unit}</span>}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
             <button
               type="button"
               className={styles.addBtn}
@@ -377,79 +494,87 @@ export default function FuelPage() {
           </div>
 
           {entries.length === 0 && (
-            <p className={styles.emptyText}>
-              {t('fuel.empty')}
-            </p>
+            <div className={styles.emptyState}>
+              <span className={styles.emptyIcon}><Inbox size={24} /></span>
+              <p className={styles.emptyTitle}>{t('fuel.title')}</p>
+              <p className={styles.emptyText}>{t('fuel.empty')}</p>
+            </div>
           )}
 
           {entries.length > 0 && (
             <>
-              <table className={styles.table}>
-                <thead>
-                  <tr className={styles.headerRow}>
-                    <th className={styles.th}>{t('fuel.table.vehicle')}</th>
-                    <th className={styles.th}>{t('fuel.table.liters')}</th>
-                    <th className={styles.th}>{t('fuel.table.kmHeader')}</th>
-                    <th className={styles.th}>{t('fuel.table.consumption')}</th>
-                    <th className={styles.th}>{t('fuel.table.cost')}</th>
-                    <th className={styles.th}>{t('fuel.table.date')}</th>
-                    <th className={styles.th}>{t('fuel.table.anomaly')}</th>
-                    <th className={styles.thActions}>{t('common.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.map((l) => (
-                    <tr key={l.id} className={styles.dataRow}>
-                      <td className={styles.td}>{l.vehicle?.licensePlate ?? '-'}</td>
-                      <td className={styles.td}>{l.liters}</td>
-                      <td className={styles.td}>{l.kilometers}</td>
-                      <td className={styles.td}>{l.calculatedConsumption?.toFixed(1) ?? '-'}</td>
-                      <td className={styles.td}>{l.cost.toFixed(2)} €</td>
-                      <td className={styles.td}>{new Date(l.fillDate).toLocaleDateString(i18n.language)}</td>
-                      <td className={styles.td}>
-                        {l.anomalyFlag
-                          ? <span className={styles.anomalyBadge}>{t('fuel.anomaly')}</span>
-                          : <span className={styles.normalBadge}>{t('fuel.normal')}</span>}
-                      </td>
-                      <td className={styles.td}>
-                        <div className={styles.actionsRow}>
-                          <button
-                            type="button"
-                            className={styles.actionBtn}
-                            onClick={() => openEdit(l)}
-                            title={t('common.edit')}
-                            aria-label={t('common.edit')}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className={`${styles.actionBtn} ${styles.danger}`}
-                            onClick={() => setDeleting(l)}
-                            title={t('common.delete')}
-                            aria-label={t('common.delete')}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className={styles.tableCard}>
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr className={styles.tableHeadRow}>
+                        <th className={styles.tableHeadCell}>{t('fuel.table.vehicle')}</th>
+                        <th className={styles.tableHeadCell}>{t('fuel.table.liters')}</th>
+                        <th className={styles.tableHeadCell}>{t('fuel.table.kmHeader')}</th>
+                        <th className={styles.tableHeadCell}>{t('fuel.table.consumption')}</th>
+                        <th className={styles.tableHeadCellRight}>{t('fuel.table.cost')}</th>
+                        <th className={styles.tableHeadCell}>{t('fuel.table.date')}</th>
+                        <th className={styles.tableHeadCell}>{t('fuel.table.anomaly')}</th>
+                        <th className={styles.tableHeadCellRight}>{t('common.actions')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.map((l) => (
+                        <tr key={l.id} className={styles.tableRow}>
+                          <td className={styles.tableCellBold}>{l.vehicle?.licensePlate ?? '-'}</td>
+                          <td className={styles.tableCellMono}>{l.liters}</td>
+                          <td className={styles.tableCellMono}>{l.kilometers}</td>
+                          <td className={styles.tableCellMono}>{l.calculatedConsumption?.toFixed(1) ?? '-'}</td>
+                          <td className={`${styles.tableCellMono} ${styles.tableCellRight}`}>{l.cost.toFixed(2)} €</td>
+                          <td className={styles.tableCell}>{new Date(l.fillDate).toLocaleDateString(i18n.language)}</td>
+                          <td className={styles.tableCell}>
+                            {l.anomalyFlag
+                              ? <span className={`${styles.badge} ${styles.badgeAnomaly}`}><AlertTriangle size={12} /> {t('fuel.anomaly')}</span>
+                              : <span className={`${styles.badge} ${styles.badgeNormal}`}><CheckCircle2 size={12} /> {t('fuel.normal')}</span>}
+                          </td>
+                          <td className={`${styles.tableCell} ${styles.tableCellRight}`}>
+                            <div className={styles.actionsRow}>
+                              <button
+                                type="button"
+                                className={styles.actionBtn}
+                                onClick={() => openEdit(l)}
+                                title={t('common.edit')}
+                                aria-label={t('common.edit')}
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                className={`${styles.actionBtn} ${styles.danger}`}
+                                onClick={() => setDeleting(l)}
+                                title={t('common.delete')}
+                                aria-label={t('common.delete')}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
               {meta.totalPages > 1 && (
                 <div className={styles.pagination}>
-                  <button disabled={page <= 1} onClick={() => setPage(page - 1)} style={pageBtnStyle(page <= 1)}>←</button>
+                  <button type="button" className={styles.pageBtn} disabled={page <= 1} onClick={() => setPage(page - 1)}>←</button>
                   {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map((p) => (
-                    <button key={p} onClick={() => setPage(p)} style={{
-                      ...pageBtnStyle(false),
-                      fontWeight: p === page ? 700 : 400,
-                      background: p === page ? '#007bff' : '#fff',
-                      color: p === page ? '#fff' : '#333',
-                    }}>{p}</button>
+                    <button
+                      key={p}
+                      type="button"
+                      className={`${styles.pageBtn} ${p === page ? styles.pageBtnActive : ''}`}
+                      onClick={() => setPage(p)}
+                    >
+                      {p}
+                    </button>
                   ))}
-                  <button disabled={page >= meta.totalPages} onClick={() => setPage(page + 1)} style={pageBtnStyle(page >= meta.totalPages)}>→</button>
+                  <button type="button" className={styles.pageBtn} disabled={page >= meta.totalPages} onClick={() => setPage(page + 1)}>→</button>
                 </div>
               )}
             </>
@@ -464,31 +589,34 @@ export default function FuelPage() {
             {t('fuel.gpsHelp')}
           </p>
 
-          <div className={styles.dateRow}>
-            <label className={styles.label}>{t('fuel.date')} :</label>
-            <input
-              type="date"
-              value={reportDate}
-              onChange={(e) => setReportDate(e.target.value)}
-              className={styles.dateInput}
-            />
+          <div className={styles.controlCard}>
+            <div className={styles.controlField}>
+              <label className={styles.label}>{t('fuel.date')}</label>
+              <input
+                type="date"
+                value={reportDate}
+                onChange={(e) => setReportDate(e.target.value)}
+                className={styles.dateInput}
+              />
+            </div>
             <button
+              type="button"
+              className={styles.genBtn}
               onClick={() => generateMutation.mutate(reportDate)}
               disabled={generateMutation.isPending}
-              style={{
-                padding: '6px 16px', border: 'none', borderRadius: 4,
-                background: generateMutation.isPending ? '#999' : '#007bff',
-                color: '#fff', cursor: generateMutation.isPending ? 'default' : 'pointer',
-                fontSize: '0.85rem', fontWeight: 500,
-              }}
             >
+              {generateMutation.isPending ? (
+                <RefreshCw size={15} style={{ animation: 'dt-spin 0.6s linear infinite' }} />
+              ) : (
+                <CalendarDays size={15} />
+              )}
               {generateMutation.isPending ? t('fuel.generating') : t('fuel.generateReport')}
             </button>
           </div>
 
           {generateMutation.isSuccess && (
             <p className={styles.successText}>
-              {t('fuel.generateSuccess')}
+              <CheckCircle2 size={14} /> {t('fuel.generateSuccess')}
             </p>
           )}
 
@@ -499,42 +627,53 @@ export default function FuelPage() {
           )}
 
           {reportList.length === 0 && (
-            <p className={styles.emptyText}>
-              {t('fuel.gpsEmpty')}
-            </p>
+            <div className={styles.emptyState}>
+              <span className={styles.emptyIcon}><Radar size={24} /></span>
+              <p className={styles.emptyTitle}>{t('fuel.tabGps')}</p>
+              <p className={styles.emptyText}>{t('fuel.gpsEmpty')}</p>
+            </div>
           )}
 
           {reportList.length > 0 && (
-            <table className={styles.table}>
-              <thead>
-                <tr className={styles.headerRow}>
-                  <th className={styles.th}>{t('fuel.table.driver')}</th>
-                  <th className={styles.th}>{t('fuel.table.vehicle')}</th>
-                  <th className={styles.th}>{t('fuel.gpsDistance')}</th>
-                  <th className={styles.th}>{t('fuel.table.consumption')}</th>
-                  <th className={styles.th}>{t('fuel.estimatedCost')}</th>
-                  <th className={styles.th}>{t('fuel.table.date')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reportList.map((r: FuelReport, i: number) => (
-                  <tr key={r.id || i} className={styles.dataRow}>
-                    <td className={styles.td}>{r.driverName}</td>
-                    <td className={styles.td}>{r.vehiclePlate}</td>
-                    <td className={styles.td}>{r.distanceKm?.toFixed(1)} km</td>
-                    <td className={styles.td}>{r.consumptionLPer100Km?.toFixed(1) ?? '-'} L/100km</td>
-                    <td className={styles.td}>{formatAriary(r.estimatedCost)}</td>
-                    <td className={styles.td}>{r.reportDate ? new Date(r.reportDate).toLocaleDateString(i18n.language) : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className={styles.tableCard}>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr className={styles.tableHeadRow}>
+                      <th className={styles.tableHeadCell}>{t('fuel.table.driver')}</th>
+                      <th className={styles.tableHeadCell}>{t('fuel.table.vehicle')}</th>
+                      <th className={styles.tableHeadCell}>{t('fuel.gpsDistance')}</th>
+                      <th className={styles.tableHeadCell}>{t('fuel.table.consumption')}</th>
+                      <th className={styles.tableHeadCellRight}>{t('fuel.estimatedCost')}</th>
+                      <th className={styles.tableHeadCell}>{t('fuel.table.date')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportList.map((r: FuelReport, i: number) => (
+                      <tr key={r.id || i} className={styles.tableRow}>
+                        <td className={styles.tableCell}>
+                          <span className={`${styles.badge} ${styles.badgeDriver}`}>{r.driverName}</span>
+                        </td>
+                        <td className={styles.tableCellBold}>{r.vehiclePlate}</td>
+                        <td className={styles.tableCellMono}>{r.distanceKm?.toFixed(1)} km</td>
+                        <td className={styles.tableCellMono}>{r.consumptionLPer100Km?.toFixed(1) ?? '-'} L/100km</td>
+                        <td className={`${styles.tableCellMono} ${styles.tableCellRight}`}>{formatAriary(r.estimatedCost)}</td>
+                        <td className={styles.tableCell}>{r.reportDate ? new Date(r.reportDate).toLocaleDateString(i18n.language) : '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
 
           <div className={styles.helpBox}>
-            <strong>{t('fuel.helpTitle')} :</strong><br />
-            {t('fuel.helpManual')}<br />
-            {t('fuel.helpGps')}
+            <span className={styles.helpIcon}><Info size={16} /></span>
+            <span className={styles.helpBody}>
+              <strong>{t('fuel.helpTitle')} :</strong><br />
+              {t('fuel.helpManual')}<br />
+              {t('fuel.helpGps')}
+            </span>
           </div>
         </div>
       )}
@@ -552,7 +691,7 @@ export default function FuelPage() {
             <div className={styles.defaultsGrid}>
               {FUEL_TYPES.map((ft) => (
                 <div key={ft} className={styles.defaultsField}>
-                  <label className={styles.label}>{t(`fuel.types.${ft}`)}</label>
+                  <label className={styles.defaultsFieldLabel}>{t(`fuel.types.${ft}`)}</label>
                   <input
                     type="number"
                     min="0"
@@ -564,14 +703,16 @@ export default function FuelPage() {
                 </div>
               ))}
             </div>
-            <button
-              type="button"
-              className={styles.addBtn}
-              onClick={saveDefaults}
-              disabled={saveDefaultsMutation.isPending}
-            >
-              {saveDefaultsMutation.isPending ? '…' : t('fuel.saveDefaults')}
-            </button>
+            <div>
+              <button
+                type="button"
+                className={styles.addBtn}
+                onClick={saveDefaults}
+                disabled={saveDefaultsMutation.isPending}
+              >
+                {saveDefaultsMutation.isPending ? '…' : t('fuel.saveDefaults')}
+              </button>
+            </div>
           </div>
 
           <div className={styles.pricesSection}>
@@ -584,53 +725,61 @@ export default function FuelPage() {
             <p className={styles.helpText}>{t('fuel.historyHelp')}</p>
 
             {priceHistory.length === 0 && (
-              <p className={styles.emptyText}>{t('fuel.noPrices')}</p>
+              <div className={styles.emptyState}>
+                <span className={styles.emptyIcon}><CircleDollarSign size={24} /></span>
+                <p className={styles.emptyTitle}>{t('fuel.historyTitle')}</p>
+                <p className={styles.emptyText}>{t('fuel.noPrices')}</p>
+              </div>
             )}
 
             {priceHistory.length > 0 && (
-              <table className={styles.table}>
-                <thead>
-                  <tr className={styles.headerRow}>
-                    <th className={styles.th}>{t('fuel.fuelType')}</th>
-                    <th className={styles.th}>{t('fuel.pricePerLiter')}</th>
-                    <th className={styles.th}>{t('fuel.effectiveFrom')}</th>
-                    <th className={styles.th}>{t('fuel.effectiveUntil')}</th>
-                    <th className={styles.thActions}>{t('common.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {priceHistory.map((p) => (
-                    <tr key={p.id} className={styles.dataRow}>
-                      <td className={styles.td}>{t(`fuel.types.${p.fuelType}`, { defaultValue: p.fuelType })}</td>
-                      <td className={styles.td}>{formatAriary(p.pricePerLiter)}</td>
-                      <td className={styles.td}>{new Date(p.effectiveFrom).toLocaleDateString(i18n.language)}</td>
-                      <td className={styles.td}>{p.effectiveUntil ? new Date(p.effectiveUntil).toLocaleDateString(i18n.language) : '—'}</td>
-                      <td className={styles.td}>
-                        <div className={styles.actionsRow}>
-                          <button
-                            type="button"
-                            className={styles.actionBtn}
-                            onClick={() => openEditPrice(p)}
-                            title={t('common.edit')}
-                            aria-label={t('common.edit')}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className={`${styles.actionBtn} ${styles.danger}`}
-                            onClick={() => setDeletingPrice(p)}
-                            title={t('common.delete')}
-                            aria-label={t('common.delete')}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className={styles.tableCard}>
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr className={styles.tableHeadRow}>
+                        <th className={styles.tableHeadCell}>{t('fuel.fuelType')}</th>
+                        <th className={styles.tableHeadCellRight}>{t('fuel.pricePerLiter')}</th>
+                        <th className={styles.tableHeadCell}>{t('fuel.effectiveFrom')}</th>
+                        <th className={styles.tableHeadCell}>{t('fuel.effectiveUntil')}</th>
+                        <th className={styles.tableHeadCellRight}>{t('common.actions')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {priceHistory.map((p) => (
+                        <tr key={p.id} className={styles.tableRow}>
+                          <td className={styles.tableCellBold}>{t(`fuel.types.${p.fuelType}`, { defaultValue: p.fuelType })}</td>
+                          <td className={`${styles.tableCellMono} ${styles.tableCellRight}`}>{formatAriary(p.pricePerLiter)}</td>
+                          <td className={styles.tableCell}>{new Date(p.effectiveFrom).toLocaleDateString(i18n.language)}</td>
+                          <td className={styles.tableCell}>{p.effectiveUntil ? new Date(p.effectiveUntil).toLocaleDateString(i18n.language) : '—'}</td>
+                          <td className={`${styles.tableCell} ${styles.tableCellRight}`}>
+                            <div className={styles.actionsRow}>
+                              <button
+                                type="button"
+                                className={styles.actionBtn}
+                                onClick={() => openEditPrice(p)}
+                                title={t('common.edit')}
+                                aria-label={t('common.edit')}
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                className={`${styles.actionBtn} ${styles.danger}`}
+                                onClick={() => setDeletingPrice(p)}
+                                title={t('common.delete')}
+                                aria-label={t('common.delete')}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </div>
         </div>

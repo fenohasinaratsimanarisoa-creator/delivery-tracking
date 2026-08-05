@@ -374,6 +374,18 @@
   },
   "fuel": {
     "title": "Carburant",
+    "subtitle": "Suivez les pleins, la consommation estimée et les prix de votre flotte.",
+    "stats": {
+      "totalLiters": "Litres totalisés",
+      "totalKm": "Km totalisés",
+      "totalCost": "Coût total",
+      "avgConsumption": "Conso. moyenne",
+      "anomalies": "Anomalies",
+      "logs": "relevés"
+    },
+    "unitLiters": "L",
+    "unitKm": "km",
+    "unitPer100": "L/100km",
     "error": "Erreur lors du chargement des données carburant",
     "empty": "Aucun relevé carburant pour le moment.",
  "tabManual": "Saisie manuelle",
