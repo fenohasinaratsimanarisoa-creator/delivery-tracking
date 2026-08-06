@@ -394,6 +394,41 @@ button, a, .clickable {
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-tertiary);
 }
+
+/* ─── Mobile: scale up typography & spacing for a readable phone UI ───
+   These are variable-only changes → every card, table, chip and button that
+   reads a token grows consistently, without touching any layout. Desktop
+   (≥701px) is completely unaffected. */
+@media (max-width: 700px) {
+  :root:root[data-theme] {
+    --text-xs: 0.6875rem;
+    --text-sm: 0.8125rem;
+    --text-base: 0.9375rem;
+    --text-md: 1.0313rem;
+    --text-lg: 1.1875rem;
+    --text-xl: 1.3125rem;
+    --text-2xl: 1.625rem;
+    --space-md: 14px;
+    --space-lg: 18px;
+    --space-xl: 26px;
+  }
+
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  body {
+    -webkit-tap-highlight-color: transparent;
+    caret-color: var(--color-accent);
+  }
+}
+
+@media (max-width: 360px) {
+  :root:root[data-theme] {
+    --space-lg: 16px;
+    --text-base: 0.9rem;
+  }
+}
 `;
 
 // Backward-compatible aliases for auth pages still using old `tokens` export
