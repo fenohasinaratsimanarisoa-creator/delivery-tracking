@@ -3,36 +3,63 @@ import { useTranslation } from 'react-i18next';
 import { formatMonth, formatDateLong } from '../../services/i18n/formatDate';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line,
+  LineChart, Line, Cell,
 } from 'recharts';
-import { MapPin, Truck, Clock, AlertTriangle, CheckCircle, Fuel, TrendingUp, Sparkles } from 'lucide-react';
+import { MapPin, Truck, Clock, AlertTriangle, CheckCircle, Fuel, TrendingUp, Sparkles, Gauge } from 'lucide-react';
 import RealTimeMap from '../map/RealTimeMap';
 import api from '../../services/api/client';
 import type { Kpis, DeliveryStat, FuelChartPoint } from '../../types';
+import OnboardingChecklist from './OnboardingChecklist';
+import styles from './DashboardPage.module.css';
 
 interface RecentDelivery {
   id: string;
   title: string;
   status: string;
 }
-import OnboardingChecklist from './OnboardingChecklist';
-import styles from './DashboardPage.module.css';
 
-function KpiChip({ icon: Icon, label, value, color, delay = 0 }: {
-  icon: React.ElementType; label: string; value: string | number; color: string; delay?: number;
+function useCountUp(target: number, duration = 700, decimals = 0) {
+  const [value, setValue] = useState(target);
+  useEffect(() => {
+    const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false;
+    if (reduced) {
+      setValue(target);
+      return;
+    }
+    let raf: number;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const val = target * eased;
+      setValue(decimals > 0 ? parseFloat(val.toFixed(decimals)) : Math.round(val));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration, decimals]);
+  return value;
+}
+
+function KpiCard({ icon: Icon, label, value, color, delay, decimals = 0 }: {
+  icon: React.ElementType; label: string; value: number | string | undefined; color: string; delay: number; decimals?: number;
 }) {
+  const numeric = typeof value === 'number' && isFinite(value);
+  const animated = numeric ? useCountUp(value, 700, decimals) : null;
   return (
-    <div className={`${styles.dashboardOverlayPanel} ${styles.kpiChip}`} style={delay ? { animation: `dt-fade-in-up 0.4s ease-out ${delay}s both` } : undefined}>
-      <div className={styles.kpiIconBox} style={{ background: `${color}15`, color }}>
-        <Icon size={18} />
-      </div>
-      <div>
-        <div className={styles.kpiLabel}>
-          {label}
-        </div>
-        <div className={styles.kpiValue}>
-          {value}
-        </div>
+    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color, animationDelay: `${delay}ms` }}>
+      <span className={styles.kpiIcon} style={{ background: `${color}18`, color }}>
+        {Icon && <Icon size={15} />}
+      </span>
+      <div className={styles.kpiBody}>
+        <span className={styles.kpiValue}>
+          {numeric
+            ? (decimals > 0 ? animated?.toFixed(decimals) : animated)
+            : (value ?? '\u2014')}
+        </span>
+        <span className={styles.kpiLabel}>{label}</span>
       </div>
     </div>
   );
@@ -41,52 +68,74 @@ function KpiChip({ icon: Icon, label, value, color, delay = 0 }: {
 function ReliabilityScore({ score, trend, delay = 0 }: { score: number; trend: 'up' | 'down' | 'stable'; delay?: number }) {
   const { t } = useTranslation();
   const color = score >= 95 ? 'var(--color-teal)' : score >= 80 ? 'var(--color-accent)' : 'var(--color-red)';
+  const r = 17;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - Math.min(100, score) / 100);
+  const trendIcon = trend === 'up' ? '\u25B2' : trend === 'down' ? '\u25BC' : '\u2015';
+  const trendColor = trend === 'up' ? 'var(--color-teal)' : trend === 'down' ? 'var(--color-red)' : 'var(--color-text-tertiary)';
   return (
-    <div className={`${styles.dashboardOverlayPanel} ${styles.reliabilityPanel}`} style={delay ? { animation: `dt-fade-in-up 0.4s ease-out ${delay}s both` } : undefined}>
-      <div className={styles.reliabilityIconBox} style={{ background: `${color}20` }}>
-        <TrendingUp size={22} style={{ color }} />
-      </div>
-      <div>
-        <div className={styles.reliabilityLabel}>
-          {t('dashboard.reliabilityScore')}
-        </div>
-        <div className={styles.reliabilityScoreRow}>
-          <span className={styles.reliabilityScore} style={{ color }}>
-            {score}%
+    <div className={styles.reliabilityPanel} style={delay ? { animation: `dt-fade-in-up 0.45s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) ${delay}s both` } : undefined}>
+      <span className={styles.reliabilityRing}>
+        <svg width="44" height="44" viewBox="0 0 44 44">
+          <circle cx="22" cy="22" r={r} fill="none" stroke="var(--color-border)" strokeWidth="3" />
+          <circle
+            cx="22" cy="22" r={r} fill="none"
+            stroke={color} strokeWidth="3" strokeLinecap="round"
+            strokeDasharray={c} strokeDashoffset={offset}
+            transform="rotate(-90 22 22)"
+            style={{ transition: 'stroke-dashoffset 0.7s var(--ease-premium, cubic-bezier(0.16,1,0.3,1))' }}
+          />
+        </svg>
+        <TrendingUp size={15} style={{ color, position: 'absolute' }} />
+      </span>
+      <div className={styles.reliabilityText}>
+        <span className={styles.reliabilityLabel}>{t('dashboard.reliabilityScore')}</span>
+        <span className={styles.reliabilityScoreRow}>
+          <span className={styles.reliabilityScore} style={{ color }}>{score}%</span>
+          <span className={styles.reliabilityTrend} style={{ color: trendColor }}>
+            {trendIcon} {t('dashboard.vsPreviousMonth')}
           </span>
-          <span className={styles.reliabilityTrend} style={{
-            color: trend === 'up' ? 'var(--color-teal)' : trend === 'down' ? 'var(--color-red)' : 'var(--color-text-tertiary)',
-          }}>
-            {trend === 'up' ? '\u25B2' : trend === 'down' ? '\u25BC' : '\u2015'} {t('dashboard.vsPreviousMonth')}
-          </span>
-        </div>
+        </span>
       </div>
     </div>
   );
 }
 
+function ChartTooltip() {
+  return {
+    contentStyle: {
+      background: 'var(--color-chart-tooltip)',
+      border: '1px solid var(--color-border)',
+      borderRadius: 10,
+      fontSize: 12,
+      fontFamily: 'var(--font-mono)',
+      boxShadow: 'var(--shadow-lg)',
+    },
+    labelStyle: { color: 'var(--color-text)', fontWeight: 600 },
+    itemStyle: { color: 'var(--color-text)' },
+  };
+}
+
+const chartTooltip = ChartTooltip();
+
 function MiniChart({ data, delay = 0 }: { data: DeliveryStat[]; delay?: number }) {
   const { t } = useTranslation();
   return (
-    <div className={`${styles.dashboardOverlayPanel} ${styles.miniChartPanel}`} style={delay ? { animation: `dt-fade-in-up 0.4s ease-out ${delay}s both` } : undefined}>
-      <div className={styles.miniChartTitle}>
-        {t('dashboard.charts.deliveryStatus')}
+    <div className={styles.chartPanel} style={delay ? { animation: `dt-fade-in-up 0.45s ease-out ${delay}s both` } : undefined}>
+      <div className={styles.chartPanelHeader}>
+        <span className={styles.chartPanelDot} style={{ background: 'var(--color-accent)' }} />
+        <span className={styles.chartPanelTitle}>{t('dashboard.charts.deliveryStatus')}</span>
       </div>
-      <ResponsiveContainer width="100%" height={120}>
-        <BarChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-          <XAxis dataKey="status" tick={{ fontSize: 10, fill: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
+      <ResponsiveContainer width="100%" height={110}>
+        <BarChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+          <XAxis dataKey="status" tick={{ fontSize: 9, fill: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
           <YAxis hide />
-          <Tooltip
-            contentStyle={{
-              background: 'var(--color-chart-tooltip)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 6,
-              fontSize: 12,
-              fontFamily: 'var(--font-mono)',
-            }}
-            labelStyle={{ color: 'var(--color-text)' }}
-          />
-          <Bar dataKey="count" fill="var(--color-accent)" radius={[4, 4, 0, 0]} />
+          <Tooltip {...chartTooltip} />
+          <Bar dataKey="count" radius={[5, 5, 0, 0]}>
+            {data.map((d) => (
+              <Cell key={d.status} fill={d.status === 'delivered' ? 'var(--color-teal)' : d.status === 'failed' ? 'var(--color-red)' : 'var(--color-accent)'} />
+            ))}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -96,25 +145,18 @@ function MiniChart({ data, delay = 0 }: { data: DeliveryStat[]; delay?: number }
 function FuelMiniChart({ data, delay = 0 }: { data: FuelChartPoint[]; delay?: number }) {
   const { t } = useTranslation();
   return (
-    <div className={`${styles.dashboardOverlayPanel} ${styles.miniChartPanel}`} style={delay ? { animation: `dt-fade-in-up 0.4s ease-out ${delay}s both` } : undefined}>
-      <div className={styles.miniChartTitle}>
-        {t('dashboard.charts.consumption')}
+    <div className={styles.chartPanel} style={delay ? { animation: `dt-fade-in-up 0.45s ease-out ${delay}s both` } : undefined}>
+      <div className={styles.chartPanelHeader}>
+        <span className={styles.chartPanelDot} style={{ background: 'var(--color-teal)' }} />
+        <span className={styles.chartPanelTitle}>{t('dashboard.charts.consumption')}</span>
       </div>
-      <ResponsiveContainer width="100%" height={120}>
-        <LineChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
+      <ResponsiveContainer width="100%" height={110}>
+        <LineChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+          <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
           <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
-          <Tooltip
-            contentStyle={{
-              background: 'var(--color-chart-tooltip)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 6,
-              fontSize: 12,
-              fontFamily: 'var(--font-mono)',
-            }}
-            labelStyle={{ color: 'var(--color-text)' }}
-          />
-          <Line type="monotone" dataKey="consumption" stroke="var(--color-teal)" strokeWidth={2} dot={false} />
+          <Tooltip {...chartTooltip} />
+          <Line type="monotone" dataKey="consumption" stroke="var(--color-teal)" strokeWidth={2} dot={false}
+            strokeLinecap="round" activeDot={{ r: 4 }} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -149,30 +191,22 @@ function RecentDeliveriesMini({ delay = 0 }: { delay?: number }) {
   if (loading) return null;
 
   return (
-    <div className={`${styles.dashboardOverlayPanel} ${styles.recentDeliveriesPanel}`} style={delay ? { animation: `dt-fade-in-up 0.4s ease-out ${delay}s both` } : undefined}>
-      <div className={styles.recentDeliveriesHeader}>
-        <span>{t('dashboard.recentDeliveries')}</span>
+    <div className={styles.recentPanel} style={delay ? { animation: `dt-fade-in-up 0.45s ease-out ${delay}s both` } : undefined}>
+      <div className={styles.recentHeader}>
+        <span className={styles.recentTitle}>{t('dashboard.recentDeliveries')}</span>
         {deliveries.length > 0 && (
-          <span className={styles.recentDeliveriesCount}>
-            {deliveries.length}
-          </span>
+          <span className={styles.recentCount}>{deliveries.length}</span>
         )}
       </div>
       {deliveries.length === 0 ? (
-        <div className={styles.recentDeliveriesEmpty}>
-          {t('dashboard.noDeliveriesToday')}
-        </div>
+        <div className={styles.recentEmpty}>{t('dashboard.noDeliveriesToday')}</div>
       ) : (
-        <div className={styles.recentDeliveriesList}>
+        <div className={styles.recentList}>
           {deliveries.map((d: RecentDelivery) => (
-            <div key={d.id} className={styles.recentDeliveryItem}>
-              <div className={styles.recentDeliveryLeft}>
-                <div className={styles.recentDeliveryDot} style={{ background: statusColor[d.status] || 'var(--color-text-tertiary)' }} />
-                <span className={styles.recentDeliveryTitle}>
-                  {d.title}
-                </span>
-              </div>
-              <span className={styles.recentDeliveryStatus}>
+            <div key={d.id} className={styles.recentItem}>
+              <span className={styles.recentDot} style={{ background: statusColor[d.status] || 'var(--color-text-tertiary)' }} />
+              <span className={styles.recentItemTitle}>{d.title}</span>
+              <span className={styles.recentStatusPill} style={{ color: statusColor[d.status] || 'var(--color-text-tertiary)', borderColor: `${statusColor[d.status] || 'var(--color-text-tertiary)'}55`, background: `${statusColor[d.status] || 'transparent'}14` }}>
                 {statusLabel[d.status] || d.status}
               </span>
             </div>
@@ -222,16 +256,11 @@ export default function DashboardPage() {
       }
     };
     load();
-  }, []);
+  }, [t]);
 
-  const currentMonth = useMemo(() =>
-    formatMonth(new Date()),
-  []);
+  const currentMonth = useMemo(() => formatMonth(new Date()), []);
 
-  const perfectMonth = useMemo(() => {
-    if (!reliability) return false;
-    return reliability.score === 100;
-  }, [reliability]);
+  const perfectMonth = useMemo(() => !!reliability && reliability.score === 100, [reliability]);
 
   const kpiItems = useMemo(() => [
     { icon: Truck, label: t('dashboard.kpis.deliveriesToday'), value: kpis?.deliveriesToday ?? '\u2014', color: 'var(--color-accent)' },
@@ -239,8 +268,10 @@ export default function DashboardPage() {
     { icon: MapPin, label: t('dashboard.kpis.activeVehicles'), value: kpis?.activeVehicles ?? '\u2014', color: 'var(--color-accent)' },
     { icon: Clock, label: t('dashboard.kpis.activeDrivers'), value: kpis?.activeDrivers ?? '\u2014', color: 'var(--color-accent)' },
     { icon: AlertTriangle, label: t('dashboard.kpis.anomalies'), value: kpis?.anomalies ?? '\u2014', color: 'var(--color-red)' },
-    { icon: Fuel, label: t('dashboard.kpis.avgConsumption'), value: kpis?.fuelStats?.averageConsumption ? `${kpis.fuelStats.averageConsumption.toFixed(1)}` : '\u2014', color: 'var(--color-teal)' },
-  ], [kpis]);
+    { icon: Fuel, label: t('dashboard.kpis.avgConsumption'), value: kpis?.fuelStats?.averageConsumption, color: 'var(--color-teal)', decimals: 1 },
+  ], [kpis, t]);
+
+  const anyChart = !error && (deliveryStats.length > 0 || fuelData.length > 0);
 
   if (loading) {
     return (
@@ -260,13 +291,13 @@ export default function DashboardPage() {
 
         <div className={styles.overlayContainer}>
           {/* Top bar */}
-          <div className={styles.topBar}>
+          <header className={styles.topBar}>
             <div className={styles.topBarLeft}>
-              <h1 className={styles.dashboardTitle}>
-                {t('dashboard.title')}
-              </h1>
-              <div className={styles.dashboardDate}>
-                {formatDateLong(new Date())}
+              <span className={styles.titleIconChip}><Gauge size={20} /></span>
+              <div className={styles.headerText}>
+                <span className={styles.kicker}>{t('dashboard.kicker')}</span>
+                <h1 className={styles.pageTitle}>{t('dashboard.title')}</h1>
+                <span className={styles.dashboardDate}>{formatDateLong(new Date())}</span>
               </div>
             </div>
             <div className={styles.topBarRight}>
@@ -275,21 +306,27 @@ export default function DashboardPage() {
                 <ReliabilityScore score={reliability.score} trend={reliability.trend} delay={0.04} />
               )}
             </div>
+          </header>
+
+          {/* Left: overview KPI panel */}
+          <div className={styles.kpiPanel}>
+            <div className={styles.kpiPanelHeader}>
+              <span className={styles.kpiPanelDot} />
+              <span className={styles.kpiPanelTitle}>{t('dashboard.overviewTitle')}</span>
+            </div>
+            <div className={styles.kpiGrid}>
+              {kpiItems.map((item, i) => (
+                <KpiCard key={item.label} {...item} delay={0.1 + i * 0.06} />
+              ))}
+            </div>
           </div>
 
-          {/* KPI column - left center */}
-          <div className={styles.kpiColumn}>
-            {kpiItems.map((item, i) => (
-              <KpiChip key={item.label} {...item} delay={0.1 + i * 0.06} />
-            ))}
-          </div>
-
-          {/* Charts + Recent deliveries - right side */}
-          {!error && (
+          {/* Right column: charts + recent deliveries */}
+          {anyChart && (
             <div className={styles.chartsColumn}>
-              {deliveryStats.length > 0 && <MiniChart data={deliveryStats} delay={0.1} />}
+              {deliveryStats.length > 0 && <MiniChart data={deliveryStats} delay={0.14} />}
               {fuelData.length > 0 && <FuelMiniChart data={fuelData} delay={0.18} />}
-              <RecentDeliveriesMini delay={0.26} />
+              <RecentDeliveriesMini delay={0.22} />
             </div>
           )}
 
@@ -310,11 +347,13 @@ export default function DashboardPage() {
           <RealTimeMap />
         </div>
 
-        <div className={`${styles.mobileStack} ${styles.dashboardMobileStack}`}>
+        <div className={styles.mobileStack}>
           <div className={styles.mobileTitleRow}>
-            <h1 className={styles.mobileTitle}>
-              {t('dashboard.title')}
-            </h1>
+            <span className={styles.titleIconChip}><Gauge size={18} /></span>
+            <div className={styles.headerText}>
+              <span className={styles.kicker}>{t('dashboard.kicker')}</span>
+              <h1 className={styles.mobileTitle}>{t('dashboard.title')}</h1>
+            </div>
             {perfectMonth && <PerfectMonthBadge month={currentMonth} />}
           </div>
 
@@ -322,18 +361,19 @@ export default function DashboardPage() {
             <ReliabilityScore score={reliability.score} trend={reliability.trend} delay={0.04} />
           )}
 
-          <div className={styles.mobileKpiRow}>
-            {kpiItems.slice(0, 3).map((item, i) => (
-              <KpiChip key={item.label} {...item} delay={0.1 + i * 0.06} />
-            ))}
-          </div>
-          <div className={styles.mobileKpiRow}>
-            {kpiItems.slice(3).map((item, i) => (
-              <KpiChip key={item.label} {...item} delay={0.28 + i * 0.06} />
-            ))}
+          <div className={styles.kpiPanel}>
+            <div className={styles.kpiPanelHeader}>
+              <span className={styles.kpiPanelDot} />
+              <span className={styles.kpiPanelTitle}>{t('dashboard.overviewTitle')}</span>
+            </div>
+            <div className={styles.kpiGrid}>
+              {kpiItems.map((item, i) => (
+                <KpiCard key={item.label} {...item} delay={0.08 + i * 0.06} />
+              ))}
+            </div>
           </div>
 
-          {!error && (
+          {anyChart && (
             <>
               {deliveryStats.length > 0 && <MiniChart data={deliveryStats} delay={0.1} />}
               {fuelData.length > 0 && <FuelMiniChart data={fuelData} delay={0.18} />}

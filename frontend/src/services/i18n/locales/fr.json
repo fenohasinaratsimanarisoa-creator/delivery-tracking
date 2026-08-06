@@ -1084,7 +1084,9 @@
       "delivered": "Livrée",
       "failed": "Échouée",
       "cancelled": "Annulée"
-    }
+    },
+    "kicker": "Suivi en direct",
+    "overviewTitle": "Vue d'ensemble"
   },
   "admin": {
     "login": {

@@ -1084,7 +1084,9 @@
       "delivered": "Delivered",
       "failed": "Failed",
       "cancelled": "Cancelled"
-    }
+    },
+    "kicker": "Live tracking",
+    "overviewTitle": "Overview"
   },
   "admin": {
     "login": {
