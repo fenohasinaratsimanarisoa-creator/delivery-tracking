@@ -206,7 +206,10 @@ function RecentDeliveriesMini({ delay = 0 }: { delay?: number }) {
             <div key={d.id} className={styles.recentItem}>
               <span className={styles.recentDot} style={{ background: statusColor[d.status] || 'var(--color-text-tertiary)' }} />
               <span className={styles.recentItemTitle}>{d.title}</span>
-              <span className={styles.recentStatusPill} style={{ color: statusColor[d.status] || 'var(--color-text-tertiary)', borderColor: `${statusColor[d.status] || 'var(--color-text-tertiary)'}55`, background: `${statusColor[d.status] || 'transparent'}14` }}>
+              <span
+                className={styles.recentStatusPill}
+                style={{ color: statusColor[d.status] || 'var(--color-text-tertiary)', borderColor: statusColor[d.status] || 'var(--color-text-tertiary)' }}
+              >
                 {statusLabel[d.status] || d.status}
               </span>
             </div>
