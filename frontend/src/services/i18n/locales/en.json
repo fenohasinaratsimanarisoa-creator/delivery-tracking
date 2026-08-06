@@ -85,7 +85,12 @@
       "sessionExpired": "Your session has expired. Please sign in again.",
       "brand": "DeliveryTrack",
       "secure": "Secure platform",
-      "uptime": "99.9% uptime"
+      "uptime": "99.9% uptime",
+      "features": {
+        "gps": "Real-time GPS tracking",
+        "proofs": "Delivery proofs",
+        "live": "Live stats"
+      }
     },
     "register": {
       "title": "Create an account",
@@ -1383,7 +1388,9 @@
     "kpiLabel": "Deliveries today",
     "kpiGoal": "Target: 100",
     "kpiAchieved": "78% reached",
-    "uptime": "99.9% uptime"
+    "uptime": "99.9% uptime",
+    "live": "Live",
+    "rating": "4.9/5 customer satisfaction"
   },
   "mapPage": {
     "currentPosition": "Current position",

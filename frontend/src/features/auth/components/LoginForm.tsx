@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Eye, EyeOff, LogIn, Loader2, AlertCircle, Lock, ShieldCheck,
+  MapPin, FileCheck, Radio,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import styles from './LoginForm.module.css';
@@ -65,11 +66,12 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
       <div className={styles.form}>
         <div style={animate(0)}>
           <div className={styles.brand}>
-            <div className={styles.brandIcon}>DT</div>
-            <span className={styles.brandName}>DeliveryTrack</span>
+            <div className={styles.brandIcon}>D</div>
+            <span className={styles.brandName}>{t('auth.login.brand')}</span>
+            <span className={styles.brandBadge}>PRO</span>
           </div>
           <div className={styles.socialProof}>
-            <ShieldCheck size={12} />
+            <ShieldCheck size={12} className={styles.shieldIcon} />
             <span>{t('auth.login.secure')}</span>
             <span className={styles.socialDot} />
             <span>{t('auth.login.uptime')}</span>
@@ -170,6 +172,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
                 />
+                <span className={styles.checkboxMark} aria-hidden />
                 {t('auth.login.rememberMe')}
               </label>
               <Link to="/forgot-password" className={styles.forgotLink}>
@@ -183,17 +186,8 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
               type="submit"
               disabled={loading || !isFormValid}
               className={`${styles.submitBtn} ${loading || !isFormValid ? styles.submitBtnDisabled : styles.submitBtnActive}`}
-              onMouseEnter={(e) => {
-                if (!loading && isFormValid) {
-                  e.currentTarget.style.transform = 'translateY(-1px)';
-                  e.currentTarget.style.boxShadow = 'var(--shadow-lg)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = '';
-                e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-              }}
             >
+              <span className={styles.buttonShine} aria-hidden />
               {loading ? (
                 <>
                   <Loader2 size={18} className={styles.spinner} />
@@ -217,7 +211,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
         </div>
 
         {googleConfigured === true && (
-          <div style={animate(0.30)}>
+          <div style={animate(0.3)}>
             <div className={styles.divider}>
               <span className={styles.dividerLine} />
               <span className={styles.dividerText}>{t('common.or')}</span>
@@ -227,14 +221,6 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
               type="button"
               className={styles.ssoButton}
               onClick={() => { window.location.href = '/api/auth/google'; }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--color-accent)';
-                e.currentTarget.style.background = 'var(--color-accent-muted)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--color-input-border)';
-                e.currentTarget.style.background = 'var(--color-input-bg)';
-              }}
             >
               <span className={styles.googleG}>G</span>
               {t('auth.login.googleLogin')}
@@ -242,7 +228,22 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
           </div>
         )}
 
-        <div className={styles.footerText} style={animate(0.30)}>
+        <div className={styles.featuresRow} style={animate(0.3)}>
+          <span className={styles.featureItem}>
+            <MapPin size={13} />
+            {t('auth.login.features.gps')}
+          </span>
+          <span className={styles.featureItem}>
+            <FileCheck size={13} />
+            {t('auth.login.features.proofs')}
+          </span>
+          <span className={styles.featureItem}>
+            <Radio size={13} />
+            {t('auth.login.features.live')}
+          </span>
+        </div>
+
+        <div className={styles.footerText} style={animate(0.34)}>
           {t('auth.login.noAccount')}{' '}
           <Link to="/register" className={styles.signupLink}>
             {t('auth.login.createAccount')}
