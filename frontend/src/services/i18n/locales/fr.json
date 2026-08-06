@@ -410,6 +410,8 @@
   "fuel": {
     "title": "Carburant",
     "subtitle": "Suivez les pleins, la consommation estimée et les prix de votre flotte.",
+    "kicker": "Suivi carburant",
+    "emptyTitle": "Aucun relevé",
     "stats": {
       "totalLiters": "Litres totalisés",
       "totalKm": "Km totalisés",

@@ -410,6 +410,8 @@
   "fuel": {
     "title": "Fuel",
     "subtitle": "Track fuel refills, estimated consumption and prices across your fleet.",
+    "kicker": "Fuel tracking",
+    "emptyTitle": "No fuel logs",
     "stats": {
       "totalLiters": "Total liters",
       "totalKm": "Total km",

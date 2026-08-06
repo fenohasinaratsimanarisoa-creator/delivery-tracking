@@ -19,6 +19,14 @@ import {
   Inbox,
   CheckCircle2,
   HelpCircle,
+  Car,
+  Calendar,
+  Flame,
+  Factory,
+  Zap,
+  Leaf,
+  ArrowUpRight,
+  ArrowDownRight,
 } from 'lucide-react';
 import api from '../services/api/client';
 import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
@@ -48,6 +56,78 @@ interface ConsumptionStats {
 }
 
 const FUEL_TYPES = ['essence', 'gasoil', 'diesel', 'electric', 'hybrid'];
+
+const FUEL_TYPE_COLORS: Record<string, string> = {
+  essence: 'var(--color-accent)',
+  gasoil: 'var(--color-teal)',
+  diesel: 'var(--color-blue)',
+  electric: 'var(--color-purple)',
+  hybrid: 'var(--color-warning)',
+};
+
+const FUEL_TYPE_ICONS: Record<string, React.ReactNode> = {
+  essence: <Flame size={15} />,
+  gasoil: <Droplets size={15} />,
+  diesel: <Factory size={15} />,
+  electric: <Zap size={15} />,
+  hybrid: <Leaf size={15} />,
+};
+
+function useCountUp(target: number, decimals = 0, duration = 700) {
+  const [value, setValue] = useState(target);
+  useEffect(() => {
+    const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false;
+    if (reduced) {
+      setValue(target);
+      return;
+    }
+    let raf: number;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const factor = Math.pow(10, decimals);
+      setValue(Math.round(target * eased * factor) / factor);
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, decimals, duration]);
+  return value;
+}
+
+function KpiCard({ icon, label, value, unit, color, delay, decimals = 0, format, pulse }: {
+  icon: React.ReactNode; label: string; value: number; unit?: string; color: string;
+  delay: number; decimals?: number; format?: (n: number) => string; pulse?: boolean;
+}) {
+  const animated = useCountUp(value, decimals);
+  const text = format
+    ? format(animated)
+    : animated.toLocaleString('fr-FR', { maximumFractionDigits: decimals, minimumFractionDigits: 0 });
+  return (
+    <div
+      className={`${styles.kpiCard} ${pulse ? styles.kpiCardPulse : ''}`}
+      style={{ ['--kpi' as string]: color, animationDelay: `${delay}ms` }}
+    >
+      <div className={styles.kpiTop}>
+        <span className={styles.kpiIcon}>{icon}</span>
+      </div>
+      <div className={styles.kpiValue}>
+        {text}
+        {unit && <span className={styles.kpiUnit}>{unit}</span>}
+      </div>
+      <div className={styles.kpiLabel}>{label}</div>
+    </div>
+  );
+}
+
+function initials(name?: string) {
+  if (!name) return '?';
+  const parts = name.replace(/[()]/g, '').split(' ').filter(Boolean);
+  return `${(parts[0]?.[0] || '').toUpperCase()}${(parts[1]?.[0] || '').toUpperCase()}`;
+}
 
 export default function FuelPage() {
   const { t, i18n } = useTranslation();
@@ -360,61 +440,40 @@ export default function FuelPage() {
     { key: 'prices' as const, label: t('fuel.tabPrices'), icon: <CircleDollarSign size={15} /> },
   ];
 
-  const statCards = [
-    {
-      label: t('fuel.stats.totalLiters'),
-      value: s.totalLiters ?? 0,
-      unit: t('fuel.unitLiters'),
-      icon: <Droplets size={18} />,
-      variant: 'teal' as const,
-      mono: true,
-    },
-    {
-      label: t('fuel.stats.totalKm'),
-      value: s.totalKilometers ?? 0,
-      unit: t('fuel.unitKm'),
-      icon: <Gauge size={18} />,
-      variant: 'accent' as const,
-      mono: true,
-    },
-    {
-      label: t('fuel.stats.totalCost'),
-      value: formatAriary(s.totalCost ?? 0),
-      unit: '',
-      icon: <Wallet size={18} />,
-      variant: 'blue' as const,
-      mono: false,
-    },
-    {
-      label: t('fuel.stats.avgConsumption'),
-      value: (s.averageConsumption ?? 0).toFixed(1),
-      unit: t('fuel.unitPer100'),
-      icon: <Fuel size={18} />,
-      variant: 'accent' as const,
-      mono: true,
-    },
-    {
-      label: t('fuel.stats.anomalies'),
-      value: s.anomalyCount ?? 0,
-      unit: '',
-      icon: <AlertTriangle size={18} />,
-      variant: 'red' as const,
-      mono: true,
-    },
-  ];
-
   if (isLoading || reportsLoading || pricesLoading) {
     return (
       <div className={styles.pageContainer}>
-        <div className={`${styles.skeleton} ${styles.skeletonHeader}`} />
-        <div className={`${styles.skeleton} ${styles.skeletonTabs}`} />
-        <div className={styles.skeletonStats}>
-          <div className={`${styles.skeleton} ${styles.skeletonStat}`} />
-          <div className={`${styles.skeleton} ${styles.skeletonStat}`} />
-          <div className={`${styles.skeleton} ${styles.skeletonStat}`} />
-          <div className={`${styles.skeleton} ${styles.skeletonStat}`} />
+        <div className={styles.pageHeader}>
+          <div className={`${styles.shimmer} ${styles.shimmerChip}`} />
+          <div className={styles.headerText}>
+            <div className={`${styles.shimmer} ${styles.shimmerKicker}`} />
+            <div className={`${styles.shimmer} ${styles.shimmerTitle}`} />
+          </div>
+          <div className={`${styles.shimmer} ${styles.shimmerBadge}`} />
         </div>
-        <div className={`${styles.skeleton} ${styles.skeletonTable}`} />
+        <div className={`${styles.shimmer} ${styles.shimmerTabs}`} />
+        <div className={styles.kpiGrid}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className={styles.kpiSkeleton}>
+              <div className={`${styles.shimmer} ${styles.shimmerIcon}`} style={{ animationDelay: `${i * 60}ms` }} />
+              <div className={`${styles.shimmer} ${styles.shimmerValue}`} style={{ animationDelay: `${i * 60 + 40}ms` }} />
+            </div>
+          ))}
+        </div>
+        <div className={styles.tableSkeleton}>
+          <div className={`${styles.shimmer} ${styles.shimmerTableHeader}`} />
+          {[0, 1, 2, 3, 4].map((r) => (
+            <div key={r} className={styles.skeletonRowLine}>
+              {[24, 12, 12, 16, 14, 18, 16, 10].map((w, c) => (
+                <div
+                  key={c}
+                  className={`${styles.shimmer} ${styles.shimmerCell}`}
+                  style={{ width: `${w}%`, animationDelay: `${(r + c) * 50}ms` }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -423,7 +482,10 @@ export default function FuelPage() {
     return (
       <div className={styles.pageContainer}>
         <div className={styles.pageHeader}>
-          <div className={styles.headerTitleWrap}>
+          <div className={styles.titleIconChip}>
+            <Fuel size={22} />
+          </div>
+          <div className={styles.headerText}>
             <h1 className={styles.pageTitle}>{t('fuel.title')}</h1>
           </div>
         </div>
@@ -435,14 +497,27 @@ export default function FuelPage() {
   return (
     <div className={styles.pageContainer}>
       <div className={styles.pageHeader}>
-        <div className={styles.headerTitleWrap}>
+        <div className={styles.titleIconChip}>
+          <Fuel size={22} />
+        </div>
+        <div className={styles.headerText}>
+          <span className={styles.kicker}>{t('fuel.kicker')}</span>
           <h1 className={styles.pageTitle}>{t('fuel.title')}</h1>
           <p className={styles.pageSubtitle}>{t('fuel.subtitle')}</p>
         </div>
-        <span className={styles.headerBadge}>
-          <Fuel size={13} />
-          {s.logCount ?? 0} {t('fuel.stats.logs')}
-        </span>
+
+        <div className={styles.headerChips}>
+          <span className={styles.headerChip}>
+            <Droplets size={13} />
+            {(s.logCount ?? 0).toLocaleString('fr-FR')} {t('fuel.stats.logs')}
+          </span>
+          {(s.anomalyCount ?? 0) > 0 && (
+            <span className={`${styles.headerChip} ${styles.headerChipDanger}`}>
+              <AlertTriangle size={13} />
+              {(s.anomalyCount ?? 0).toLocaleString('fr-FR')} {t('fuel.stats.anomalies').toLowerCase()}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className={styles.tabsRow}>
@@ -463,26 +538,48 @@ export default function FuelPage() {
       {tab === 'manual' && (
         <>
           <div className={styles.toolbarRow}>
-            <div className={styles.statsGrid}>
-              {statCards.map((c) => (
-                <div key={c.label} className={styles.statCard}>
-                  <div className={`${styles.statIcon} ${
-                    c.variant === 'teal' ? styles.statIconTeal
-                      : c.variant === 'red' ? styles.statIconRed
-                        : c.variant === 'blue' ? styles.statIconBlue
-                          : ''
-                  }`}>
-                    {c.icon}
-                  </div>
-                  <div className={styles.statBody}>
-                    <span className={styles.statLabel}>{c.label}</span>
-                    <span className={styles.statValue}>
-                      {c.value}
-                      {c.unit && <span className={styles.statUnit}>{c.unit}</span>}
-                    </span>
-                  </div>
-                </div>
-              ))}
+            <div className={styles.kpiGrid}>
+              <KpiCard
+                icon={<Droplets size={16} />}
+                label={t('fuel.stats.totalLiters')}
+                value={Math.round(s.totalLiters ?? 0)}
+                unit={t('fuel.unitLiters')}
+                color="var(--color-teal)"
+                delay={0}
+              />
+              <KpiCard
+                icon={<Gauge size={16} />}
+                label={t('fuel.stats.totalKm')}
+                value={Math.round(s.totalKilometers ?? 0)}
+                unit={t('fuel.unitKm')}
+                color="var(--color-accent)"
+                delay={60}
+              />
+              <KpiCard
+                icon={<Wallet size={16} />}
+                label={t('fuel.stats.totalCost')}
+                value={s.totalCost ?? 0}
+                format={formatAriary}
+                color="var(--color-blue)"
+                delay={120}
+              />
+              <KpiCard
+                icon={<Fuel size={16} />}
+                label={t('fuel.stats.avgConsumption')}
+                value={s.averageConsumption ?? 0}
+                unit={t('fuel.unitPer100')}
+                color="var(--color-purple)"
+                decimals={1}
+                delay={180}
+              />
+              <KpiCard
+                icon={<AlertTriangle size={16} />}
+                label={t('fuel.stats.anomalies')}
+                value={s.anomalyCount ?? 0}
+                color="var(--color-red)"
+                delay={240}
+                pulse={(s.anomalyCount ?? 0) > 0}
+              />
             </div>
 
             <button
@@ -497,7 +594,7 @@ export default function FuelPage() {
           {entries.length === 0 && (
             <div className={styles.emptyState}>
               <span className={styles.emptyIcon}><Inbox size={24} /></span>
-              <p className={styles.emptyTitle}>{t('fuel.title')}</p>
+              <p className={styles.emptyTitle}>{t('fuel.emptyTitle')}</p>
               <p className={styles.emptyText}>{t('fuel.empty')}</p>
             </div>
           )}
@@ -522,12 +619,35 @@ export default function FuelPage() {
                     <tbody>
                       {entries.map((l) => (
                         <tr key={l.id} className={styles.tableRow}>
-                          <td className={styles.tableCellBold}>{l.vehicle?.licensePlate ?? '-'}</td>
-                          <td className={styles.tableCellMono}>{l.liters}</td>
-                          <td className={styles.tableCellMono}>{l.kilometers}</td>
-                          <td className={styles.tableCellMono}>{l.calculatedConsumption?.toFixed(1) ?? '-'}</td>
-                          <td className={`${styles.tableCellMono} ${styles.tableCellRight}`}>{l.cost.toFixed(2)} €</td>
-                          <td className={styles.tableCell}>{new Date(l.fillDate).toLocaleDateString(i18n.language)}</td>
+                          <td className={styles.tableCell}>
+                            <span className={styles.fuelVehicle}>
+                              <span className={styles.fuelVehicleIcon}><Car size={14} /></span>
+                              <span className={styles.fuelVehiclePlate}>{l.vehicle?.licensePlate ?? '-'}</span>
+                            </span>
+                          </td>
+                          <td className={styles.tableCell}>
+                            <span className={styles.monoValue}>{l.liters}</span>
+                            <span className={styles.monoUnit}>L</span>
+                          </td>
+                          <td className={styles.tableCell}>
+                            <span className={styles.monoValue}>{l.kilometers}</span>
+                            <span className={styles.monoUnit}>km</span>
+                          </td>
+                          <td className={styles.tableCell}>
+                            <span className={styles.consPill}>
+                              {l.calculatedConsumption?.toFixed(1) ?? '-'}
+                              <span className={styles.consUnit}>L/100km</span>
+                            </span>
+                          </td>
+                          <td className={`${styles.tableCell} ${styles.tableCellRight}`}>
+                            <span className={styles.costCell}>{l.cost.toFixed(2)} €</span>
+                          </td>
+                          <td className={styles.tableCell}>
+                            <span className={styles.dateCell}>
+                              <Calendar size={13} />
+                              {new Date(l.fillDate).toLocaleDateString(i18n.language)}
+                            </span>
+                          </td>
                           <td className={styles.tableCell}>
                             {l.anomalyFlag ? (
                               <span
@@ -538,7 +658,12 @@ export default function FuelPage() {
                                     : t('fuel.underConsumption')
                                   : undefined}
                               >
-                                <AlertTriangle size={12} /> {t('fuel.anomaly')}
+                                {l.consumptionDeviationDirection === 'over'
+                                  ? <ArrowUpRight size={12} />
+                                  : l.consumptionDeviationDirection === 'under'
+                                    ? <ArrowDownRight size={12} />
+                                    : <AlertTriangle size={12} />}
+                                {t('fuel.anomaly')}
                               </span>
                             ) : l.gpsCoverageInsufficientFlag ? (
                               // Signal « non vérifiable » : couverture GPS absente sur la
@@ -610,10 +735,13 @@ export default function FuelPage() {
       {tab === 'gps' && (
         <div>
           <p className={styles.helpText}>
-            {t('fuel.gpsHelp')}
+            <Radar size={14} className={styles.helpInlineIcon} /> {t('fuel.gpsHelp')}
           </p>
 
           <div className={styles.controlCard}>
+            <div className={styles.controlIcon}>
+              <Radar size={18} />
+            </div>
             <div className={styles.controlField}>
               <label className={styles.label}>{t('fuel.date')}</label>
               <input
@@ -676,12 +804,19 @@ export default function FuelPage() {
                     {reportList.map((r: FuelReport, i: number) => (
                       <tr key={r.id || i} className={styles.tableRow}>
                         <td className={styles.tableCell}>
-                          <span className={`${styles.badge} ${styles.badgeDriver}`}>{r.driverName}</span>
+                          <span className={styles.driverCell}>
+                            <span className={styles.driverAvatar}>{initials(r.driverName)}</span>
+                            <span className={styles.driverName}>{r.driverName || '—'}</span>
+                          </span>
                         </td>
-                        <td className={styles.tableCellBold}>{r.vehiclePlate}</td>
+                        <td className={styles.tableCell}>
+                          <span className={styles.plateChip}>
+                            <Car size={12} /> {r.vehiclePlate || '—'}
+                          </span>
+                        </td>
                         <td className={styles.tableCell}>
                           <div className={styles.distCell}>
-                            <span className={styles.tableCellMono}>{r.distanceKm?.toFixed(1)} km</span>
+                            <span className={styles.monoValue}>{r.distanceKm?.toFixed(1)} km</span>
                             {r.gpsDataQuality === 'insufficient' && (
                               // gpsDataQuality='insufficient' : des positions GPS existent mais la
                               // distance calculée est trop faible pour être fiable (< 0.1 km) — ce
@@ -698,9 +833,21 @@ export default function FuelPage() {
                             )}
                           </div>
                         </td>
-                        <td className={styles.tableCellMono}>{r.consumptionLPer100Km?.toFixed(1) ?? '-'} L/100km</td>
-                        <td className={`${styles.tableCellMono} ${styles.tableCellRight}`}>{formatAriary(r.estimatedCost)}</td>
-                        <td className={styles.tableCell}>{r.reportDate ? new Date(r.reportDate).toLocaleDateString(i18n.language) : '-'}</td>
+                        <td className={styles.tableCell}>
+                          <span className={styles.consPill}>
+                            {r.consumptionLPer100Km?.toFixed(1) ?? '-'}
+                            <span className={styles.consUnit}>L/100km</span>
+                          </span>
+                        </td>
+                        <td className={`${styles.tableCell} ${styles.tableCellRight}`}>
+                          <span className={styles.costCellAr}>{formatAriary(r.estimatedCost)}</span>
+                        </td>
+                        <td className={styles.tableCell}>
+                          <span className={styles.dateCell}>
+                            <Calendar size={13} />
+                            {r.reportDate ? new Date(r.reportDate).toLocaleDateString(i18n.language) : '-'}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -724,26 +871,40 @@ export default function FuelPage() {
       {tab === 'prices' && (
         <div>
           <p className={styles.helpText}>
-            {t('fuel.pricesHelp')}
+            <CircleDollarSign size={14} className={styles.helpInlineIcon} /> {t('fuel.pricesHelp')}
           </p>
 
           <div className={styles.pricesSection}>
-            <h3 className={styles.pricesTitle}>{t('fuel.defaultPricesTitle')}</h3>
+            <div className={styles.sectionHeader}>
+              <span className={styles.sectionHeaderIcon}><CircleDollarSign size={15} /></span>
+              <h3 className={styles.pricesTitle}>{t('fuel.defaultPricesTitle')}</h3>
+            </div>
             <p className={styles.helpText}>{t('fuel.defaultPricesHelp')}</p>
             <div className={styles.defaultsGrid}>
-              {FUEL_TYPES.map((ft) => (
-                <div key={ft} className={styles.defaultsField}>
-                  <label className={styles.defaultsFieldLabel}>{t(`fuel.types.${ft}`)}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    className={styles.dateInput}
-                    value={defaultsDraft[ft] ?? ''}
-                    onChange={(e) => setDefaultsDraft((d) => ({ ...d, [ft]: e.target.value }))}
-                  />
-                </div>
-              ))}
+              {FUEL_TYPES.map((ft) => {
+                const color = FUEL_TYPE_COLORS[ft] || 'var(--color-accent)';
+                return (
+                  <div key={ft} className={styles.defaultsField}>
+                    <label className={styles.defaultsFieldLabel} style={{ color }}>
+                      <span
+                        className={styles.fuelTypeIconSm}
+                        style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}
+                      >
+                        {FUEL_TYPE_ICONS[ft]}
+                      </span>
+                      {t(`fuel.types.${ft}`)}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      className={styles.dateInput}
+                      value={defaultsDraft[ft] ?? ''}
+                      onChange={(e) => setDefaultsDraft((d) => ({ ...d, [ft]: e.target.value }))}
+                    />
+                  </div>
+                );
+              })}
             </div>
             <div>
               <button
@@ -759,7 +920,10 @@ export default function FuelPage() {
 
           <div className={styles.pricesSection}>
             <div className={styles.historyHeader}>
-              <h3 className={styles.pricesTitle}>{t('fuel.historyTitle')}</h3>
+              <div className={styles.sectionHeader}>
+                <span className={styles.sectionHeaderIcon}><CircleDollarSign size={15} /></span>
+                <h3 className={styles.pricesTitle}>{t('fuel.historyTitle')}</h3>
+              </div>
               <button type="button" className={styles.addBtn} onClick={openAddPrice}>
                 <Plus size={16} /> {t('fuel.addPrice')}
               </button>
@@ -788,36 +952,65 @@ export default function FuelPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {priceHistory.map((p) => (
-                        <tr key={p.id} className={styles.tableRow}>
-                          <td className={styles.tableCellBold}>{t(`fuel.types.${p.fuelType}`, { defaultValue: p.fuelType })}</td>
-                          <td className={`${styles.tableCellMono} ${styles.tableCellRight}`}>{formatAriary(p.pricePerLiter)}</td>
-                          <td className={styles.tableCell}>{new Date(p.effectiveFrom).toLocaleDateString(i18n.language)}</td>
-                          <td className={styles.tableCell}>{p.effectiveUntil ? new Date(p.effectiveUntil).toLocaleDateString(i18n.language) : '—'}</td>
-                          <td className={`${styles.tableCell} ${styles.tableCellRight}`}>
-                            <div className={styles.actionsRow}>
-                              <button
-                                type="button"
-                                className={styles.actionBtn}
-                                onClick={() => openEditPrice(p)}
-                                title={t('common.edit')}
-                                aria-label={t('common.edit')}
-                              >
-                                <Pencil size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                className={`${styles.actionBtn} ${styles.danger}`}
-                                onClick={() => setDeletingPrice(p)}
-                                title={t('common.delete')}
-                                aria-label={t('common.delete')}
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {priceHistory.map((p) => {
+                        const color = FUEL_TYPE_COLORS[p.fuelType] || 'var(--color-accent)';
+                        return (
+                          <tr key={p.id} className={styles.tableRow}>
+                            <td className={styles.tableCell}>
+                              <span className={styles.fuelTypeCell}>
+                                <span
+                                  className={styles.fuelTypeIcon}
+                                  style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}
+                                >
+                                  {FUEL_TYPE_ICONS[p.fuelType]}
+                                </span>
+                                <span className={styles.fuelTypeName}>{t(`fuel.types.${p.fuelType}`, { defaultValue: p.fuelType })}</span>
+                              </span>
+                            </td>
+                            <td className={`${styles.tableCell} ${styles.tableCellRight}`}>
+                              <span className={styles.costCellAr}>{formatAriary(p.pricePerLiter)}</span>
+                            </td>
+                            <td className={styles.tableCell}>
+                              <span className={styles.dateCell}>
+                                <Calendar size={13} />
+                                {new Date(p.effectiveFrom).toLocaleDateString(i18n.language)}
+                              </span>
+                            </td>
+                            <td className={styles.tableCell}>
+                              {p.effectiveUntil ? (
+                                <span className={styles.dateCell}>
+                                  <Calendar size={13} />
+                                  {new Date(p.effectiveUntil).toLocaleDateString(i18n.language)}
+                                </span>
+                              ) : (
+                                <span className={styles.openPill}>∞</span>
+                              )}
+                            </td>
+                            <td className={`${styles.tableCell} ${styles.tableCellRight}`}>
+                              <div className={styles.actionsRow}>
+                                <button
+                                  type="button"
+                                  className={styles.actionBtn}
+                                  onClick={() => openEditPrice(p)}
+                                  title={t('common.edit')}
+                                  aria-label={t('common.edit')}
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`${styles.actionBtn} ${styles.danger}`}
+                                  onClick={() => setDeletingPrice(p)}
+                                  title={t('common.delete')}
+                                  aria-label={t('common.delete')}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
