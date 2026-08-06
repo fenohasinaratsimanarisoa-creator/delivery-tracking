@@ -505,11 +505,18 @@
   },
   "reports": {
     "title": "Rapports",
-    "subtitle": "Analysez les performances de votre flotte",
+    "subtitle": "Analysez les performances de votre flotte sur la période",
+    "kicker": "Analytique & performance",
     "period": {
       "7days": "7 jours",
       "30days": "30 jours",
       "custom": "Personnalisé"
+    },
+    "export": {
+      "pdf": "PDF",
+      "excel": "Excel",
+      "pdfTitle": "Télécharger le rapport PDF",
+      "excelTitle": "Télécharger le rapport Excel"
     },
     "stats": {
       "onTime": "À l'heure"
@@ -519,12 +526,64 @@
       "dailyEvolution": "Évolution par jour",
       "deliveries": "Livraisons",
       "vehicles": "Véhicules",
-      "drivers": "Chauffeurs"
+      "drivers": "Chauffeurs",
+      "distanceByVehicle": "Distance par véhicule",
+      "consumptionByVehicle": "Consommation",
+      "deliveriesByVehicle": "Livraisons par véhicule",
+      "deliveriesByDriver": "Livraisons par chauffeur",
+      "completed": "Complétées",
+      "inProgress": "En cours",
+      "failed": "Échouées"
+    },
+    "kpis": {
+      "deliveryTotal": "Total livraisons",
+      "deliveryCompleted": "Complétées",
+      "deliveryOnTime": "À l'heure",
+      "deliveryOnTimeRate": "Ponctualité",
+      "fleetActive": "Véhicules actifs",
+      "fleetOnline": "En ligne",
+      "fleetDistance": "Distance totale",
+      "fleetFuel": "Carburant total",
+      "driverTotal": "Total livraisons",
+      "driverCompleted": "Complétées",
+      "driverOnTimeRate": "Ponctualité globale",
+      "driverActive": "Chauffeurs actifs"
     },
     "tabs": {
       "delivery": "Livraisons",
       "fleet": "Flotte",
       "driver": "Chauffeurs"
+    },
+    "status": {
+      "pending": "En attente",
+      "assigned": "Assignée",
+      "in_progress": "En cours",
+      "delivered": "Livrée",
+      "failed": "Échouée",
+      "cancelled": "Annulée"
+    },
+    "table": {
+      "vehicles": "Détail des véhicules",
+      "drivers": "Détail des chauffeurs",
+      "vehicle": "Véhicule",
+      "licensePlate": "Immatriculation",
+      "deliveries": "Livraisons",
+      "distance": "Distance",
+      "fuel": "Carburant",
+      "consumption": "Consommation",
+      "status": "État",
+      "driver": "Chauffeur",
+      "phone": "Téléphone",
+      "completed": "Complétées",
+      "onTime": "À l'heure",
+      "punctuality": "Ponctualité",
+      "failed": "Échouées",
+      "online": "En ligne",
+      "offline": "Hors-ligne"
+    },
+    "empty": {
+      "noData": "Aucune donnée sur la période",
+      "hint": "Modifiez la période ou vérifiez vos données et réessayez"
     },
     "toast": {
       "downloaded": "Rapport {tab} téléchargé ({format})"

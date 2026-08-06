@@ -505,11 +505,18 @@
   },
   "reports": {
     "title": "Reports",
-    "subtitle": "Analyze your fleet's performance",
+    "subtitle": "Analyze your fleet's performance over the period",
+    "kicker": "Analytics & performance",
     "period": {
       "7days": "7 days",
       "30days": "30 days",
       "custom": "Custom"
+    },
+    "export": {
+      "pdf": "PDF",
+      "excel": "Excel",
+      "pdfTitle": "Download the PDF report",
+      "excelTitle": "Download the Excel report"
     },
     "stats": {
       "onTime": "On time"
@@ -519,12 +526,64 @@
       "dailyEvolution": "Daily evolution",
       "deliveries": "Deliveries",
       "vehicles": "Vehicles",
-      "drivers": "Drivers"
+      "drivers": "Drivers",
+      "distanceByVehicle": "Distance per vehicle",
+      "consumptionByVehicle": "Consumption",
+      "deliveriesByVehicle": "Deliveries per vehicle",
+      "deliveriesByDriver": "Deliveries per driver",
+      "completed": "Completed",
+      "inProgress": "In progress",
+      "failed": "Failed"
+    },
+    "kpis": {
+      "deliveryTotal": "Total deliveries",
+      "deliveryCompleted": "Completed",
+      "deliveryOnTime": "On time",
+      "deliveryOnTimeRate": "On-time rate",
+      "fleetActive": "Active vehicles",
+      "fleetOnline": "Online",
+      "fleetDistance": "Total distance",
+      "fleetFuel": "Total fuel",
+      "driverTotal": "Total deliveries",
+      "driverCompleted": "Completed",
+      "driverOnTimeRate": "Global on-time rate",
+      "driverActive": "Active drivers"
     },
     "tabs": {
       "delivery": "Deliveries",
       "fleet": "Fleet",
       "driver": "Drivers"
+    },
+    "status": {
+      "pending": "Pending",
+      "assigned": "Assigned",
+      "in_progress": "In progress",
+      "delivered": "Delivered",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "table": {
+      "vehicles": "Vehicle details",
+      "drivers": "Driver details",
+      "vehicle": "Vehicle",
+      "licensePlate": "License plate",
+      "deliveries": "Deliveries",
+      "distance": "Distance",
+      "fuel": "Fuel",
+      "consumption": "Consumption",
+      "status": "Status",
+      "driver": "Driver",
+      "phone": "Phone",
+      "completed": "Completed",
+      "onTime": "On time",
+      "punctuality": "Punctuality",
+      "failed": "Failed",
+      "online": "Online",
+      "offline": "Offline"
+    },
+    "empty": {
+      "noData": "No data for this period",
+      "hint": "Change the period or check your data and try again"
     },
     "toast": {
       "downloaded": "Report {tab} downloaded ({format})"
