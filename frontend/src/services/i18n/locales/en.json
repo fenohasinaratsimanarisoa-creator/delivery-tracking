@@ -268,16 +268,32 @@
   "fleet": {
     "title": "Fleet",
     "subtitle": "Manage your vehicles",
+    "kicker": "Vehicle fleet",
     "newVehicle": "New vehicle",
     "searchPlaceholder": "Search vehicles…",
     "drawerSubtitle": "Add a vehicle to your fleet",
+    "editSubtitle": "Year {year} · {fuelType}",
     "editVehicle": "Save",
     "createVehicle": "Create vehicle",
+    "deleteConfirmLabel": "Delete",
+    "selectDevicePlaceholder": "Select a device…",
+    "addDevice": "Add",
+    "addDeviceHint": "Add a new Traccar device",
+    "kpis": {
+      "total": "Vehicles",
+      "active": "Active",
+      "inactive": "Inactive",
+      "withDriver": "With driver"
+    },
+    "positionSources": {
+      "phone": "Mobile app (driver)",
+      "tracker": "Physical tracker (Traccar)"
+    },
     "formSections": {
       "identity": "Vehicle Identity",
       "registration": "Registration",
       "features": "Features",
-      "positionSource": "Position Source"
+      "positionSource": "GPS Source"
     },
     "fields": {
       "brand": "Brand",
@@ -287,7 +303,8 @@
       "vin": "VIN number",
       "fuelType": "Fuel type",
       "theoreticalConsumption": "Theoretical consumption (L/100km)",
-      "positionSource": "Position source"
+      "positionSource": "Position source",
+      "traccarDeviceId": "Traccar device"
     },
     "fuelTypes": {
       "gasoline": "Gasoline",
@@ -303,7 +320,8 @@
       "year": "Year",
       "licensePlate": "Plate",
       "fuelType": "Fuel",
-      "status": "Status"
+      "status": "Status",
+      "driver": "Driver"
     },
     "status": {
       "active": "Active",
@@ -321,7 +339,10 @@
       "updated": "Vehicle updated",
       "created": "Vehicle created",
       "deleted": "Vehicle deleted",
-      "deleteError": "Error deleting vehicle"
+      "deleteError": "Error deleting vehicle",
+      "saveError": "Error saving vehicle",
+      "deviceAdded": "Traccar device added",
+      "deviceError": "Error adding device"
     },
     "confirmDelete": {
       "title": "Delete vehicle",
@@ -331,6 +352,18 @@
     "count_plural": "{{count}} vehicles in your fleet",
     "validation": {
       "invalidYear": "Invalid year (e.g. 2024)"
+    },
+    "resultCount": "{{count}} result",
+    "resultCount_plural": "{{count}} results",
+    "modalDevice": {
+      "title": "New Traccar device",
+      "nameLabel": "Tracker name",
+      "namePlaceholder": "Ex: Renault Kangoo tracker",
+      "imeiLabel": "Unique identifier (IMEI)",
+      "imeiPlaceholder": "Ex: 863295042345678",
+      "cancel": "Cancel",
+      "add": "Add",
+      "adding": "Adding..."
     }
   },
   "drivers": {
@@ -339,7 +372,7 @@
     "kicker": "Delivery team",
     "countSubtitle": "{{count}} driver in your fleet",
     "countSubtitle_plural": "{{count}} drivers in your fleet",
-    "fromUsersHint": "Drivers appear here after being created from Users (Role \u201cDriver\u201d)",
+    "fromUsersHint": "Drivers appear here after being created from Users (Role “Driver”)",
     "vehicleAssignment": "Vehicle assignment",
     "noVehicle": "No vehicle",
     "newDriver": "New driver",
@@ -453,39 +486,39 @@
     "unitPer100": "L/100km",
     "error": "Error loading fuel data",
     "empty": "No fuel records yet.",
- "tabManual": "Manual Entry",
- "tabGps": "GPS Report",
- "tabPrices": "Fuel Prices",
- "pricesHelp": "Set the fuel prices used to estimate GPS report costs. The most recent price applicable to the report date is used.",
- "defaultPricesTitle": "Default prices (per fuel type)",
- "defaultPricesHelp": "Used when no historical price applies to the report date. These replace the old fixed values.",
- "saveDefaults": "Save default prices",
- "defaultsSaved": "Default prices saved",
- "defaultsError": "Error saving default prices",
- "historyTitle": "Price history",
- "historyHelp": "A price applies from its effective date. \"Until\" is optional: left empty, the price stays valid indefinitely.",
- "addPrice": "Add price",
- "addPriceTitle": "Add price",
- "editPriceTitle": "Edit price",
- "fuelType": "Fuel type",
- "pricePerLiter": "Price per liter (Ar)",
- "effectiveFrom": "Effective from",
- "effectiveUntil": "Until (optional)",
- "priceSaved": "Price saved",
- "priceUpdated": "Price updated",
- "priceDeleted": "Price deleted",
- "priceError": "Error saving price",
- "priceDeleteError": "Error deleting price",
- "noPrices": "No historical prices yet.",
- "invalidPrice": "Please enter a valid price (number ≥ 0).",
- "confirmDeletePriceTitle": "Delete price",
- "types": {
-  "essence": "Gasoline",
-  "gasoil": "Gasoil",
-  "diesel": "Diesel",
-  "electric": "Electric",
-  "hybrid": "Hybrid"
- },
+    "tabManual": "Manual Entry",
+    "tabGps": "GPS Report",
+    "tabPrices": "Fuel Prices",
+    "pricesHelp": "Set the fuel prices used to estimate GPS report costs. The most recent price applicable to the report date is used.",
+    "defaultPricesTitle": "Default prices (per fuel type)",
+    "defaultPricesHelp": "Used when no historical price applies to the report date. These replace the old fixed values.",
+    "saveDefaults": "Save default prices",
+    "defaultsSaved": "Default prices saved",
+    "defaultsError": "Error saving default prices",
+    "historyTitle": "Price history",
+    "historyHelp": "A price applies from its effective date. \"Until\" is optional: left empty, the price stays valid indefinitely.",
+    "addPrice": "Add price",
+    "addPriceTitle": "Add price",
+    "editPriceTitle": "Edit price",
+    "fuelType": "Fuel type",
+    "pricePerLiter": "Price per liter (Ar)",
+    "effectiveFrom": "Effective from",
+    "effectiveUntil": "Until (optional)",
+    "priceSaved": "Price saved",
+    "priceUpdated": "Price updated",
+    "priceDeleted": "Price deleted",
+    "priceError": "Error saving price",
+    "priceDeleteError": "Error deleting price",
+    "noPrices": "No historical prices yet.",
+    "invalidPrice": "Please enter a valid price (number ≥ 0).",
+    "confirmDeletePriceTitle": "Delete price",
+    "types": {
+      "essence": "Gasoline",
+      "gasoil": "Gasoil",
+      "diesel": "Diesel",
+      "electric": "Electric",
+      "hybrid": "Hybrid"
+    },
     "gpsHelp": "The GPS report estimates consumption from distances calculated using vehicle GPS positions. Click \"Generate\" to compute the report for a given date.",
     "gpsEmpty": "No GPS report for this date. Generate one using the button above.",
     "generateReport": "Generate Report",
@@ -516,16 +549,16 @@
     "helpTitle": "Understanding both records",
     "helpManual": "• Manual entry: real fuel fill-ups recorded by the team (liters, cost, mileage). Used to track actual fuel expenses.",
     "helpGps": "• GPS Report: automatic estimation based on vehicle GPS positions. Uses the vehicle's theoretical consumption to estimate costs. Complements manual entries.",
- "editTitle": "Edit fuel log",
- "editDetails": "Fill-up details",
- "addEntry": "New fuel log",
- "addTitle": "Add fuel log",
- "addSubmit": "Add",
- "addSuccess": "Fuel log added",
- "addError": "Error adding fuel log",
- "kmHelper": "Do not enter the odometer reading",
- "requiredFields": "Please fill in vehicle, liters, mileage, cost and date.",
- "notes": "Notes",
+    "editTitle": "Edit fuel log",
+    "editDetails": "Fill-up details",
+    "addEntry": "New fuel log",
+    "addTitle": "Add fuel log",
+    "addSubmit": "Add",
+    "addSuccess": "Fuel log added",
+    "addError": "Error adding fuel log",
+    "kmHelper": "Do not enter the odometer reading",
+    "requiredFields": "Please fill in vehicle, liters, mileage, cost and date.",
+    "notes": "Notes",
     "updateSuccess": "Fuel log updated",
     "updateError": "Error updating fuel log",
     "deleteSuccess": "Fuel log deleted",
@@ -1145,16 +1178,16 @@
     }
   },
   "errors": {
-    "404": {
-      "title": "404",
-      "heading": "Page not found",
-      "message": "The page you are looking for does not exist.",
-      "backToDashboard": "Back to Dashboard"
-    },
     "403": {
       "icon": "🚫",
       "heading": "Access denied",
       "message": "You don't have the required permissions to access this page.",
+      "backToDashboard": "Back to Dashboard"
+    },
+    "404": {
+      "title": "404",
+      "heading": "Page not found",
+      "message": "The page you are looking for does not exist.",
       "backToDashboard": "Back to Dashboard"
     }
   },
@@ -1177,18 +1210,42 @@
     "backToRegister": "Back to registration",
     "lastUpdated": "Last updated: {date}",
     "privacyPolicy": "Privacy Policy",
-    "section1": { "title": "1. Purpose of the Terms" },
-    "section2": { "title": "2. Definitions" },
-    "section3": { "title": "3. Account Creation & Management" },
-    "section4": { "title": "4. Services Provided" },
-    "section5": { "title": "5. User Obligations" },
-    "section6": { "title": "6. Personal Data Protection" },
-    "section7": { "title": "7. Intellectual Property" },
-    "section8": { "title": "8. Liability" },
-    "section9": { "title": "9. Pricing & Billing" },
-    "section10": { "title": "10. Termination" },
-    "section11": { "title": "11. Governing Law" },
-    "section12": { "title": "12. Contact" }
+    "section1": {
+      "title": "1. Purpose of the Terms"
+    },
+    "section2": {
+      "title": "2. Definitions"
+    },
+    "section3": {
+      "title": "3. Account Creation & Management"
+    },
+    "section4": {
+      "title": "4. Services Provided"
+    },
+    "section5": {
+      "title": "5. User Obligations"
+    },
+    "section6": {
+      "title": "6. Personal Data Protection"
+    },
+    "section7": {
+      "title": "7. Intellectual Property"
+    },
+    "section8": {
+      "title": "8. Liability"
+    },
+    "section9": {
+      "title": "9. Pricing & Billing"
+    },
+    "section10": {
+      "title": "10. Termination"
+    },
+    "section11": {
+      "title": "11. Governing Law"
+    },
+    "section12": {
+      "title": "12. Contact"
+    }
   },
   "privacy": {
     "title": "Privacy Policy",
@@ -1196,21 +1253,41 @@
     "cookies": "Cookie Policy",
     "cookiesDesc": "See our",
     "cookiesLink": "for more information on the cookies we use and how to manage them.",
-    "section1": { "title": "1. Data Controller" },
+    "section1": {
+      "title": "1. Data Controller"
+    },
     "section2": {
       "title": "2. Data Collected",
       "sub1": "2.1 Directly Provided Data",
       "sub2": "2.2 Automatically Collected Data"
     },
-    "section3": { "title": "3. Legal Basis for Processing" },
-    "section4": { "title": "4. Data Recipients" },
-    "section5": { "title": "5. Transfers Outside the EU" },
-    "section6": { "title": "6. Retention Period" },
-    "section7": { "title": "7. Your GDPR Rights" },
-    "section8": { "title": "8. Security" },
-    "section9": { "title": "9. Cookies" },
-    "section10": { "title": "10. Complaints" },
-    "section11": { "title": "11. Contact" }
+    "section3": {
+      "title": "3. Legal Basis for Processing"
+    },
+    "section4": {
+      "title": "4. Data Recipients"
+    },
+    "section5": {
+      "title": "5. Transfers Outside the EU"
+    },
+    "section6": {
+      "title": "6. Retention Period"
+    },
+    "section7": {
+      "title": "7. Your GDPR Rights"
+    },
+    "section8": {
+      "title": "8. Security"
+    },
+    "section9": {
+      "title": "9. Cookies"
+    },
+    "section10": {
+      "title": "10. Complaints"
+    },
+    "section11": {
+      "title": "11. Contact"
+    }
   },
   "form": {
     "validation": {
@@ -1302,7 +1379,6 @@
       "periodLabel": "Period",
       "title": "Filters",
       "reset": "Reset",
-      "today": "Today",
       "today": "Today",
       "7days": "7 days",
       "30days": "30 days",
@@ -1470,15 +1546,6 @@
     "statusDelivered": "Delivered",
     "statusFailed": "Failed",
     "statusCancelled": "Cancelled"
-  },
-  "myDeliveriesMap": {
-    "pickup": "📍",
-    "dropoff": "🏁",
-    "vehicle": "🚛"
-  },
-  "activeDelivery": {
-    "pickup": "📍",
-    "dropoff": "🏁"
   },
   "navigation": {
     "calculating": "Calculating route…",

@@ -1,8 +1,11 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Power, PowerOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import {
+  Search, Power, PowerOff, Plus, Truck, CarFront, Fuel, Zap, Droplets,
+  Battery, Flame, IdCard, CheckCircle2, CircleOff, UserCheck, SearchX,
+} from 'lucide-react';
 import Button from '../components/Button';
-import Input from '../components/Input';
 import api from '../services/api/client';
 import DataTable from '../components/DataTable';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -21,50 +24,106 @@ interface VehicleFormValues {
   positionSource: string; traccarDeviceId: string;
 }
 
-const vehicleFields: FieldDef<VehicleFormValues>[] = [
-  { name: 'brand', label: 'Marque', type: 'text', required: true, section: 'identity', autoFocus: true,
-    rules: { minLength: 2, maxLength: 50 } },
-  { name: 'model', label: 'Modèle', type: 'text', required: true, section: 'identity',
-    rules: { minLength: 1, maxLength: 50 } },
-  { name: 'year', label: 'Année', type: 'number', required: true, section: 'identity',
-    rules: { minLength: 4, maxLength: 4, pattern: /^\d{4}$/, patternMessage: 'Année invalide (ex: 2024)' } },
-  { name: 'licensePlate', label: 'Plaque d\'immatriculation', type: 'text', required: true, section: 'registration',
-    rules: { minLength: 4, maxLength: 15 } },
-  { name: 'vin', label: 'Numéro VIN', type: 'text', section: 'registration',
-    rules: { maxLength: 17 } },
-  { name: 'fuelType', label: 'Type de carburant', type: 'select', required: true, section: 'specs',
-    options: [
-      { value: 'Essence', label: 'Essence' },
-      { value: 'Diesel', label: 'Diesel' },
-      { value: 'Électrique', label: 'Électrique' },
-      { value: 'Hybride', label: 'Hybride Essence' },
-      { value: 'Hybride Diesel', label: 'Hybride Diesel' },
-      { value: 'GPL', label: 'GPL' },
-    ] },
-  { name: 'theoreticalConsumption', label: 'Consommation théorique (L/100km)', type: 'number', section: 'specs' },
-  { name: 'positionSource', label: 'Source de position', type: 'select', required: true, section: 'gps',
-    options: [
-      { value: 'phone', label: 'App mobile (chauffeur)' },
-      { value: 'physical_tracker', label: 'Traceur physique (Traccar)' },
-    ] },
-  { name: 'traccarDeviceId', label: 'Dispositif Traccar', type: 'select', section: 'gps' },
-];
+function useCountUp(target: number, duration = 650) {
+  const [value, setValue] = useState(target);
+  useEffect(() => {
+    const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false;
+    if (reduced) {
+      setValue(target);
+      return;
+    }
+    let raf: number;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(target * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return value;
+}
 
-const vehicleSections: FormSection[] = [
-  { title: 'Identité du véhicule', fields: ['brand', 'model', 'year'] },
-  { title: 'Immatriculation', fields: ['licensePlate', 'vin'] },
-  { title: 'Caractéristiques', fields: ['fuelType', 'theoreticalConsumption'] },
-  { title: 'Source GPS', fields: ['positionSource', 'traccarDeviceId'] },
-];
+function KpiCard({ icon, label, value, color, delay }: {
+  icon: React.ReactNode; label: string; value: number; color: string; delay: number;
+}) {
+  const animated = useCountUp(value);
+  return (
+    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color, animationDelay: `${delay}ms` }}>
+      <div className={styles.kpiTop}>
+        <span className={styles.kpiIcon}>{icon}</span>
+      </div>
+      <div className={styles.kpiValue}>{animated}</div>
+      <div className={styles.kpiLabel}>{label}</div>
+    </div>
+  );
+}
+
+const FUEL_TONES: Record<string, { color: string; bg: string; icon: React.ReactNode }> = {
+  'Essence': { color: '#F2A93C', bg: 'rgba(242,169,60,0.14)', icon: <Droplets size={13} /> },
+  'Diesel': { color: '#eab308', bg: 'rgba(234,179,8,0.14)', icon: <Fuel size={13} /> },
+  'Électrique': { color: '#22c55e', bg: 'rgba(34,197,94,0.14)', icon: <Zap size={13} /> },
+  'Hybride Essence': { color: '#06b6d4', bg: 'rgba(6,182,212,0.14)', icon: <Battery size={13} /> },
+  'Hybride Diesel': { color: '#06b6d4', bg: 'rgba(6,182,212,0.14)', icon: <Battery size={13} /> },
+  'GPL': { color: '#a855f7', bg: 'rgba(168,85,247,0.14)', icon: <Flame size={13} /> },
+};
+
+function VehicleNameCell({ vehicle }: { vehicle: Vehicle }) {
+  return (
+    <span className={styles.vehicleNameCell}>
+      <span className={styles.vehicleAvatar}>
+        <CarFront size={15} />
+      </span>
+      <span className={styles.vehicleNameText}>
+        <span className={styles.vehicleName}>{vehicle.brand}</span>
+        <span className={styles.vehicleModel}>{vehicle.model}</span>
+      </span>
+    </span>
+  );
+}
+
+function PlateCell({ plate }: { plate: string }) {
+  return (
+    <span className={styles.platePill}>
+      <IdCard size={12} />
+      {plate}
+    </span>
+  );
+}
+
+function FuelCell({ fuelType }: { fuelType: string }) {
+  const tone = FUEL_TONES[fuelType] ?? { color: '#9BA6B9', bg: 'rgba(155,166,185,0.14)', icon: <Fuel size={13} /> };
+  return (
+    <span className={styles.fuelPill} style={{ color: tone.color, background: tone.bg, borderColor: `${tone.color}33` }}>
+      {tone.icon}
+      {fuelType}
+    </span>
+  );
+}
+
+function DriverCell({ driver }: { driver: Vehicle['driver'] }) {
+  if (!driver) return <span className={styles.driverNone}>—</span>;
+  const initials = `${(driver.firstName[0] || '').toUpperCase()}${(driver.lastName[0] || '').toUpperCase()}`;
+  return (
+    <span className={styles.driverCell}>
+      <span className={styles.driverAvatar}>{initials}</span>
+      <span className={styles.driverName}>{driver.firstName} {driver.lastName}</span>
+    </span>
+  );
+}
 
 function SkeletonRows() {
   return (
     <>
       {[1, 2, 3, 4].map((i) => (
         <tr key={`sk-${i}`} className={styles.skeletonRow}>
-          {[40, 30, 20, 35, 25, 25, 20].map((w, j) => (
+          {[36, 32, 18, 26, 30, 34, 28].map((w, j) => (
             <td key={j} className={styles.skeletonCell}>
-              <div className={styles.shimmer} style={{ width: `${w}%` }} />
+              <div className={styles.shimmer} style={{ width: `${w}%`, animationDelay: `${(i + j) * 90}ms` }} />
             </td>
           ))}
         </tr>
@@ -74,6 +133,7 @@ function SkeletonRows() {
 }
 
 export default function FleetPage() {
+  const { t } = useTranslation();
   const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Vehicle | null>(null);
@@ -101,6 +161,13 @@ export default function FleetPage() {
   const vehicles: Vehicle[] = data?.data ?? [];
   const meta = data?.meta ?? { total: 0, page: 1, limit: 20, totalPages: 1 };
 
+  const stats = {
+    total: vehicles.length,
+    active: vehicles.filter((v) => v.isActive).length,
+    inactive: vehicles.filter((v) => !v.isActive).length,
+    withDriver: vehicles.filter((v) => v.driver).length,
+  };
+
   const filtered = useMemo(() => {
     if (!search.trim()) return vehicles;
     const q = search.toLowerCase();
@@ -121,11 +188,11 @@ export default function FleetPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles', 'list'] });
-      toast('Véhicule supprimé');
+      toast(t('fleet.toast.deleted'));
       setDeleting(null);
     },
     onError: (err: ApiError) => {
-      toast(err?.response?.data?.message || 'Erreur lors de la suppression', 'error');
+      toast(err?.response?.data?.message || t('fleet.toast.deleteError'), 'error');
       setDeleting(null);
     },
   });
@@ -138,7 +205,7 @@ export default function FleetPage() {
       queryClient.invalidateQueries({ queryKey: ['vehicles', 'list'] });
     },
     onError: (err: ApiError) => {
-      toast(err?.response?.data?.message || 'Erreur', 'error');
+      toast(err?.response?.data?.message || t('common.error'), 'error');
     },
   });
 
@@ -147,13 +214,13 @@ export default function FleetPage() {
       api.post('/vehicles/traccar-devices', body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['traccar-devices'] });
-      toast('Dispositif Traccar ajouté');
+      toast(t('fleet.toast.deviceAdded'));
       setShowAddDevice(false);
       setNewDeviceName('');
       setNewDeviceId('');
     },
     onError: (err: ApiError) => {
-      toast(err?.response?.data?.message || 'Erreur lors de l\'ajout', 'error');
+      toast(err?.response?.data?.message || t('fleet.toast.deviceError'), 'error');
     },
   });
 
@@ -161,6 +228,42 @@ export default function FleetPage() {
     value: String(d.id),
     label: `${d.name} (ID: ${d.id})`,
   }));
+
+  const vehicleFields: FieldDef<VehicleFormValues>[] = [
+    { name: 'brand', label: t('fleet.fields.brand'), type: 'text', required: true, section: 'identity', autoFocus: true,
+      rules: { minLength: 2, maxLength: 50 } },
+    { name: 'model', label: t('fleet.fields.model'), type: 'text', required: true, section: 'identity',
+      rules: { minLength: 1, maxLength: 50 } },
+    { name: 'year', label: t('fleet.fields.year'), type: 'number', required: true, section: 'identity',
+      rules: { minLength: 4, maxLength: 4, pattern: /^\d{4}$/, patternMessage: t('fleet.validation.invalidYear') } },
+    { name: 'licensePlate', label: t('fleet.fields.licensePlate'), type: 'text', required: true, section: 'registration',
+      rules: { minLength: 4, maxLength: 15 } },
+    { name: 'vin', label: t('fleet.fields.vin'), type: 'text', section: 'registration',
+      rules: { maxLength: 17 } },
+    { name: 'fuelType', label: t('fleet.fields.fuelType'), type: 'select', required: true, section: 'specs',
+      options: [
+        { value: 'Essence', label: t('fleet.fuelTypes.gasoline') },
+        { value: 'Diesel', label: t('fleet.fuelTypes.diesel') },
+        { value: 'Électrique', label: t('fleet.fuelTypes.electric') },
+        { value: 'Hybride Essence', label: t('fleet.fuelTypes.hybrid') },
+        { value: 'Hybride Diesel', label: t('fleet.fuelTypes.hybridDiesel') },
+        { value: 'GPL', label: t('fleet.fuelTypes.lpg') },
+      ] },
+    { name: 'theoreticalConsumption', label: t('fleet.fields.theoreticalConsumption'), type: 'number', section: 'specs' },
+    { name: 'positionSource', label: t('fleet.fields.positionSource'), type: 'select', required: true, section: 'gps',
+      options: [
+        { value: 'phone', label: t('fleet.positionSources.phone') },
+        { value: 'physical_tracker', label: t('fleet.positionSources.tracker') },
+      ] },
+    { name: 'traccarDeviceId', label: t('fleet.fields.traccarDeviceId'), type: 'select', section: 'gps' },
+  ];
+
+  const vehicleSections: FormSection[] = [
+    { title: t('fleet.formSections.identity'), fields: ['brand', 'model', 'year'] },
+    { title: t('fleet.formSections.registration'), fields: ['licensePlate', 'vin'] },
+    { title: t('fleet.formSections.features'), fields: ['fuelType', 'theoreticalConsumption'] },
+    { title: t('fleet.formSections.positionSource'), fields: ['positionSource', 'traccarDeviceId'] },
+  ];
 
   const fieldsWithTraccar = useMemo(() => {
     return vehicleFields.map((f) => {
@@ -196,9 +299,12 @@ export default function FleetPage() {
       const id = editing?.id || '';
       setHighlightedId(id);
       setTimeout(() => setHighlightedId(null), 1500);
-      toast(editing ? 'Véhicule modifié' : 'Véhicule créé');
+      toast(editing ? t('fleet.toast.updated') : t('fleet.toast.created'));
       setDrawerOpen(false);
       setEditing(null);
+    },
+    onError: (err: ApiError) => {
+      toast(err?.response?.data?.message || t('fleet.toast.saveError'), 'error');
     },
   });
 
@@ -223,45 +329,76 @@ export default function FleetPage() {
     if (drawerOpen) vehicleForm.reset();
   }, [drawerOpen, editing?.id]);
 
-  const drawerTitle = editing ? `${editing.brand} ${editing.model} (${editing.licensePlate})` : 'Nouveau véhicule';
-  const drawerSubtitle = editing ? `Année ${editing.year} · ${editing.fuelType}` : 'Ajoutez un véhicule à votre flotte';
+  const drawerTitle = editing
+    ? `${editing.brand} ${editing.model} (${editing.licensePlate})`
+    : t('fleet.newVehicle');
+  const drawerSubtitle = editing
+    ? t('fleet.editSubtitle', { year: editing.year, fuelType: editing.fuelType })
+    : t('fleet.drawerSubtitle');
   const onCancel = () => { setDrawerOpen(false); setEditing(null); };
 
   return (
-    <div className={`page-padding ${styles.pageContainer}`}>
-      <div className={styles.headerRow}>
-        <div>
-          <h1 className={styles.pageTitle}>
-            Flotte
-          </h1>
+    <div className={styles.pageContainer}>
+      <header className={styles.pageHeader}>
+        <div className={styles.titleIconChip}><Truck size={24} /></div>
+        <div className={styles.headerText}>
+          <span className={styles.kicker}>{t('fleet.kicker')}</span>
+          <h1 className={styles.pageTitle}>{t('fleet.title')}</h1>
           <p className={styles.pageSubtitle}>
-            {meta.total > 0 ? `${meta.total} véhicule${meta.total > 1 ? 's' : ''} dans votre flotte` : 'Gérez vos véhicules'}
+            {meta.total > 0
+              ? t(meta.total > 1 ? 'fleet.count_plural' : 'fleet.count', { count: meta.total })
+              : t('fleet.subtitle')}
           </p>
         </div>
-        <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
-          Nouveau véhicule
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<Plus size={16} />}
+          onClick={() => { setEditing(null); setDrawerOpen(true); }}
+        >
+          {t('fleet.newVehicle')}
         </Button>
+      </header>
+
+      <div className={styles.kpiGrid}>
+        <KpiCard icon={<Truck size={18} />} label={t('fleet.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" delay={0} />
+        <KpiCard icon={<CheckCircle2 size={18} />} label={t('fleet.kpis.active')} value={stats.active} color="#22c55e" delay={70} />
+        <KpiCard icon={<CircleOff size={18} />} label={t('fleet.kpis.inactive')} value={stats.inactive} color="var(--color-text-tertiary, #7A8BA3)" delay={140} />
+        <KpiCard icon={<UserCheck size={18} />} label={t('fleet.kpis.withDriver')} value={stats.withDriver} color="var(--color-blue, #3b82f6)" delay={210} />
       </div>
 
-      <div className={styles.searchBarContainer}>
-        <div style={{ flex: 1, maxWidth: 320 }}>
-          <Input
-            placeholder="Rechercher un véhicule…"
-            prefixIcon={<Search size={14} />}
+      <div className={styles.filtersRow}>
+        <div className={styles.searchInputWrapper}>
+          <Search size={14} className={styles.searchIcon} />
+          <input
+            placeholder={t('fleet.searchPlaceholder')}
             onChange={(e) => handleSearch(e.target.value)}
-            fullWidth
+            className={styles.searchInput}
           />
         </div>
+        {search && (
+          <span className={styles.resultCount}>
+            {t(search.length > 1 ? 'fleet.resultCount_plural' : 'fleet.resultCount', { count: filtered.length })}
+          </span>
+        )}
       </div>
 
       <div className={styles.tableContainer}>
         {isLoading ? (
-          <div className={styles.skeletonWrapper}>
+          <div className={styles.skeletonTableWrapper}>
             <table className={styles.skeletonTable}>
               <thead>
                 <tr className={styles.skeletonTheadTr}>
-                  {['Marque', 'Modèle', 'Année', 'Plaque', 'Carburant', 'Chauffeur', 'Statut', ''].map((l) => (
-                    <th key={l} className={styles.skeletonTh} style={{ textAlign: l === '' ? 'right' : 'left' }}>
+                  {[
+                    t('fleet.table.brand'),
+                    t('fleet.table.model'),
+                    t('fleet.table.year'),
+                    t('fleet.table.licensePlate'),
+                    t('fleet.table.driver'),
+                    t('fleet.table.status'),
+                    '',
+                  ].map((l, idx) => (
+                    <th key={idx} className={styles.skeletonTh} style={{ textAlign: l === '' ? 'right' : 'left' }}>
                       {l}
                     </th>
                   ))}
@@ -274,71 +411,76 @@ export default function FleetPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className={styles.emptyState}>
-            <div className={styles.emptyStateIcon}>
-              <Plus size={24} />
+            <div className={styles.emptyIconWrap}>
+              <SearchX size={26} />
             </div>
-            <p className={styles.emptyStateTitle}>
-              {search ? 'Aucun véhicule ne correspond' : 'Aucun véhicule enregistré'}
+            <p className={styles.emptyTitle}>
+              {search ? t('fleet.empty.noMatch') : t('fleet.empty.noData')}
             </p>
-            <p className={styles.emptyStateDesc}>
-              {search ? 'Essayez un autre terme' : 'Ajoutez le premier véhicule à votre flotte'}
+            <p className={styles.emptyDesc}>
+              {search ? t('fleet.empty.tryDifferent') : t('fleet.empty.createFirst')}
             </p>
             {!search && (
               <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
-                Ajouter un véhicule
+                {t('fleet.createVehicle')}
               </Button>
             )}
           </div>
         ) : (
-          <DataTable
-            columns={[
-              {
-                key: 'brand', label: 'Marque', sortable: true,
-                render: (r: Vehicle) => <span className={styles.cellPrimary}>{r.brand}</span>,
-              },
-              {
-                key: 'model', label: 'Modèle', sortable: true,
-                render: (r: Vehicle) => <span className={styles.cellBody}>{r.model}</span>,
-              },
-              {
-                key: 'year', label: 'Année', sortable: true,
-                render: (r: Vehicle) => <span className={styles.cellMuted}>{r.year}</span>,
-              },
-              {
-                key: 'licensePlate', label: 'Plaque', sortable: true,
-                render: (r: Vehicle) => <span className={styles.cellMono}>{r.licensePlate}</span>,
-              },
-              {
-                key: 'fuelType', label: 'Carburant', sortable: true,
-                render: (r: Vehicle) => <span className={styles.cellMuted}>{r.fuelType}</span>,
-              },
-              {
-                key: 'driver', label: 'Chauffeur',
-                render: (r: Vehicle) => r.driver
-                  ? <span className={styles.cellMuted}>{r.driver.firstName} {r.driver.lastName}</span>
-                  : <span className={styles.cellMuted}>-</span>,
-              },
-              {
-                key: 'isActive', label: 'Statut',
-                render: (r: Vehicle) => (
-                  <div className={styles.statusCell}>
-                    <span className={`${styles.statusDot} ${r.isActive ? styles.statusDotActive : styles.statusDotInactive}`} />
-                    <Button variant="ghost" size="sm" icon={r.isActive ? <Power size={14} /> : <PowerOff size={14} />} onClick={() => toggleMutation.mutate({ id: r.id, isActive: !r.isActive })} title={r.isActive ? 'Désactiver' : 'Activer'} />
-                  </div>
-                ),
-              },
-            ]}
-            data={filtered}
-            total={meta.total}
-            page={page}
-            limit={20}
-            onPageChange={setPage}
-            onEdit={(r) => { setEditing(r); setDrawerOpen(true); }}
-            onDelete={(r) => setDeleting(r)}
-            loading={false}
-            emptyMessage=""
-            keyExtractor={(r) => r.id}
-          />
+          <div className={styles.tableCard}>
+            <DataTable
+              columns={[
+                {
+                  key: 'brand', label: t('fleet.table.brand'), sortable: true,
+                  render: (r: Vehicle) => <VehicleNameCell vehicle={r} />,
+                },
+                {
+                  key: 'year', label: t('fleet.table.year'), sortable: true,
+                  render: (r: Vehicle) => <span className={styles.yearText}>{r.year}</span>,
+                },
+                {
+                  key: 'licensePlate', label: t('fleet.table.licensePlate'), sortable: true,
+                  render: (r: Vehicle) => <PlateCell plate={r.licensePlate} />,
+                },
+                {
+                  key: 'fuelType', label: t('fleet.table.fuelType'), sortable: true,
+                  render: (r: Vehicle) => <FuelCell fuelType={r.fuelType} />,
+                },
+                {
+                  key: 'driver', label: t('fleet.table.driver'),
+                  render: (r: Vehicle) => <DriverCell driver={r.driver} />,
+                },
+                {
+                  key: 'isActive', label: t('fleet.table.status'),
+                  render: (r: Vehicle) => (
+                    <span className={styles.statusCell}>
+                      <span className={`${styles.activePill} ${r.isActive ? styles.activePillOn : styles.activePillOff}`}>
+                        <span className={styles.activeDot} />
+                        {r.isActive ? t('fleet.status.active') : t('fleet.status.inactive')}
+                      </span>
+                      <Button
+                        variant={r.isActive ? 'ghost' : 'outline'}
+                        size="sm"
+                        icon={r.isActive ? <Power size={14} /> : <PowerOff size={14} />}
+                        onClick={() => toggleMutation.mutate({ id: r.id, isActive: !r.isActive })}
+                        title={r.isActive ? t('fleet.status.deactivate') : t('fleet.status.activate')}
+                      />
+                    </span>
+                  ),
+                },
+              ]}
+              data={filtered}
+              total={meta.total}
+              page={page}
+              limit={20}
+              onPageChange={setPage}
+              onEdit={(r) => { setEditing(r); setDrawerOpen(true); }}
+              onDelete={(r) => setDeleting(r)}
+              loading={false}
+              emptyMessage=""
+              keyExtractor={(r) => r.id}
+            />
+          </div>
         )}
       </div>
 
@@ -352,7 +494,7 @@ export default function FleetPage() {
             form="entity-form"
             loading={vehicleForm.saving}
             onCancel={onCancel}
-            submitLabel={editing ? 'Enregistrer' : 'Créer le véhicule'}
+            submitLabel={editing ? t('fleet.editVehicle') : t('fleet.createVehicle')}
             error={vehicleForm.serverError}
           />
         }
@@ -379,7 +521,7 @@ export default function FleetPage() {
                           style={{ flex: 1 }}
                         >
                           {def.name === 'traccarDeviceId' && (
-                            <option value="">Sélectionnez un dispositif…</option>
+                            <option value="">{t('fleet.selectDevicePlaceholder')}</option>
                           )}
                           {def.options?.map((o: { value: string; label: string }) => (
                             <option key={o.value} value={o.value}>{o.label}</option>
@@ -389,10 +531,10 @@ export default function FleetPage() {
                           <button
                             type="button"
                             onClick={() => setShowAddDevice(true)}
-                            title="Ajouter un nouveau dispositif Traccar"
+                            title={t('fleet.addDeviceHint')}
                             className={styles.addDeviceBtn}
                           >
-                            <Plus size={14} /> Ajouter
+                            <Plus size={14} /> {t('fleet.addDevice')}
                           </button>
                         )}
                       </div>
@@ -417,51 +559,48 @@ export default function FleetPage() {
 
       <ConfirmDialog
         open={!!deleting}
-        title="Supprimer le véhicule"
+        title={t('fleet.confirmDelete.title')}
         message={
           deleting
-            ? `Supprimer ${deleting.brand} ${deleting.model} (${deleting.licensePlate}, ${deleting.year}) ? Cette action est irréversible et retirera le véhicule de l'historique actif.`
+            ? t('fleet.confirmDelete.message', { brand: deleting.brand, model: deleting.model, licensePlate: deleting.licensePlate, year: deleting.year })
             : ''
         }
         variant="danger"
-        confirmLabel="Supprimer"
+        confirmLabel={t('fleet.deleteConfirmLabel')}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />
 
       {showAddDevice && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 7000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
+        <div className={styles.modalOverlay}>
           <div
             onClick={() => setShowAddDevice(false)}
             className={styles.modalBackdrop}
           />
           <div className={styles.modalContent}>
             <h3 className={styles.modalTitle}>
-              Nouveau dispositif Traccar
+              {t('fleet.modalDevice.title')}
             </h3>
             <div className={styles.modalField}>
               <label className={styles.modalLabel}>
-                Nom du traceur *
+                {t('fleet.modalDevice.nameLabel')} *
               </label>
               <input
                 className="dialog-input"
                 value={newDeviceName}
                 onChange={(e) => setNewDeviceName(e.target.value)}
-                placeholder="Ex: Traceur Renault Kangoo"
+                placeholder={t('fleet.modalDevice.namePlaceholder')}
               />
             </div>
             <div className={styles.modalField}>
               <label className={styles.modalLabel}>
-                Identifiant unique (IMEI) *
+                {t('fleet.modalDevice.imeiLabel')} *
               </label>
               <input
                 className="dialog-input"
                 value={newDeviceId}
                 onChange={(e) => setNewDeviceId(e.target.value)}
-                placeholder="Ex: 863295042345678"
+                placeholder={t('fleet.modalDevice.imeiPlaceholder')}
               />
             </div>
             <div className={styles.modalActions}>
@@ -470,7 +609,7 @@ export default function FleetPage() {
                 onClick={() => setShowAddDevice(false)}
                 className={styles.cancelBtn}
               >
-                Annuler
+                {t('fleet.modalDevice.cancel')}
               </button>
               <button
                 type="button"
@@ -479,7 +618,7 @@ export default function FleetPage() {
                 className={styles.submitBtn}
                 style={{ opacity: (!newDeviceName.trim() || !newDeviceId.trim()) ? 0.5 : 1 }}
               >
-                {addDeviceMutation.isPending ? 'Ajout...' : 'Ajouter'}
+                {addDeviceMutation.isPending ? t('fleet.modalDevice.adding') : t('fleet.modalDevice.add')}
               </button>
             </div>
           </div>

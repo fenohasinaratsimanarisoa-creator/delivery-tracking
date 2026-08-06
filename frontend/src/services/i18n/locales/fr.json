@@ -268,16 +268,32 @@
   "fleet": {
     "title": "Flotte",
     "subtitle": "Gérez vos véhicules",
+    "kicker": "Parc automobile",
     "newVehicle": "Nouveau véhicule",
     "searchPlaceholder": "Rechercher un véhicule…",
     "drawerSubtitle": "Ajoutez un véhicule à votre flotte",
+    "editSubtitle": "Année {year} · {fuelType}",
     "editVehicle": "Enregistrer",
     "createVehicle": "Créer le véhicule",
+    "deleteConfirmLabel": "Supprimer",
+    "selectDevicePlaceholder": "Sélectionnez un dispositif…",
+    "addDevice": "Ajouter",
+    "addDeviceHint": "Ajouter un nouveau dispositif Traccar",
+    "kpis": {
+      "total": "Véhicules",
+      "active": "Actifs",
+      "inactive": "Inactifs",
+      "withDriver": "Avec chauffeur"
+    },
+    "positionSources": {
+      "phone": "App mobile (chauffeur)",
+      "tracker": "Traceur physique (Traccar)"
+    },
     "formSections": {
       "identity": "Identité du véhicule",
       "registration": "Immatriculation",
       "features": "Caractéristiques",
-      "positionSource": "Source de position"
+      "positionSource": "Source GPS"
     },
     "fields": {
       "brand": "Marque",
@@ -287,7 +303,8 @@
       "vin": "Numéro VIN",
       "fuelType": "Type de carburant",
       "theoreticalConsumption": "Consommation théorique (L/100km)",
-      "positionSource": "Source de position"
+      "positionSource": "Source de position",
+      "traccarDeviceId": "Dispositif Traccar"
     },
     "fuelTypes": {
       "gasoline": "Essence",
@@ -303,6 +320,7 @@
       "year": "Année",
       "licensePlate": "Plaque",
       "fuelType": "Carburant",
+      "driver": "Chauffeur",
       "status": "Statut"
     },
     "status": {
@@ -321,7 +339,10 @@
       "updated": "Véhicule modifié",
       "created": "Véhicule créé",
       "deleted": "Véhicule supprimé",
-      "deleteError": "Erreur lors de la suppression"
+      "deleteError": "Erreur lors de la suppression",
+      "saveError": "Erreur lors de l'enregistrement",
+      "deviceAdded": "Dispositif Traccar ajouté",
+      "deviceError": "Erreur lors de l'ajout"
     },
     "confirmDelete": {
       "title": "Supprimer le véhicule",
@@ -329,6 +350,18 @@
     },
     "count": "{{count}} véhicule dans votre flotte",
     "count_plural": "{{count}} véhicules dans votre flotte",
+    "resultCount": "{{count}} résultat",
+    "resultCount_plural": "{{count}} résultats",
+    "modalDevice": {
+      "title": "Nouveau dispositif Traccar",
+      "nameLabel": "Nom du traceur",
+      "namePlaceholder": "Ex: Traceur Renault Kangoo",
+      "imeiLabel": "Identifiant unique (IMEI)",
+      "imeiPlaceholder": "Ex: 863295042345678",
+      "cancel": "Annuler",
+      "add": "Ajouter",
+      "adding": "Ajout..."
+    },
     "validation": {
       "invalidYear": "Année invalide (ex: 2024)"
     }
