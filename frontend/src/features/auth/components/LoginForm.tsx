@@ -5,6 +5,7 @@ import {
   MapPin, FileCheck, Radio,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { isNativeApp, openGoogleOAuthInNative } from '../../../services/native/nativeAuth';
 import styles from './LoginForm.module.css';
 
 interface Props {
@@ -220,7 +221,13 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
             <button
               type="button"
               className={styles.ssoButton}
-              onClick={() => { window.location.href = '/api/auth/google'; }}
+              onClick={() => {
+                if (isNativeApp()) {
+                  void openGoogleOAuthInNative();
+                  return;
+                }
+                window.location.href = '/api/auth/google';
+              }}
             >
               <span className={styles.googleG}>G</span>
               {t('auth.login.googleLogin')}

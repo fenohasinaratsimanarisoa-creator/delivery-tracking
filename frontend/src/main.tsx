@@ -3,8 +3,10 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { initSentry } from './services/monitoring/sentry';
+import { initNativeOAuthListener } from './services/native/nativeAuth';
 
 initSentry();
+initNativeOAuthListener();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

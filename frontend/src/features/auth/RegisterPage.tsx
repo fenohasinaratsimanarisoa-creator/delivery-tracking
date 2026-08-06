@@ -4,6 +4,7 @@ import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, UserPlus } from 'lucid
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../../hooks/AuthContext';
 import api from '../../services/api/client';
+import { isNativeApp, openGoogleOAuthInNative } from '../../services/native/nativeAuth';
 import styles from './RegisterPage.module.css';
 
 const MIN_LEN = 12;
@@ -284,7 +285,13 @@ export default function RegisterPage() {
 
               <button
                 type="button"
-                onClick={() => { window.location.href = '/api/auth/google'; }}
+                onClick={() => {
+                  if (isNativeApp()) {
+                    void openGoogleOAuthInNative();
+                    return;
+                  }
+                  window.location.href = '/api/auth/google';
+                }}
                 className={styles.ssoButton}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = 'var(--color-accent)';

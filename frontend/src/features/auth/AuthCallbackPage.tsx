@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/AuthContext';
 import { setAccessToken } from '../../services/auth/tokenStore';
 import { parseToken } from '../../services/jwt';
+import { isNativeApp, isWebView, isMobileBrowser, relayTokenToNativeApp } from '../../services/native/nativeAuth';
 import type { User } from '../../types';
 import { Loader2, AlertCircle } from 'lucide-react';
 import styles from './AuthCallbackPage.module.css';
@@ -29,6 +30,22 @@ export default function AuthCallbackPage() {
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
 
+  const applyLogin = (token: string, payload: ReturnType<typeof parseToken> & object) => {
+    processedRef.current = true;
+    const u: User = {
+      id: (payload.sub || payload.id) as string,
+      email: payload.email as string,
+      role: payload.role as User['role'],
+      companyId: payload.companyId as string,
+      firstName: (payload.firstName || payload.given_name || '') as string,
+      lastName: (payload.lastName || payload.family_name || '') as string,
+    };
+    setAccessToken(token);
+    loginRef.current(u, token);
+    setStatus('success');
+    navigateRef.current('/', { replace: true });
+  };
+
   useEffect(() => {
     if (processedRef.current) return;
 
@@ -47,19 +64,21 @@ export default function AuthCallbackPage() {
     if (tokenFromHash) {
       const payload = parseToken(tokenFromHash);
       if (payload) {
-        const u: User = {
-          id: (payload.sub || payload.id) as string,
-          email: payload.email as string,
-          role: payload.role as User['role'],
-          companyId: payload.companyId as string,
-          firstName: (payload.firstName || payload.given_name || '') as string,
-          lastName: (payload.lastName || payload.family_name || '') as string,
-        };
-        processedRef.current = true;
-        setAccessToken(tokenFromHash);
-        loginRef.current(u, tokenFromHash);
-        setStatus('success');
-        navigateRef.current('/', { replace: true });
+        // Custom tab / navigateur mobile (app non détectée) : renvoie le token
+        // vers l'app native via le scheme logitrack://, avec repli web.
+        if (!isNativeApp() && !isWebView() && isMobileBrowser()) {
+          const schedule = window.setTimeout(() => {
+            applyLogin(tokenFromHash, payload);
+          }, 1200);
+          try {
+            relayTokenToNativeApp(tokenFromHash);
+          } catch {
+            window.clearTimeout(schedule);
+            applyLogin(tokenFromHash, payload);
+          }
+          return;
+        }
+        applyLogin(tokenFromHash, payload);
         return;
       }
     }
