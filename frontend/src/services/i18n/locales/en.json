@@ -1152,12 +1152,17 @@
   },
   "alerts": {
     "title": "Alerts",
+    "subtitle": "Real-time monitoring of your fleet: speed, delivery delays, fuel anomalies and maintenance",
     "unresolvedCount": "{{count}} unresolved",
     "unresolvedCount_plural": "{{count}} unresolved",
+    "live": "Live",
     "liveNew": "🔴 {{count}} new live",
     "liveNew_plural": "🔴 {{count}} new live",
     "filters": {
       "periodLabel": "Period",
+      "title": "Filters",
+      "reset": "Reset",
+      "today": "Today",
       "today": "Today",
       "7days": "7 days",
       "30days": "30 days",
@@ -1169,6 +1174,7 @@
       "unresolved": "Unresolved",
       "resolved": "Resolved"
     },
+    "kpiTypes": "Alert types",
     "kpiUnresolved": "Unresolved",
     "emptyTitle": "No alerts found",
     "emptyDesc": "Adjust your filters or change the period",

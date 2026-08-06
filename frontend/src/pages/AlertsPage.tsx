@@ -1,8 +1,29 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Bell, X, Check, Clock, MapPin, Gauge, Fuel, Wifi } from 'lucide-react';
+import {
+  Bell,
+  BellRing,
+  X,
+  Check,
+  CheckCheck,
+  Clock,
+  MapPin,
+  Gauge,
+  Fuel,
+  WifiOff,
+  Timer,
+  Crosshair,
+  AlertTriangle,
+  TrendingUp,
+  Layers,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
+  ArrowUpRight,
+  ArrowDownRight,
+} from 'lucide-react';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import { formatDateTime } from '../services/i18n/formatDate';
@@ -61,6 +82,7 @@ export default function AlertsPage() {
   const [selectedAlert, setSelectedAlert] = useState<AlertItem | null>(null);
   const [resolveComment, setResolveComment] = useState('');
   const [liveCount, setLiveCount] = useState(0);
+  const [liveConnected, setLiveConnected] = useState(false);
 
   const queryParams = useMemo(() => {
     const p = new URLSearchParams();
@@ -111,6 +133,8 @@ export default function AlertsPage() {
         reconnection: true,
         reconnectionDelay: 1000,
       });
+      socket.on('connect', () => setLiveConnected(true));
+      socket.on('disconnect', () => setLiveConnected(false));
       socket.on('notification', () => {
         setLiveCount((c) => c + 1);
         queryClient.invalidateQueries({ queryKey: ['alerts'] });
@@ -120,6 +144,18 @@ export default function AlertsPage() {
     return () => { try { socket?.disconnect(); } catch {} };
   }, [queryClient]);
 
+  useEffect(() => {
+    if (!selectedAlert) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedAlert(null);
+        setResolveComment('');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedAlert]);
+
   const alerts: AlertItem[] = data?.data ?? [];
   const meta = data?.meta ?? { total: 0 };
   const alertStats: AlertStats | undefined = stats;
@@ -127,15 +163,36 @@ export default function AlertsPage() {
   const toggleType = (t: string) => { setSelectedTypes((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]); setPage(1); };
   const togglePriority = (p: string) => { setSelectedPriorities((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]); setPage(1); };
 
+  const resetFilters = () => {
+    setSelectedTypes([]);
+    setSelectedPriorities([]);
+    setResolvedFilter('false');
+    setPeriod('7d');
+    setPage(1);
+  };
+
+  const hasActiveFilters =
+    selectedTypes.length > 0 ||
+    selectedPriorities.length > 0 ||
+    resolvedFilter !== 'false' ||
+    period !== '7d';
+
   const typeConfig = useMemo(() => ({
-    speed_alert: { icon: <Gauge size={16} />, borderColor: '#f97316' },
-    prolonged_stop: { icon: <Clock size={16} />, borderColor: '#eab308' },
-    delay_alert: { icon: <Clock size={16} />, borderColor: '#f97316' },
-    device_offline: { icon: <Wifi size={16} />, borderColor: '#eab308' },
-    geofence_event: { icon: <MapPin size={16} />, borderColor: '#f97316' },
-    location_mismatch: { icon: <MapPin size={16} />, borderColor: '#f97316' },
-    fuel_anomaly: { icon: <Fuel size={16} />, borderColor: '#f97316' },
+    speed_alert: { icon: <Gauge size={17} />, color: '#f97316' },
+    prolonged_stop: { icon: <Clock size={17} />, color: '#eab308' },
+    delay_alert: { icon: <Timer size={17} />, color: '#3b82f6' },
+    device_offline: { icon: <WifiOff size={17} />, color: '#ef4444' },
+    geofence_event: { icon: <MapPin size={17} />, color: '#14b8a6' },
+    location_mismatch: { icon: <Crosshair size={17} />, color: '#8b5cf6' },
+    fuel_anomaly: { icon: <Fuel size={17} />, color: '#f59e0b' },
   }), []);
+
+  const PRIORITY_ICONS: Record<string, React.ReactNode> = {
+    critical: <AlertTriangle size={16} />,
+    high: <TrendingUp size={16} />,
+    medium: <Clock size={16} />,
+    low: <CheckCheck size={16} />,
+  };
 
   const trendPercent = useMemo(() => {
     if (!alertStats?.prevTotal || alertStats.prevTotal === 0) return null;
@@ -147,39 +204,83 @@ export default function AlertsPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <div className={styles.headerRow}>
-        <h1 className={styles.pageTitle}>
-          <Bell size={22} className={styles.titleIcon} />
-          {t('alerts.title')}
-          {alertStats && alertStats.total > 0 && (
-            <span className={styles.unresolvedBadge}>
-              {t('alerts.unresolvedCount', { count: alertStats.total })}
+      <div className={styles.pageHeader}>
+        <div className={styles.headerTitleWrap}>
+          <div className={styles.headerTop}>
+            <div className={styles.titleIconChip}>
+              <BellRing size={19} />
+            </div>
+            <h1 className={styles.pageTitle}>{t('alerts.title')}</h1>
+            {alertStats && alertStats.total > 0 && (
+              <span className={styles.unresolvedPill}>
+                <span className={styles.pillDot} />
+                {t('alerts.unresolvedCount', { count: alertStats.total })}
+              </span>
+            )}
+          </div>
+          <p className={styles.pageSubtitle}>{t('alerts.subtitle')}</p>
+        </div>
+        <div className={styles.headerActions}>
+          {liveConnected && (
+            <span className={styles.livePill}>
+              <span className={styles.livePulseDot} />
+              {t('alerts.live')}
             </span>
           )}
-        </h1>
-        {liveCount > 0 && (
-          <span className={styles.liveCount}>
-            {t('alerts.liveNew', { count: liveCount })}
-          </span>
-        )}
+          {liveCount > 0 && (
+            <span className={styles.newCountPill}>
+              {t('alerts.liveNew', { count: liveCount })}
+            </span>
+          )}
+        </div>
       </div>
 
       {alertStats && (
         <div className={styles.kpiGrid}>
-          <KpiCard label={t('alerts.kpiUnresolved')} value={alertStats.total} color="#ef4444" trend={trendPercent} />
+          <KpiCard
+            icon={<BellRing size={16} />}
+            label={t('alerts.kpiUnresolved')}
+            value={alertStats.total}
+            color="#ef4444"
+            trend={trendPercent}
+          />
           {allPriorities.map((prio) => {
             const count = alertStats.byPriority.find((p) => p.priority === prio)?._count ?? 0;
             if (count === 0) return null;
-            return <KpiCard key={prio} label={PRIORITY_LABELS[prio]} value={count} color={PRIORITY_COLORS[prio]} />;
+            return (
+              <KpiCard
+                key={prio}
+                icon={PRIORITY_ICONS[prio]}
+                label={PRIORITY_LABELS[prio]}
+                value={count}
+                color={PRIORITY_COLORS[prio]}
+              />
+            );
           })}
+          {alertStats.byType.length > 0 && (
+            <KpiCard
+              icon={<Layers size={16} />}
+              label={t('alerts.kpiTypes')}
+              value={alertStats.byType.length}
+              color="#3b82f6"
+            />
+          )}
         </div>
       )}
 
       <div className={styles.filtersPanel}>
-        <div>
-          <div className={styles.filterLabel}>
-            {t('alerts.filters.periodLabel')}
-          </div>
+        <div className={styles.filtersHeader}>
+          <div className={styles.filtersTitle}>{t('alerts.filters.title')}</div>
+          {hasActiveFilters && (
+            <button onClick={resetFilters} className={styles.resetBtn}>
+              <RotateCcw size={13} />
+              {t('alerts.filters.reset')}
+            </button>
+          )}
+        </div>
+
+        <div className={styles.filterBlock}>
+          <div className={styles.filterLabel}>{t('alerts.filters.periodLabel')}</div>
           <div className={styles.filterChipsRow}>
             {PERIOD_VALUES.map((val) => (
               <FilterChip key={val} active={period === val} onClick={() => { setPeriod(val); setPage(1); }}>{PERIOD_LABELS[val]}</FilterChip>
@@ -187,37 +288,38 @@ export default function AlertsPage() {
           </div>
         </div>
 
-        <div>
-          <div className={styles.filterLabel}>
-            {t('alerts.filters.typeLabel')}
-          </div>
+        <div className={styles.filterBlock}>
+          <div className={styles.filterLabel}>{t('alerts.filters.typeLabel')}</div>
           <div className={styles.filterChipsRow}>
-            {allTypes.map((tp) => (
-              <FilterChip key={tp} active={selectedTypes.includes(tp)} onClick={() => toggleType(tp)}>
-                {t(`alerts.type.${tp}`, tp)}
-              </FilterChip>
-            ))}
+            {allTypes.map((tp) => {
+              const cfg = typeConfig[tp as keyof typeof typeConfig];
+              const count = alertStats?.byType.find((bt) => bt.type === tp)?._count;
+              return (
+                <FilterChip key={tp} active={selectedTypes.includes(tp)} onClick={() => toggleType(tp)} color={cfg?.color} count={count}>
+                  {t(`alerts.type.${tp}`, tp)}
+                </FilterChip>
+              );
+            })}
           </div>
         </div>
 
-        <div>
-          <div className={styles.filterLabel}>
-            {t('alerts.filters.priorityLabel')}
-          </div>
+        <div className={styles.filterBlock}>
+          <div className={styles.filterLabel}>{t('alerts.filters.priorityLabel')}</div>
           <div className={styles.filterChipsRow}>
-            {allPriorities.map((prio) => (
-              <FilterChip key={prio} active={selectedPriorities.includes(prio)} onClick={() => togglePriority(prio)} color={PRIORITY_COLORS[prio]}>
-                {PRIORITY_LABELS[prio]}
-              </FilterChip>
-            ))}
+            {allPriorities.map((prio) => {
+              const count = alertStats?.byPriority.find((bp) => bp.priority === prio)?._count;
+              return (
+                <FilterChip key={prio} active={selectedPriorities.includes(prio)} onClick={() => togglePriority(prio)} color={PRIORITY_COLORS[prio]} count={count}>
+                  {PRIORITY_LABELS[prio]}
+                </FilterChip>
+              );
+            })}
           </div>
         </div>
 
-        <div>
-          <div className={styles.filterLabel}>
-            {t('alerts.filters.statusLabel')}
-          </div>
-          <div className={styles.filterStatusRow}>
+        <div className={styles.filterBlock}>
+          <div className={styles.filterLabel}>{t('alerts.filters.statusLabel')}</div>
+          <div className={styles.filterChipsRow}>
             <FilterChip active={resolvedFilter === ''} onClick={() => { setResolvedFilter(''); setPage(1); }}>{t('alerts.filters.all')}</FilterChip>
             <FilterChip active={resolvedFilter === 'false'} onClick={() => { setResolvedFilter('false'); setPage(1); }} color="#ef4444">{t('alerts.filters.unresolved')}</FilterChip>
             <FilterChip active={resolvedFilter === 'true'} onClick={() => { setResolvedFilter('true'); setPage(1); }} color="#22c55e">{t('alerts.filters.resolved')}</FilterChip>
@@ -228,65 +330,68 @@ export default function AlertsPage() {
       {isLoading ? (
         <div className={styles.loadingContainer}>
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className={styles.skeletonItem} />
+            <div key={i} className={styles.skeletonCard} style={{ animationDelay: `${i * 90}ms` }} />
           ))}
         </div>
       ) : alerts.length === 0 ? (
         <div className={styles.emptyState}>
-          <Bell size={40} className={styles.emptyIcon} />
+          <div className={styles.emptyIconWrap}>
+            <Bell size={34} className={styles.emptyIcon} />
+          </div>
           <p className={styles.emptyTitle}>{t('alerts.emptyTitle')}</p>
           <p className={styles.emptyDesc}>{t('alerts.emptyDesc')}</p>
         </div>
       ) : (
         <div className={styles.alertList}>
-          {alerts.map((r) => {
-            const cfg = typeConfig[r.type as keyof typeof typeConfig] || { icon: <Bell size={16} />, borderColor: '#6b7280' };
+          {alerts.map((r, i) => {
+            const cfg = typeConfig[r.type as keyof typeof typeConfig] || { icon: <Bell size={17} />, color: '#6b7280' };
+            const prio = PRIORITY_COLORS[r.priority] || '#6b7280';
+            const cardStyle = { '--prio': r.resolved ? '#22c55e' : prio, animationDelay: `${Math.min(i, 10) * 45}ms` } as CSSProperties;
             return (
               <div
                 key={r.id}
                 onClick={() => setSelectedAlert(r)}
-                className={styles.alertCard}
-                style={{
-                  background: r.resolved ? 'var(--color-surface)' : 'var(--color-glass, rgba(18,27,46,0.92))',
-                  border: '1px solid var(--color-border-subtle)',
-                  borderLeft: `3px solid ${r.resolved ? '#22c55e' : PRIORITY_COLORS[r.priority] || '#6b7280'}`,
-                  opacity: r.resolved ? 0.7 : 1,
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover, #1E2A45)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = r.resolved ? 'var(--color-surface)' : 'var(--color-glass, rgba(18,27,46,0.92))'; }}
+                className={`${styles.alertCard}${r.resolved ? ` ${styles.alertCardResolved}` : ''}`}
+                style={cardStyle}
               >
-                <div className={styles.alertIcon} style={{ color: PRIORITY_COLORS[r.priority] || '#6b7280' }}>
+                <div className={styles.alertIconChip} style={{ background: `${prio}1a`, color: prio }}>
                   {cfg.icon}
                 </div>
                 <div className={styles.alertContent}>
                   <div className={styles.alertHeader}>
                     <span className={styles.alertTitle}>{r.title}</span>
-                    <span className={styles.priorityBadge} style={{ background: `${PRIORITY_COLORS[r.priority] || '#6b7280'}15`, color: PRIORITY_COLORS[r.priority] || '#6b7280' }}>
-                      {PRIORITY_LABELS[r.priority] || r.priority}
+                    <span className={styles.alertType}>
+                      <span className={styles.alertTypeDot} style={{ background: cfg.color }} />
+                      {t(`alerts.type.${r.type}`, r.type)}
                     </span>
-                    <span className={styles.alertType}>{t(`alerts.type.${r.type}`, r.type)}</span>
                   </div>
-                  <div className={styles.alertMessage}>
-                    {r.message}
-                  </div>
+                  <div className={styles.alertMessage}>{r.message}</div>
                   <div className={styles.alertMeta}>
-                    <span>{formatDateTime(r.createdAt)}</span>
+                    <span className={styles.metaTime}>{formatDateTime(r.createdAt)}</span>
                     {r.delivery && (
-                      <Link to={`/deliveries/${r.delivery.id}`} onClick={(e) => e.stopPropagation()} className={styles.deliveryLink}>
+                      <Link to={`/deliveries/${r.delivery.id}`} onClick={(e) => e.stopPropagation()} className={styles.deliveryChip}>
                         📦 {r.delivery.title}
                       </Link>
                     )}
-                    {r.resolved && <span className={styles.resolvedLabel}>✓ {t('alerts.detail.resolved')}</span>}
+                    {r.resolved ? (
+                      <span className={styles.resolvedStamp}>
+                        <CheckCheck size={12} />
+                        {t('alerts.detail.resolved')}
+                      </span>
+                    ) : (
+                      <span className={styles.activePulse} title={t('alerts.detail.active')} />
+                    )}
                   </div>
                 </div>
                 <div className={styles.alertActions}>
                   {!r.resolved ? (
                     <button onClick={(e) => { e.stopPropagation(); resolveMutation.mutate({ id: r.id }); }}
                       className={styles.resolveBtn}>
+                      <Check size={13} />
                       {t('alerts.resolveButton')}
                     </button>
                   ) : (
-                    <Check size={16} className={styles.checkIcon} />
+                    <span className={styles.checkSeal}><Check size={14} /></span>
                   )}
                 </div>
               </div>
@@ -299,12 +404,14 @@ export default function AlertsPage() {
         <div className={styles.pagination}>
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
             className={styles.pageBtn}>
+            <ChevronLeft size={15} />
             {t('alerts.pagination.previous')}
           </button>
-          <span className={styles.pageInfo}>{t('alerts.pagination.page')}</span>
+          <span className={styles.pageInfo}>{t('alerts.pagination.page', { page })}</span>
           <button onClick={() => setPage(p => p + 1)} disabled={alerts.length < 50}
             className={styles.pageBtn}>
             {t('alerts.pagination.next')}
+            <ChevronRight size={15} />
           </button>
         </div>
       )}
@@ -320,7 +427,7 @@ export default function AlertsPage() {
                 </div>
                 <h2 className={styles.drawerTitle}>{selectedAlert.title}</h2>
               </div>
-              <button onClick={() => { setSelectedAlert(null); setResolveComment(''); }} className={styles.closeBtn}><X size={20} /></button>
+              <button onClick={() => { setSelectedAlert(null); setResolveComment(''); }} className={styles.closeBtn} aria-label="Close"><X size={20} /></button>
             </div>
 
             <div className={styles.badgeRow}>
@@ -335,13 +442,15 @@ export default function AlertsPage() {
                 <Link to={`/deliveries/${selectedAlert.delivery.id}`} className={styles.deliveryLink}>
                   {selectedAlert.delivery.title}
                 </Link>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>{selectedAlert.delivery.deliveryAddress}</div>
+                <div className={styles.sectionMuted}>{selectedAlert.delivery.deliveryAddress}</div>
               </Section>
             )}
 
             {selectedAlert.user && <Section label={t('alerts.detail.driver')}>{selectedAlert.user.firstName} {selectedAlert.user.lastName}</Section>}
 
-            <Section label={t('alerts.detail.date')}>{formatDateTime(selectedAlert.createdAt)}</Section>
+            <Section label={t('alerts.detail.date')}>
+              <span className={styles.monoTime}>{formatDateTime(selectedAlert.createdAt)}</span>
+            </Section>
 
             {selectedAlert.link && (
               <Section label={t('alerts.detail.link')}>
@@ -351,7 +460,7 @@ export default function AlertsPage() {
 
             {selectedAlert.resolved && selectedAlert.resolvedBy && (
               <Section label={t('alerts.detail.resolution')}>
-                <div>{t('alerts.detail.resolvedBy', { firstName: selectedAlert.resolvedBy.firstName, lastName: selectedAlert.resolvedBy.lastName, date: formatDateTime(selectedAlert.resolvedAt!) })}</div>
+                <div className={styles.sectionMuted}>{t('alerts.detail.resolvedBy', { firstName: selectedAlert.resolvedBy.firstName, lastName: selectedAlert.resolvedBy.lastName, date: formatDateTime(selectedAlert.resolvedAt!) })}</div>
                 {selectedAlert.resolutionComment && (
                   <div className={styles.resolutionComment}>{selectedAlert.resolutionComment}</div>
                 )}
@@ -365,6 +474,7 @@ export default function AlertsPage() {
                   className={styles.textarea} />
                 <button onClick={() => resolveMutation.mutate({ id: selectedAlert.id, comment: resolveComment })} disabled={resolveMutation.isPending}
                   className={styles.confirmBtn}>
+                  <Check size={14} />
                   {resolveMutation.isPending ? t('alerts.detail.resolving') : t('alerts.detail.confirmResolve')}
                 </button>
               </div>
@@ -376,16 +486,43 @@ export default function AlertsPage() {
   );
 }
 
-function KpiCard({ label, value, color, trend }: { label: string; value: number; color: string; trend?: number | null }) {
+function useCountUp(target: number, duration = 650) {
+  const [value, setValue] = useState(target);
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setValue(target);
+      return;
+    }
+    let raf: number;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(target * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return value;
+}
+
+function KpiCard({ label, value, color, trend, icon }: { label: string; value: number; color: string; trend?: number | null; icon?: React.ReactNode }) {
+  const animatedValue = useCountUp(value);
+  const cardStyle = { '--kpi': color, '--kpi-muted': `${color}1a` } as CSSProperties;
   return (
-    <div className={styles.kpiCard}>
+    <div className={styles.kpiCard} style={cardStyle}>
+      <div className={styles.kpiTop}>
+        <div className={styles.kpiIcon}>{icon}</div>
+        {trend !== null && trend !== undefined && (
+          <span className={styles.kpiTrend} style={{ color: trend > 0 ? '#ef4444' : trend < 0 ? '#22c55e' : 'var(--color-text-tertiary)' }}>
+            {trend > 0 ? <ArrowUpRight size={12} /> : trend < 0 ? <ArrowDownRight size={12} /> : null}
+            {trend > 0 ? `+${trend}%` : trend < 0 ? `${trend}%` : '='}
+          </span>
+        )}
+      </div>
       <div className={styles.kpiLabel}>{label}</div>
-      <div className={styles.kpiValue} style={{ color }}>{value}</div>
-      {trend !== null && trend !== undefined && (
-        <div className={styles.kpiTrend} style={{ color: trend > 0 ? '#ef4444' : trend < 0 ? '#22c55e' : 'var(--color-text-tertiary)' }}>
-          {trend > 0 ? `+${trend}%` : trend < 0 ? `${trend}%` : '='}
-        </div>
-      )}
+      <div className={styles.kpiValue}>{animatedValue}</div>
     </div>
   );
 }
@@ -401,16 +538,21 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 
 function Badge({ color, children }: { color: string; children: React.ReactNode }) {
   return (
-    <span className={styles.badge} style={{ background: `${color}15`, color }}>{children}</span>
+    <span className={styles.badge} style={{ background: `${color}1a`, color, boxShadow: `0 0 0 1px ${color}30, 0 0 14px ${color}22` }}>{children}</span>
   );
 }
 
-function FilterChip({ active, onClick, children, color }: { active: boolean; onClick: () => void; children: React.ReactNode; color?: string }) {
+function FilterChip({ active, onClick, children, color, count }: { active: boolean; onClick: () => void; children: React.ReactNode; color?: string; count?: number }) {
+  const chipStyle = { '--chip': color || 'var(--color-accent)' } as CSSProperties;
   return (
-    <button onClick={onClick} className={styles.filterChip} style={{
-      border: active ? `1px solid ${color || 'var(--color-accent, #F2A93C)'}` : '1px solid var(--color-border-subtle)',
-      background: active ? `${color || 'var(--color-accent, #F2A93C)'}15` : 'transparent',
-      color: active ? (color || 'var(--color-accent, #F2A93C)') : 'var(--color-text-secondary)',
-    }}>{children}</button>
+    <button
+      onClick={onClick}
+      className={`${styles.filterChip}${active ? ` ${styles.filterChipActive}` : ''}`}
+      style={chipStyle}
+    >
+      {color && <span className={styles.chipDot} />}
+      {children}
+      {count !== undefined && count > 0 && <span className={styles.chipCount}>{count}</span>}
+    </button>
   );
 }
