@@ -54,6 +54,67 @@ const LEADER_TTL_S = 30;
 const LEADER_RENEW_INTERVAL_MS = 20000;
 const LEADER_RETRY_INTERVAL_MS = 20000;
 
+export interface TraccarDiagnoseDevice {
+  id: number;
+  name?: string;
+  uniqueId?: string;
+  status?: string;
+  disabled?: boolean;
+  lastUpdate?: string | null;
+  protocol: string | null;
+  protocolSource: 'device_champ' | 'device_attributes' | 'position_traccar' | null;
+}
+
+interface TraccarApiDevice {
+  id: number;
+  name?: string;
+  uniqueId?: string;
+  status?: string;
+  disabled?: boolean;
+  lastUpdate?: string | null;
+  protocol?: unknown;
+  attributes?: { protocol?: unknown };
+}
+
+interface TraccarApiPosition {
+  deviceId?: number;
+  protocol?: string;
+}
+
+export interface TraccarDiagnoseReport {
+  timestamp: string;
+  environment: string;
+  config: {
+    urlConfigured: boolean;
+    userConfigured: boolean;
+    passwordConfigured: boolean;
+    urlIsDefault: boolean;
+    fullyConfigured: boolean;
+    note: string;
+  };
+  authentication: {
+    attempted: boolean;
+    success: boolean | null;
+    httpStatus: number | null;
+    error: string | null;
+  };
+  devices: {
+    exposedByApi: boolean;
+    success: boolean;
+    httpStatus: number | null;
+    error: string | null;
+    count: number;
+    protocolInferenceAvailable: boolean;
+    protocolNote: string;
+    items: TraccarDiagnoseDevice[];
+  };
+  protocolPort: {
+    exposedByApi: boolean;
+    message: string;
+    reference: string;
+  };
+}
+
 @Injectable()
 export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TraccarBridgeService.name);
@@ -286,6 +347,157 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  async diagnosePlatformConfig(): Promise<TraccarDiagnoseReport> {
+    const urlConfigured =
+      this.traccarUrl !== 'http://traccar:8082' && this.traccarUrl !== 'disabled';
+    const userConfigured = this.traccarUser !== 'admin';
+    const passwordConfigured = this.traccarPassword !== 'admin';
+    const fullyConfigured = urlConfigured && userConfigured && passwordConfigured;
+
+    const report: TraccarDiagnoseReport = {
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      config: {
+        urlConfigured,
+        userConfigured,
+        passwordConfigured,
+        urlIsDefault: !urlConfigured,
+        fullyConfigured,
+        note: fullyConfigured
+          ? 'TRACCAR_URL/USER/PASSWORD configurés et non-défauts'
+          : "Configuration incomplète ou valeurs par défaut — l'authentification n'est pas tentée",
+      },
+      authentication: { attempted: false, success: null, httpStatus: null, error: null },
+      devices: {
+        exposedByApi: true,
+        success: false,
+        httpStatus: null,
+        error: null,
+        count: 0,
+        protocolInferenceAvailable: false,
+        protocolNote:
+          "Le Device Traccar n'expose pas de champ protocol standard (schéma REST : id, name, uniqueId, status, disabled, lastUpdate, positionId, groupId, phone, model, contact, category, attributes). Le protocole est inféré depuis la dernière position (Position.protocol) quand elle est disponible.",
+        items: [],
+      },
+      protocolPort: {
+        exposedByApi: false,
+        message:
+          "Le port d'écoute par protocole (ex: port GT06) n'est PAS exposé par l'API REST Traccar — à confirmer manuellement dans l'interface https://server.traccar.org lors de la création ou de la consultation du device.",
+        reference: 'RAPPORT_PORTS_TRACCAR.md — section « Traccar Cloud (production) »',
+      },
+    };
+
+    if (!fullyConfigured) {
+      report.authentication = {
+        attempted: false,
+        success: null,
+        httpStatus: null,
+        error:
+          'TRACCAR_URL/USER/PASSWORD non configurés ou valeurs par défaut — authentification non tentée',
+      };
+      report.devices.error =
+        'Authentification non tentée (configuration incomplète) — devices non récupérés';
+      return report;
+    }
+
+    let sessionCookie: string | null = null;
+    try {
+      const login = await this.performSessionLogin();
+      if (login.ok) {
+        sessionCookie = login.cookie;
+        report.authentication = {
+          attempted: true,
+          success: true,
+          httpStatus: login.httpStatus,
+          error: null,
+        };
+      } else {
+        report.authentication = {
+          attempted: true,
+          success: false,
+          httpStatus: login.httpStatus,
+          error: login.error,
+        };
+      }
+    } catch (err: unknown) {
+      report.authentication = {
+        attempted: true,
+        success: false,
+        httpStatus: null,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+
+    if (sessionCookie) {
+      try {
+        const devicesResponse = await fetch(`${this.traccarUrl}/api/devices`, {
+          headers: { Cookie: sessionCookie },
+          signal: AbortSignal.timeout(15000),
+        });
+        report.devices.httpStatus = devicesResponse.status;
+
+        if (!devicesResponse.ok) {
+          report.devices.error = `Traccar /api/devices: HTTP ${devicesResponse.status}`;
+        } else {
+          const rawDevices: TraccarApiDevice[] = await devicesResponse.json();
+          const positionsProtocols = new Map<number, string>();
+
+          try {
+            const positionsResponse = await fetch(`${this.traccarUrl}/api/positions`, {
+              headers: { Cookie: sessionCookie },
+              signal: AbortSignal.timeout(15000),
+            });
+            if (positionsResponse.ok) {
+              const positions: TraccarApiPosition[] = await positionsResponse.json();
+              for (const pos of positions) {
+                if (pos && typeof pos.deviceId === 'number' && typeof pos.protocol === 'string') {
+                  positionsProtocols.set(pos.deviceId, pos.protocol);
+                }
+              }
+            }
+          } catch {
+            // l'inférence de protocole par position est non bloquante
+          }
+
+          report.devices.items = rawDevices.map((device) => {
+            let protocol: string | null = null;
+            let protocolSource: TraccarDiagnoseDevice['protocolSource'] = null;
+            if (typeof device.protocol === 'string') {
+              protocol = device.protocol;
+              protocolSource = 'device_champ';
+            } else if (typeof device?.attributes?.protocol === 'string') {
+              protocol = device.attributes.protocol;
+              protocolSource = 'device_attributes';
+            } else if (positionsProtocols.has(device.id)) {
+              protocol = positionsProtocols.get(device.id)!;
+              protocolSource = 'position_traccar';
+            }
+            return {
+              id: device.id,
+              name: device.name,
+              uniqueId: device.uniqueId,
+              status: device.status,
+              disabled: device.disabled,
+              lastUpdate: device.lastUpdate,
+              protocol,
+              protocolSource,
+            };
+          });
+          report.devices.protocolInferenceAvailable = positionsProtocols.size > 0;
+          report.devices.success = true;
+          report.devices.count = report.devices.items.length;
+        }
+      } catch (err: unknown) {
+        report.devices.error = err instanceof Error ? err.message : String(err);
+      }
+    } else {
+      report.devices.error =
+        'Session impossible — devices non récupérés (voir field authentication)';
+    }
+
+    return report;
+  }
+
   private startHealthCheck() {
     this.healthTimer = setInterval(async () => {
       try {
@@ -413,7 +625,10 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async authenticate(): Promise<string> {
+  private async performSessionLogin(): Promise<
+    | { ok: true; cookie: string; httpStatus: number }
+    | { ok: false; httpStatus: number | null; error: string }
+  > {
     const loginResponse = await fetch(`${this.traccarUrl}/api/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -421,25 +636,45 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!loginResponse.ok) {
-      throw new Error(`Traccar authentication failed: HTTP ${loginResponse.status}`);
+      return {
+        ok: false,
+        httpStatus: loginResponse.status,
+        error: `Traccar authentication failed: HTTP ${loginResponse.status}`,
+      };
     }
 
     const setCookie = loginResponse.headers.get('set-cookie');
     if (!setCookie) {
-      throw new Error('Traccar did not return a session cookie');
+      return {
+        ok: false,
+        httpStatus: loginResponse.status,
+        error: 'Traccar did not return a session cookie',
+      };
     }
 
     const match = setCookie.match(/JSESSIONID=([^;]+)/);
     if (!match) {
-      throw new Error('Traccar session cookie (JSESSIONID) not found');
+      return {
+        ok: false,
+        httpStatus: loginResponse.status,
+        error: 'Traccar session cookie (JSESSIONID) not found',
+      };
     }
 
-    const cookie = `JSESSIONID=${match[1]}`;
-    this.sessionCookie = cookie;
+    return { ok: true, cookie: `JSESSIONID=${match[1]}`, httpStatus: loginResponse.status };
+  }
+
+  private async authenticate(): Promise<string> {
+    const result = await this.performSessionLogin();
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+
+    this.sessionCookie = result.cookie;
     this.logger.log('Traccar REST session established');
 
     this.scheduleSessionRenewal();
-    return cookie;
+    return result.cookie;
   }
 
   private scheduleSessionRenewal() {

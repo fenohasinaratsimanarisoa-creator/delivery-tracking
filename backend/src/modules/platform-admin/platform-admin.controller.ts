@@ -164,6 +164,12 @@ export class PlatformAdminController {
   }
 
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Get('traccar/diagnose')
+  async diagnoseTraccar() {
+    return this.traccarBridgeService.diagnosePlatformConfig();
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
   @Post('tracking/archive')
   @HttpCode(HttpStatus.OK)
   async archiveAllPositions(@Body('before') before: string) {
