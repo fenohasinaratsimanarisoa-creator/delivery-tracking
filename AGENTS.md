@@ -14,11 +14,17 @@ Web and mobile share the same Vite codebase; only the backend URL differs.
    VITE_API_URL=https://deliverytrack-api.onrender.com/api npm run build
    npx cap sync android
    ```
-2. Open in Android Studio: `cd frontend && npx cap open android` (Gradle compile + APK).
-3. Changing backend URL at runtime without rebuild: set `localStorage['dt-api-base']`.
-4. Native limits: Google OAuth (`/api/auth/google`) and push notifications are not wired yet
-   (need custom URL scheme + native plugins); email/password login works after backend CORS
-   allows the native WebView origin (`https://localhost`).
+2. Build the APK (Linux-compatible; Android SDK at `$HOME/android-sdk` or Android Studio):
+   ```bash
+   cd frontend/android && ANDROID_HOME=$HOME/android-sdk ./gradlew assembleDebug
+   # APK → frontend/android/app/build/outputs/apk/debug/app-debug.apk
+   ```
+3. Native login also requires the backend to allow the app's WebView origin:
+   `CORS_ORIGIN` (Render env, or `http://localhost:5173` default) now accepts a
+   comma-separated list — append `,https://localhost` for Capacitor Android.
+4. Changing backend URL at runtime without rebuild: set `localStorage['dt-api-base']`.
+5. Native limits: Google OAuth (`/api/auth/google`) and push notifications are not wired yet
+   (need custom URL scheme + native plugins).
 
 ## Render (production)
 

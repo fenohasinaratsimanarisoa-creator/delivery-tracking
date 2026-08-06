@@ -11,6 +11,7 @@ import Redis from 'ioredis';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { AppModule } from './app.module';
+import { getCorsOrigins } from './config/cors';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AlertService } from './common/alerting/alert.service';
 import { validateCsrfSecret } from './common/guards/csrf.guard';
@@ -98,7 +99,7 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter(alertService));
 
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: getCorsOrigins(),
     credentials: true,
   });
 
@@ -136,7 +137,9 @@ async function bootstrap() {
     app.get(Logger).log('[STARTUP] BILLING_ENABLED=false — pilot mode, quotas disabled');
   }
   if (!process.env.ALERT_SLACK_WEBHOOK && !process.env.ALERT_DISCORD_WEBHOOK) {
-    app.get(Logger).warn('[STARTUP] No alert webhook configured — critical alerts will not be sent');
+    app
+      .get(Logger)
+      .warn('[STARTUP] No alert webhook configured — critical alerts will not be sent');
   }
 }
 bootstrap();

@@ -9,10 +9,11 @@ import { UseGuards } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 import { WsAuthService } from '../../common/auth/ws-auth.service';
+import { getCorsOrigins } from '../../config/cors';
 
 @WebSocketGateway({
   namespace: '/notifications',
-  cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:5173' },
+  cors: { origin: getCorsOrigins() },
 })
 @UseGuards(WsJwtGuard)
 export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {

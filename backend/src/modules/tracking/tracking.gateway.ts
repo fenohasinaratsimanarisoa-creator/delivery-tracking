@@ -21,13 +21,16 @@ import { WsTrackingExceptionFilter } from '../../common/filters/ws-tracking-exce
 import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
 import { haversineDistance } from '../../common/geo/geo.utils';
 import { computeConfidence } from '../../common/geo/gps-quality';
+import { getCorsOrigins } from '../../config/cors';
 
 @WebSocketGateway({
-  cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:5173' },
+  cors: { origin: getCorsOrigins() },
 })
 @UseGuards(WsJwtGuard)
 @UseFilters(WsTrackingExceptionFilter)
-export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy {
+export class TrackingGateway
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy
+{
   @WebSocketServer()
   server!: Server;
 
@@ -118,81 +121,87 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (!user || user.role !== 'driver') return;
 
     return CompanyScopedContext.run(user.companyId, async () => {
-    if (await this.trackingService.isRateLimited(user.id)) return;
+      if (await this.trackingService.isRateLimited(user.id)) return;
 
-    if (dto.deliveryId) {
+      if (dto.deliveryId) {
+        try {
+          await this.trackingService.verifyDriverAssignment(dto.deliveryId, user.id);
+        } catch {
+          this.logger.warn(
+            `Position rejected: driver ${user.id} not assigned to delivery ${dto.deliveryId}`,
+          );
+          return;
+        }
+      }
+
+      const driver = await this.trackingService.findDriverByUserId(user.id);
+      if (!driver) return;
+
+      // Cross-tenant check: ensure the vehicle belongs to the user's company
       try {
-        await this.trackingService.verifyDriverAssignment(dto.deliveryId, user.id);
+        await this.trackingService.assertVehicleOwnership(dto.vehicleId, user.companyId);
       } catch {
         this.logger.warn(
-          `Position rejected: driver ${user.id} not assigned to delivery ${dto.deliveryId}`,
+          `Position rejected: vehicle ${dto.vehicleId} not owned by company ${user.companyId}`,
         );
         return;
       }
-    }
 
-    const driver = await this.trackingService.findDriverByUserId(user.id);
-    if (!driver) return;
-
-    // Cross-tenant check: ensure the vehicle belongs to the user's company
-    try {
-      await this.trackingService.assertVehicleOwnership(dto.vehicleId, user.companyId);
-    } catch {
-      this.logger.warn(
-        `Position rejected: vehicle ${dto.vehicleId} not owned by company ${user.companyId}`,
-      );
-      return;
-    }
-
-    let speed = dto.speed;
-    if (!speed || speed <= 0) {
-      const last = await this.trackingService.getLastPosition(dto.vehicleId);
-      if (last) {
-        const timeDiffSec = (new Date(dto.timestamp).getTime() - last.timestamp.getTime()) / 1000;
-        if (timeDiffSec > 0) {
-          const distance = haversineDistance(
-            last.latitude,
-            last.longitude,
-            dto.latitude,
-            dto.longitude,
-          );
-          speed = distance / timeDiffSec;
+      let speed = dto.speed;
+      if (!speed || speed <= 0) {
+        const last = await this.trackingService.getLastPosition(dto.vehicleId);
+        if (last) {
+          const timeDiffSec = (new Date(dto.timestamp).getTime() - last.timestamp.getTime()) / 1000;
+          if (timeDiffSec > 0) {
+            const distance = haversineDistance(
+              last.latitude,
+              last.longitude,
+              dto.latitude,
+              dto.longitude,
+            );
+            speed = distance / timeDiffSec;
+          }
         }
       }
-    }
 
-    // Le WebSocket de l'app mobile est toujours une source 'phone'.
-    const position = await this.trackingService.savePosition(driver.id, dto, user.companyId, 'phone');
-    if (!position) return;
+      // Le WebSocket de l'app mobile est toujours une source 'phone'.
+      const position = await this.trackingService.savePosition(
+        driver.id,
+        dto,
+        user.companyId,
+        'phone',
+      );
+      if (!position) return;
 
-    this.logger.log(
-      `[POSITION] driver=${driver.id} lat=${dto.latitude.toFixed(6)} lng=${dto.longitude.toFixed(6)} speed=${speed?.toFixed(2)} heading=${dto.heading} delivery=${dto.deliveryId || 'none'} company=${user.companyId}`,
-    );
+      this.logger.log(
+        `[POSITION] driver=${driver.id} lat=${dto.latitude.toFixed(6)} lng=${dto.longitude.toFixed(6)} speed=${speed?.toFixed(2)} heading=${dto.heading} delivery=${dto.deliveryId || 'none'} company=${user.companyId}`,
+      );
 
-    const confidence = dto.accuracy && dto.accuracy > 0
-      ? computeConfidence(dto.accuracy, false, speed, dto.heading)
-      : computeConfidence(undefined, false, speed, dto.heading);
+      const confidence =
+        dto.accuracy && dto.accuracy > 0
+          ? computeConfidence(dto.accuracy, false, speed, dto.heading)
+          : computeConfidence(undefined, false, speed, dto.heading);
 
-    const broadcast = {
-      driverId: driver.id,
-      driverName: `${user.firstName} ${user.lastName}`,
-      latitude: dto.latitude,
-      longitude: dto.longitude,
-      speed: speed,
-      heading: dto.heading,
-      altitude: dto.altitude,
-      accuracy: dto.accuracy,
-      suspect: position.suspect,
-      confidence,
-      timestamp: dto.timestamp,
-      deliveryId: dto.deliveryId,
-      vehicleId: dto.vehicleId,
-    };
+      const broadcast = {
+        driverId: driver.id,
+        driverName: `${user.firstName} ${user.lastName}`,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+        speed: speed,
+        heading: dto.heading,
+        altitude: dto.altitude,
+        accuracy: dto.accuracy,
+        suspect: position.suspect,
+        confidence,
+        timestamp: dto.timestamp,
+        deliveryId: dto.deliveryId,
+        vehicleId: dto.vehicleId,
+      };
 
-    if (dto.deliveryId) {
-      this.server.to(`delivery:${dto.deliveryId}`).emit('positionUpdate', broadcast);
-    }
-    this.server.to(`company:${user.companyId}`).emit('positionUpdate', broadcast);
+      if (dto.deliveryId) {
+        this.server.to(`delivery:${dto.deliveryId}`).emit('positionUpdate', broadcast);
+      }
+      this.server.to(`company:${user.companyId}`).emit('positionUpdate', broadcast);
 
       return { event: 'positionSaved', data: { id: position.id, suspect: position.suspect } };
     });
@@ -207,44 +216,46 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (!user || user.role !== 'driver') return;
 
     return CompanyScopedContext.run(user.companyId, async () => {
-    const driver = await this.trackingService.findDriverByUserId(user.id);
-    if (!driver) return;
+      const driver = await this.trackingService.findDriverByUserId(user.id);
+      if (!driver) return;
 
-    const saved = await this.trackingService.saveBatch(
-      user.id,
-      driver.id,
-      dto.positions,
-      user.companyId,
-    );
+      const saved = await this.trackingService.saveBatch(
+        user.id,
+        driver.id,
+        dto.positions,
+        user.companyId,
+      );
 
-    // Only broadcast positions that were actually saved
-    const broadcasts = saved.map((pos: GpsPosition) => ({
-      driverId: driver.id,
-      driverName: `${user.firstName} ${user.lastName}`,
-      latitude: pos.latitude,
-      longitude: pos.longitude,
-      speed: pos.speed,
-      heading: pos.heading,
-      altitude: pos.altitude,
-      accuracy: pos.accuracy,
-      suspect: pos.suspect,
-      confidence: pos.accuracy ? computeConfidence(pos.accuracy, pos.suspect ?? false, pos.speed ?? undefined) : computeConfidence(undefined, pos.suspect ?? false, pos.speed ?? undefined),
-      timestamp: pos.timestamp instanceof Date ? pos.timestamp.toISOString() : pos.timestamp,
-      deliveryId: pos.deliveryId ?? undefined,
-      vehicleId: pos.vehicleId,
-    }));
+      // Only broadcast positions that were actually saved
+      const broadcasts = saved.map((pos: GpsPosition) => ({
+        driverId: driver.id,
+        driverName: `${user.firstName} ${user.lastName}`,
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        speed: pos.speed,
+        heading: pos.heading,
+        altitude: pos.altitude,
+        accuracy: pos.accuracy,
+        suspect: pos.suspect,
+        confidence: pos.accuracy
+          ? computeConfidence(pos.accuracy, pos.suspect ?? false, pos.speed ?? undefined)
+          : computeConfidence(undefined, pos.suspect ?? false, pos.speed ?? undefined),
+        timestamp: pos.timestamp instanceof Date ? pos.timestamp.toISOString() : pos.timestamp,
+        deliveryId: pos.deliveryId ?? undefined,
+        vehicleId: pos.vehicleId,
+      }));
 
-    const rooms = new Set<string>();
-    for (const pos of saved) {
-      if (pos.deliveryId) {
-        rooms.add(`delivery:${pos.deliveryId}`);
+      const rooms = new Set<string>();
+      for (const pos of saved) {
+        if (pos.deliveryId) {
+          rooms.add(`delivery:${pos.deliveryId}`);
+        }
       }
-    }
-    rooms.add(`company:${user.companyId}`);
+      rooms.add(`company:${user.companyId}`);
 
-    for (const room of rooms) {
-      this.server.to(room).emit('batchPositionUpdate', broadcasts);
-    }
+      for (const room of rooms) {
+        this.server.to(room).emit('batchPositionUpdate', broadcasts);
+      }
 
       return { event: 'positionsSaved', data: { count: saved.length } };
     });
@@ -288,7 +299,11 @@ export class TrackingGateway implements OnGatewayConnection, OnGatewayDisconnect
         ? Math.floor(body.escalationLevel)
         : 0;
 
-    await this.deliveryProximityService.snoozeProximity(deliveryId, driver.vehicleId, escalationLevel);
+    await this.deliveryProximityService.snoozeProximity(
+      deliveryId,
+      driver.vehicleId,
+      escalationLevel,
+    );
   }
 
   @SubscribeMessage('subscribeToDelivery')

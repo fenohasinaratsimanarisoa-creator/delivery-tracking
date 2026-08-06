@@ -41,3 +41,9 @@ backend/SECURITY_AUDIT.md
 # Redis dump / artifacts racine
 dump.rdb
 package-lock.json
+
+# Mobile builds (never commit)
+*.apk
+frontend/android/.gradle/
+frontend/android/build/
+frontend/android/app/build/
