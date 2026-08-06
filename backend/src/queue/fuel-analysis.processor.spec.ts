@@ -106,6 +106,119 @@ describe('FuelAnalysisProcessor', () => {
   });
 
   // ----------------------------------------------------------------
+  // Message de notification : le sens de l'écart (above/below) doit refléter
+  // la direction RÉELLE (sur- vs sous-consommation), pas un « exceeded » systématique.
+  // ----------------------------------------------------------------
+  describe('processFuelLogAnalysis — message de notification selon le sens de l’écart', () => {
+    const runAnalyze = (fuelLog: any, threshold = 20) => {
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce(fuelLog);
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({
+        anomalyThreshold: threshold,
+      });
+      mockPrisma.fuelLog.update.mockResolvedValueOnce({});
+      return processor.process({
+        name: 'analyze',
+        data: { fuelLogId: fuelLog.id, vehicleId: 'veh-1', companyId: 'comp-1' },
+      } as any);
+    };
+
+    it('Test B (cas réel du bug) : sous-consommation 1.6 vs 2.0 L/100km → message « below », jamais « exceeded »', async () => {
+      await runAnalyze(
+        {
+          id: 'log-under',
+          liters: 1.6,
+          kilometers: 100, // → calculatedConsumption = 1.6 L/100km
+          vehicle: { licensePlate: 'TRK-4824', theoreticalConsumption: 2.0 },
+        },
+        15, // déviation 20% > 15 → anomalie déclenchée (sous-consommation, pas dépassement)
+      );
+
+      // Le champ direction est cohérent avec le signe réel.
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith({
+        where: { id: 'log-under' },
+        data: expect.objectContaining({
+          consumptionAnomalyFlag: true,
+          consumptionDeviationDirection: 'under',
+        }),
+      });
+      // Le message indique clairement une consommation INFÉRIEURE à l'attendu.
+      expect(mockNotifications.create).toHaveBeenCalledWith(
+        'comp-1',
+        expect.objectContaining({
+          message: expect.stringContaining('below'),
+        }),
+      );
+      const msg = mockNotifications.create.mock.calls[0][1].message as string;
+      expect(msg).not.toContain('exceeded');
+      expect(msg).not.toContain('above');
+      console.log(`[Test B] message = "${msg}"`);
+    });
+
+    it('Test A : sur-consommation → message « above », jamais « below »', async () => {
+      await runAnalyze(
+        {
+          id: 'log-over',
+          liters: 50,
+          kilometers: 100, // → calculatedConsumption = 50 L/100km
+          vehicle: { licensePlate: 'TRK-1', theoreticalConsumption: 10 },
+        },
+        20, // déviation 400% > 20 → anomalie (sur-consommation)
+      );
+
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith({
+        where: { id: 'log-over' },
+        data: expect.objectContaining({
+          consumptionAnomalyFlag: true,
+          consumptionDeviationDirection: 'over',
+        }),
+      });
+      expect(mockNotifications.create).toHaveBeenCalledWith(
+        'comp-1',
+        expect.objectContaining({
+          message: expect.stringContaining('above'),
+        }),
+      );
+      const msg = mockNotifications.create.mock.calls[0][1].message as string;
+      expect(msg).not.toContain('below');
+      console.log(`[Test A] message = "${msg}"`);
+    });
+
+    it('Test C : consumptionDeviationDirection cohérent avec le signe (calculated - theoretical) sur 5 cas', async () => {
+      // Générateur pseudo-aléatoire déterministe (reproductible en CI).
+      let seeded = 12345;
+      const rand = () => {
+        seeded = (seeded * 9301 + 49297) % 233280;
+        return seeded / 233280;
+      };
+      for (let i = 0; i < 5; i++) {
+        const theoretical = 8 + i * 2;
+        // Déviation garantie > 50% (seuil 20) dans les deux sens.
+        const multiplier = 1 + (0.5 + rand()) * (i % 2 === 0 ? 1 : -1);
+        const calculated = theoretical * multiplier;
+        const expectedDirection = calculated > theoretical ? 'over' : 'under';
+
+        await runAnalyze(
+          {
+            id: `log-rand-${i}`,
+            liters: calculated,
+            kilometers: 100,
+            vehicle: { licensePlate: `TRK-${i}`, theoreticalConsumption: theoretical },
+          },
+          20,
+        );
+
+        expect(mockPrisma.fuelLog.update).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              consumptionDeviationDirection: expectedDirection,
+            }),
+          }),
+        );
+      }
+    });
+  });
+
+  // ----------------------------------------------------------------
   // RÉGRESSION — write-loss entre les deux détecteurs d'anomalie carburant.
   // Chaque détecteur écrit SA propre paire de champs. Quel que soit l'ordre
   // d'exécution, les deux anomalies doivent rester visibles (flag + raison).
@@ -178,8 +291,7 @@ describe('FuelAnalysisProcessor', () => {
         data: { fuelLogId: 'log-1', vehicleId: 'vehicle-1', companyId: 'comp-1' },
       } as any);
 
-    const runCrossCheck = () =>
-      (service as any).crossCheckFuelLogWithGps(store['log-1'], 'comp-1');
+    const runCrossCheck = () => (service as any).crossCheckFuelLogWithGps(store['log-1'], 'comp-1');
 
     const expectBothAnomaliesVisible = () => {
       const log = store['log-1'];

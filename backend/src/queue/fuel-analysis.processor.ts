@@ -1,7 +1,11 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { NotificationType, NotificationPriority } from '@prisma/client';
+import {
+  NotificationType,
+  NotificationPriority,
+  ConsumptionDeviationDirection,
+} from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { FuelConsumptionService } from '../modules/fuel-consumption/fuel-consumption.service';
@@ -63,9 +67,7 @@ export class FuelAnalysisProcessor extends WorkerHost {
         `Driver fuel report recomputed for driver ${driverId} (company ${companyId})${status ? ` [delivery status: ${status}]` : ''}`,
       );
     } catch (error) {
-      this.logger.error(
-        `Failed to recompute driver fuel report for ${driverId}: ${error}`,
-      );
+      this.logger.error(`Failed to recompute driver fuel report for ${driverId}: ${error}`);
       throw error;
     }
   }
@@ -95,6 +97,8 @@ export class FuelAnalysisProcessor extends WorkerHost {
 
       let consumptionAnomalyFlag = false;
       let consumptionAnomalyReason: string | null = null;
+      let consumptionDeviationDirection: ConsumptionDeviationDirection | null = null;
+      let deviation: number | null = null;
       const theoretical = fuelLog.vehicle.theoreticalConsumption;
 
       const defaultThreshold = parseInt(process.env.FUEL_ANOMALY_THRESHOLD_PERCENT || '20', 10);
@@ -102,34 +106,54 @@ export class FuelAnalysisProcessor extends WorkerHost {
 
       if (calculatedConsumption !== null) {
         if (theoretical && theoretical > 0) {
-          const deviation = (Math.abs(calculatedConsumption - theoretical) / theoretical) * 100;
+          deviation = (Math.abs(calculatedConsumption - theoretical) / theoretical) * 100;
 
           if (deviation > threshold) {
             consumptionAnomalyFlag = true;
             consumptionAnomalyReason = `Consumption ${calculatedConsumption.toFixed(2)} L/100km deviates ${deviation.toFixed(1)}% from theoretical ${theoretical} L/100km (threshold: ${threshold}%)`;
+            // Sens réel de l'écart : la détection est bidirectionnelle (Math.abs), une
+            // sous-consommation (mesuré < théorique) n'est PAS un dépassement. Le champ
+            // permet au frontend d'afficher over/under sans parser le message.
+            consumptionDeviationDirection =
+              calculatedConsumption > theoretical
+                ? ConsumptionDeviationDirection.over
+                : ConsumptionDeviationDirection.under;
           }
         }
       }
 
       // Ce détecteur n'écrit QUE sa propre paire de champs (consumptionAnomalyFlag/
-      // consumptionAnomalyReason). Il ne touche jamais aux champs GPS ni au champ
-      // dérivé anomalyFlag (calculé en lecture) : sinon il écraserait la détection
-      // GPS concurrente (write-loss).
+      // consumptionAnomalyReason) + la direction associée. Il ne touche jamais aux champs
+      // GPS ni au champ dérivé anomalyFlag (calculé en lecture) : sinon il écraserait la
+      // détection GPS concurrente (write-loss).
       await this.prisma.fuelLog.update({
         where: { id: fuelLogId },
-        data: { calculatedConsumption, consumptionAnomalyFlag, consumptionAnomalyReason },
+        data: {
+          calculatedConsumption,
+          consumptionAnomalyFlag,
+          consumptionAnomalyReason,
+          consumptionDeviationDirection,
+        },
       });
 
       this.logger.log(
-        `FuelLog ${fuelLogId}: consumption=${calculatedConsumption?.toFixed(2)} L/100km, anomaly=${consumptionAnomalyFlag}`,
+        `FuelLog ${fuelLogId}: consumption=${calculatedConsumption?.toFixed(2)} L/100km, anomaly=${consumptionAnomalyFlag}${consumptionDeviationDirection ? ` (${consumptionDeviationDirection})` : ''}`,
       );
 
-      if (consumptionAnomalyFlag && calculatedConsumption !== null) {
+      if (consumptionAnomalyFlag && calculatedConsumption !== null && deviation !== null) {
+        // Message honnête reflétant le sens réel de l'écart : 'above' (sur-consommation)
+        // ou 'below' (sous-consommation). L'ancien libellé « exceeded consumption
+        // threshold » était FAUX en sous-consommation (conso mesurée < théorique), ce qui
+        // induisait l'utilisateur en erreur sur la situation opérationnelle (une
+        // sous-consommation évoque un km manuel surdéclaré / mauvais théorique / erreur de
+        // saisie, PAS une fuite ou un vol de carburant).
+        const direction =
+          consumptionDeviationDirection === ConsumptionDeviationDirection.over ? 'above' : 'below';
         await this.notifications.create(companyId, {
           type: NotificationType.fuel_anomaly,
           priority: NotificationPriority.high,
           title: 'Fuel Consumption Anomaly',
-          message: `Vehicle ${fuelLog.vehicle.licensePlate} exceeded consumption threshold: ${calculatedConsumption.toFixed(1)} L/100km (expected ${theoretical?.toFixed(1) || 'N/A'} L/100km)`,
+          message: `Vehicle ${fuelLog.vehicle.licensePlate}: consumption ${calculatedConsumption.toFixed(1)} L/100km is ${deviation.toFixed(0)}% ${direction} the expected ${theoretical?.toFixed(1) || 'N/A'} L/100km`,
           link: `/fuel-consumption`,
           deliveryId: undefined,
         });

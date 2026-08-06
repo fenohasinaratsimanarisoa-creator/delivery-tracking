@@ -530,7 +530,14 @@ export default function FuelPage() {
                           <td className={styles.tableCell}>{new Date(l.fillDate).toLocaleDateString(i18n.language)}</td>
                           <td className={styles.tableCell}>
                             {l.anomalyFlag ? (
-                              <span className={`${styles.badge} ${styles.badgeAnomaly}`}>
+                              <span
+                                className={`${styles.badge} ${styles.badgeAnomaly}`}
+                                title={l.consumptionDeviationDirection
+                                  ? l.consumptionDeviationDirection === 'over'
+                                    ? t('fuel.overConsumption')
+                                    : t('fuel.underConsumption')
+                                  : undefined}
+                              >
                                 <AlertTriangle size={12} /> {t('fuel.anomaly')}
                               </span>
                             ) : l.gpsCoverageInsufficientFlag ? (

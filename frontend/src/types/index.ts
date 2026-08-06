@@ -120,6 +120,10 @@ export interface FuelLog {
   anomalyReason?: string | null;
   consumptionAnomalyFlag?: boolean;
   consumptionAnomalyReason?: string | null;
+  // Sens de l'écart de consommation (over = sur-consommation, under = sous-consommation),
+  // renseigné quand consumptionAnomalyFlag=true. Permet d'afficher la direction sans
+  // parser le texte du message.
+  consumptionDeviationDirection?: 'over' | 'under' | null;
   gpsAnomalyFlag?: boolean;
   gpsAnomalyReason?: string | null;
   // Couverture GPS insuffisante : signal distinct d'une anomalie confirmée (« non

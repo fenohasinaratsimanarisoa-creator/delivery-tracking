@@ -444,6 +444,8 @@
     "anomaly": "⚠️ Anomalie",
     "normal": "✓ Normal",
     "nonVerifiable": "❔ Non vérifiable",
+    "overConsumption": "Sur-consommation",
+    "underConsumption": "Sous-consommation",
     "helpTitle": "Comprendre les deux relevés",
     "helpManual": "• Saisie manuelle : enregistrements de pleins réels saisis par l'équipe (litres, coût, kilométrage). Permet de suivre les dépenses réelles en carburant.",
     "helpGps": "• Rapport GPS : estimation automatique basée sur les positions GPS des véhicules. La consommation théorique du véhicule est utilisée pour estimer le coût. Complémentaire à la saisie manuelle.",

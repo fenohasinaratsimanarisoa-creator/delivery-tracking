@@ -7,8 +7,12 @@
 
 export interface FuelAnomalySource {
   consumptionAnomalyFlag?: boolean | null;
-  gpsAnomalyFlag?: boolean | null;
   consumptionAnomalyReason?: string | null;
+  // Sens de l'écart de consommation ('over' sur-consommation | 'under' sous-consommation),
+  // renseigné quand consumptionAnomalyFlag=true. Exposé tel quel (jamais fusionné dans
+  // anomalyFlag) pour que le frontend affiche la direction sans parser le message.
+  consumptionDeviationDirection?: 'over' | 'under' | null;
+  gpsAnomalyFlag?: boolean | null;
   gpsAnomalyReason?: string | null;
   // Paire dédiée à l'ABSENCE de couverture GPS sur la période du cross-check.
   // Volontairement EXCLUE de hasFuelAnomaly()/getFuelAnomalyReason() : un manque de
