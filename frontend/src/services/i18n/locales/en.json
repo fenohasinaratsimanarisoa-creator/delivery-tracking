@@ -583,6 +583,8 @@
   "settings": {
     "title": "Settings",
     "subtitle": "Manage your account and preferences",
+    "kicker": "Account & preferences",
+    "unsavedChanges": "Unsaved changes",
     "profile": "Profile",
     "profileDesc": "Your identity visible to the team",
     "firstName": "First name",
@@ -1234,13 +1236,23 @@
     "newPasswordPlaceholder": "8 chars min, uppercase, lowercase, digit, special",
     "confirmPassword": "Confirm new password",
     "confirmPasswordPlaceholder": "Re-enter new password",
-    "showPassword": "Show passwords",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "copySecret": "Copy",
+    "secretCopied": "Copied!",
     "changePassword": "Change password",
     "passwordStrength": {
       "veryWeak": "Very weak",
       "weak": "Weak",
       "medium": "Medium",
       "strong": "Strong"
+    },
+    "passwordRequirements": {
+      "minLength": "At least 8 characters",
+      "lowercase": "Lowercase letter",
+      "uppercase": "Uppercase letter",
+      "digit": "Number",
+      "symbol": "Special character"
     },
     "twoFactorTitle": "Two-factor authentication (2FA)",
     "twoFactorSubtitle": "Secure your account with an authenticator app",
@@ -1262,6 +1274,8 @@
     "toastTwoFactorDisabled": "Two-factor authentication disabled",
     "toastTwoFactorCodeRequired": "6-digit code required",
     "sessionTitle": "Active sessions",
+    "sessionCount": "{{count}} session",
+    "sessionCount_plural": "{{count}} sessions",
     "sessionSubtitle": "Devices connected to your account",
     "sessionEmpty": "No active sessions",
     "sessionUnknownDevice": "Unknown device",

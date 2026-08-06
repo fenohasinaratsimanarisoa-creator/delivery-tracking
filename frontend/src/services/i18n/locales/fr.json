@@ -583,6 +583,8 @@
   "settings": {
     "title": "Paramètres",
     "subtitle": "Gérez votre compte et vos préférences",
+    "kicker": "Compte & préférences",
+    "unsavedChanges": "Modifications non enregistrées",
     "profile": "Profil",
     "profileDesc": "Votre identité visible par l'équipe",
     "firstName": "Prénom",
@@ -1233,13 +1235,23 @@
     "newPasswordPlaceholder": "8 caractères min, majuscule, minuscule, chiffre, spécial",
     "confirmPassword": "Confirmer le nouveau mot de passe",
     "confirmPasswordPlaceholder": "Ressaisissez le nouveau mot de passe",
-    "showPassword": "Afficher les mots de passe",
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Masquer le mot de passe",
+    "copySecret": "Copier",
+    "secretCopied": "Copié !",
     "changePassword": "Changer le mot de passe",
-    "passwordStrength": {
+"passwordStrength": {
       "veryWeak": "Très faible",
       "weak": "Faible",
-      "medium": "Moyen",
+      "medium": "Moyenne",
       "strong": "Fort"
+    },
+    "passwordRequirements": {
+      "minLength": "8 caractères minimum",
+      "lowercase": "Une minuscule",
+      "uppercase": "Une majuscule",
+      "digit": "Un chiffre",
+      "symbol": "Un caractère spécial"
     },
     "twoFactorTitle": "Authentification à deux facteurs (2FA)",
     "twoFactorSubtitle": "Sécurisez votre compte avec une application d'authentification",
@@ -1261,6 +1273,8 @@
     "toastTwoFactorDisabled": "Authentification à deux facteurs désactivée",
     "toastTwoFactorCodeRequired": "Code à 6 chiffres requis",
     "sessionTitle": "Sessions actives",
+    "sessionCount": "{{count}} session",
+    "sessionCount_plural": "{{count}} sessions",
     "sessionSubtitle": "Appareils connectés à votre compte",
     "sessionEmpty": "Aucune session active",
     "sessionUnknownDevice": "Appareil inconnu",
