@@ -47,6 +47,11 @@ Cherchez ces mots-clés dans la description :
 | "Supports GPRS/SMS" | Par défaut GT06 ou TK103 |
 | "4G LTE tracker" | Vérifier le protocole — peut être GT06, Teltonika ou H02 |
 
+> ℹ️ Les ports indiqués ci-dessus (5055, 5056…) sont ceux du **Traccar local de développement**.
+> En **production** (Traccar Cloud), le port de chaque protocole est **différent** et est fourni
+> par l'interface Traccar Cloud lors de la création du device — voir section 3 et
+> `TRACCAR_SETUP.md` section 2.
+
 ### Pièges à éviter
 
 - ❌ "GPS tracker with APP only" = probablement fermé (protocole propriétaire, pas d'accès serveur)
@@ -89,16 +94,29 @@ Si le budget le permet, **Teltonika FMB** est la référence professionnelle (~6
 
 Par SMS ou par câble USB (selon le modèle). Exemple pour un traceur GT06 :
 
+> **⚠️ ATTENTION — le port 5055 n'existe QUE en développement local.**
+> Le port `5055` (ainsi que 5056-5065) est celui du **Traccar local** (docker-compose, dev uniquement).
+> En **production**, DelivTrack utilise **Traccar Cloud** (`server.traccar.org`) dont le port est
+> **différent et non garanti** — il n'est **jamais** 5055. Le port exact n'est connu qu'une fois
+> confirmé dans l'interface `https://server.traccar.org` lors de la création du device
+> (pour GT06, probablement `5023` — à confirmer, voir `RAPPORT_PORTS_TRACCAR.md` section
+> « Traccar Cloud (production) »).
+> **Procédure pour obtenir l'IP et le port réels :** voir **`TRACCAR_SETUP.md` section 2
+> « Configurer Traccar Cloud (production) »** (IP `45.55.84.20` documentée, port fourni par l'interface).
+
 ```bash
-# Configurer le serveur (APN + IP:Port Traccar)
+# Configurer le serveur (APN + IP:Port Traccar Cloud)
 # Par SMS au numéro de la SIM du traceur
 # Remplacer XXXXX par le numéro de téléphone de la SIM du traceur
 
 # Configurer l'APN (exemple Telma)
 SMS à XXXXX : apn,telma
 
-# Configurer le serveur Traccar de production
-SMS à XXXXX : adminip123,[IP_DU_SERVEUR],5055
+# Configurer le serveur Traccar Cloud de production
+# [IP_TRACCAR_CLOUD]             = IP de Traccar Cloud (45.55.84.20 — voir TRACCAR_SETUP.md section 2)
+# [PORT_CONFIRME_DANS_INTERFACE] = port affiché par l'interface Traccar Cloud à la création
+#                                  du device (PAS 5055 — 5055 n'existe qu'en dev local)
+SMS à XXXXX : adminip123,[IP_TRACCAR_CLOUD],[PORT_CONFIRME_DANS_INTERFACE]
 
 # Configurer l'intervalle d'envoi (10 secondes en mouvement)
 SMS à XXXXX : upload,10
@@ -112,7 +130,9 @@ SMS à XXXXX : reboot
 
 ### Étape 3 : Créer le device dans Traccar
 
-1. Interface web Traccar : `http://[IP_Traccar]:8082`
+1. Interface web Traccar :
+   - **Production (Traccar Cloud)** : `https://server.traccar.org`
+   - **Dev local uniquement** : `http://[IP_Traccar]:8082`
 2. Login avec les identifiants admin
 3. Menu **Devices** → **Add**
 4. **Name** : nom du véhicule
@@ -156,17 +176,28 @@ Vérifications dans l'ordre :
 
 ### 3. Le port est-il ouvert sur le serveur ?
 ```bash
-# Depuis n'importe quelle machine :
+# Depuis n'importe quelle machine — EXEMPLE pour le Traccar LOCAL de développement :
 nc -zv [IP_SERVEUR] 5055
 # Doit répondre "Connected to [IP_SERVEUR]"
 # Si "Connection refused" → le port n'est pas ouvert (vérifier firewall/VPS)
 
-# Vérifier que Traccar écoute bien le port :
+# Vérifier que Traccar écoute bien le port (dev local / VPS auto-hébergé uniquement) :
 ssh [VPS] "ss -tlnp | grep 5055"
 # Doit montrer LISTEN
 ```
+> ⚠️ L'exemple ci-dessus (port `5055`) ne vaut **que** pour le Traccar **local de développement**
+> (docker-compose / VPS auto-hébergé). En **production** (Traccar Cloud), le port n'est **pas** 5055 :
+> tester avec l'IP et le port confirmés dans l'interface Traccar Cloud
+> (voir `TRACCAR_SETUP.md` section 2) :
+```bash
+nc -zv [IP_TRACCAR_CLOUD] [PORT_CONFIRME_DANS_INTERFACE]
+# Traccar Cloud n'étant pas auto-hébergé, le contrôle "ssh ... ss -tlnp" ne s'y applique pas.
+```
 
 ### 4. Le protocole est-il activé dans traccar.xml ?
+> ℹ️ Cette vérification ne concerne **que** le Traccar local / auto-hébergé (dev).
+> En **production** (Traccar Cloud), le fichier `traccar.xml` n'est pas accessible : le port du
+> protocole est celui affiché dans l'interface Traccar Cloud à la création du device.
 L'admin peut vérifier que la ligne correspondante est dans `traccar.xml` :
 ```xml
 <entry key='gt06.port'>5055</entry>
@@ -189,8 +220,10 @@ Rechercher des erreurs de parsing de protocole.
 
 ### 8. Tester avec un simulateur
 ```bash
-# Depuis une machine qui peut atteindre le serveur Traccar :
+# Depuis une machine qui peut atteindre le serveur Traccar (dev local : IP + port 5055) :
 node scripts/simulate-protocol-gt06.js [IMEI] [IP_SERVEUR] 5055
+# En production (Traccar Cloud), utiliser l'IP et le port confirmés dans l'interface :
+# node scripts/simulate-protocol-gt06.js [IMEI] [IP_TRACCAR_CLOUD] [PORT_CONFIRME_DANS_INTERFACE]
 ```
 Si le simulateur fonctionne mais pas le traceur physique :
 - Problème de configuration du traceur (APN, IP, port)
