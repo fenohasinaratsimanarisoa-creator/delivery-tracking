@@ -1058,14 +1058,12 @@ describe('TrackingService', () => {
       });
 
       // isDuplicateByTimestamp → null ; getLastPosition → dernier point physical_tracker il y a 2 min.
-      mockPrisma.gpsPosition.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({
-          latitude: 0,
-          longitude: 0,
-          timestamp: new Date(now.getTime() - 120000),
-          source: 'physical_tracker',
-        });
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({
+        latitude: 0,
+        longitude: 0,
+        timestamp: new Date(now.getTime() - 120000),
+        source: 'physical_tracker',
+      });
       // Recherche du dernier point de la MÊME source ('phone') → aucun historique → exempté.
       mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null);
 
@@ -1482,6 +1480,220 @@ describe('TrackingService', () => {
       // (~4450 m), jamais P1→P2→P4 (qui ajouterait ~2 m de bruit) ni P1→P3 (suspect).
       expect(js.meters).toBeGreaterThan(4000);
       expect(js.meters).toBeLessThan(5000);
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // PROMPT A2 — seuil de bruit GPS pondéré par l'accuracy dans calculateDistance
+  // ----------------------------------------------------------------
+  describe('PROMPT A2 — seuil de bruit pondéré par l’accuracy (calculateDistance)', () => {
+    const DELIVERY = '00000000-0000-4000-0000-00000000000a';
+    const COMPANY = 'company-1';
+
+    it('Test D : trajet ~10 km avec bruit phone (accuracy 40m) → distance non gonflée par le bruit', async () => {
+      // P0→P1 et P1→P2 = bruit de jitter ~11 m (accuracy 40 → seuil pondéré 20 m → filtré).
+      // P2→P3→P4 = trajet réel ~9985 m. AVANT pondération (seuil fixe 5 m), le bruit était
+      // compté → ~10007 m ; APRÈS, il est filtré → ~9985 m.
+      const positions = [
+        { latitude: 0, longitude: 0, accuracy: 40, timestamp: new Date('2026-07-20T06:00:00Z') },
+        {
+          latitude: 0,
+          longitude: 0.0001,
+          accuracy: 40,
+          timestamp: new Date('2026-07-20T06:01:00Z'),
+        },
+        {
+          latitude: 0,
+          longitude: 0.0002,
+          accuracy: 40,
+          timestamp: new Date('2026-07-20T06:02:00Z'),
+        },
+        {
+          latitude: 0,
+          longitude: 0.045,
+          accuracy: 40,
+          timestamp: new Date('2026-07-20T06:03:00Z'),
+        },
+        { latitude: 0, longitude: 0.09, accuracy: 40, timestamp: new Date('2026-07-20T06:04:00Z') },
+      ];
+      mockPrisma.gpsPosition.count.mockResolvedValue(5);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(positions as any);
+
+      const result = await service.calculateDistance(DELIVERY, COMPANY);
+
+      console.log(`[Test D] distance = ${result.meters} m`);
+      expect(result.meters).toBeLessThan(10000);
+      expect(result.meters).toBeGreaterThan(9900);
+    });
+
+    it('Test E : cohérence calculateDistance() vs DailyFuelReport.distanceKm sur un même (véhicule, jour)', async () => {
+      const DRIVER = '00000000-0000-4000-0000-000000000002';
+      const VEHICLE = '00000000-0000-4000-0000-000000000001';
+      const TARGET_DATE = new Date('2026-07-20T12:00:00.000Z');
+      const positions = [
+        {
+          latitude: 0,
+          longitude: 0,
+          accuracy: 40,
+          vehicleId: VEHICLE,
+          driverId: DRIVER,
+          deliveryId: DELIVERY,
+          timestamp: new Date('2026-07-20T06:00:00Z'),
+        },
+        {
+          latitude: 0,
+          longitude: 0.0001,
+          accuracy: 40,
+          vehicleId: VEHICLE,
+          driverId: DRIVER,
+          deliveryId: DELIVERY,
+          timestamp: new Date('2026-07-20T06:01:00Z'),
+        },
+        {
+          latitude: 0,
+          longitude: 0.0002,
+          accuracy: 40,
+          vehicleId: VEHICLE,
+          driverId: DRIVER,
+          deliveryId: DELIVERY,
+          timestamp: new Date('2026-07-20T06:02:00Z'),
+        },
+        {
+          latitude: 0,
+          longitude: 0.045,
+          accuracy: 40,
+          vehicleId: VEHICLE,
+          driverId: DRIVER,
+          deliveryId: DELIVERY,
+          timestamp: new Date('2026-07-20T06:03:00Z'),
+        },
+        {
+          latitude: 0,
+          longitude: 0.09,
+          accuracy: 40,
+          vehicleId: VEHICLE,
+          driverId: DRIVER,
+          deliveryId: DELIVERY,
+          timestamp: new Date('2026-07-20T06:04:00Z'),
+        },
+      ];
+      mockPrisma.gpsPosition.count.mockResolvedValue(5);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(positions as any);
+
+      // 1) calculateDistance (rapport de trajet).
+      const calc = await service.calculateDistance(DELIVERY, COMPANY);
+
+      // 2) DailyFuelReport (rapport carburant) sur les MÊMES positions.
+      const fuelService = new FuelConsumptionService(
+        mockPrisma as unknown as PrismaService,
+        { get: jest.fn((_k: string, d?: number) => d ?? 20) } as any,
+        { create: jest.fn() } as any,
+        undefined as any,
+        { broadcastDataUpdate: jest.fn() } as any,
+      );
+      mockPrisma.driver.findFirst.mockResolvedValue({
+        id: DRIVER,
+        firstName: 'Jean',
+        lastName: 'Rakoto',
+      });
+      mockPrisma.vehicle.findUnique.mockResolvedValue({
+        id: VEHICLE,
+        licensePlate: 'TRK-1',
+        fuelType: 'Diesel',
+        theoreticalConsumption: 10,
+      });
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 4900 });
+      mockPrisma.vehicle.findMany.mockResolvedValue([]);
+      let captured: any;
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (args: any) => {
+        captured = args;
+        return args;
+      });
+      await fuelService.generateDailyReportForSingleDriver(COMPANY, DRIVER, TARGET_DATE);
+      const reportMeters = Math.round(captured.create.distanceKm * 1000);
+
+      console.log(
+        `[Test E] calculateDistance = ${calc.meters} m | DailyFuelReport = ${captured.create.distanceKm} km (${reportMeters} m)`,
+      );
+      // Même fonction de distance filtrée → convergence à l'arrondi près.
+      expect(Math.abs(reportMeters - calc.meters)).toBeLessThanOrEqual(10);
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // PROMPT E — harmonisation de la détection de téléportation temps réel vs batch
+  // (evaluateTeleportation, source unique dans teleportation.utils)
+  // ----------------------------------------------------------------
+  describe('PROMPT E — téléportation batch vs temps réel (fonction partagée)', () => {
+    const VID = '00000000-0000-4000-0000-000000000001';
+
+    it('Test F : un saut de distance > 5km en < 10s est marqué suspect en batch', async () => {
+      const base = Date.parse('2026-07-21T10:00:00.000Z');
+      mockPrisma.delivery.findMany.mockReset();
+      mockPrisma.vehicle.findMany.mockReset().mockResolvedValueOnce([{ id: VID }]);
+      mockPrisma.gpsPosition.findMany
+        .mockReset()
+        .mockResolvedValueOnce([]) // lastPositions : base vide
+        .mockResolvedValueOnce([]); // lecture des insérées
+      const inserted: any[] = [];
+      mockPrisma.gpsPosition.createMany.mockReset().mockImplementation(async ({ data }: any) => {
+        inserted.push(...data);
+        return { count: data.length };
+      });
+
+      // Point à ~6672m en 9s (< 10s) : conditions du « saut court ». Note : avec les
+      // constantes actuelles (5000m, 10s, 55.56 m/s, scale >= 1), cette situation est
+      // TOUJOURS aussi couverte par la règle de vitesse (vitesse = 741 m/s > 55.56) — le
+      // test vérifie que le batch la détecte (suspect=true), comme le chemin temps réel.
+      await service.saveBatch('user-1', 'driver-1', [
+        { latitude: 0, longitude: 0, timestamp: new Date(base).toISOString(), vehicleId: VID },
+        {
+          latitude: 0,
+          longitude: 0.06,
+          timestamp: new Date(base + 9000).toISOString(),
+          vehicleId: VID,
+        },
+      ] as any);
+
+      expect(inserted).toHaveLength(2);
+      expect(inserted[1].suspect).toBe(true);
+    });
+
+    it('Test G : timestamp non croissant en batch → rejeté comme doublon (politique documentée, identique au temps réel)', async () => {
+      const base = Date.parse('2026-07-21T10:00:00.000Z');
+      mockPrisma.delivery.findMany.mockReset();
+      mockPrisma.vehicle.findMany.mockReset().mockResolvedValueOnce([{ id: VID }]);
+      // La base contient déjà P1 (t=+10s).
+      mockPrisma.gpsPosition.findMany
+        .mockReset()
+        .mockResolvedValueOnce([
+          // La ligne lastPositions porte vehicleId (sinon le Map serait indexé par undefined).
+          {
+            vehicleId: VID,
+            latitude: 0,
+            longitude: 0.001,
+            timestamp: new Date(base + 10000),
+            speed: null,
+          },
+        ])
+        .mockResolvedValueOnce([]);
+      mockPrisma.gpsPosition.createMany.mockReset();
+
+      // Lot : P2 (t=+0s, ANTÉRIEUR à la référence en base) + P1 (déjà en base).
+      await service.saveBatch('user-1', 'driver-1', [
+        { latitude: 0, longitude: 0, timestamp: new Date(base).toISOString(), vehicleId: VID },
+        {
+          latitude: 0,
+          longitude: 0.001,
+          timestamp: new Date(base + 10000).toISOString(),
+          vehicleId: VID,
+        },
+      ] as any);
+
+      // P2 (timeDiffSec = -10s) et P1 (doublon) sont rejetés par le dédoublonnage 1s,
+      // même politique que isDuplicateByTimestamp du temps réel : un point non croissant
+      // est une retransmission/doublon, pas une anomalie — jamais inséré en base.
+      expect(mockPrisma.gpsPosition.createMany).not.toHaveBeenCalled();
     });
   });
 });

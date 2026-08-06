@@ -6,6 +6,7 @@ import {
   Inject,
   Optional,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { plainToInstance } from 'class-transformer';
@@ -56,6 +57,14 @@ const LEADER_RETRY_INTERVAL_MS = 20000;
 @Injectable()
 export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TraccarBridgeService.name);
+  // Identité UNIQUE par instance du pont Traccar pour l'élection de leader (verrou Redis).
+  // En environnement conteneurisé (Docker/Kubernetes/Render), process.pid vaut quasi
+  // toujours 1 : deux replicas partageraient la même identité "1" et ne pourraient pas
+  // distinguer une vraie perte de lock d'un faux positif (deux instances croiraient être
+  // leader). HOSTNAME = nom du conteneur/pod (distinct entre replicas), combiné à un UUID
+  // pour éliminer toute collision même si HOSTNAME était partagé. Généré UNE SEULE FOIS au
+  // chargement de la classe, jamais recalculé.
+  private readonly instanceId = `${process.env.HOSTNAME || 'unknown'}-${randomUUID()}`;
   private socket: any = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private backfillTimer: ReturnType<typeof setTimeout> | null = null;
@@ -99,6 +108,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private leaderRetryTimer: ReturnType<typeof setInterval> | null = null;
 
   async onModuleInit() {
+    this.logger.log(
+      `Traccar bridge: instance initialisée (id=${this.instanceId}, HOSTNAME=${process.env.HOSTNAME || 'unknown'}, pid=${process.pid})`,
+    );
     if (this.traccarUrl === 'http://traccar:8082' || this.traccarUrl === 'disabled') {
       this.logger.warn('Traccar bridge: TRACCAR_URL not configured — bridge inactive');
       await this.notifyInactiveOnce();
@@ -186,18 +198,17 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     if (this.isLeader) return true;
 
     try {
-      const pid = String(process.pid);
       const acquired = await this.redis.call(
         'SET',
         LEADER_KEY,
-        pid,
+        this.instanceId,
         'NX',
         'EX',
         String(LEADER_TTL_S),
       );
       if (acquired === 'OK') {
         this.isLeader = true;
-        this.logger.log(`Traccar bridge: became leader (pid=${pid})`);
+        this.logger.log(`Traccar bridge: became leader (instance=${this.instanceId})`);
         this.startLeaderRenew();
         await this.connect();
         return true;
@@ -215,10 +226,10 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       if (!this.redis || !this.isLeader) return;
       try {
         const current = await this.redis.get(LEADER_KEY);
-        if (current !== String(process.pid)) {
+        if (current !== this.instanceId) {
           this.isLeader = false;
           this.logger.warn(
-            'Traccar bridge: lock repris par un autre process — perte réelle de leadership',
+            `Traccar bridge: lock repris par une autre instance (instance=${this.instanceId}, détenteur=${current || 'inconnu'}) — perte réelle de leadership`,
           );
           this.disconnect();
           this.stopLeaderRenew();
@@ -244,9 +255,11 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     this.stopLeaderRenew();
     try {
       const current = await this.redis.get(LEADER_KEY);
-      if (current === String(process.pid)) {
+      // Ne supprime JAMAIS le lock d'une autre instance légitime : si le détenteur n'est
+      // pas cette instance (ex. un nouveau leader élu après notre expiration), on s'abstient.
+      if (current === this.instanceId) {
         await this.redis.del(LEADER_KEY);
-        this.logger.log('Traccar bridge: stepped down as leader');
+        this.logger.log(`Traccar bridge: stepped down as leader (instance=${this.instanceId})`);
       }
     } catch (err: any) {
       this.logger.error(`Step down error: ${err.message}`);

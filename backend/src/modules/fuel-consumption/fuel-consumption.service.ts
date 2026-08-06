@@ -19,10 +19,7 @@ import { FuelFilterDto } from './dto/fuel-filter.dto';
 import { CreateFuelPriceDto } from './dto/create-fuel-price.dto';
 import { UpdateFuelPriceDto } from './dto/update-fuel-price.dto';
 import { UpdateDefaultFuelPricesDto } from './dto/update-default-fuel-prices.dto';
-import {
-  haversineDistance as haversineDistanceM,
-  GPS_NOISE_THRESHOLD_M,
-} from '../../common/geo/geo.utils';
+import { computeFilteredDistance } from '../../common/geo/geo.utils';
 import { hasFuelAnomaly, withDerivedAnomaly } from '../../common/fuel/fuel-anomaly.utils';
 
 // Valeurs initiales (seed) utilisées UNIQUEMENT tant que la company n'a pas configuré
@@ -543,16 +540,19 @@ export class FuelConsumptionService {
         timestamp: { gte: bounds.start, lte: bounds.end },
       },
       orderBy: { timestamp: 'asc' },
-      select: { latitude: true, longitude: true, vehicleId: true },
+      select: { latitude: true, longitude: true, vehicleId: true, accuracy: true },
     });
 
     // GROUP BY vehicleId côté applicatif : chaque véhicule réellement utilisé ce
     // jour produit son propre rapport (un chauffeur peut changer de véhicule à
     // midi : les km du matin restent attribués au véhicule du matin).
-    const byVehicle = new Map<string, Array<{ latitude: number; longitude: number }>>();
+    const byVehicle = new Map<
+      string,
+      Array<{ latitude: number; longitude: number; accuracy?: number | null }>
+    >();
     for (const pos of positions) {
       const group = byVehicle.get(pos.vehicleId) ?? [];
-      group.push({ latitude: pos.latitude, longitude: pos.longitude });
+      group.push({ latitude: pos.latitude, longitude: pos.longitude, accuracy: pos.accuracy });
       byVehicle.set(pos.vehicleId, group);
     }
 
@@ -590,7 +590,7 @@ export class FuelConsumptionService {
         timestamp: { gte: bounds.start, lte: bounds.end },
       },
       orderBy: { timestamp: 'asc' },
-      select: { latitude: true, longitude: true, driverId: true },
+      select: { latitude: true, longitude: true, driverId: true, accuracy: true },
     });
 
     if (positions.length === 0) return;
@@ -619,7 +619,11 @@ export class FuelConsumptionService {
       companyId,
       targetDate,
       vehicleId,
-      positions.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
+      positions.map((p) => ({
+        latitude: p.latitude,
+        longitude: p.longitude,
+        accuracy: p.accuracy,
+      })),
     );
   }
 
@@ -632,24 +636,18 @@ export class FuelConsumptionService {
     companyId: string,
     targetDate: Date,
     vehicleId: string,
-    positions: Array<{ latitude: number; longitude: number }>,
+    positions: Array<{ latitude: number; longitude: number; accuracy?: number | null }>,
   ) {
     let distanceKm = 0;
     let gpsDataQuality: GpsDataQuality = GpsDataQuality.insufficient;
 
     if (positions.length >= 2) {
-      let totalDistance = 0;
-      for (let i = 1; i < positions.length; i++) {
-        const segDist = haversineDistanceM(
-          positions[i - 1].latitude,
-          positions[i - 1].longitude,
-          positions[i].latitude,
-          positions[i].longitude,
-        );
-        if (segDist >= GPS_NOISE_THRESHOLD_M) {
-          totalDistance += segDist;
-        }
-      }
+      // Distance filtrée par bruit PONDÉRÉ par l'accuracy moyenne de chaque segment
+      // (computeFilteredDistance, source unique dans geo.utils — même logique que
+      // calculateDistance du rapport de trajet). Un téléphone à l'arrêt (accuracy
+      // 10-50m) dérive de plusieurs mètres : le seuil fixe de 5m laissait passer ce
+      // bruit et gonflait distanceKm.
+      const totalDistance = computeFilteredDistance(positions);
       const computedKm = Math.round((totalDistance / 1000) * 100) / 100;
       // Données GPS exploitables uniquement si un déplacement est mesurable (>= 0.1 km).
       if (computedKm >= 0.1) {

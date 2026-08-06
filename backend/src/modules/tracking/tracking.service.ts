@@ -14,11 +14,18 @@ import { DeliveryProximityService } from './delivery-proximity.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { UpdatePositionDto } from './dto/update-position.dto';
-import { haversineDistance, GPS_NOISE_THRESHOLD_M } from '../../common/geo/geo.utils';
+import {
+  haversineDistance,
+  GPS_NOISE_THRESHOLD_M,
+  computeFilteredDistance,
+} from '../../common/geo/geo.utils';
+import {
+  TELEPORT_SPEED_THRESHOLD_MS,
+  TELEPORT_DISTANCE_THRESHOLD_M,
+  TELEPORT_TIME_THRESHOLD_S,
+  evaluateTeleportation,
+} from '../../common/geo/teleportation.utils';
 
-const TELEPORT_SPEED_THRESHOLD_MS = 55.56;
-const TELEPORT_DISTANCE_THRESHOLD_M = 5000;
-const TELEPORT_TIME_THRESHOLD_S = 10;
 const STOP_SPEED_THRESHOLD_MS = 0.3; // ~1 km/h — seuil pour détecter l'arrêt (évite les égalités strictes sur flottants)
 const SPEED_SMOOTHING_WINDOW = 5; // nombre de positions pour lisser la vitesse (ETA/réveil retard)
 // Tolérance horloge réelle (pas fenêtre anti-spam). Un doublon = timestamp identique ou antérieur.
@@ -180,38 +187,18 @@ export class TrackingService {
       }
     }
 
-    const timeDiffSec = (timestamp.getTime() - reference.timestamp.getTime()) / 1000;
-    if (timeDiffSec <= 0) {
+    // Décision unique partagée avec le chemin batch (evaluateTeleportation, source unique
+    // dans teleportation.utils) : règles de vitesse + saut court + garde non-croissant.
+    const evaluation = evaluateTeleportation(reference, latitude, longitude, timestamp, accuracy);
+    if (evaluation.suspect) {
+      const reasonLabel =
+        evaluation.reason === 'non_croissant'
+          ? 'timestamp non croissant'
+          : evaluation.reason === 'saut_court'
+            ? 'saut court'
+            : 'vitesse';
       this.logger.warn(
-        `Timestamp non croissant reçu: vehicle=${vehicleId} diff=${timeDiffSec.toFixed(1)}s — marqué suspect`,
-      );
-      return true;
-    }
-
-    const distance = haversineDistance(
-      reference.latitude,
-      reference.longitude,
-      latitude,
-      longitude,
-    );
-    const speedMs = distance / timeDiffSec;
-
-    // If accuracy is poor, the apparent teleportation could be just GPS noise
-    // Scale thresholds up with accuracy
-    const accuracyScale = accuracy ? Math.max(1, accuracy / 10) : 1;
-    const adjustedSpeedThreshold = TELEPORT_SPEED_THRESHOLD_MS * accuracyScale;
-    const adjustedDistanceThreshold = TELEPORT_DISTANCE_THRESHOLD_M * accuracyScale;
-
-    if (speedMs > adjustedSpeedThreshold) {
-      this.logger.warn(
-        `Teleportation suspect: vehicle=${vehicleId} distance=${Math.round(distance)}m time=${timeDiffSec.toFixed(1)}s speed=${(speedMs * 3.6).toFixed(1)}km/h acc=${accuracy ?? 'N/A'}`,
-      );
-      return true;
-    }
-
-    if (distance > adjustedDistanceThreshold && timeDiffSec < TELEPORT_TIME_THRESHOLD_S) {
-      this.logger.warn(
-        `Teleportation suspect (short burst): vehicle=${vehicleId} distance=${Math.round(distance)}m time=${timeDiffSec.toFixed(1)}s acc=${accuracy ?? 'N/A'}`,
+        `Teleportation suspect (${reasonLabel}): vehicle=${vehicleId} distance=${Math.round(evaluation.distance)}m time=${evaluation.timeDiffSec.toFixed(1)}s speed=${(evaluation.speedMs * 3.6).toFixed(1)}km/h acc=${accuracy ?? 'N/A'}`,
       );
       return true;
     }
@@ -699,18 +686,19 @@ export class TrackingService {
 
       let suspect = false;
       if (last && timeDiffSec > 0) {
-        const distance = haversineDistance(
-          last.latitude,
-          last.longitude,
+        // Même décision de téléportation que le chemin temps réel (evaluateTeleportation,
+        // source unique dans teleportation.utils) : règle de vitesse + saut court. Les
+        // timestamps non croissants / dans la fenêtre 1s ont déjà été rejetés par le
+        // dédoublonnage ci-dessus (politique documentée, identique au temps réel). Un point
+        // suspect est SAUVEGARDÉ avec suspect=true (traçabilité conservée pour l'audit).
+        suspect = evaluateTeleportation(
+          last,
           pos.latitude,
           pos.longitude,
-        );
-        const speedMs = distance / timeDiffSec;
-        const accuracyScale = pos.accuracy ? Math.max(1, pos.accuracy / 10) : 1;
-        if (speedMs > TELEPORT_SPEED_THRESHOLD_MS * accuracyScale) {
-          suspect = true;
-          this.metrics.teleported++;
-        }
+          ts,
+          pos.accuracy,
+        ).suspect;
+        if (suspect) this.metrics.teleported++;
       }
 
       lastPositions.set(pos.vehicleId, {
@@ -879,22 +867,12 @@ export class TrackingService {
     const positions = await this.getAllPositionsByDelivery(deliveryId, companyId);
     if (positions.length < 2) return { meters: 0, kilometers: 0 };
 
-    let totalDistance = 0;
-    for (let i = 1; i < positions.length; i++) {
-      const segDist = haversineDistance(
-        positions[i - 1].latitude,
-        positions[i - 1].longitude,
-        positions[i].latitude,
-        positions[i].longitude,
-      );
-      // Même seuil de bruit que le rapport carburant (GPS_NOISE_THRESHOLD_M, source
-      // unique dans geo.utils) : les segments < 5m (dérive GPS à l'arrêt) ne sont PAS
-      // comptés. Sans ce filtre, le rapport de trajet gonflait la distance par rapport
-      // au DailyFuelReport pour le même trajet (même écart que le bug du point 4).
-      if (segDist >= GPS_NOISE_THRESHOLD_M) {
-        totalDistance += segDist;
-      }
-    }
+    // Même logique de distance filtrée que le rapport carburant (computeFilteredDistance,
+    // source unique dans geo.utils) : les segments < seuil de bruit PONDÉRÉ PAR l'accuracy
+    // moyenne du segment (dérive GPS à l'arrêt, accuracy 10-50m) ne sont PAS comptés. Sans
+    // cette pondération, le rapport de trajet gonflait la distance par rapport au
+    // DailyFuelReport pour le même trajet.
+    const totalDistance = computeFilteredDistance(positions);
     return {
       meters: Math.round(totalDistance),
       kilometers: Math.round(totalDistance / 10) / 100,
