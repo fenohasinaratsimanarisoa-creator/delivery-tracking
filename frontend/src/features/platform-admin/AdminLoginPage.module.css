@@ -3,58 +3,67 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg);
-  font-family: var(--font-body);
+  background:
+    radial-gradient(1200px 500px at 50% -10%, var(--color-accent-muted, rgba(242,169,60,0.12)), transparent 60%),
+    var(--color-bg, #0B1220);
+  font-family: var(--font-body, Inter, sans-serif);
+  padding: var(--space-lg);
 }
 .card {
   width: 420px;
   max-width: 90vw;
   padding: var(--space-2xl);
-  background: var(--color-surface);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--color-border);
+  background: var(--color-surface, #121B2E);
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--color-border, rgba(242,169,60,0.2));
+  box-shadow: var(--shadow-dialog, 0 2px 8px rgba(0,0,0,0.3), 0 20px 60px rgba(0,0,0,0.4));
 }
 .cardHeader {
   text-align: center;
   margin-bottom: var(--space-xl);
 }
 .logoBox {
-  width: 56px;
-  height: 56px;
+  width: 60px;
+  height: 60px;
   border-radius: var(--radius-full);
-  background: var(--color-accent-muted);
-  color: var(--color-accent);
+  background: var(--color-accent-muted, rgba(242,169,60,0.15));
+  color: var(--color-accent, #F2A93C);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 12px;
+  margin: 0 auto var(--space-md);
+  box-shadow: var(--shadow-glow, 0 0 12px rgba(242,169,60,0.35));
 }
 .cardTitle {
-  font-family: var(--font-display);
+  font-family: var(--font-display, 'Space Grotesk', sans-serif);
   font-size: var(--text-lg);
   font-weight: 700;
-  color: var(--color-text);
+  letter-spacing: -0.02em;
+  color: var(--color-text, #E8ECF3);
   margin: 0;
 }
 .cardSubtitle {
-  color: var(--color-text-secondary);
+  color: var(--color-text-secondary, #9BA6B9);
   font-size: var(--text-sm);
   margin-top: 4px;
 }
 .errorBanner {
   padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-md);
-  background: var(--color-red-muted);
-  color: var(--color-red);
+  border-radius: var(--radius-full);
+  background: var(--color-red-muted, rgba(232,84,76,0.15));
+  color: var(--color-red, #E8544C);
   font-size: var(--text-sm);
+  font-weight: 500;
   margin-bottom: var(--space-md);
+  text-align: center;
 }
 .infoBanner {
   padding: var(--space-md);
   border-radius: var(--radius-md);
-  background: var(--color-accent-muted);
-  color: var(--color-accent);
+  background: var(--color-accent-muted, rgba(242,169,60,0.15));
+  color: var(--color-accent, #F2A93C);
   font-size: var(--text-sm);
+  line-height: 1.5;
   margin-bottom: var(--space-lg);
   text-align: center;
 }
@@ -69,18 +78,19 @@
 .qrImage {
   width: 180px;
   height: 180px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border, rgba(242,169,60,0.2));
+  box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.35));
 }
 .otpUrlBox {
   margin-bottom: var(--space-lg);
   padding: var(--space-sm) var(--space-md);
-  background: var(--color-bg);
+  background: var(--color-input-bg, #0D1525);
   border-radius: var(--radius-md);
   font-size: var(--text-xs);
   word-break: break-all;
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary, #9BA6B9);
+  border: 1px solid var(--color-input-border, #1E2A45);
 }
 .formField {
   margin-bottom: var(--space-md);
@@ -89,7 +99,7 @@
   display: block;
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--color-text-secondary, #9BA6B9);
   margin-bottom: 6px;
 }
 .inputWrapper {
@@ -100,19 +110,25 @@
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--color-text-tertiary);
+  color: var(--color-text-tertiary, #7A8BA3);
 }
 .inputField {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-input-border, #1E2A45);
   border-radius: var(--radius-md);
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: var(--color-input-bg, #0D1525);
+  color: var(--color-text, #E8ECF3);
   font-size: var(--text-sm);
-  font-family: var(--font-body);
+  font-family: var(--font-body, Inter, sans-serif);
   outline: none;
   box-sizing: border-box;
+  transition: border-color var(--duration-fast) var(--ease-smooth, ease),
+    box-shadow var(--duration-fast) var(--ease-smooth, ease);
+}
+.inputField:focus {
+  border-color: var(--color-accent, #F2A93C);
+  box-shadow: 0 0 0 3px var(--color-accent-muted, rgba(242,169,60,0.15));
 }
 .inputFieldWithIcon {
   padding: 10px 12px 10px 36px;
@@ -120,6 +136,7 @@
 .inputFieldCenter {
   text-align: center;
   letter-spacing: 8px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
 }
 .formFieldLast {
   margin-bottom: var(--space-lg);
@@ -127,18 +144,24 @@
 .submitBtn {
   width: 100%;
   padding: 10px;
-  background: var(--color-accent);
-  color: #fff;
+  background: var(--color-accent, #F2A93C);
+  color: var(--color-bg, #0B1220);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
   font-weight: 600;
   font-size: var(--text-sm);
-  font-family: var(--font-body);
+  font-family: var(--font-body, Inter, sans-serif);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  box-shadow: var(--shadow-glow, 0 0 12px rgba(242,169,60,0.35));
+  transition: transform var(--duration-fast) var(--ease-snappy, ease),
+    box-shadow var(--duration-fast) var(--ease-smooth, ease);
+}
+.submitBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 .submitBtn:disabled {
   opacity: 0.7;

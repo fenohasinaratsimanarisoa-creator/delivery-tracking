@@ -274,7 +274,16 @@ export default function AdminDashboard() {
 
       {loading && (
         <div className={styles.loadingState}>
-          {t('common.loading')}
+          <div className={styles.skeletonStats}>
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className={`${styles.skeletonCard} ${styles.skeletonStat}`} />
+            ))}
+          </div>
+          <div className={`${styles.skeletonCard} ${styles.skeletonChart}`} />
+          <div className={`${styles.skeletonCard} ${styles.skeletonTable}`} />
+          <div style={{ textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
+            {t('common.loading')}
+          </div>
         </div>
       )}
 
