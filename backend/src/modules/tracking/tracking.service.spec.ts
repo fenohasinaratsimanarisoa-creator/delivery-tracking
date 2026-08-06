@@ -1035,6 +1035,60 @@ describe('TrackingService', () => {
     );
   });
 
+  // ─── ITEM 5 — Exemption de changement de source dans detectTeleportation ───
+  // Le premier point GPS après un basculement de traceur (phone → physical_tracker ou
+  // inverse) sur un même véhicule peut légitimement représenter un vrai déplacement :
+  // comparer à l'AUTRE source marquerait suspect à tort (le point serait ensuite exclu
+  // du rapport carburant via suspect=false). La mitigation est déjà en place (comparer
+  // uniquement au sein de la MÊME source si un changement a eu lieu dans les 5 dernières
+  // minutes) — ce test en est le garde de non-régression.
+  describe('ITEM 5 — exemption de changement de source (detectTeleportation)', () => {
+    const VID = '00000000-0000-4000-0000-000000000001';
+    const DRIVER = '00000000-0000-4000-0000-000000000002';
+
+    it('ne marque PAS suspect le premier point phone après un basculement physical_tracker → phone (< 5 min, sans historique intra-source)', async () => {
+      const now = new Date('2026-07-21T10:00:00.000Z');
+      // Reset ciblé (suite complète : clearAllMocks ne vide pas les once-queues).
+      mockPrisma.gpsPosition.findFirst.mockReset();
+      mockPrisma.gpsPosition.create.mockReset();
+      mockPrisma.vehicle.findFirst.mockReset();
+      mockPrisma.vehicle.findFirst.mockResolvedValue({
+        companyId: 'company-1',
+        positionSource: 'phone',
+      });
+
+      // isDuplicateByTimestamp → null ; getLastPosition → dernier point physical_tracker il y a 2 min.
+      mockPrisma.gpsPosition.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          latitude: 0,
+          longitude: 0,
+          timestamp: new Date(now.getTime() - 120000),
+          source: 'physical_tracker',
+        });
+      // Recherche du dernier point de la MÊME source ('phone') → aucun historique → exempté.
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null);
+
+      let created: any;
+      mockPrisma.gpsPosition.create.mockImplementation(async ({ data }: any) => {
+        created = data;
+        return { id: 'gps-exempt', suspect: data.suspect };
+      });
+
+      // Point à ~111 km du dernier fix physical_tracker : SANS l'exemption, speed ≈ 926 m/s
+      // > 55.56 → suspect à tort. AVEC l'exemption (aucun historique phone), il passe.
+      await service.savePosition(
+        DRIVER,
+        { latitude: 0, longitude: 1, timestamp: now.toISOString(), vehicleId: VID } as any,
+        'company-1',
+        'phone',
+      );
+
+      expect(created).toBeDefined();
+      expect(created.suspect).toBe(false);
+    });
+  });
+
   it('lists positions for a delivery in company scope', async () => {
     mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([
       {
