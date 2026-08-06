@@ -356,6 +356,24 @@
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
 }
 
+/* Badge NEUTRE « GPS faible » (gpsDataQuality='insufficient') : des positions existent mais
+   la distance calculée est jugée peu fiable ce jour-là (< 0.1 km). Orange clair (tokens
+   warning du thème), jamais rouge — ce n'est pas une anomalie confirmée. Distinct de
+   gpsCoverageInsufficientFlag (absence totale de positions). */
+.badgeWarn {
+  background: var(--color-warning-muted, rgba(245,158,11,0.12));
+  color: var(--color-warning, #f59e0b);
+  border: 1px solid var(--color-warning-subtle, rgba(245,158,11,0.2));
+}
+
+/* Cellule distance du rapport GPS : valeur + badge qualité empilés proprement. */
+.distCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
 .badgeAnomaly {
   background: var(--color-red-muted, rgba(232,84,76,0.15));
   color: var(--color-red, #E8544C);

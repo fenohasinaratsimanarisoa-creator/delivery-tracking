@@ -679,7 +679,25 @@ export default function FuelPage() {
                           <span className={`${styles.badge} ${styles.badgeDriver}`}>{r.driverName}</span>
                         </td>
                         <td className={styles.tableCellBold}>{r.vehiclePlate}</td>
-                        <td className={styles.tableCellMono}>{r.distanceKm?.toFixed(1)} km</td>
+                        <td className={styles.tableCell}>
+                          <div className={styles.distCell}>
+                            <span className={styles.tableCellMono}>{r.distanceKm?.toFixed(1)} km</span>
+                            {r.gpsDataQuality === 'insufficient' && (
+                              // gpsDataQuality='insufficient' : des positions GPS existent mais la
+                              // distance calculée est trop faible pour être fiable (< 0.1 km) — ce
+                              // n'est PAS une anomalie confirmée, juste une donnée peu fiable ce
+                              // jour-là. Badge neutre (orange clair), distinct de
+                              // gpsCoverageInsufficientFlag (aucune position du tout) et du rouge
+                              // des anomalies.
+                              <span
+                                className={`${styles.badge} ${styles.badgeWarn}`}
+                                title={t('fuel.gpsQualityInsufficient')}
+                              >
+                                <HelpCircle size={12} /> {t('fuel.gpsQualityBadge')}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className={styles.tableCellMono}>{r.consumptionLPer100Km?.toFixed(1) ?? '-'} L/100km</td>
                         <td className={`${styles.tableCellMono} ${styles.tableCellRight}`}>{formatAriary(r.estimatedCost)}</td>
                         <td className={styles.tableCell}>{r.reportDate ? new Date(r.reportDate).toLocaleDateString(i18n.language) : '-'}</td>

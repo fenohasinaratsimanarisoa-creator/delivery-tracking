@@ -113,4 +113,53 @@ describe('FuelPage', () => {
     expect(screen.getByText('Enregistrer les prix par défaut')).toBeInTheDocument();
     expect(screen.getByText('Diesel')).toBeInTheDocument();
   });
+
+  it('affiche un badge neutre quand gpsDataQuality === "insufficient" sur un rapport GPS (Distance GPS peu fiable)', async () => {
+    // Un rapport GPS dont la distance calculée est jugée insuffisante (< 0.1 km) :
+    // des positions GPS existent, mais le badge doit être distinct de
+    // gpsCoverageInsufficientFlag (absence totale de positions) et rester neutre (non rouge).
+    mockUseQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => {
+      if (queryKey[0] === 'fuel-daily-reports') {
+        return {
+          data: [
+            {
+              id: 1,
+              driverName: 'Jean Rakoto',
+              vehiclePlate: 'TRK-1',
+              distanceKm: 0,
+              gpsDataQuality: 'insufficient',
+              consumptionLPer100Km: 0,
+              estimatedCost: 0,
+              reportDate: '2026-07-20T00:00:00.000Z',
+            },
+          ],
+          isLoading: false,
+        };
+      }
+      if (queryKey[0] === 'fuel-prices') {
+        return { data: { defaults: { diesel: 5200 }, history: [] }, isLoading: false };
+      }
+      if (queryKey[0] === 'vehicles') {
+        return { data: [{ id: 'veh-1', brand: 'Toyota', model: 'Hilux', licensePlate: 'AB-123-CD' }], isLoading: false };
+      }
+      return { data: { data: [], meta: { total: 0, page: 1, limit: 20, totalPages: 1 } }, isLoading: false };
+    });
+
+    render(<FuelPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rapport GPS' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('GPS faible')).toBeInTheDocument();
+    });
+
+    // Preuve : le badge est bien rendu dans le HTML (sortie réelle).
+    const html = document.body.innerHTML;
+    console.log('[FuelPage gpsDataQuality] badge "GPS faible" présent dans le HTML :', html.includes('GPS faible'));
+    // Le tooltip explicatif est présent via l'attribut title.
+    const badge = screen.getByText('GPS faible');
+    expect(badge.getAttribute('title')).toContain('Distance GPS trop faible');
+    // Ce n'est PAS une anomalie (pas de texte "Anomalie" associé à ce rapport).
+    expect(html).not.toContain('Anomalie');
+  });
 });

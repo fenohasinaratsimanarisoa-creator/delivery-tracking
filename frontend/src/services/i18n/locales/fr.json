@@ -428,6 +428,8 @@
     "generateSuccess": "Rapport généré avec succès !",
     "generateError": "Erreur lors de la génération du rapport.",
     "gpsDistance": "Distance GPS",
+    "gpsQualityBadge": "GPS faible",
+    "gpsQualityInsufficient": "Distance GPS trop faible pour être fiable ce jour-là (positions présentes mais déplacement < 0,1 km).",
     "estimatedCost": "Coût estimé",
     "date": "Date",
     "table": {
