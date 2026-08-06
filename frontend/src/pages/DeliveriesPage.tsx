@@ -1,7 +1,10 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Plus, Search, ChevronDown, ChevronUp, Upload } from 'lucide-react';
+import {
+  Plus, Search, ChevronDown, ChevronUp, Upload, Package, PackageOpen, MapPin,
+  Calendar, CalendarDays, AlertTriangle, Clock, CheckCircle2, Loader2, Truck,
+} from 'lucide-react';
 import Button from '../components/Button';
 import api from '../services/api/client';
 import { formatDate } from '../services/i18n/formatDate';
@@ -45,6 +48,11 @@ const deliveryFields: FieldDef<DeliveryFormValues>[] = [
   { name: 'deliveryLng', label: 'Longitude (livraison)', type: 'text', section: 'gps' },
 ];
 
+const STATUS_LABELS_KEY: Record<string, string> = {
+  pending: 'pending', assigned: 'assigned', in_progress: 'in_progress',
+  delivered: 'delivered', failed: 'failed', cancelled: 'cancelled',
+};
+
 const STATUS_BADGE: Record<string, string> = {
   pending: styles.statusBadgePending,
   assigned: styles.statusBadgeAssigned,
@@ -54,19 +62,53 @@ const STATUS_BADGE: Record<string, string> = {
   cancelled: styles.statusBadgeCancelled,
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'En attente', assigned: 'Assigné', in_progress: 'En cours',
-  delivered: 'Livré', failed: 'Échoué', cancelled: 'Annulé',
-};
+function useCountUp(target: number, duration = 650) {
+  const [value, setValue] = useState(target);
+  useEffect(() => {
+    const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false;
+    if (reduced) {
+      setValue(target);
+      return;
+    }
+    let raf: number;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(target * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return value;
+}
+
+function KpiCard({ icon, label, value, color, delay }: {
+  icon: React.ReactNode; label: string; value: number; color: string; delay: number;
+}) {
+  const animated = useCountUp(value);
+  return (
+    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color, animationDelay: `${delay}ms` }}>
+      <div className={styles.kpiTop}>
+        <span className={styles.kpiIcon}>{icon}</span>
+      </div>
+      <div className={styles.kpiValue}>{animated}</div>
+      <div className={styles.kpiLabel}>{label}</div>
+    </div>
+  );
+}
 
 function SkeletonRows() {
   return (
     <>
       {[1, 2, 3, 4].map((i) => (
         <tr key={`sk-${i}`} className={styles.skeletonRow}>
-          {[40, 35, 30, 25, 20].map((w, j) => (
+          {[38, 26, 32, 24, 22, 20, 24, 18].map((w, j) => (
             <td key={j} className={styles.skeletonCell}>
-              <div className={styles.shimmer} style={{ width: `${w}%` }} />
+              <div className={styles.shimmer} style={{ width: `${w}%`, animationDelay: `${(i + j) * 90}ms` }} />
             </td>
           ))}
         </tr>
@@ -75,7 +117,64 @@ function SkeletonRows() {
   );
 }
 
+function TitleCell({ delivery }: { delivery: Delivery }) {
+  return (
+    <span className={styles.titleCell}>
+      <span className={styles.titleIcon}>
+        <Package size={14} />
+      </span>
+      <span className={styles.titleCellText}>
+        <span className={styles.titleCellMain}>{delivery.title}</span>
+        {delivery.externalOrderRef && (
+          <span className={styles.titleCellRef}>{delivery.externalOrderRef}</span>
+        )}
+      </span>
+    </span>
+  );
+}
+
+function DriverCell({ driver, unassignedLabel }: { driver: Delivery['driver']; unassignedLabel: string }) {
+  if (!driver) return <span className={styles.unassignedPill}>{unassignedLabel}</span>;
+  const initials = `${(driver.firstName[0] || '').toUpperCase()}${(driver.lastName[0] || '').toUpperCase()}`;
+  return (
+    <span className={styles.driverCell}>
+      <span className={styles.driverAvatar}>{initials}</span>
+      <span className={styles.driverName}>{driver.firstName} {driver.lastName}</span>
+    </span>
+  );
+}
+
+function DateCell({ delivery }: { delivery: Delivery }) {
+  return (
+    <span className={styles.dateCell}>
+      <span className={styles.dateMain}>
+        <Calendar size={12} />
+        {formatDate(delivery.createdAt)}
+      </span>
+      {delivery.scheduledDate && (
+        <span className={styles.dateScheduled}>
+          <CalendarDays size={12} />
+          {formatDate(delivery.scheduledDate)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function AmountCell({ amount }: { amount?: number }) {
+  if (amount === undefined || amount === null) return <span className={styles.mutedText}>—</span>;
+  return <span className={styles.amountText}>{formatAriary(amount)}</span>;
+}
+
+function DescriptionCell({ delivery }: { delivery: Delivery }) {
+  const desc = delivery.productDescription || delivery.description;
+  if (desc) return <span className={styles.descriptionText}>{desc}</span>;
+  if (delivery.notes) return <span className={styles.notesText}>📝 {delivery.notes.slice(0, 60)}</span>;
+  return <span className={styles.mutedText}>—</span>;
+}
+
 export default function DeliveriesPage() {
+  const { t } = useTranslation();
   const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Delivery | null>(null);
@@ -84,7 +183,6 @@ export default function DeliveriesPage() {
   const [search, setSearch] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const queryClient = useQueryClient();
-  const { t } = useTranslation();
   const { toast } = useToast();
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -113,6 +211,13 @@ export default function DeliveriesPage() {
   const deliveries: Delivery[] = data?.data ?? [];
   const meta = data?.meta ?? { total: 0, page: 1, limit: 20, totalPages: 1 };
   const drivers: Driver[] = driversData?.data ?? [];
+
+  const stats = {
+    total: deliveries.length,
+    pending: deliveries.filter((d) => d.status === 'pending').length,
+    inProgress: deliveries.filter((d) => d.status === 'in_progress' || d.status === 'assigned').length,
+    delivered: deliveries.filter((d) => d.status === 'delivered').length,
+  };
 
   const recentPlaces = useMemo(() => {
     const seen = new Set<string>();
@@ -160,17 +265,21 @@ export default function DeliveriesPage() {
       setImporting(false);
       setImportReport(report);
       const parts: string[] = [];
-      if (report.created > 0) parts.push(`${report.created} créée${report.created > 1 ? 's' : ''}`);
-      if (report.updated > 0) parts.push(`${report.updated} mise${report.updated > 1 ? 's' : ''} à jour`);
-      if (report.skipped.length > 0) parts.push(`${report.skipped.length} déjà existante${report.skipped.length > 1 ? 's' : ''}`);
-      if (report.errors.length > 0) parts.push(`${report.errors.length} erreur${report.errors.length > 1 ? 's' : ''}`);
-      if (parts.length > 0) toast(parts.join(', ') + ' — voir détail');
-      else toast('Aucune donnée importée');
+      const createdLabel = report.created > 1 ? t('deliveries.import.report.created_plural') : t('deliveries.import.report.created');
+      const updatedLabel = report.updated > 1 ? t('deliveries.import.report.updated_plural') : t('deliveries.import.report.updated');
+      const skippedLabel = report.skipped.length > 1 ? t('deliveries.import.report.skipped_plural') : t('deliveries.import.report.skipped');
+      const errorsLabel = report.errors.length > 1 ? t('deliveries.import.report.errors_plural') : t('deliveries.import.report.errors');
+      if (report.created > 0) parts.push(t('deliveries.import.report.line', { count: report.created, label: createdLabel }));
+      if (report.updated > 0) parts.push(t('deliveries.import.report.line', { count: report.updated, label: updatedLabel }));
+      if (report.skipped.length > 0) parts.push(t('deliveries.import.report.line', { count: report.skipped.length, label: skippedLabel }));
+      if (report.errors.length > 0) parts.push(t('deliveries.import.report.line', { count: report.errors.length, label: errorsLabel }));
+      if (parts.length > 0) toast(`${parts.join(' - ')} — ${t('deliveries.import.report.seeDetail')}`);
+      else toast(t('deliveries.import.report.none'));
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
     onError: (err: ApiError) => {
       setImporting(false);
-      toast(err?.response?.data?.message || 'Erreur lors de l\'import Excel', 'error');
+      toast(err?.response?.data?.message || t('deliveries.toast.importError'), 'error');
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
   });
@@ -179,7 +288,7 @@ export default function DeliveriesPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.name.match(/\.xlsx$/i)) {
-      toast('Format de fichier invalide, .xlsx attendu', 'error');
+      toast(t('deliveries.toast.invalidFile'), 'error');
       return;
     }
     setImporting(true);
@@ -193,15 +302,19 @@ export default function DeliveriesPage() {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
       setBulkActionLoading(false);
       if (report.failed.length > 0) {
-        toast(`${report.succeeded.length} succès, ${report.failed.length} échecs : ${report.failed[0].reason}`, 'error');
+        toast(t('deliveries.bulk.partialResult', {
+          succeeded: report.succeeded.length,
+          failed: report.failed.length,
+          reason: report.failed[0].reason,
+        }), 'error');
       } else {
-        toast(`${report.succeeded.length} livraison${report.succeeded.length > 1 ? 's' : ''} mise${report.succeeded.length > 1 ? 's' : ''} à jour`);
+        toast(t('deliveries.bulk.successResult', { count: report.succeeded.length }));
       }
       setSelectedIds(new Set());
     },
     onError: (err: ApiError) => {
       setBulkActionLoading(false);
-      toast(err?.response?.data?.message || 'Erreur lors de l\'action groupée', 'error');
+      toast(err?.response?.data?.message || t('deliveries.bulk.error'), 'error');
     },
   });
 
@@ -233,12 +346,12 @@ export default function DeliveriesPage() {
       const id = editing?.id || '';
       setHighlightedId(id);
       setTimeout(() => setHighlightedId(null), 1500);
-      toast(editing ? 'Livraison modifiée' : 'Livraison créée');
+      toast(editing ? t('deliveries.toast.updated') : t('deliveries.toast.created'));
       setDrawerOpen(false);
       setEditing(null);
     },
     onError: (err: ApiError) => {
-      toast(err?.userMessage || err?.response?.data?.message || "Erreur lors de l'enregistrement", 'error');
+      toast(err?.userMessage || err?.response?.data?.message || t('deliveries.toast.saveError'), 'error');
     },
   });
 
@@ -246,11 +359,11 @@ export default function DeliveriesPage() {
     mutationFn: (id: string) => api.delete(`/deliveries/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
-      toast('Livraison supprimée');
+      toast(t('deliveries.toast.deleted'));
       setDeleting(null);
     },
     onError: (err: ApiError) => {
-      toast(err?.response?.data?.message || 'Erreur lors de la suppression', 'error');
+      toast(err?.response?.data?.message || t('deliveries.toast.deleteError'), 'error');
       setDeleting(null);
     },
   });
@@ -259,10 +372,10 @@ export default function DeliveriesPage() {
     mutationFn: (id: string) => api.patch(`/deliveries/${id}/resolve-mismatch`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
-      toast('Alerte marquée comme traitée');
+      toast(t('deliveries.toast.mismatchResolved'));
     },
     onError: (err: ApiError) => {
-      toast(err?.response?.data?.message || 'Erreur', 'error');
+      toast(err?.response?.data?.message || t('common.error'), 'error');
     },
   });
 
@@ -323,10 +436,10 @@ export default function DeliveriesPage() {
     doReverse();
   }, [editing?.id, drawerOpen]);
 
-  const drawerTitle = editing ? editing.title : 'Nouvelle livraison';
+  const drawerTitle = editing ? editing.title : t('deliveries.newDelivery');
   const drawerSubtitle = editing
-    ? STATUS_LABELS[editing.status] || editing.status
-    : 'Titre, adresses et chauffeur en une seule étape';
+    ? (t(`deliveries.status.${editing.status}`))
+    : t('deliveries.drawerNew');
   const onCancel = () => { setDrawerOpen(false); setEditing(null); };
 
   const setLocationField = useCallback((field: 'pickup' | 'delivery', value: { lat: number | null; lng: number | null; label: string }) => {
@@ -357,21 +470,16 @@ export default function DeliveriesPage() {
     `${d.firstName} ${d.lastName}${d.phone ? ` — ${d.phone}` : ''}`;
 
   return (
-    <div className={`page-padding ${styles.pageContainer}`}>
-      <style>{`
-        @keyframes dt-row-highlight {
-          0% { background: var(--color-accent-muted); }
-          100% { background: transparent; }
-        }
-      `}</style>
-
-      <div className={styles.headerRow}>
-        <div className={styles.headerTitleWrapper}>
-          <h1 className={`page-title ${styles.pageTitle}`}>
-            Livraisons
-          </h1>
+    <div className={styles.pageContainer}>
+      <header className={styles.pageHeader}>
+        <div className={styles.titleIconChip}><Package size={24} /></div>
+        <div className={styles.headerText}>
+          <span className={styles.kicker}>{t('deliveries.kicker')}</span>
+          <h1 className={styles.pageTitle}>{t('deliveries.title')}</h1>
           <p className={styles.pageSubtitle}>
-            {meta.total > 0 ? `${meta.total} livraison${meta.total > 1 ? 's' : ''}` : 'Gérez les livraisons de votre flotte'}
+            {meta.total > 0
+              ? t(meta.total > 1 ? 'deliveries.count_plural' : 'deliveries.count', { count: meta.total })
+              : t('deliveries.subtitle')}
           </p>
         </div>
         <div className={styles.actionButtonsRow}>
@@ -387,7 +495,7 @@ export default function DeliveriesPage() {
               onClick={() => fileInputRef.current?.click()}
               disabled={importing}
             >
-              {importing ? 'Import en cours…' : 'Importer Excel'}
+              {importing ? t('deliveries.import.importing') : t('deliveries.import.action')}
             </Button>
             <button
               onClick={() => setImportMode(importMode === 'create-only' ? 'upsert' : 'create-only')}
@@ -399,26 +507,38 @@ export default function DeliveriesPage() {
             </button>
           </div>
           <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
-            Nouvelle livraison
+            {t('deliveries.newDelivery')}
           </Button>
         </div>
+      </header>
+
+      <div className={styles.kpiGrid}>
+        <KpiCard icon={<Package size={18} />} label={t('deliveries.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" delay={0} />
+        <KpiCard icon={<Clock size={18} />} label={t('deliveries.kpis.pending')} value={stats.pending} color="#f59e0b" delay={70} />
+        <KpiCard icon={<Truck size={18} />} label={t('deliveries.kpis.inProgress')} value={stats.inProgress} color="var(--color-blue, #3b82f6)" delay={140} />
+        <KpiCard icon={<CheckCircle2 size={18} />} label={t('deliveries.kpis.delivered')} value={stats.delivered} color="#22c55e" delay={210} />
       </div>
 
-      <div className={styles.searchRow}>
+      <div className={styles.filtersRow}>
         <div className={styles.searchInputWrapper}>
           <Search size={14} className={styles.searchIcon} />
           <input
-            placeholder="Rechercher une livraison…"
+            placeholder={t('deliveries.searchPlaceholder')}
             onChange={(e) => handleSearch(e.target.value)}
             className={styles.searchInput}
           />
         </div>
+        {search && (
+          <span className={styles.resultCount}>
+            {t(search.length > 1 ? 'deliveries.resultCount_plural' : 'deliveries.resultCount', { count: filtered.length })}
+          </span>
+        )}
       </div>
 
       {selectedIds.size > 0 && (
         <div className={styles.bulkActionBar}>
           <span className={styles.bulkActionCount}>
-            {selectedIds.size} livraison{selectedIds.size > 1 ? 's' : ''} sélectionnée{selectedIds.size > 1 ? 's' : ''}
+            {t(selectedIds.size > 1 ? 'deliveries.bulk.selected_plural' : 'deliveries.bulk.selected', { count: selectedIds.size })}
           </span>
           <select
             className={styles.bulkActionSelect}
@@ -431,9 +551,9 @@ export default function DeliveriesPage() {
             }}
             disabled={bulkActionLoading}
           >
-            <option value="">Changer le statut…</option>
-            {Object.entries(STATUS_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
+            <option value="">{t('deliveries.bulk.changeStatus')}</option>
+            {Object.entries(STATUS_LABELS_KEY).map(([k]) => (
+              <option key={k} value={k}>{t(`deliveries.status.${k}`)}</option>
             ))}
           </select>
           <select
@@ -447,7 +567,7 @@ export default function DeliveriesPage() {
             }}
             disabled={bulkActionLoading}
           >
-            <option value="">Assigner un chauffeur…</option>
+            <option value="">{t('deliveries.bulk.assignDriver')}</option>
             {drivers.filter((d) => d.isActive).map((d) => (
               <option key={d.id} value={d.id}>{d.firstName} {d.lastName}</option>
             ))}
@@ -460,15 +580,15 @@ export default function DeliveriesPage() {
             disabled={bulkActionLoading}
             className={styles.bulkDeleteBtn}
           >
-            Supprimer
+            {t('deliveries.bulk.delete')}
           </button>
-          {bulkActionLoading && <span className={styles.bulkLoadingText}>En cours…</span>}
+          {bulkActionLoading && <span className={styles.bulkLoadingText}>{t('deliveries.bulk.loading')}</span>}
           <button
             onClick={() => setSelectedIds(new Set())}
             disabled={bulkActionLoading}
             className={styles.clearSelectionBtn}
           >
-            Tout désélectionner
+            {t('deliveries.bulk.clearSelection')}
           </button>
         </div>
       )}
@@ -479,8 +599,18 @@ export default function DeliveriesPage() {
             <table className={styles.skeletonTable}>
               <thead>
                 <tr className={styles.skeletonTheadTr}>
-                  {['Titre', 'Statut', 'Adresse livraison', 'Chauffeur', 'Date', 'Description', ''].map((l) => (
-                    <th key={l} className={styles.skeletonTh} style={{ textAlign: l === '' ? 'right' : 'left' }}>
+                  {[
+                    t('deliveries.table.title'),
+                    t('deliveries.table.status'),
+                    t('deliveries.table.deliveryAddress'),
+                    t('deliveries.table.driver'),
+                    t('deliveries.table.date'),
+                    t('deliveries.table.clientPhone'),
+                    t('deliveries.table.amount'),
+                    t('deliveries.table.description'),
+                    '',
+                  ].map((l, idx) => (
+                    <th key={idx} className={styles.skeletonTh} style={{ textAlign: l === '' ? 'right' : 'left' }}>
                       {l}
                     </th>
                   ))}
@@ -493,122 +623,104 @@ export default function DeliveriesPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className={styles.emptyState}>
-            <div className={styles.emptyStateIcon}>
-              <Plus size={24} />
+            <div className={styles.emptyIconWrap}>
+              <PackageOpen size={26} />
             </div>
-            <p className={styles.emptyStateTitle}>
-              {search ? 'Aucune livraison ne correspond' : 'Aucune livraison enregistrée'}
+            <p className={styles.emptyTitle}>
+              {search ? t('deliveries.empty.noMatch') : t('deliveries.empty.noData')}
             </p>
-            <p className={styles.emptyStateDesc}>
-              {search ? 'Essayez un autre terme' : 'Créez votre première livraison'}
+            <p className={styles.emptyDesc}>
+              {search ? t('deliveries.empty.tryDifferent') : t('deliveries.empty.createFirst')}
             </p>
             {!search && (
               <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
-                Nouvelle livraison
+                {t('deliveries.newDelivery')}
               </Button>
             )}
           </div>
         ) : (
-          <DataTable
-            selectable
-            selectedIds={selectedIds}
-            onSelectionChange={(ids) => {
-              setSelectedIds(ids);
-            }}
-            columns={[
-              {
-                key: 'title', label: 'Titre', sortable: true,
-                render: (r: Delivery) => <span className={styles.cellPrimary}>{r.title}</span>,
-              },
-              {
-                key: 'status', label: 'Statut', sortable: true,
-                render: (r: Delivery) => (
-                  <div className={styles.statusColumn}>
-                    <span className={`${styles.statusBadge} ${STATUS_BADGE[r.status] || styles.statusBadgeDefault}`}>
-                      {STATUS_LABELS[r.status] || r.status}
-                    </span>
-                    {r.locationMismatch && !r.mismatchResolved && (
-                      <div className={styles.mismatchAlert}>
-                        <span>⚠️</span>
-                        <span>{r.deliveryProofDistance != null ? `${r.deliveryProofDistance}m d'écart` : 'Écart détecté'}</span>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); resolveMismatchMutation.mutate(r.id); }}
-                          disabled={resolveMismatchMutation.isPending}
-                          className={styles.mismatchResolveBtn}
-                        >
-                          ✓ Traité
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ),
-              },
-              {
-                key: 'deliveryAddress', label: 'Adresse de livraison',
-                render: (r: Delivery) => <span className={styles.cellSecondary}>{r.deliveryAddress}</span>,
-              },
-              {
-                key: 'driver', label: 'Chauffeur',
-                render: (r: Delivery) => (
-                  r.driver
-                    ? `${r.driver.firstName} ${r.driver.lastName}`
-                    : <span className={styles.textMuted}>Non assigné</span>
-                ),
-              },
-              {
-                key: 'createdAt', label: 'Date', sortable: true,
-                render: (r: Delivery) => (
-                  <div>
-                    <div className={styles.dateText}>
-                      {formatDate(r.createdAt)}
+          <div className={styles.tableCard}>
+            <DataTable
+              selectable
+              selectedIds={selectedIds}
+              onSelectionChange={(ids) => {
+                setSelectedIds(ids);
+              }}
+              columns={[
+                {
+                  key: 'title', label: t('deliveries.table.title'), sortable: true,
+                  render: (r: Delivery) => <TitleCell delivery={r} />,
+                },
+                {
+                  key: 'status', label: t('deliveries.table.status'), sortable: true,
+                  render: (r: Delivery) => (
+                    <div className={styles.statusColumn}>
+                      <span className={`${styles.statusBadge} ${STATUS_BADGE[r.status] || styles.statusBadgeDefault}`}>
+                        <span className={styles.statusDot} />
+                        {t(`deliveries.status.${r.status}`)}
+                      </span>
+                      {r.locationMismatch && !r.mismatchResolved && (
+                        <div className={styles.mismatchAlert}>
+                          <AlertTriangle size={12} />
+                          <span>{r.deliveryProofDistance != null ? t('deliveries.mismatch.distance', { distance: r.deliveryProofDistance }) : t('deliveries.mismatch.detected')}</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); resolveMismatchMutation.mutate(r.id); }}
+                            disabled={resolveMismatchMutation.isPending}
+                            className={styles.mismatchResolveBtn}
+                          >
+                            <CheckCircle2 size={12} /> {t('deliveries.mismatch.resolved')}
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {r.scheduledDate && (
-                      <div className={styles.scheduledDate}>
-                        📅 {formatDate(r.scheduledDate)}
-                      </div>
-                    )}
-                  </div>
-                ),
-              },
-              {
-                key: 'clientPhone', label: 'Tél.',
-                render: (r: Delivery) => (
-                  r.clientPhone
-                    ? <span className={styles.monoText}>{r.clientPhone}</span>
-                    : <span className={styles.textMuted}>—</span>
-                ),
-              },
-              {
-                key: 'amount', label: 'Montant',
-                render: (r: Delivery) => (
-                  r.amount !== undefined && r.amount !== null
-                    ? <span className={styles.semiBoldMono}>{formatAriary(r.amount)}</span>
-                    : <span className={styles.textMuted}>—</span>
-                ),
-              },
-              {
-                key: 'description', label: 'Description',
-                render: (r: Delivery) => (
-                  <span className={styles.descriptionText}>
-                    {r.productDescription || r.description || (r.notes
-                      ? <span className={styles.notesItalic}>📝 {r.notes.slice(0, 60)}</span>
-                      : <span className={styles.textMuted}>—</span>
-                    )}
-                  </span>
-                ),
-              },
-            ]}
-            data={filtered}
-            total={meta.total}
-            page={page}
-            limit={20}
-            onPageChange={(p) => { setPage(p); setSelectedIds(new Set()); }}
-            onEdit={(r) => { setEditing(r); setDrawerOpen(true); }}
-            onDelete={(r) => setDeleting(r)}
-            loading={false}
-            emptyMessage=""
-            keyExtractor={(r) => r.id}
-          />
+                  ),
+                },
+                {
+                  key: 'deliveryAddress', label: t('deliveries.table.deliveryAddress'),
+                  render: (r: Delivery) => (
+                    <span className={styles.addressCell}>
+                      <MapPin size={13} />
+                      <span>{r.deliveryAddress}</span>
+                    </span>
+                  ),
+                },
+                {
+                  key: 'driver', label: t('deliveries.table.driver'),
+                  render: (r: Delivery) => <DriverCell driver={r.driver} unassignedLabel={t('deliveries.table.unassigned')} />,
+                },
+                {
+                  key: 'createdAt', label: t('deliveries.table.date'), sortable: true,
+                  render: (r: Delivery) => <DateCell delivery={r} />,
+                },
+                {
+                  key: 'clientPhone', label: t('deliveries.table.clientPhone'),
+                  render: (r: Delivery) => (
+                    r.clientPhone
+                      ? <span className={styles.phoneCell}>{r.clientPhone}</span>
+                      : <span className={styles.mutedText}>—</span>
+                  ),
+                },
+                {
+                  key: 'amount', label: t('deliveries.table.amount'),
+                  render: (r: Delivery) => <AmountCell amount={r.amount} />,
+                },
+                {
+                  key: 'description', label: t('deliveries.table.description'),
+                  render: (r: Delivery) => <DescriptionCell delivery={r} />,
+                },
+              ]}
+              data={filtered}
+              total={meta.total}
+              page={page}
+              limit={20}
+              onPageChange={(p) => { setPage(p); setSelectedIds(new Set()); }}
+              onEdit={(r) => { setEditing(r); setDrawerOpen(true); }}
+              onDelete={(r) => setDeleting(r)}
+              loading={false}
+              emptyMessage=""
+              keyExtractor={(r) => r.id}
+            />
+          </div>
         )}
       </div>
 
@@ -623,51 +735,49 @@ export default function DeliveriesPage() {
             form="entity-form"
             loading={deliveryForm.saving}
             onCancel={onCancel}
-            submitLabel={editing ? 'Enregistrer' : 'Créer la livraison'}
+            submitLabel={editing ? t('deliveries.editDelivery') : t('deliveries.createDelivery')}
             error={deliveryForm.serverError}
           />
         }
       >
         <form id="entity-form" onSubmit={deliveryForm.handleSubmit}>
-          {/* === SECTION 1: Infos principales === */}
-          <DialogSection title="Informations principales">
-            <DialogField label="Titre de la livraison" required
+          <DialogSection title={t('deliveries.formSections.general')}>
+            <DialogField label={t('deliveries.fields.title')} required
               error={deliveryForm.touched.has('title') ? deliveryForm.errors.title : null}>
               <input className="dialog-input" type="text"
                 value={deliveryForm.values.title}
                 onChange={(e) => deliveryForm.setValue('title', e.target.value)}
                 onBlur={() => deliveryForm.handleBlur('title')}
-                placeholder="Ex: Livraison Analamanga 45"
+                placeholder={t('deliveries.formPlaceholders.title')}
                 autoFocus />
             </DialogField>
 
-            <DialogField label="Chauffeur"
+            <DialogField label={t('deliveries.fields.driver')}
               error={deliveryForm.touched.has('driverId') ? deliveryForm.errors.driverId : null}>
               <div>
                 <select className="dialog-select"
                   value={deliveryForm.values.driverId}
                   onChange={(e) => deliveryForm.setValue('driverId', e.target.value)}
                   onBlur={() => deliveryForm.handleBlur('driverId')}>
-                  <option value="">Sélectionner un chauffeur…</option>
+                  <option value="">{t('deliveries.formPlaceholders.driver')}</option>
                   {drivers.filter((d) => d.isActive).map((d) => (
                     <option key={d.id} value={d.id}>{getDriverLabel(d)}</option>
                   ))}
                 </select>
                 {drivers.filter((d) => d.isActive).length === 0 && (
                   <div className={styles.driverEmptyText}>
-                    Aucun chauffeur actif disponible
+                    {t('deliveries.formPlaceholders.noActiveDriver')}
                   </div>
                 )}
               </div>
             </DialogField>
           </DialogSection>
 
-          {/* === SECTION 2: Adresses === */}
-          <DialogSection title="Adresses">
-            <DialogField label="Point d'enlèvement" required
+          <DialogSection title={t('deliveries.formSections.addresses')}>
+            <DialogField label={t('deliveries.fields.pickupLocation')} required
               error={deliveryForm.touched.has('pickupAddress') ? deliveryForm.errors.pickupAddress : null}>
               <LocationSearchInput
-                placeholder="Ex: Analakely Antananarivo…"
+                placeholder={t('deliveries.formPlaceholders.pickup')}
                 value={{
                   lat: deliveryForm.values.pickupLat ? parseFloat(deliveryForm.values.pickupLat) : null,
                   lng: deliveryForm.values.pickupLng ? parseFloat(deliveryForm.values.pickupLng) : null,
@@ -679,10 +789,10 @@ export default function DeliveriesPage() {
               />
             </DialogField>
 
-            <DialogField label="Point de livraison" required
+            <DialogField label={t('deliveries.fields.deliveryLocation')} required
               error={deliveryForm.touched.has('deliveryAddress') ? deliveryForm.errors.deliveryAddress : null}>
               <LocationSearchInput
-                placeholder="Ex: Ivato Antananarivo…"
+                placeholder={t('deliveries.formPlaceholders.delivery')}
                 value={{
                   lat: deliveryForm.values.deliveryLat ? parseFloat(deliveryForm.values.deliveryLat) : null,
                   lng: deliveryForm.values.deliveryLng ? parseFloat(deliveryForm.values.deliveryLng) : null,
@@ -693,12 +803,11 @@ export default function DeliveriesPage() {
                 recentPlaces={recentPlaces}
                 showCopyButton={!!(deliveryForm.values.pickupLocationLabel || deliveryForm.values.pickupAddress)}
                 onCopyFromOther={copyPickupToDelivery}
-                copyTooltip="Même adresse que l'enlèvement"
+                copyTooltip={t('deliveries.copyTooltip')}
               />
             </DialogField>
           </DialogSection>
 
-          {/* === SECTION 3: Options avancées (repliables) === */}
           <div className={styles.advancedSection}>
             <button
               type="button"
@@ -706,49 +815,46 @@ export default function DeliveriesPage() {
               className={styles.advancedToggle}
             >
               {showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              {showAdvanced ? 'Masquer les options avancées' : 'Options avancées'}
+              {showAdvanced ? t('deliveries.advanced.hide') : t('deliveries.advanced.show')}
             </button>
 
             {showAdvanced && (
               <div className={styles.advancedContent}>
                 <div className={styles.advancedGrid}>
-                  <DialogField label="Date planifiée">
+                  <DialogField label={t('deliveries.fields.scheduledDate')}>
                     <input className="dialog-input" type="date"
                       value={deliveryForm.values.scheduledDate}
                       onChange={(e) => deliveryForm.setValue('scheduledDate', e.target.value)}
                       onBlur={() => deliveryForm.handleBlur('scheduledDate')} />
                   </DialogField>
 
-                  <DialogField label="Statut">
+                  <DialogField label={t('deliveries.fields.status')}>
                     <select className="dialog-select"
                       value={deliveryForm.values.status}
                       onChange={(e) => deliveryForm.setValue('status', e.target.value)}
                       onBlur={() => deliveryForm.handleBlur('status')}>
-                      <option value="pending">En attente</option>
-                      <option value="assigned">Assigné</option>
-                      <option value="in_progress">En cours</option>
-                      <option value="delivered">Livré</option>
-                      <option value="failed">Échoué</option>
-                      <option value="cancelled">Annulé</option>
+                      {Object.keys(STATUS_LABELS_KEY).map((k) => (
+                        <option key={k} value={k}>{t(`deliveries.status.${k}`)}</option>
+                      ))}
                     </select>
                   </DialogField>
                 </div>
 
-                <DialogField label="Description">
+                <DialogField label={t('deliveries.fields.description')}>
                   <textarea className={`dialog-input ${styles.textareaField}`}
                     value={deliveryForm.values.description}
                     onChange={(e) => deliveryForm.setValue('description', e.target.value)}
                     onBlur={() => deliveryForm.handleBlur('description')}
-                    placeholder="Description détaillée de la livraison…"
+                    placeholder={t('deliveries.formPlaceholders.description')}
                     rows={2} />
                 </DialogField>
 
-                <DialogField label="Notes / Instructions chauffeur">
+                <DialogField label={t('deliveries.fields.notes')}>
                   <textarea className={`dialog-input ${styles.textareaField}`}
                     value={deliveryForm.values.notes}
                     onChange={(e) => deliveryForm.setValue('notes', e.target.value)}
                     onBlur={() => deliveryForm.handleBlur('notes')}
-                    placeholder="Instructions particulières, informations complémentaires…"
+                    placeholder={t('deliveries.formPlaceholders.notes')}
                     rows={3} />
                 </DialogField>
               </div>
@@ -759,7 +865,7 @@ export default function DeliveriesPage() {
 
       {reverseLoading && (
         <div className={styles.reverseToast}>
-          Recherche des adresses…
+          <Loader2 size={12} className={styles.spin} /> {t('deliveries.reverseGeocoding')}
         </div>
       )}
 
@@ -777,7 +883,7 @@ export default function DeliveriesPage() {
             </h2>
             <div className={styles.importStatsRow}>
               <div className={styles.importStatCard}>
-                <div className={styles.importStatNumber} style={{ color: 'var(--color-teal)' }}>{importReport.created}</div>
+                <div className={styles.importStatNumber} style={{ color: '#22c55e' }}>{importReport.created}</div>
                 <div className={styles.importStatLabel}>{t('deliveries.import.stats.created')}</div>
               </div>
               <div className={styles.importStatCard}>
@@ -815,12 +921,12 @@ export default function DeliveriesPage() {
             {importReport.errors.length > 0 && (
               <div className={styles.importErrorSection}>
                 <h3 className={styles.importSectionTitle}>
-                  Erreurs
+                  {t('deliveries.import.errorsTitle')}
                 </h3>
                 <div className={styles.importErrorList}>
                   {importReport.errors.map((e, i) => (
                     <div key={i} className={styles.importErrorItem}>
-                      Ligne {e.row} : {e.reason}
+                      {t('deliveries.import.errorRow', { row: e.row })} : {e.reason}
                     </div>
                   ))}
                 </div>
@@ -832,7 +938,7 @@ export default function DeliveriesPage() {
                 onClick={() => setImportReport(null)}
                 className={styles.importCloseBtn}
               >
-                Fermer
+                {t('deliveries.import.close')}
               </button>
             </div>
           </div>
@@ -841,14 +947,14 @@ export default function DeliveriesPage() {
 
       <ConfirmDialog
         open={!!deleting}
-        title="Supprimer la livraison"
+        title={t('deliveries.confirmDelete.title')}
         message={
           deleting
-            ? `Supprimer "${deleting.title}" ? Cette action est irréversible.`
+            ? t('deliveries.confirmDelete.message', { title: deleting.title })
             : ''
         }
         variant="danger"
-        confirmLabel="Supprimer"
+        confirmLabel={t('deliveries.confirmDelete.confirmLabel')}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />

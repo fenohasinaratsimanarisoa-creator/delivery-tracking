@@ -150,19 +150,61 @@
   "deliveries": {
     "title": "Livraisons",
     "subtitle": "Gérez les livraisons de votre flotte",
+    "kicker": "Exécution des opérations",
     "newDelivery": "Nouvelle livraison",
     "searchPlaceholder": "Rechercher une livraison…",
     "editDelivery": "Enregistrer",
     "createDelivery": "Créer la livraison",
-    "drawerSubtitle": "Créez une livraison et affectez-la à un chauffeur",
+    "drawerNew": "Titre, adresses et chauffeur en une seule étape",
+    "copyTooltip": "Même adresse que l'enlèvement",
+    "reverseGeocoding": "Recherche des adresses…",
     "formSections": {
       "general": "Informations générales",
       "addresses": "Adresses",
       "gps": "Coordonnées GPS"
     },
+    "formPlaceholders": {
+      "title": "Ex: Livraison Analamanga 45",
+      "driver": "Sélectionner un chauffeur…",
+      "noActiveDriver": "Aucun chauffeur actif disponible",
+      "pickup": "Ex: Analakely Antananarivo…",
+      "delivery": "Ex: Ivato Antananarivo…",
+      "description": "Description détaillée de la livraison…",
+      "notes": "Instructions particulières, informations complémentaires…"
+    },
+    "advanced": {
+      "show": "Options avancées",
+      "hide": "Masquer les options avancées"
+    },
+    "kpis": {
+      "total": "Total",
+      "pending": "À traiter",
+      "inProgress": "En route",
+      "delivered": "Livrées"
+    },
+    "mismatch": {
+      "detected": "Écart détecté",
+      "distance": "{{distance}}m d'écart",
+      "resolved": "Traité"
+    },
+    "bulk": {
+      "selected": "{{count}} livraison sélectionnée",
+      "selected_plural": "{{count}} livraisons sélectionnées",
+      "changeStatus": "Changer le statut…",
+      "assignDriver": "Assigner un chauffeur…",
+      "delete": "Supprimer",
+      "loading": "En cours…",
+      "clearSelection": "Tout désélectionner",
+      "successResult": "{{count}} livraison mise à jour",
+      "successResult_plural": "{{count}} livraisons mises à jour",
+      "partialResult": "{{succeeded}} succès, {{failed}} échecs : {{reason}}",
+      "error": "Erreur lors de l'action groupée"
+    },
     "fields": {
       "title": "Titre",
       "status": "Statut",
+      "description": "Description",
+      "driver": "Chauffeur",
       "pickupAddress": "Adresse d'enlèvement",
       "deliveryAddress": "Adresse de livraison",
       "pickupLat": "Latitude (enlèvement)",
@@ -170,7 +212,9 @@
       "deliveryLat": "Latitude (livraison)",
       "deliveryLng": "Longitude (livraison)",
       "pickupLocation": "Position de l'enlèvement",
-      "deliveryLocation": "Position de livraison"
+      "deliveryLocation": "Position de livraison",
+      "scheduledDate": "Date planifiée",
+      "notes": "Notes / Instructions chauffeur"
     },
     "status": {
       "pending": "En attente",
@@ -186,7 +230,10 @@
       "deliveryAddress": "Adresse de livraison",
       "driver": "Chauffeur",
       "unassigned": "Non assigné",
-      "date": "Date"
+      "date": "Date",
+      "clientPhone": "Tél.",
+      "amount": "Montant",
+      "description": "Description"
     },
     "empty": {
       "noMatch": "Aucune livraison ne correspond",
@@ -199,18 +246,26 @@
       "created": "Livraison créée",
       "saveError": "Erreur lors de l'enregistrement",
       "deleted": "Livraison supprimée",
-      "deleteError": "Erreur lors de la suppression"
+      "deleteError": "Erreur lors de la suppression",
+      "mismatchResolved": "Alerte marquée comme traitée",
+      "importError": "Erreur lors de l'import Excel",
+      "invalidFile": "Format de fichier invalide, .xlsx attendu"
     },
     "confirmDelete": {
       "title": "Supprimer la livraison",
-      "message": "Supprimer \"{title}\" ? Cette action est irréversible."
+      "message": "Supprimer \"{title}\" ? Cette action est irréversible.",
+      "confirmLabel": "Supprimer"
     },
     "count": "{{count}} livraison",
     "count_plural": "{{count}} livraisons",
+    "resultCount": "{{count}} résultat",
+    "resultCount_plural": "{{count}} résultats",
     "validation": {
       "validNumber": "Doit être un nombre valide"
     },
     "import": {
+      "action": "Importer Excel",
+      "importing": "Import en cours…",
       "resultTitle": "Résultat de l'import",
       "stats": {
         "created": "Créées",
@@ -220,6 +275,22 @@
       },
       "skippedTitle": "Commandes ignorées",
       "alreadyExists": "Déjà existante",
+      "errorsTitle": "Erreurs",
+      "errorRow": "Ligne {{row}}",
+      "close": "Fermer",
+      "report": {
+        "created": "créée",
+        "created_plural": "créées",
+        "updated": "mise à jour",
+        "updated_plural": "mises à jour",
+        "skipped": "déjà existante",
+        "skipped_plural": "déjà existantes",
+        "errors": "erreur",
+        "errors_plural": "erreurs",
+        "line": "{{count}} {{label}}",
+        "seeDetail": "voir détail",
+        "none": "Aucune donnée importée"
+      },
       "tooltip": {
         "skipDuplicates": "Mode: ignorer les doublons",
         "updateExisting": "Mode: mettre à jour les existants"
@@ -486,39 +557,39 @@
     "unitPer100": "L/100km",
     "error": "Erreur lors du chargement des données carburant",
     "empty": "Aucun relevé carburant pour le moment.",
- "tabManual": "Saisie manuelle",
- "tabGps": "Rapport GPS",
- "tabPrices": "Prix carburant",
- "pricesHelp": "Définissez ici les prix du carburant utilisés pour estimer les coûts du rapport GPS. Le prix le plus récent applicable à la date du rapport est utilisé.",
- "defaultPricesTitle": "Prix par défaut (par type de carburant)",
- "defaultPricesHelp": "Utilisés quand aucun prix historique ne s'applique à la date du rapport. Ces prix remplacent les anciennes valeurs figées.",
- "saveDefaults": "Enregistrer les prix par défaut",
- "defaultsSaved": "Prix par défaut enregistrés",
- "defaultsError": "Erreur lors de l'enregistrement des prix par défaut",
- "historyTitle": "Historique des prix",
- "historyHelp": "Un prix s'applique à partir de sa date d'effet. « Jusqu'au » est optionnel : laissé vide, le prix reste valable indéfiniment.",
- "addPrice": "Ajouter un prix",
- "addPriceTitle": "Ajouter un prix",
- "editPriceTitle": "Modifier le prix",
- "fuelType": "Type de carburant",
- "pricePerLiter": "Prix au litre (Ar)",
- "effectiveFrom": "À partir du",
- "effectiveUntil": "Jusqu'au (optionnel)",
- "priceSaved": "Prix enregistré",
- "priceUpdated": "Prix mis à jour",
- "priceDeleted": "Prix supprimé",
- "priceError": "Erreur lors de l'enregistrement du prix",
- "priceDeleteError": "Erreur lors de la suppression du prix",
- "noPrices": "Aucun prix historique pour le moment.",
- "invalidPrice": "Veuillez saisir un prix valide (nombre ≥ 0).",
- "confirmDeletePriceTitle": "Supprimer le prix",
- "types": {
-  "essence": "Essence",
-  "gasoil": "Gasoil",
-  "diesel": "Diesel",
-  "electric": "Électrique",
-  "hybrid": "Hybride"
- },
+    "tabManual": "Saisie manuelle",
+    "tabGps": "Rapport GPS",
+    "tabPrices": "Prix carburant",
+    "pricesHelp": "Définissez ici les prix du carburant utilisés pour estimer les coûts du rapport GPS. Le prix le plus récent applicable à la date du rapport est utilisé.",
+    "defaultPricesTitle": "Prix par défaut (par type de carburant)",
+    "defaultPricesHelp": "Utilisés quand aucun prix historique ne s'applique à la date du rapport. Ces prix remplacent les anciennes valeurs figées.",
+    "saveDefaults": "Enregistrer les prix par défaut",
+    "defaultsSaved": "Prix par défaut enregistrés",
+    "defaultsError": "Erreur lors de l'enregistrement des prix par défaut",
+    "historyTitle": "Historique des prix",
+    "historyHelp": "Un prix s'applique à partir de sa date d'effet. « Jusqu'au » est optionnel : laissé vide, le prix reste valable indéfiniment.",
+    "addPrice": "Ajouter un prix",
+    "addPriceTitle": "Ajouter un prix",
+    "editPriceTitle": "Modifier le prix",
+    "fuelType": "Type de carburant",
+    "pricePerLiter": "Prix au litre (Ar)",
+    "effectiveFrom": "À partir du",
+    "effectiveUntil": "Jusqu'au (optionnel)",
+    "priceSaved": "Prix enregistré",
+    "priceUpdated": "Prix mis à jour",
+    "priceDeleted": "Prix supprimé",
+    "priceError": "Erreur lors de l'enregistrement du prix",
+    "priceDeleteError": "Erreur lors de la suppression du prix",
+    "noPrices": "Aucun prix historique pour le moment.",
+    "invalidPrice": "Veuillez saisir un prix valide (nombre ≥ 0).",
+    "confirmDeletePriceTitle": "Supprimer le prix",
+    "types": {
+      "essence": "Essence",
+      "gasoil": "Gasoil",
+      "diesel": "Diesel",
+      "electric": "Électrique",
+      "hybrid": "Hybride"
+    },
     "gpsHelp": "Le rapport GPS estime la consommation à partir des distances parcourues calculées sur les positions GPS des véhicules. Cliquez sur « Générer » pour calculer le rapport pour une date donnée.",
     "gpsEmpty": "Aucun rapport GPS pour cette date. Lancez la génération avec le bouton ci-dessus.",
     "generateReport": "Générer le rapport",
@@ -549,16 +620,16 @@
     "helpTitle": "Comprendre les deux relevés",
     "helpManual": "• Saisie manuelle : enregistrements de pleins réels saisis par l'équipe (litres, coût, kilométrage). Permet de suivre les dépenses réelles en carburant.",
     "helpGps": "• Rapport GPS : estimation automatique basée sur les positions GPS des véhicules. La consommation théorique du véhicule est utilisée pour estimer le coût. Complémentaire à la saisie manuelle.",
- "editTitle": "Modifier le relevé",
- "editDetails": "Détails du plein",
- "addEntry": "Nouveau plein",
- "addTitle": "Ajouter un relevé",
- "addSubmit": "Ajouter",
- "addSuccess": "Relevé ajouté",
- "addError": "Erreur lors de l'ajout du relevé",
- "kmHelper": "Ne pas saisir le kilométrage au compteur",
- "requiredFields": "Veuillez renseigner le véhicule, les litres, le kilométrage, le coût et la date.",
- "notes": "Notes",
+    "editTitle": "Modifier le relevé",
+    "editDetails": "Détails du plein",
+    "addEntry": "Nouveau plein",
+    "addTitle": "Ajouter un relevé",
+    "addSubmit": "Ajouter",
+    "addSuccess": "Relevé ajouté",
+    "addError": "Erreur lors de l'ajout du relevé",
+    "kmHelper": "Ne pas saisir le kilométrage au compteur",
+    "requiredFields": "Veuillez renseigner le véhicule, les litres, le kilométrage, le coût et la date.",
+    "notes": "Notes",
     "updateSuccess": "Relevé mis à jour",
     "updateError": "Erreur lors de la mise à jour du relevé",
     "deleteSuccess": "Relevé supprimé",
@@ -1178,16 +1249,16 @@
     }
   },
   "errors": {
-    "404": {
-      "title": "404",
-      "heading": "Page introuvable",
-      "message": "La page que vous cherchez n'existe pas.",
-      "backToDashboard": "Retour au Dashboard"
-    },
     "403": {
       "icon": "🚫",
       "heading": "Accès refusé",
       "message": "Vous n'avez pas les droits nécessaires pour accéder à cette page.",
+      "backToDashboard": "Retour au Dashboard"
+    },
+    "404": {
+      "title": "404",
+      "heading": "Page introuvable",
+      "message": "La page que vous cherchez n'existe pas.",
       "backToDashboard": "Retour au Dashboard"
     }
   },
@@ -1210,18 +1281,42 @@
     "backToRegister": "Retour à l'inscription",
     "lastUpdated": "Dernière mise à jour : {date}",
     "privacyPolicy": "Politique de Confidentialité",
-    "section1": { "title": "1. Objet des CGU" },
-    "section2": { "title": "2. Définitions" },
-    "section3": { "title": "3. Création et gestion du compte" },
-    "section4": { "title": "4. Services fournis" },
-    "section5": { "title": "5. Obligations de l'utilisateur" },
-    "section6": { "title": "6. Protection des données personnelles" },
-    "section7": { "title": "7. Propriété intellectuelle" },
-    "section8": { "title": "8. Responsabilité" },
-    "section9": { "title": "9. Tarifs et facturation" },
-    "section10": { "title": "10. Résiliation" },
-    "section11": { "title": "11. Droit applicable" },
-    "section12": { "title": "12. Contact" }
+    "section1": {
+      "title": "1. Objet des CGU"
+    },
+    "section2": {
+      "title": "2. Définitions"
+    },
+    "section3": {
+      "title": "3. Création et gestion du compte"
+    },
+    "section4": {
+      "title": "4. Services fournis"
+    },
+    "section5": {
+      "title": "5. Obligations de l'utilisateur"
+    },
+    "section6": {
+      "title": "6. Protection des données personnelles"
+    },
+    "section7": {
+      "title": "7. Propriété intellectuelle"
+    },
+    "section8": {
+      "title": "8. Responsabilité"
+    },
+    "section9": {
+      "title": "9. Tarifs et facturation"
+    },
+    "section10": {
+      "title": "10. Résiliation"
+    },
+    "section11": {
+      "title": "11. Droit applicable"
+    },
+    "section12": {
+      "title": "12. Contact"
+    }
   },
   "privacy": {
     "title": "Politique de confidentialité",
@@ -1229,21 +1324,41 @@
     "cookies": "Politique de cookies",
     "cookiesDesc": "Consultez notre",
     "cookiesLink": "pour plus d'informations sur les cookies utilisés et comment les gérer.",
-    "section1": { "title": "1. Responsable de traitement" },
+    "section1": {
+      "title": "1. Responsable de traitement"
+    },
     "section2": {
       "title": "2. Données collectées",
       "sub1": "2.1 Données fournies directement",
       "sub2": "2.2 Données collectées automatiquement"
     },
-    "section3": { "title": "3. Base légale du traitement" },
-    "section4": { "title": "4. Destinataires des données" },
-    "section5": { "title": "5. Transferts hors UE" },
-    "section6": { "title": "6. Durée de conservation" },
-    "section7": { "title": "7. Vos droits RGPD" },
-    "section8": { "title": "8. Sécurité" },
-    "section9": { "title": "9. Cookies" },
-    "section10": { "title": "10. Réclamations" },
-    "section11": { "title": "11. Contact" }
+    "section3": {
+      "title": "3. Base légale du traitement"
+    },
+    "section4": {
+      "title": "4. Destinataires des données"
+    },
+    "section5": {
+      "title": "5. Transferts hors UE"
+    },
+    "section6": {
+      "title": "6. Durée de conservation"
+    },
+    "section7": {
+      "title": "7. Vos droits RGPD"
+    },
+    "section8": {
+      "title": "8. Sécurité"
+    },
+    "section9": {
+      "title": "9. Cookies"
+    },
+    "section10": {
+      "title": "10. Réclamations"
+    },
+    "section11": {
+      "title": "11. Contact"
+    }
   },
   "form": {
     "validation": {
@@ -1409,7 +1524,7 @@
     "copySecret": "Copier",
     "secretCopied": "Copié !",
     "changePassword": "Changer le mot de passe",
-"passwordStrength": {
+    "passwordStrength": {
       "veryWeak": "Très faible",
       "weak": "Faible",
       "medium": "Moyenne",
@@ -1502,15 +1617,6 @@
     "statusDelivered": "Livré",
     "statusFailed": "Échoué",
     "statusCancelled": "Annulé"
-  },
-  "myDeliveriesMap": {
-    "pickup": "📍",
-    "dropoff": "🏁",
-    "vehicle": "🚛"
-  },
-  "activeDelivery": {
-    "pickup": "📍",
-    "dropoff": "🏁"
   },
   "navigation": {
     "calculating": "Calcul de l'itinéraire…",

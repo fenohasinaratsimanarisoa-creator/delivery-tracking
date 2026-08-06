@@ -150,19 +150,61 @@
   "deliveries": {
     "title": "Deliveries",
     "subtitle": "Manage your fleet deliveries",
+    "kicker": "Operations execution",
     "newDelivery": "New delivery",
     "searchPlaceholder": "Search deliveries…",
     "editDelivery": "Save",
     "createDelivery": "Create delivery",
-    "drawerSubtitle": "Create a delivery and assign it to a driver",
+    "drawerNew": "Title, addresses and driver in one step",
+    "copyTooltip": "Same address as pickup",
+    "reverseGeocoding": "Looking up addresses…",
     "formSections": {
       "general": "General Information",
       "addresses": "Addresses",
       "gps": "GPS Coordinates"
     },
+    "formPlaceholders": {
+      "title": "Ex: Delivery Analamanga 45",
+      "driver": "Select a driver…",
+      "noActiveDriver": "No active driver available",
+      "pickup": "Ex: Analakely Antananarivo…",
+      "delivery": "Ex: Ivato Antananarivo…",
+      "description": "Detailed delivery description…",
+      "notes": "Special instructions, additional information…"
+    },
+    "advanced": {
+      "show": "Advanced options",
+      "hide": "Hide advanced options"
+    },
+    "kpis": {
+      "total": "Total",
+      "pending": "Pending",
+      "inProgress": "Active",
+      "delivered": "Delivered"
+    },
+    "mismatch": {
+      "detected": "Mismatch detected",
+      "distance": "{{distance}}m off",
+      "resolved": "Handled"
+    },
+    "bulk": {
+      "selected": "{{count}} delivery selected",
+      "selected_plural": "{{count}} deliveries selected",
+      "changeStatus": "Change status…",
+      "assignDriver": "Assign a driver…",
+      "delete": "Delete",
+      "loading": "In progress…",
+      "clearSelection": "Clear selection",
+      "successResult": "{{count}} delivery updated",
+      "successResult_plural": "{{count}} deliveries updated",
+      "partialResult": "{{succeeded}} succeeded, {{failed}} failed: {{reason}}",
+      "error": "Error performing bulk action"
+    },
     "fields": {
       "title": "Title",
       "status": "Status",
+      "description": "Description",
+      "driver": "Driver",
       "pickupAddress": "Pickup address",
       "deliveryAddress": "Delivery address",
       "pickupLat": "Latitude (pickup)",
@@ -170,7 +212,9 @@
       "deliveryLat": "Latitude (delivery)",
       "deliveryLng": "Longitude (delivery)",
       "pickupLocation": "Pickup position",
-      "deliveryLocation": "Delivery position"
+      "deliveryLocation": "Delivery position",
+      "scheduledDate": "Scheduled date",
+      "notes": "Notes / Driver instructions"
     },
     "status": {
       "pending": "Pending",
@@ -186,7 +230,10 @@
       "deliveryAddress": "Delivery address",
       "driver": "Driver",
       "unassigned": "Unassigned",
-      "date": "Date"
+      "date": "Date",
+      "clientPhone": "Phone",
+      "amount": "Amount",
+      "description": "Description"
     },
     "empty": {
       "noMatch": "No deliveries match your search",
@@ -199,18 +246,26 @@
       "created": "Delivery created",
       "saveError": "Error saving delivery",
       "deleted": "Delivery deleted",
-      "deleteError": "Error deleting delivery"
+      "deleteError": "Error deleting delivery",
+      "mismatchResolved": "Alert marked as handled",
+      "importError": "Error importing Excel file",
+      "invalidFile": "Invalid file format, .xlsx expected"
     },
     "confirmDelete": {
       "title": "Delete delivery",
-      "message": "Delete \"{title}\"? This action cannot be undone."
+      "message": "Delete \"{title}\"? This action cannot be undone.",
+      "confirmLabel": "Delete"
     },
     "count": "{{count}} delivery",
     "count_plural": "{{count}} deliveries",
+    "resultCount": "{{count}} result",
+    "resultCount_plural": "{{count}} results",
     "validation": {
       "validNumber": "Must be a valid number"
     },
     "import": {
+      "action": "Import Excel",
+      "importing": "Importing…",
       "resultTitle": "Import results",
       "stats": {
         "created": "Created",
@@ -220,6 +275,22 @@
       },
       "skippedTitle": "Skipped orders",
       "alreadyExists": "Already exists",
+      "errorsTitle": "Errors",
+      "errorRow": "Row {{row}}",
+      "close": "Close",
+      "report": {
+        "created": "created",
+        "created_plural": "created",
+        "updated": "updated",
+        "updated_plural": "updated",
+        "skipped": "already existing",
+        "skipped_plural": "already existing",
+        "errors": "error",
+        "errors_plural": "errors",
+        "line": "{{count}} {{label}}",
+        "seeDetail": "see details",
+        "none": "No data imported"
+      },
       "tooltip": {
         "skipDuplicates": "Mode: skip duplicates",
         "updateExisting": "Mode: update existing"
