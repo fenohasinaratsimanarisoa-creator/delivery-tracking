@@ -1,0 +1,9 @@
+# Keep the Render/Docker build context lean and web-only.
+node_modules/
+dist/
+android/
+scripts/
+coverage/
+*.log
+*.tsbuildinfo
+start.sh

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { getAccessToken } from '../auth/tokenStore';
+import { getSocketBaseUrl } from '../api/config';
 
 let socket: Socket | null = null;
 
 function getNotificationSocket(): Socket {
   if (!socket) {
-    socket = io('/notifications', {
+    socket = io(getSocketBaseUrl() + '/notifications', {
       auth: (cb: (data: { token: string | null }) => void) => cb({ token: getAccessToken() }),
       transports: ['websocket', 'polling'],
       reconnection: true,

@@ -10,9 +10,13 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "mobile:sync": "npm run build && npx cap sync",
+    "mobile:android": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
     "@sentry/react": "^10.67.0",
     "@tanstack/react-query": "^5.101.3",
     "axios": "^1.7.7",
@@ -28,6 +32,7 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.8",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/leaflet": "^1.9.21",
