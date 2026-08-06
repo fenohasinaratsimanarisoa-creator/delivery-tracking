@@ -19,12 +19,7 @@ import {
   GPS_NOISE_THRESHOLD_M,
   computeFilteredDistance,
 } from '../../common/geo/geo.utils';
-import {
-  TELEPORT_SPEED_THRESHOLD_MS,
-  TELEPORT_DISTANCE_THRESHOLD_M,
-  TELEPORT_TIME_THRESHOLD_S,
-  evaluateTeleportation,
-} from '../../common/geo/teleportation.utils';
+import { evaluateTeleportation } from '../../common/geo/teleportation.utils';
 
 const STOP_SPEED_THRESHOLD_MS = 0.3; // ~1 km/h — seuil pour détecter l'arrêt (évite les égalités strictes sur flottants)
 const SPEED_SMOOTHING_WINDOW = 5; // nombre de positions pour lisser la vitesse (ETA/réveil retard)

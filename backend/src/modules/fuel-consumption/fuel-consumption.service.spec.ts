@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NotificationPriority, NotificationType, GpsDataQuality } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { haversineDistance } from '../../common/geo/geo.utils';
 import { FuelConsumptionService } from './fuel-consumption.service';
 
 const mockQueue = {
@@ -383,6 +384,55 @@ describe('FuelConsumptionService', () => {
   // ----------------------------------------------------------------
   // POINT 1 — Couverture GPS insuffisante (gpsKm <= 0) : signal explicite au lieu du silence
   // ----------------------------------------------------------------
+  // ----------------------------------------------------------------
+  // Non-régression (a) : un véhicule 100% physical_tracker avec un trajet réel normal
+  // (accuracy 3-15m) ne doit PAS voir son déplacement réel filtré par le seuil de bruit
+  // pondéré par l'accuracy — distanceKm quasi identique à la distance brute (tolérance < 2%).
+  // ----------------------------------------------------------------
+  describe('Non-régression (a) — véhicule physical_tracker, déplacement réel non filtré', () => {
+    const TARGET_DATE = new Date('2026-07-20T12:00:00.000Z');
+    const driver = { id: 'driver-1', firstName: 'Jean', lastName: 'Rakoto' };
+    const VEHICLE = {
+      id: 'vehicle-1',
+      licensePlate: 'TRK-PHYS',
+      fuelType: 'Diesel',
+      theoreticalConsumption: 10,
+    };
+
+    it.each([
+      { name: 'accuracy 5m (seuil pondéré = 5m)', acc: 5 },
+      { name: 'accuracy 15m (seuil pondéré = 7.5m)', acc: 15 },
+    ])('$name → segments réels ~111m conservés, distanceKm ≈ distance brute (< 2%)', async ({ acc }) => {
+      // Deux segments réels ~111m chacun (0.001° de longitude à l'équateur) — très au-dessus
+      // du seuil de bruit pondéré (5m ou 7.5m) : ils ne doivent JAMAIS être filtrés.
+      const positions = [
+        { latitude: 0, longitude: 0, accuracy: acc, vehicleId: 'vehicle-1', driverId: 'driver-1', timestamp: new Date('2026-07-20T06:00:00Z') },
+        { latitude: 0, longitude: 0.001, accuracy: acc, vehicleId: 'vehicle-1', driverId: 'driver-1', timestamp: new Date('2026-07-20T07:00:00Z') },
+        { latitude: 0, longitude: 0.002, accuracy: acc, vehicleId: 'vehicle-1', driverId: 'driver-1', timestamp: new Date('2026-07-20T08:00:00Z') },
+      ];
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(positions as any);
+      mockPrisma.vehicle.findUnique.mockResolvedValue(VEHICLE as any);
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 4900 });
+      mockPrisma.vehicle.findMany.mockResolvedValue([]);
+      let captured: any;
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (a: any) => {
+        captured = a;
+        return a;
+      });
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      // Distance brute (somme haversine des segments) — le correctif ne doit PAS la réduire
+      // pour un vrai déplacement (seuls les segments < seuil pondéré sont filtrés).
+      const rawMeters =
+        haversineDistance(0, 0, 0, 0.001) + haversineDistance(0, 0.001, 0, 0.002);
+      const reportMeters = captured.create.distanceKm * 1000;
+      console.log(`[a ${acc}m] raw=${rawMeters.toFixed(1)}m report=${reportMeters.toFixed(1)}m`);
+      expect(Math.abs(reportMeters - rawMeters) / rawMeters).toBeLessThan(0.02);
+    });
+  });
+
   describe('Point 1 — crossCheckFuelLogWithGps quand gpsKm <= 0', () => {
     it('écrit gpsCoverageInsufficientFlag + notification quand AUCUNE position GPS sur la période', async () => {
       const fuelLog = {
