@@ -29,21 +29,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           <input
             ref={ref}
             id={inputId}
-            className={styles.input}
+            className={`${styles.input}${error ? ` ${styles.inputError}` : ''}`}
             style={{
               width: fullWidth ? '100%' : undefined,
               paddingLeft: prefixIcon ? 32 : 12,
               paddingRight: suffixIcon ? 32 : 12,
-              border: `1px solid ${error ? 'var(--color-red, #E8544C)' : 'var(--color-input-border, #1E2A45)'}`,
               ...style,
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = 'var(--color-input-focus, #F2A93C)';
-              e.currentTarget.style.boxShadow = 'var(--shadow-glow, 0 0 8px rgba(242,169,60,0.2))';
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = error ? 'var(--color-red, #E8544C)' : 'var(--color-input-border, #1E2A45)';
-              e.currentTarget.style.boxShadow = '';
             }}
             {...rest}
           />

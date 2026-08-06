@@ -35,17 +35,36 @@ const dialogKeyframes = `
   padding: var(--space-sm) var(--space-md);
   background: var(--color-input-bg);
   border: 1px solid var(--color-input-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   color: var(--color-text);
   font-size: var(--text-sm);
   font-family: var(--font-body);
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color var(--duration-fast) var(--ease-premium), box-shadow var(--duration-fast) var(--ease-premium), background-color var(--duration-fast) var(--ease-premium);
   box-sizing: border-box;
+}
+.dialog-input::placeholder, .dialog-select::placeholder {
+  color: var(--color-text-tertiary);
+}
+.dialog-input:hover:not(:disabled), .dialog-select:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-input-border) 55%, var(--color-input-focus) 45%);
 }
 .dialog-input:focus, .dialog-select:focus {
   border-color: var(--color-input-focus);
   box-shadow: 0 0 0 3px var(--color-accent-muted);
+}
+.dialog-input:disabled, .dialog-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.dialog-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: var(--space-xl);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237A8BA3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-md) center;
+  cursor: pointer;
 }
 .dialog-input.--error, .dialog-select.--error {
   border-color: var(--color-red);

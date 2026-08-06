@@ -40,7 +40,7 @@
 .copyBtn {
   padding: 6px;
   border: 1px solid var(--color-input-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--color-input-bg);
   cursor: pointer;
   display: flex;
@@ -48,12 +48,18 @@
   justify-content: center;
   color: var(--color-text-secondary, #5D6B83);
   flex-shrink: 0;
+  transition: border-color var(--duration-fast, 120ms) var(--ease-premium, cubic-bezier(0.16, 1, 0.3, 1)), color var(--duration-fast, 120ms) var(--ease-premium, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+.copyBtn:hover, .mapBtn:hover {
+  border-color: var(--color-input-focus);
+  color: var(--color-accent);
 }
 
 .mapBtn {
   padding: 6px;
   border: 1px solid var(--color-input-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--color-input-bg);
   cursor: pointer;
   display: flex;
@@ -61,6 +67,7 @@
   justify-content: center;
   color: var(--color-text-secondary, #5D6B83);
   flex-shrink: 0;
+  transition: border-color var(--duration-fast, 120ms) var(--ease-premium, cubic-bezier(0.16, 1, 0.3, 1)), color var(--duration-fast, 120ms) var(--ease-premium, cubic-bezier(0.16, 1, 0.3, 1));
 }
 
 .errorText {

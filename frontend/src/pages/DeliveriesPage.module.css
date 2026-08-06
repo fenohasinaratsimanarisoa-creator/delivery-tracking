@@ -262,16 +262,24 @@
 .bulkActionSelect {
   padding: 6px 10px;
   font-size: var(--text-xs, 0.625rem);
-  border-radius: var(--radius-md, 6px);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
-  background: var(--color-surface, #121B2E);
+  border-radius: var(--radius-lg, 8px);
+  border: 1px solid var(--color-input-border, #1E2A45);
+  background: var(--color-input-bg, #0D1525);
   color: var(--color-text, #E8ECF3);
   font-family: var(--font-body, Inter, sans-serif);
   outline: none;
+  cursor: pointer;
+  transition: border-color var(--duration-fast, 120ms) var(--ease-premium, cubic-bezier(0.16, 1, 0.3, 1)), box-shadow var(--duration-fast, 120ms) var(--ease-premium, cubic-bezier(0.16, 1, 0.3, 1));
 }
 
 .bulkActionSelect:focus {
-  border-color: var(--color-accent, #F2A93C);
+  border-color: var(--color-input-focus, #F2A93C);
+  box-shadow: 0 0 0 3px var(--color-accent-muted, rgba(242,169,60,0.15));
+}
+
+.bulkActionSelect:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .bulkDeleteBtn {
