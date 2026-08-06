@@ -1,10 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Package, Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import {
+  Package, Search, MapPin, Crosshair, CheckCircle2, XCircle, ArrowUpRight,
+  ShieldCheck, FileCheck2, Clock,
+} from 'lucide-react';
 import api from '../services/api/client';
 import styles from './DeliveryProofsPage.module.css';
 import DataTable from '../components/DataTable';
 import { formatDate } from '../services/i18n/formatDate';
+import { useTranslation } from 'react-i18next';
 
 interface DeliveryProof {
   id: string;
@@ -27,15 +32,82 @@ interface DeliveryProof {
   vehicle: { id: string; licensePlate: string; brand: string; model: string } | null;
 }
 
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_DOT_COLORS: Record<string, string> = {
   delivered: '#22c55e',
   failed: '#ef4444',
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  delivered: 'Livré',
-  failed: 'Échoué',
-};
+function useCountUp(target: number, duration = 650) {
+  const [value, setValue] = useState(target);
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setValue(target);
+      return;
+    }
+    let raf: number;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(target * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return value;
+}
+
+function KpiCard({ icon, label, value, color, delay }: {
+  icon: React.ReactNode; label: string; value: number; color: string; delay: number;
+}) {
+  const animated = useCountUp(value);
+  return (
+    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color, animationDelay: `${delay}ms` }}>
+      <div className={styles.kpiTop}>
+        <span className={styles.kpiIcon}>{icon}</span>
+      </div>
+      <div className={styles.kpiValue}>{animated}</div>
+      <div className={styles.kpiLabel}>{label}</div>
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const { t } = useTranslation();
+  const isDelivered = status === 'delivered';
+  return (
+    <span className={`${styles.statusPill} ${isDelivered ? styles.statusPillOk : styles.statusPillBad}`}>
+      <span className={styles.statusPillDot} style={{ background: STATUS_DOT_COLORS[status] }} />
+      {isDelivered ? t('deliveryProofsPage.delivered') : t('deliveryProofsPage.failed')}
+    </span>
+  );
+}
+
+function DistanceCell({ p }: { p: DeliveryProof }) {
+  const { t } = useTranslation();
+  if (p.deliveryProofDistance == null) return <span className={styles.dimText}>{t('deliveryProofsPage.missing')}</span>;
+  const km = (p.deliveryProofDistance / 1000).toFixed(1);
+  const mismatch = p.locationMismatch && !p.mismatchResolved;
+  return (
+    <span className={`${styles.distanceBadge} ${mismatch ? styles.distanceBadgeBad : styles.distanceBadgeOk}`}>
+      {mismatch ? <XCircle size={13} /> : <CheckCircle2 size={13} />}
+      {km} km
+      <span className={styles.distanceHint}>{mismatch ? t('deliveryProofsPage.distance.mismatch') : t('deliveryProofsPage.distance.ok')}</span>
+    </span>
+  );
+}
+
+function GpsCell({ p }: { p: DeliveryProof }) {
+  const { t } = useTranslation();
+  if (!p.deliveryProofLat) return <span className={styles.dimText}>{t('deliveryProofsPage.noProof')}</span>;
+  return (
+    <span className={styles.gpsCode}>
+      <Crosshair size={12} />
+      {p.deliveryProofLat.toFixed(4)}, {p.deliveryProofLng?.toFixed(4)}
+    </span>
+  );
+}
 
 function SkeletonRows() {
   return (
@@ -44,7 +116,7 @@ function SkeletonRows() {
         <tr key={`sk-${i}`} className={styles.skeletonRow}>
           {[40, 30, 25, 20, 20, 20].map((w, j) => (
             <td key={j} className={styles.skeletonCell}>
-              <div className={styles.shimmer} style={{ width: `${w}%` }} />
+              <div className={styles.shimmer} style={{ width: `${w}%`, animationDelay: `${(i + j) * 90}ms` }} />
             </td>
           ))}
         </tr>
@@ -54,6 +126,7 @@ function SkeletonRows() {
 }
 
 export default function DeliveryProofsPage() {
+  const { t } = useTranslation();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -82,38 +155,67 @@ export default function DeliveryProofsPage() {
     return d ? `${d.firstName} ${d.lastName}` : '-';
   };
 
+  const stats = useMemo(() => ({
+    total: meta.total ?? 0,
+    delivered: proofs.filter(p => p.status === 'delivered').length,
+    failed: proofs.filter(p => p.status === 'failed').length,
+    mismatch: proofs.filter(p => p.locationMismatch && !p.mismatchResolved).length,
+  }), [proofs, meta.total]);
+
+  const driverInitials = (p: DeliveryProof) => {
+    const d = p.driver || p.assignedDriver;
+    if (!d) return '?';
+    return `${(d.firstName[0] || '').toUpperCase()}${(d.lastName[0] || '').toUpperCase()}`;
+  };
+
   return (
     <div className={styles.pageContainer}>
-      <div className={styles.headerRow}>
-        <div>
-          <h1 className={styles.pageTitle}>
-            <Package size={22} className={styles.pageTitleIcon} />
-            Preuves de livraison
-          </h1>
-          <p className={styles.pageSubtitle}>
-            {meta.total > 0 ? `${meta.total} confirmation${meta.total > 1 ? 's' : ''}` : 'Historique des validations de livraison'}
-          </p>
+      <header className={styles.pageHeader}>
+        <div className={styles.titleIconChip}><FileCheck2 size={24} /></div>
+        <div className={styles.headerText}>
+          <span className={styles.kicker}>{t('deliveryProofsPage.kicker')}</span>
+          <h1 className={styles.pageTitle}>{t('deliveryProofsPage.title')}</h1>
+          <p className={styles.pageSubtitle}>{t('deliveryProofsPage.subtitle')}</p>
         </div>
+        <div className={styles.verifiedPill}>
+          <ShieldCheck size={14} />
+          {t('deliveryProofsPage.verified')}
+        </div>
+      </header>
+
+      <div className={styles.kpiGrid}>
+        <KpiCard icon={<FileCheck2 size={18} />} label={t('deliveryProofsPage.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" delay={0} />
+        <KpiCard icon={<CheckCircle2 size={18} />} label={t('deliveryProofsPage.kpis.delivered')} value={stats.delivered} color="#22c55e" delay={70} />
+        <KpiCard icon={<XCircle size={18} />} label={t('deliveryProofsPage.kpis.failed')} value={stats.failed} color="#ef4444" delay={140} />
+        <KpiCard icon={<MapPin size={18} />} label={t('deliveryProofsPage.kpis.mismatch')} value={stats.mismatch} color="var(--color-blue, #4A90E2)" delay={210} />
       </div>
 
-      <div className={styles.searchRow}>
+      <div className={styles.filtersRow}>
         <div className={styles.searchInputWrapper}>
           <Search size={14} className={styles.searchIcon} />
           <input
-            placeholder="Rechercher..."
+            placeholder={t('deliveryProofsPage.searchPlaceholder')}
             onChange={(e) => setSearch(e.target.value)}
             className={styles.searchInput}
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className={styles.statusFilterSelect}
-        >
-          <option value="">Tous les statuts</option>
-          <option value="delivered">Livré</option>
-          <option value="failed">Échoué</option>
-        </select>
+        <div className={styles.filterChips}>
+          {[
+            { value: '', label: t('deliveryProofsPage.allStatuses') },
+            { value: 'delivered', label: t('deliveryProofsPage.delivered') },
+            { value: 'failed', label: t('deliveryProofsPage.failed') },
+          ].map((chip) => (
+            <button
+              key={chip.value}
+              onClick={() => { setStatusFilter(chip.value); setPage(1); }}
+              className={`${styles.filterChip} ${statusFilter === chip.value ? styles.filterChipActive : ''}`}
+            >
+              {chip.value === 'delivered' && <span className={styles.chipDot} style={{ background: '#22c55e' }} />}
+              {chip.value === 'failed' && <span className={styles.chipDot} style={{ background: '#ef4444' }} />}
+              {chip.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className={styles.tableContainer}>
@@ -122,7 +224,7 @@ export default function DeliveryProofsPage() {
             <table className={styles.skeletonTable}>
               <thead>
                 <tr className={styles.skeletonTheadTr}>
-                  {['Livraison', 'Chauffeur', 'Statut', 'Écart', 'Preuve GPS', 'Validé le'].map((l) => (
+                  {[t('deliveryProofsPage.table.delivery'), t('deliveryProofsPage.table.driver'), t('deliveryProofsPage.table.status'), t('deliveryProofsPage.table.distance'), t('deliveryProofsPage.table.proof'), t('deliveryProofsPage.table.date')].map((l) => (
                     <th key={l} className={styles.skeletonTh}>{l}</th>
                   ))}
                 </tr>
@@ -131,48 +233,58 @@ export default function DeliveryProofsPage() {
             </table>
           </div>
         ) : (
-          <DataTable
-            columns={[
-              { key: 'title', label: 'Livraison', render: (r: DeliveryProof) => r.title, sortable: true },
-              { key: 'driver', label: 'Chauffeur', render: (r: DeliveryProof) => driverName(r), sortable: true },
-              {
-                key: 'status', label: 'Statut', sortable: true,
-                render: (r: DeliveryProof) => (
-                  <span className={styles.statusText} style={{ color: STATUS_COLORS[r.status] }}>
-                    {STATUS_LABELS[r.status] || r.status}
-                  </span>
-                ),
-              },
-              {
-                key: 'distance', label: 'Écart',
-                render: (r: DeliveryProof) => {
-                  if (r.deliveryProofDistance == null) return '-';
-                  const km = (r.deliveryProofDistance / 1000).toFixed(1);
-                  return (
-                    <span style={{ color: r.locationMismatch ? 'var(--color-red)' : 'var(--color-teal)', fontWeight: r.locationMismatch ? 600 : 400 }}>
-                      {km} km{r.locationMismatch ? ' ⚠️' : ' ✓'}
+          <div className={styles.tableCard}>
+            <DataTable
+              columns={[
+                {
+                  key: 'title', label: t('deliveryProofsPage.table.delivery'), sortable: true,
+                  render: (r: DeliveryProof) => (
+                    <span className={styles.deliveryCell}>
+                      <span className={styles.deliveryIcon}><Package size={14} /></span>
+                      <span className={styles.deliveryText}>
+                        <Link to={`/deliveries/${r.id}`} className={styles.deliveryLink}>{r.title}</Link>
+                        <span className={styles.deliveryAddr}>{r.deliveryAddress}</span>
+                      </span>
+                      <ArrowUpRight size={13} className={styles.deliveryArrow} />
                     </span>
-                  );
+                  ),
                 },
-              },
-              {
-                key: 'proof', label: 'Preuve GPS',
-                render: (r: DeliveryProof) => r.deliveryProofLat ? `${r.deliveryProofLat.toFixed(4)}, ${r.deliveryProofLng?.toFixed(4)}` : '-',
-              },
-              {
-                key: 'completedAt', label: 'Validé le', sortable: true,
-                render: (r: DeliveryProof) => r.completedAt ? formatDate(r.completedAt) : '-',
-              },
-            ]}
-            data={filtered}
-            total={meta.total}
-            page={page}
-            limit={20}
-            onPageChange={setPage}
-            loading={false}
-            emptyMessage="Aucune preuve de livraison"
-            keyExtractor={(r) => r.id}
-          />
+                {
+                  key: 'driver', label: t('deliveryProofsPage.table.driver'), sortable: true,
+                  render: (r: DeliveryProof) => (
+                    <span className={styles.driverCell}>
+                      <span className={styles.driverAvatar}>{driverInitials(r)}</span>
+                      {driverName(r)}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'status', label: t('deliveryProofsPage.table.status'), sortable: true,
+                  render: (r: DeliveryProof) => <StatusPill status={r.status} />,
+                },
+                {
+                  key: 'distance', label: t('deliveryProofsPage.table.distance'),
+                  render: (r: DeliveryProof) => <DistanceCell p={r} />,
+                },
+                {
+                  key: 'proof', label: t('deliveryProofsPage.table.proof'),
+                  render: (r: DeliveryProof) => <GpsCell p={r} />,
+                },
+                {
+                  key: 'completedAt', label: t('deliveryProofsPage.table.date'), sortable: true,
+                  render: (r: DeliveryProof) => r.completedAt ? <span className={styles.dateCell}><Clock size={12} />{formatDate(r.completedAt)}</span> : <span className={styles.dimText}>—</span>,
+                },
+              ]}
+              data={filtered}
+              total={meta.total}
+              page={page}
+              limit={20}
+              onPageChange={setPage}
+              loading={false}
+              emptyMessage={t('deliveryProofsPage.empty')}
+              keyExtractor={(r) => r.id}
+            />
+          </div>
         )}
       </div>
     </div>

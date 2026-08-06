@@ -230,6 +230,41 @@
       }
     }
   },
+  "deliveryProofsPage": {
+    "title": "Delivery proofs",
+    "subtitle": "History of GPS validation for your deliveries",
+    "kicker": "Validation & control",
+    "count": "{{count}} proof",
+    "count_plural": "{{count}} proofs",
+    "verified": "Verified",
+    "searchPlaceholder": "Search delivery, driver…",
+    "allStatuses": "All statuses",
+    "delivered": "Delivered",
+    "failed": "Failed",
+    "kpis": {
+      "total": "Total proofs",
+      "delivered": "Delivered",
+      "failed": "Failed",
+      "mismatch": "GPS deviations"
+    },
+    "table": {
+      "delivery": "Delivery",
+      "driver": "Driver",
+      "status": "Status",
+      "distance": "Deviation",
+      "proof": "GPS proof",
+      "date": "Verified on"
+    },
+    "distance": {
+      "ok": "Compliant",
+      "mismatch": "Deviation detected"
+    },
+    "noProof": "No position",
+    "missing": "—",
+    "empty": "No delivery proofs",
+    "emptyDesc": "GPS proofs appear here after validation",
+    "view": "View"
+  },
   "fleet": {
     "title": "Fleet",
     "subtitle": "Manage your vehicles",

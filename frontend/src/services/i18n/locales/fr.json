@@ -230,6 +230,41 @@
       }
     }
   },
+  "deliveryProofsPage": {
+    "title": "Preuves de livraison",
+    "subtitle": "Historique des validations GPS de vos livraisons",
+    "kicker": "Validation & contrôle",
+    "count": "{{count}} preuve",
+    "count_plural": "{{count}} preuves",
+    "verified": "Vérifié",
+    "searchPlaceholder": "Rechercher une livraison, un chauffeur…",
+    "allStatuses": "Tous les statuts",
+    "delivered": "Livré",
+    "failed": "Échoué",
+    "kpis": {
+      "total": "Total preuves",
+      "delivered": "Livrées",
+      "failed": "Échouées",
+      "mismatch": "Écarts GPS"
+    },
+    "table": {
+      "delivery": "Livraison",
+      "driver": "Chauffeur",
+      "status": "Statut",
+      "distance": "Écart",
+      "proof": "Preuve GPS",
+      "date": "Validé le"
+    },
+    "distance": {
+      "ok": "Conforme",
+      "mismatch": "Écart détecté"
+    },
+    "noProof": "Aucune position",
+    "missing": "—",
+    "empty": "Aucune preuve de livraison",
+    "emptyDesc": "Les preuves GPS apparaissent ici après validation",
+    "view": "Voir"
+  },
   "fleet": {
     "title": "Flotte",
     "subtitle": "Gérez vos véhicules",
