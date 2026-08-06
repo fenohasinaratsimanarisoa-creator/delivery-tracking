@@ -1,15 +1,30 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Bell, BellOff, ArrowRight, X } from 'lucide-react';
+import {
+  Bell, BellOff, ArrowRight, X,
+  MapPin, AlertTriangle, Construction, Antenna, Radio, Ban,
+} from 'lucide-react';
 import type { TrackingStatus, DriverAlert } from '../../hooks/useDriverTracking';
 import styles from './ProximityAlert.module.css';
 
-const URGENCY_CONFIG = {
+const URGENCY_CONFIG: Record<string, { border: string; bg: string }> = {
   normal: { border: 'var(--color-accent, #F2A93C)', bg: 'var(--color-surface, #121B2E)' },
   high: { border: 'var(--color-orange, #E8753C)', bg: 'var(--color-surface, #1A1525)' },
   critical: { border: 'var(--color-red, #E8544C)', bg: 'var(--color-surface, #201015)' },
 };
+
+function alertIcon(type: string): React.ReactNode {
+  switch (type) {
+    case 'proximity': return <MapPin size={16} />;
+    case 'cascade': return <AlertTriangle size={16} />;
+    case 'geofence': return <Construction size={16} />;
+    case 'poor_accuracy': return <Antenna size={16} />;
+    case 'queue_full': return <Radio size={16} />;
+    case 'geo_denied': return <Ban size={16} />;
+    default: return <Bell size={16} />;
+  }
+}
 
 function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingStatus }) {
   const { t } = useTranslation();
@@ -38,27 +53,29 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
     <div className={styles.alertBanner} style={{
       zIndex: 2000 + (urgency === 'critical' ? 10 : urgency === 'high' ? 5 : 0),
       background: colors.bg,
-      border: `2px solid ${colors.border}`,
-      boxShadow: urgency === 'critical' ? '0 0 20px rgba(232,84,76,0.4)' : 'var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5))',
-    }}>
+      border: `1px solid ${colors.border}`,
+      boxShadow: urgency === 'critical' ? '0 0 24px rgba(232,84,76,0.4)' : 'var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5))',
+      '--alert-color': colors.border,
+    } as React.CSSProperties}>
+      <div className={styles.alertGlowLine} />
       <div className={styles.alertHeader}>
-        <div className={styles.alertTitle} style={{ color: colors.border }}>
-          {alert.type === 'proximity' && '📍 '}
-          {alert.type === 'cascade' && '⚠️ '}
-          {alert.type === 'geofence' && '🚧 '}
-          {alert.type === 'poor_accuracy' && '📡 '}
-          {alert.type === 'queue_full' && '📶 '}
-          {alert.type === 'geo_denied' && '🚫 '}
-          {alert.title}
-          {urgency === 'critical' ? ' ⚠️' : ''}
+        <div className={styles.alertTitleRow}>
+          <span className={styles.alertIconChip}>
+            {alertIcon(alert.type)}
+          </span>
+          <div className={styles.alertTitle} style={{ color: colors.border }}>
+            {alert.title}
+          </div>
         </div>
         <div className={styles.alertActions}>
           <button onClick={() => { soundEnabledRef.current = !soundEnabledRef.current; }}
-            className={`${styles.iconBtn} ${soundEnabledRef.current ? styles.soundOn : styles.soundOff}`}>
+            className={`${styles.iconBtn} ${soundEnabledRef.current ? styles.soundOn : styles.soundOff}`}
+            aria-label="Son">
             {soundEnabledRef.current ? <Bell size={16} /> : <BellOff size={16} />}
           </button>
           <button onClick={() => status.dismissAlert(alert.type, alert.deliveryId)}
-            className={styles.dismissBtn}>
+            className={styles.dismissBtn}
+            aria-label="Fermer">
             <X size={16} />
           </button>
         </div>

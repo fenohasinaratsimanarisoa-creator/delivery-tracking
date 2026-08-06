@@ -882,7 +882,9 @@
       "statusUpdated": "Status updated",
       "updateError": "Error updating status",
       "gpsRequired": "Enable location to confirm delivery"
-    }
+    },
+    "hello": "Hello",
+    "live": "Live"
   },
   "myPosition": {
     "title": "My Position",
@@ -953,7 +955,8 @@
     "positionSource": {
       "physicalTracker": "Physical GPS tracker",
       "mobileApp": "Mobile app"
-    }
+    },
+    "subtitle": "Your assigned vehicle and its details."
   },
   "myOrders": {
     "title": "My Orders",

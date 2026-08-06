@@ -1,3 +1,12 @@
+@keyframes dt-alert-in {
+  from { opacity: 0; transform: translateY(-12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alertBanner { animation: none !important; }
+}
+
 .alertBanner {
   position: fixed;
   top: 60px;
@@ -6,78 +15,158 @@
   z-index: 2000;
   max-width: 420px;
   width: calc(100% - 32px);
-  border-radius: var(--radius-lg, 12px);
-  padding: 14px 18px;
+  border-radius: var(--radius-xl, 12px);
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  animation: dt-fade-in-up 0.3s ease-out;
+  backdrop-filter: blur(14px) saturate(1.1);
+  animation: dt-alert-in 0.3s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
+  position: relative;
+  overflow: hidden;
 }
+
+.alertGlowLine {
+  position: absolute;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--alert-color, var(--color-accent)), transparent);
+  opacity: 0.7;
+}
+
 .alertHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
 }
+
+.alertTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .alertTitle {
   font-weight: 700;
   font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+.alertIconChip {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md, 8px);
+  background: color-mix(in srgb, var(--alert-color, var(--color-accent)) 16%, transparent);
+  color: var(--alert-color, var(--color-accent));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .alertActions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
+  flex-shrink: 0;
 }
+
 .iconBtn {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px;
+  padding: 5px;
   display: flex;
+  border-radius: var(--radius-sm, 6px);
+  transition: background var(--duration-fast, 120ms) var(--ease-smooth, ease),
+    transform var(--duration-fast, 120ms) var(--ease-premium, cubic-bezier(0.16,1,0.3,1));
 }
+
+.iconBtn:hover {
+  background: color-mix(in srgb, var(--alert-color, var(--color-accent)) 12%, transparent);
+  transform: translateY(-1px);
+}
+
 .soundOn {
   color: var(--color-text-tertiary);
 }
+
 .soundOff {
   color: var(--color-red);
 }
+
 .dismissBtn {
   background: none;
   border: none;
   cursor: pointer;
   color: var(--color-text-tertiary);
-  padding: 4px;
+  padding: 5px;
   font-size: 0.8rem;
+  display: flex;
+  border-radius: var(--radius-sm, 6px);
+  transition: color var(--duration-fast, 120ms) var(--ease-smooth, ease),
+    background var(--duration-fast, 120ms) var(--ease-smooth, ease),
+    transform var(--duration-fast, 120ms) var(--ease-premium, cubic-bezier(0.16,1,0.3,1));
 }
+
+.dismissBtn:hover {
+  color: var(--color-red, #E8544C);
+  background: var(--color-red-muted, rgba(232,84,76,0.12));
+  transform: translateY(-1px);
+}
+
 .alertMessage {
   margin: 0;
   font-size: 0.8rem;
   color: var(--color-text-secondary);
-  line-height: 1.4;
+  line-height: 1.45;
 }
+
 .alertActionsRow {
   display: flex;
   gap: 8px;
 }
+
 .actionBtn {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 9px 16px;
   flex: 1;
   color: var(--color-bg, #0B1220);
   border: none;
-  border-radius: var(--radius-md, 6px);
-  font-weight: 600;
+  border-radius: var(--radius-md, 8px);
+  font-weight: 700;
   font-size: 0.8rem;
   cursor: pointer;
+  font-family: var(--font-body, Inter, sans-serif);
+  transition: transform var(--duration-fast, 120ms) var(--ease-premium, cubic-bezier(0.16,1,0.3,1)),
+    box-shadow var(--duration-fast, 120ms) var(--ease-smooth, ease),
+    filter var(--duration-fast, 120ms) var(--ease-smooth, ease);
 }
+
+.actionBtn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--alert-color, var(--color-accent)) 35%, transparent);
+}
+
 .actionBtnLight {
   color: #fff;
+  filter: brightness(0.9);
 }
+
 .alertWrapper {
   position: relative;
 }
+
 .alertSpacer {
   height: 8px;
 }

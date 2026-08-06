@@ -1,23 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
-  MapPin,
-  Flag,
-  CalendarDays,
-  Truck,
-  StickyNote,
-  Clock,
-  PackagePlus,
-  PackageCheck,
-  XCircle,
-  Inbox,
+  ClipboardList, MapPin, Flag, CalendarDays, Truck, StickyNote,
+  PackagePlus, PackageCheck, XCircle, Inbox, Loader2, Navigation,
+  Radio, WifiOff, Cpu, AlertTriangle,
 } from 'lucide-react';
 import { formatDate, formatDateShort } from '../services/i18n/formatDate';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
-import Button from '../components/Button';
 import { useDataUpdates } from '../hooks/useDataUpdates';
+import { useAuth } from '../hooks/AuthContext';
+import { useTrackingStatus } from '../services/tracking/TrackingContext';
 import type { Delivery } from '../types';
 import styles from './MyDeliveriesPage.module.css';
 
@@ -47,6 +41,7 @@ export default function MyDeliveriesPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [gpsLoading, setGpsLoading] = useState(false);
 
   // Rafraîchissement temps réel : quand une nouvelle livraison est assignée, le
@@ -109,9 +104,9 @@ export default function MyDeliveriesPage() {
           </div>
         </div>
         <div className={styles.summaryRow}>
-          <div className={`${styles.skeletonCard}`} style={{ minHeight: 84 }} />
-          <div className={`${styles.skeletonCard}`} style={{ minHeight: 84 }} />
-          <div className={`${styles.skeletonCard}`} style={{ minHeight: 84 }} />
+          <div className={styles.skeletonCard} style={{ minHeight: 104 }} />
+          <div className={styles.skeletonCard} style={{ minHeight: 104 }} />
+          <div className={styles.skeletonCard} style={{ minHeight: 104 }} />
         </div>
         <div className={styles.list}>
           {[1, 2, 3].map((i) => (
@@ -126,63 +121,87 @@ export default function MyDeliveriesPage() {
     <div className={styles.pageContainer}>
       <div className={styles.pageHeader}>
         <div className={styles.headerTitleWrap}>
-          <h1 className={styles.pageTitle}>{t('myDeliveries.title')}</h1>
-          <p className={styles.pageSubtitle}>{t('myDeliveries.subtitle')}</p>
+          <div className={styles.headerTop}>
+            <div className={styles.titleIconChip}>
+              <ClipboardList size={18} />
+            </div>
+            <div>
+              <h1 className={styles.pageTitle}>{t('myDeliveries.title')}</h1>
+              <p className={styles.pageSubtitle}>{t('myDeliveries.subtitle')}</p>
+            </div>
+          </div>
+          {user?.firstName && (
+            <p className={styles.hello}>{t('myDeliveries.hello')}, {user.firstName}.</p>
+          )}
         </div>
-        <span className={styles.liveBadge}>
-          <span className={styles.liveDot} />
-          {t('myDeliveries.title')}
-        </span>
+        <LivePill />
       </div>
 
       <div className={styles.summaryRow}>
-        <div className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>{t('myDeliveries.summary.toTake')}</span>
-          <span className={`${styles.summaryValue} ${styles.summaryValueAccent}`}>{toTakeCount}</span>
-        </div>
-        <div className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>{t('myDeliveries.summary.inProgress')}</span>
-          <span className={styles.summaryValue}>{activeCount}</span>
-        </div>
-        <div className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>{t('myDeliveries.summary.done')}</span>
-          <span className={`${styles.summaryValue} ${styles.summaryValueTeal}`}>{doneCount}</span>
-        </div>
+        <SummaryCard
+          icon={<PackagePlus size={16} />}
+          label={t('myDeliveries.summary.toTake')}
+          value={toTakeCount}
+          color="var(--color-accent)"
+        />
+        <SummaryCard
+          icon={<Navigation size={16} />}
+          label={t('myDeliveries.summary.inProgress')}
+          value={activeCount}
+          color="var(--color-blue)"
+        />
+        <SummaryCard
+          icon={<PackageCheck size={16} />}
+          label={t('myDeliveries.summary.done')}
+          value={doneCount}
+          color="var(--color-teal)"
+        />
       </div>
 
       {sorted.length === 0 && (
         <div className={styles.emptyState}>
-          <span className={styles.emptyIcon}><Inbox size={26} /></span>
+          <div className={styles.emptyIcon}><Inbox size={28} /></div>
           <p className={styles.emptyTitle}>{t('myDeliveries.title')}</p>
           <p className={styles.emptyText}>{t('myDeliveries.empty')}</p>
         </div>
       )}
 
       <div className={styles.list}>
-        {sorted.map((d) => {
+        {sorted.map((d, i) => {
           const isActive = d.status === 'in_progress';
           const isPending = d.status === 'assigned';
           return (
             <div
               key={d.id}
-              className={`${styles.deliveryCard} ${isActive ? styles.deliveryCardActive : ''}`}
+              className={`${styles.deliveryCard}${isActive ? ` ${styles.deliveryCardActive}` : ''}${isPending ? ` ${styles.deliveryCardPending}` : ''}`}
+              style={{ animationDelay: `${Math.min(i, 6) * 60}ms` } as CSSProperties}
             >
               {(isActive || isPending) && (
                 <span className={`${styles.accentBar} ${isPending ? styles.accentBarAmber : ''}`} />
               )}
+              <div className={styles.cardGlowLine} />
 
               <div className={styles.cardTop}>
-                <div className={styles.cardTitleRow}>
+                <div className={styles.cardIdentity}>
+                  <div className={styles.cardTagRow}>
+                    <StatusBadge status={d.status} />
+                    {isActive && (
+                      <span className={styles.activePulse}>
+                        <span className={styles.activePulseDot} />
+                        {t('myDeliveries.live')}
+                      </span>
+                    )}
+                  </div>
                   <h3 className={styles.cardTitle}>{d.title}</h3>
-                  <StatusBadge status={d.status} />
                 </div>
                 <span className={styles.cardTime}>
-                  <Clock size={11} /> {formatDateShort(d.createdAt)}
+                  <ClockIcon />
+                  {formatDateShort(d.createdAt)}
                 </span>
               </div>
 
-              <div className={styles.addressList}>
-                <div className={styles.addressRow}>
+              <div className={styles.route}>
+                <div className={styles.routeStop}>
                   <span className={`${styles.addressIcon} ${styles.addressIconPickup}`}>
                     <MapPin size={15} />
                   </span>
@@ -191,7 +210,11 @@ export default function MyDeliveriesPage() {
                     <span className={styles.addressText}>{d.pickupAddress}</span>
                   </span>
                 </div>
-                <div className={styles.addressRow}>
+                <div className={styles.routeConnector}>
+                  <span className={styles.routeLine} />
+                  <span className={styles.routeFlow} />
+                </div>
+                <div className={styles.routeStop}>
                   <span className={`${styles.addressIcon} ${styles.addressIconDrop}`}>
                     <Flag size={15} />
                   </span>
@@ -202,19 +225,22 @@ export default function MyDeliveriesPage() {
                 </div>
               </div>
 
-              {d.scheduledDate && (
-                <div className={styles.infoRow}>
-                  <CalendarDays size={15} className={styles.infoIcon} />
-                  {t('myDeliveries.scheduled')} {formatDate(d.scheduledDate)}
-                </div>
-              )}
-
-              {d.vehicle && (
-                <div className={styles.infoRow}>
-                  <Truck size={15} className={styles.infoIcon} />
-                  {d.vehicle.brand} {d.vehicle.model} ({d.vehicle.licensePlate})
-                </div>
-              )}
+              <div className={styles.infoRowWrap}>
+                {d.scheduledDate && (
+                  <div className={styles.infoRow}>
+                    <CalendarDays size={14} className={styles.infoIcon} />
+                    <span>{t('myDeliveries.scheduled')}</span>
+                    <span className={styles.infoValue}>{formatDate(d.scheduledDate)}</span>
+                  </div>
+                )}
+                {d.vehicle && (
+                  <div className={styles.infoRow}>
+                    <Truck size={14} className={styles.infoIcon} />
+                    <span>{d.vehicle.brand} {d.vehicle.model}</span>
+                    <span className={styles.plateChip}>{d.vehicle.licensePlate}</span>
+                  </div>
+                )}
+              </div>
 
               {d.notes && (
                 <div className={styles.notesBox}>
@@ -238,6 +264,65 @@ export default function MyDeliveriesPage() {
   );
 }
 
+function ClockIcon() {
+  return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+}
+
+function LivePill() {
+  const { t } = useTranslation();
+  const status = useTrackingStatus();
+
+  const isPhysical = status.positionSource === 'physical_tracker';
+  if (isPhysical) {
+    return (
+      <span className={`${styles.livePill} ${styles.pillTeal}`}>
+        <Cpu size={13} />
+        {t('trackingIndicator.physicalTracker')}
+        <span className={styles.pillPing} />
+      </span>
+    );
+  }
+  if (status.geolocationDenied) {
+    return (
+      <span className={`${styles.livePill} ${styles.pillRed}`}>
+        <AlertTriangle size={13} />
+        {t('trackingIndicator.gpsBlocked')}
+      </span>
+    );
+  }
+  if (!status.active) {
+    return (
+      <span className={`${styles.livePill} ${styles.pillMuted}`}>
+        <Radio size={13} />
+        {t('trackingIndicator.gpsPending')}
+      </span>
+    );
+  }
+  if (!status.position) {
+    return (
+      <span className={`${styles.livePill} ${styles.pillAmber}`}>
+        <Radio size={13} />
+        {t('trackingIndicator.searching')}
+      </span>
+    );
+  }
+  if (status.poorAccuracy) {
+    return (
+      <span className={`${styles.livePill} ${styles.pillAmber}`}>
+        <WifiOff size={13} />
+        {t('trackingIndicator.poorAccuracy')}
+      </span>
+    );
+  }
+  return (
+    <span className={`${styles.livePill} ${styles.pillTeal}`}>
+      <Navigation size={13} />
+      {status.isStationary ? t('trackingIndicator.stationary') : t('trackingIndicator.moving')}
+      <span className={styles.pillPing} />
+    </span>
+  );
+}
+
 function StatusBadge({ status }: { status: string }) {
   const { t } = useTranslation();
   const classMap: Record<string, string> = {
@@ -258,6 +343,7 @@ function StatusBadge({ status }: { status: string }) {
   };
   return (
     <span className={`${styles.statusBadge} ${classMap[status] || styles.statusCancelled}`}>
+      <span className={styles.badgeDot} />
       {labelMap[status] || status}
     </span>
   );
@@ -268,42 +354,78 @@ function ActionButtons({ status, loading, onAction }: { status: string; loading:
 
   if (status === 'assigned') {
     return (
-      <Button
-        variant="primary"
-        size="sm"
-        loading={loading}
-        icon={<PackagePlus size={14} />}
+      <button
+        type="button"
+        disabled={loading}
         onClick={() => onAction('in_progress')}
+        className={`${styles.actionBtn} ${styles.actionPrimary}`}
       >
+        {loading ? <Loader2 size={15} className={styles.spinner} /> : <PackagePlus size={15} />}
         {t('myDeliveries.actions.takeCharge')}
-      </Button>
+      </button>
     );
   }
 
   if (status === 'in_progress') {
     return (
       <>
-        <Button
-          variant="outline"
-          size="sm"
-          loading={loading}
-          icon={<PackageCheck size={14} />}
+        <button
+          type="button"
+          disabled={loading}
           onClick={() => onAction('delivered')}
+          className={`${styles.actionBtn} ${styles.actionSuccess}`}
         >
+          {loading ? <Loader2 size={15} className={styles.spinner} /> : <PackageCheck size={15} />}
           {t('myDeliveries.actions.deliver')}
-        </Button>
-        <Button
-          variant="danger"
-          size="sm"
-          loading={loading}
-          icon={<XCircle size={14} />}
+        </button>
+        <button
+          type="button"
+          disabled={loading}
           onClick={() => onAction('failed')}
+          className={`${styles.actionBtn} ${styles.actionDanger}`}
         >
+          {loading ? <Loader2 size={15} className={styles.spinner} /> : <XCircle size={15} />}
           {t('myDeliveries.actions.fail')}
-        </Button>
+        </button>
       </>
     );
   }
 
   return null;
+}
+
+function useCountUp(target: number, duration = 600) {
+  const [value, setValue] = useState(target);
+  useEffect(() => {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) {
+      setValue(target);
+      return;
+    }
+    let raf: number;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(target * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return value;
+}
+
+function SummaryCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) {
+  const animated = useCountUp(value);
+  const cardStyle = { '--kpi': color, '--kpi-muted': `${color}1a` } as CSSProperties;
+  return (
+    <div className={styles.summaryCard} style={cardStyle}>
+      <div className={styles.summaryTop}>
+        <div className={styles.summaryIcon}>{icon}</div>
+      </div>
+      <span className={styles.summaryLabel}>{label}</span>
+      <span className={styles.summaryValue}>{animated}</span>
+    </div>
+  );
 }
