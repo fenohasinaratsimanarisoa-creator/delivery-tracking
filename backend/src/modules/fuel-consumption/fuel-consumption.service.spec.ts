@@ -381,6 +381,92 @@ describe('FuelConsumptionService', () => {
   });
 
   // ----------------------------------------------------------------
+  // POINT 1 — Couverture GPS insuffisante (gpsKm <= 0) : signal explicite au lieu du silence
+  // ----------------------------------------------------------------
+  describe('Point 1 — crossCheckFuelLogWithGps quand gpsKm <= 0', () => {
+    it('écrit gpsCoverageInsufficientFlag + notification quand AUCUNE position GPS sur la période', async () => {
+      const fuelLog = {
+        id: 'fuel-log-nogps',
+        vehicleId: 'vehicle-a',
+        kilometers: 500,
+        fillDate: new Date('2026-07-25'),
+        vehicle: { licensePlate: 'TRK-A' },
+        gpsCoverageInsufficientFlag: false,
+        gpsCoverageInsufficientReason: null,
+      };
+      // Aucun plein précédent → période = 30 jours. Aucun dailyFuelReport → gpsKm = 0.
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({ _sum: { distanceKm: 0 } });
+
+      await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
+
+      // AVANT correctif : aucun update, aucune notification (silence complet).
+      // APRÈS correctif : flag dédié + raison explicite + notification medium.
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith({
+        where: { id: 'fuel-log-nogps' },
+        data: {
+          gpsCoverageInsufficientFlag: true,
+          gpsCoverageInsufficientReason: expect.stringContaining('Aucune position GPS enregistrée'),
+        },
+      });
+      expect(mockNotifications.create).toHaveBeenCalledWith(
+        'company-1',
+        expect.objectContaining({
+          type: 'fuel_gps_coverage_missing',
+          priority: 'medium',
+        }),
+      );
+    });
+
+    it('ne pose PAS le flag quand gpsKm est suffisant et cohérent (pas de faux positif)', async () => {
+      const fuelLog = {
+        id: 'fuel-log-ok',
+        vehicleId: 'vehicle-a',
+        kilometers: 100,
+        fillDate: new Date('2026-07-25'),
+        vehicle: { licensePlate: 'TRK-A' },
+        gpsCoverageInsufficientFlag: false,
+      };
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({ fillDate: new Date('2026-07-20') });
+      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({ _sum: { distanceKm: 90 } });
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({ crossCheckThreshold: 1.3 });
+
+      await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
+
+      // ratio 100/90 = 1.11 < 1.3 → aucune anomalie GPS, AUCUN flag couverture.
+      expect(mockPrisma.fuelLog.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ gpsCoverageInsufficientFlag: true }),
+        }),
+      );
+      expect(mockNotifications.create).not.toHaveBeenCalled();
+    });
+
+    it('remet le flag couverture à false quand gpsKm > 0 (flag obsolète d’un check précédent)', async () => {
+      const fuelLog = {
+        id: 'fuel-log-recover',
+        vehicleId: 'vehicle-a',
+        kilometers: 100,
+        fillDate: new Date('2026-07-25'),
+        vehicle: { licensePlate: 'TRK-A' },
+        gpsCoverageInsufficientFlag: true,
+        gpsCoverageInsufficientReason: 'ancienne raison',
+      };
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({ fillDate: new Date('2026-07-20') });
+      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({ _sum: { distanceKm: 90 } });
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({ crossCheckThreshold: 1.3 });
+
+      await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
+
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith({
+        where: { id: 'fuel-log-recover' },
+        data: { gpsCoverageInsufficientFlag: false, gpsCoverageInsufficientReason: null },
+      });
+      expect(mockNotifications.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // ----------------------------------------------------------------
   // Existing tests (must continue to pass)
   // ----------------------------------------------------------------
   describe('create (existing)', () => {
@@ -629,6 +715,8 @@ describe('FuelConsumptionService', () => {
           consumptionAnomalyReason: null,
           gpsAnomalyFlag: false,
           gpsAnomalyReason: null,
+          gpsCoverageInsufficientFlag: false,
+          gpsCoverageInsufficientReason: null,
         },
         include: { vehicle: true },
       });

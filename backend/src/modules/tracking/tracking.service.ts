@@ -635,6 +635,10 @@ export class TrackingService {
       }
     }
 
+    // 1er passage : ne garder que les positions VALIDES (IDs bien formés, livraison du bon
+    // chauffeur, véhicule actif). Le tri chronologique s'applique à ce sous-ensemble, pas
+    // aux données qui seront de toute façon rejetées (inutile de trier du bruit).
+    const validPositions: typeof positions = [];
     for (const pos of positions) {
       try {
         if (pos.deliveryId && !verifiedDeliveries.has(pos.deliveryId)) {
@@ -661,6 +665,25 @@ export class TrackingService {
         continue;
       }
 
+      validPositions.push(pos);
+    }
+
+    // Tri chronologique (copie) APRÈS le filtrage, AVANT tout calcul de dédoublonnage et de
+    // téléportation. Le flux batchPosition (TrackingGateway.handleBatchPosition) est le
+    // rattrapage réseau de l'app mobile : l'ordre d'arrivée n'est PAS garanti
+    // chronologique. Sans ce tri, une position antérieure à la première traitée est rejetée
+    // à tort comme doublon (timeDiffSec négatif) et les vitesses entre points non-consécutifs
+    // deviennent absurdes (>200 km/h) — ce qui polluait suspect et, en aval, les distances
+    // carburant (filtres suspect=false). verifiedDeliveries/validVehicleIds sont des Set
+    // indépendants de l'ordre (aucune casse de correspondance). Cas limite : deux positions
+    // au timestamp STRICTEMENT identique — le tri les conserve toutes les deux ; la 2e est
+    // rejetée par le dédoublonnage timeDiffSec <= DEDUP_CLOCK_SKEW_S, même fenêtre de 1s que
+    // isDuplicateByTimestamp du chemin temps réel (comportement cohérent, pas de doublon).
+    const sorted = [...validPositions].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    );
+
+    for (const pos of sorted) {
       const ts = new Date(pos.timestamp);
       const last = lastPositions.get(pos.vehicleId);
 

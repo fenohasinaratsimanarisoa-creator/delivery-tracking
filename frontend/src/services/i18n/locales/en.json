@@ -443,6 +443,7 @@
     },
     "anomaly": "⚠️ Anomaly",
     "normal": "✓ Normal",
+    "nonVerifiable": "❔ Not verifiable",
     "helpTitle": "Understanding both records",
     "helpManual": "• Manual entry: real fuel fill-ups recorded by the team (liters, cost, mileage). Used to track actual fuel expenses.",
     "helpGps": "• GPS Report: automatic estimation based on vehicle GPS positions. Uses the vehicle's theoretical consumption to estimate costs. Complements manual entries.",

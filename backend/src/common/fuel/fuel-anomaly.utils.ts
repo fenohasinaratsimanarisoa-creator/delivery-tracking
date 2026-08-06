@@ -10,9 +10,15 @@ export interface FuelAnomalySource {
   gpsAnomalyFlag?: boolean | null;
   consumptionAnomalyReason?: string | null;
   gpsAnomalyReason?: string | null;
+  // Paire dédiée à l'ABSENCE de couverture GPS sur la période du cross-check.
+  // Volontairement EXCLUE de hasFuelAnomaly()/getFuelAnomalyReason() : un manque de
+  // données GPS n'est pas une anomalie confirmée, c'est une absence de preuve — le
+  // frontend doit pouvoir l'afficher différemment (« ❔ Non vérifiable » vs « ⚠️ Anomalie »).
+  gpsCoverageInsufficientFlag?: boolean | null;
+  gpsCoverageInsufficientReason?: string | null;
 }
 
-/** true si au moins l'un des deux détecteurs a signalé une anomalie. */
+/** true si au moins l'un des deux détecteurs a signalé une anomalie confirmée. */
 export function hasFuelAnomaly(log: FuelAnomalySource): boolean {
   return !!(log.consumptionAnomalyFlag || log.gpsAnomalyFlag);
 }

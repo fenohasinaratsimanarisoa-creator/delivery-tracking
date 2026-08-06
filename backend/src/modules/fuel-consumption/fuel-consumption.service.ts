@@ -210,6 +210,8 @@ export class FuelConsumptionService {
       data.consumptionAnomalyReason = null;
       data.gpsAnomalyFlag = false;
       data.gpsAnomalyReason = null;
+      data.gpsCoverageInsufficientFlag = false;
+      data.gpsCoverageInsufficientReason = null;
     }
 
     const updated = await this.prisma.fuelLog.update({
@@ -764,9 +766,55 @@ export class FuelConsumptionService {
     });
 
     const gpsKm = gpsDistance._sum?.distanceKm || 0;
-    if (gpsKm <= 0) return;
-
     const manualKm = fuelLog.kilometers;
+
+    if (gpsKm <= 0) {
+      // Aucune donnée GPS exploitable sur la période (GPS téléphone coupé, permission
+      // refusée, traceur physique débranché/hors ligne, ou rapports jamais générés) :
+      // le kilométrage saisi est TOTALEMENT invérifiable. Avant cette correction, la
+      // fonction retournait SILENCIEUSEMENT — un plein sans aucune trace GPS devenait
+      // indistinguable d'un plein cohérent (faille de fraude). On émet désormais un
+      // signal explicite d'« impossibilité de vérifier », distinct d'une anomalie
+      // confirmée (sémantique ≠ gpsAnomalyFlag), via une paire de champs dédiée + une
+      // notification de priorité medium. On n'écrit/ne notifie que si le flag n'est pas
+      // déjà posé : éviter les écritures/notifications redondantes à chaque create/update.
+      const reason = `Aucune position GPS enregistrée pour ce véhicule entre ${periodStart.toISOString().slice(0, 10)} et ${periodEnd.toISOString().slice(0, 10)} — kilométrage saisi non vérifiable (${manualKm} km déclarés).`;
+      if (!fuelLog.gpsCoverageInsufficientFlag) {
+        await this.prisma.fuelLog.update({
+          where: { id: fuelLog.id },
+          data: {
+            gpsCoverageInsufficientFlag: true,
+            gpsCoverageInsufficientReason: reason,
+          },
+        });
+        await this.notifications.create(companyId, {
+          type: NotificationType.fuel_gps_coverage_missing,
+          priority: NotificationPriority.medium,
+          title: 'Couverture GPS insuffisante',
+          message:
+            `Vehicle ${fuelLog.vehicle?.licensePlate || fuelLog.vehicleId}: aucun kilométrage GPS vérifiable entre ` +
+            `${periodStart.toISOString().slice(0, 10)} et ${periodEnd.toISOString().slice(0, 10)} (${manualKm} km déclarés).`,
+          link: `/fuel-consumption`,
+          deliveryId: undefined,
+        });
+      }
+      return;
+    }
+
+    // gpsKm > 0 : la vérification est possible. Si un flag « couverture insuffisante »
+    // obsolète traînait d'un check précédent (ex. le GPS a été backfillé / le rapport
+    // généré depuis), on le remet à zéro — ne pas laisser un flag périmé (même logique
+    // que le reset des flags dans update()).
+    if (fuelLog.gpsCoverageInsufficientFlag) {
+      await this.prisma.fuelLog.update({
+        where: { id: fuelLog.id },
+        data: {
+          gpsCoverageInsufficientFlag: false,
+          gpsCoverageInsufficientReason: null,
+        },
+      });
+    }
+
     const ratio = manualKm / gpsKm;
 
     // Seuil de tolérance configurable : CompanyFuelSettings.crossCheckThreshold

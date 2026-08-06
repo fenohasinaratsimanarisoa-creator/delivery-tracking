@@ -18,6 +18,7 @@ import {
   Info,
   Inbox,
   CheckCircle2,
+  HelpCircle,
 } from 'lucide-react';
 import api from '../services/api/client';
 import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
@@ -528,9 +529,25 @@ export default function FuelPage() {
                           <td className={`${styles.tableCellMono} ${styles.tableCellRight}`}>{l.cost.toFixed(2)} €</td>
                           <td className={styles.tableCell}>{new Date(l.fillDate).toLocaleDateString(i18n.language)}</td>
                           <td className={styles.tableCell}>
-                            {l.anomalyFlag
-                              ? <span className={`${styles.badge} ${styles.badgeAnomaly}`}><AlertTriangle size={12} /> {t('fuel.anomaly')}</span>
-                              : <span className={`${styles.badge} ${styles.badgeNormal}`}><CheckCircle2 size={12} /> {t('fuel.normal')}</span>}
+                            {l.anomalyFlag ? (
+                              <span className={`${styles.badge} ${styles.badgeAnomaly}`}>
+                                <AlertTriangle size={12} /> {t('fuel.anomaly')}
+                              </span>
+                            ) : l.gpsCoverageInsufficientFlag ? (
+                              // Signal « non vérifiable » : couverture GPS absente sur la
+                              // période (gpsCoverageInsufficientFlag), affiché en neutre
+                              // (gris), distinct du rouge des anomalies confirmées.
+                              <span
+                                className={`${styles.badge} ${styles.badgeMuted}`}
+                                title={l.gpsCoverageInsufficientReason ?? undefined}
+                              >
+                                <HelpCircle size={12} /> {t('fuel.nonVerifiable')}
+                              </span>
+                            ) : (
+                              <span className={`${styles.badge} ${styles.badgeNormal}`}>
+                                <CheckCircle2 size={12} /> {t('fuel.normal')}
+                              </span>
+                            )}
                           </td>
                           <td className={`${styles.tableCell} ${styles.tableCellRight}`}>
                             <div className={styles.actionsRow}>

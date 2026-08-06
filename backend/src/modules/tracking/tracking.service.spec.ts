@@ -853,6 +853,186 @@ describe('TrackingService', () => {
       expect(saved).toHaveLength(0);
       expect(mockPrisma.gpsPosition.createMany).not.toHaveBeenCalled();
     });
+
+    it('trie le lot par timestamp croissant AVANT le calcul (pas de doublon/vitesse à tort sur lot désordonné)', async () => {
+      const base = Date.parse('2026-07-21T10:00:00.000Z');
+      // Lot volontairement désordonné (scénario nominal du rattrapage réseau de l'app
+      // mobile : l'ordre d'arrivée n'est pas chronologique). Le point le plus récent
+      // (t=+20s) arrive en premier ; les vitesses réelles sont réalistes (< 55.56 m/s).
+      const positions = [
+        {
+          latitude: 0,
+          longitude: 0.001,
+          timestamp: new Date(base + 20000).toISOString(),
+          vehicleId: VID1,
+        }, // t=+20s
+        { latitude: 0, longitude: 0, timestamp: new Date(base + 0).toISOString(), vehicleId: VID1 }, // t=+0s
+        {
+          latitude: 0,
+          longitude: 0.0012,
+          timestamp: new Date(base + 10000).toISOString(),
+          vehicleId: VID1,
+        }, // t=+10s
+      ];
+
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VID1 }]);
+      // lastPositions (aucune position en base) puis lecture des positions insérées.
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+      let inserted: any[] = [];
+      mockPrisma.gpsPosition.createMany.mockImplementation(async ({ data }: any) => {
+        inserted = data;
+        return { count: data.length };
+      });
+
+      await service.saveBatch('user-1', 'driver-1', positions as any);
+
+      // Les 3 positions doivent être insérées : sans tri, les points antérieurs à la
+      // première position traitée (t=+20s) sont rejetés à tort comme doublons.
+      expect(mockPrisma.gpsPosition.createMany).toHaveBeenCalledTimes(1);
+      expect(inserted).toHaveLength(3);
+      const byTime = new Map(inserted.map((p) => [new Date(p.timestamp).getTime(), p]));
+      // Aucune vitesse absurde (>200 km/h) → aucune position suspecte à tort.
+      expect(byTime.get(base + 0)!.suspect).toBe(false);
+      expect(byTime.get(base + 10000)!.suspect).toBe(false);
+      expect(byTime.get(base + 20000)!.suspect).toBe(false);
+    });
+  });
+
+  // ─── Point 3 — Équivalence du champ `suspect` entre savePosition et saveBatch ───
+  // Preuve que la divergence décrite (batch n'appliquant que la règle de vitesse) ne
+  // produit AUCUNE différence binaire observable sur `suspect` avec les constantes
+  // actuelles : le « sursaut court » (distance > 5000×scale ET Δt < 10s) implique
+  // speed = distance/Δt > 500×scale > 55.56×scale → TOUJOURS couvert par la règle de
+  // vitesse ; les timestamps non croissants sont rejetés par le dédoublonnage (1s) dans
+  // les DEUX chemins ; l'exemption de changement de source est inapplicable au batch
+  // (flux phone-only). Ce test compare les deux chemins sur un même couple (référence,
+  // point) et vérifie que `suspect` est identique — c'est un garde de non-régression.
+  describe('Point 3 — équivalence suspect savePosition vs saveBatch', () => {
+    const VID = '00000000-0000-4000-0000-000000000001';
+    const DRIVER = '00000000-0000-4000-0000-000000000002';
+    const BASE = Date.parse('2026-07-21T10:00:00.000Z');
+
+    // Chemin batch : lot [P1, P2] (base vide), renvoie le suspect du 2e point inséré.
+    async function batchSecondSuspect(P1: any, P2: any): Promise<boolean | null> {
+      // Reset ciblé : des tests antérieurs du fichier peuvent laisser des once-values
+      // non consommées (clearAllMocks ne vide pas les files de mockImplementationOnce).
+      mockPrisma.gpsPosition.findFirst.mockReset();
+      mockPrisma.gpsPosition.create.mockReset();
+      mockPrisma.gpsPosition.createMany.mockReset();
+      mockPrisma.gpsPosition.findMany.mockReset();
+      mockPrisma.vehicle.findMany.mockReset();
+      mockPrisma.vehicle.findFirst.mockReset();
+      mockPrisma.vehicle.findFirst.mockResolvedValue({ companyId: 'company-1' });
+      mockPrisma.delivery.findMany.mockReset();
+      mockPrisma.delivery.findMany.mockResolvedValue([]);
+
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VID }]);
+      mockPrisma.gpsPosition.findMany
+        .mockResolvedValueOnce([]) // lastPositions : aucune position en base
+        .mockResolvedValueOnce([]); // lecture des positions insérées
+      const inserted: any[] = [];
+      mockPrisma.gpsPosition.createMany.mockImplementation(async ({ data }: any) => {
+        inserted.push(...data);
+        return { count: data.length };
+      });
+      await service.saveBatch('user-1', DRIVER, [P1, P2] as any);
+      return inserted.length >= 2 ? inserted[1].suspect : null;
+    }
+
+    // Chemin temps réel : deux savePosition séquentiels, renvoie le suspect du 2e point.
+    async function singleSecondSuspect(P1: any, P2: any): Promise<boolean | null> {
+      mockPrisma.gpsPosition.findFirst.mockReset();
+      mockPrisma.gpsPosition.create.mockReset();
+      mockPrisma.gpsPosition.createMany.mockReset();
+      mockPrisma.gpsPosition.findMany.mockReset();
+      mockPrisma.vehicle.findMany.mockReset();
+      mockPrisma.vehicle.findFirst.mockReset();
+      mockPrisma.vehicle.findFirst.mockResolvedValue({ companyId: 'company-1' });
+      mockPrisma.delivery.findMany.mockReset();
+
+      let secondSuspect: boolean | null = null;
+      for (const [i, pos] of [P1, P2].entries()) {
+        // Implémentation à compteur local (robuste en suite complète : pas de once-queue
+        // fragile face aux appels résiduels). Appel #1 = isDuplicateByTimestamp, appel #2+
+        // = getLastPosition / éventuelle exemption intra-source.
+        let findFirstCalls = 0;
+        mockPrisma.gpsPosition.findFirst.mockImplementation(async () => {
+          findFirstCalls++;
+          if (findFirstCalls === 1) return null; // isDuplicateByTimestamp : jamais un doublon
+          return i === 0
+            ? null
+            : {
+                latitude: P1.latitude,
+                longitude: P1.longitude,
+                timestamp: new Date(P1.timestamp),
+                source: 'phone',
+              };
+        });
+        mockPrisma.gpsPosition.create.mockImplementation(async ({ data }: any) => {
+          if (i === 1) secondSuspect = data.suspect;
+          return { id: `gps-${i}`, suspect: data.suspect, timestamp: data.timestamp };
+        });
+        await service.savePosition(
+          DRIVER,
+          {
+            latitude: pos.latitude,
+            longitude: pos.longitude,
+            timestamp: pos.timestamp,
+            vehicleId: VID,
+            accuracy: pos.accuracy,
+          } as any,
+          'company-1',
+        );
+      }
+      return secondSuspect;
+    }
+
+    const cases: Array<{ name: string; P1: any; P2: any }> = [
+      {
+        name: 'vitesse brute (téléportation claire)',
+        P1: { latitude: 0, longitude: 0, timestamp: new Date(BASE).toISOString(), vehicleId: VID },
+        // ~1112 m en 5s = 222 m/s > 55.56 → suspect dans les deux chemins.
+        P2: {
+          latitude: 0,
+          longitude: 0.01,
+          timestamp: new Date(BASE + 5000).toISOString(),
+          vehicleId: VID,
+        },
+      },
+      {
+        name: 'sursaut court (grande distance, temps court)',
+        P1: { latitude: 0, longitude: 0, timestamp: new Date(BASE).toISOString(), vehicleId: VID },
+        // ~6672 m en 9s : remplit les conditions du sursaut court (>5000m, Δt<10s)
+        // MAIS speed = 741 m/s > 55.56 → déjà couvert par la règle de vitesse.
+        P2: {
+          latitude: 0,
+          longitude: 0.06,
+          timestamp: new Date(BASE + 9000).toISOString(),
+          vehicleId: VID,
+        },
+      },
+      {
+        name: 'déplacement réaliste (aucun suspect)',
+        P1: { latitude: 0, longitude: 0, timestamp: new Date(BASE).toISOString(), vehicleId: VID },
+        // ~111 m en 10s = 11 m/s < 55.56 → non suspect dans les deux chemins.
+        P2: {
+          latitude: 0,
+          longitude: 0.001,
+          timestamp: new Date(BASE + 10000).toISOString(),
+          vehicleId: VID,
+        },
+      },
+    ];
+
+    it.each(cases)(
+      '$name → suspect identique entre savePosition et saveBatch',
+      async ({ P1, P2 }) => {
+        const batchS = await batchSecondSuspect(P1, P2);
+        const singleS = await singleSecondSuspect(P1, P2);
+        expect(singleS).not.toBeNull();
+        expect(batchS).toBe(singleS);
+      },
+    );
   });
 
   it('lists positions for a delivery in company scope', async () => {

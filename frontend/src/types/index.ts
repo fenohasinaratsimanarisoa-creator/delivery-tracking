@@ -122,6 +122,11 @@ export interface FuelLog {
   consumptionAnomalyReason?: string | null;
   gpsAnomalyFlag?: boolean;
   gpsAnomalyReason?: string | null;
+  // Couverture GPS insuffisante : signal distinct d'une anomalie confirmée (« non
+  // vérifiable »), exposé séparément par withDerivedAnomaly (jamais fusionné dans
+  // anomalyFlag) pour un affichage neutre côté frontend.
+  gpsCoverageInsufficientFlag?: boolean;
+  gpsCoverageInsufficientReason?: string | null;
   calculatedConsumption: number | null;
   notes?: string;
   vehicleId?: string;

@@ -50,6 +50,7 @@ enum GpsPositionSource {
 enum NotificationType {
   delivery_status
   fuel_anomaly
+  fuel_gps_coverage_missing
   maintenance_due
   system
   speed_alert
@@ -554,23 +555,30 @@ model VehicleAssignmentHistory {
 /// Seule l'entreprise peut être soft-deleted (deletedAt), les lignes FuelLog
 /// sont anonymisées via le job company-purge (BullMQ) après le délai de grâce.
 model FuelLog {
-  id                       String   @id @default(uuid()) @db.Uuid
-  liters                   Float
-  kilometers               Float
-  cost                     Float
-  fuelUnit                 FuelUnit @default(liters) @map("fuel_unit")
-  fillDate                 DateTime @map("fill_date")
-  notes                    String?
+  id                            String   @id @default(uuid()) @db.Uuid
+  liters                        Float
+  kilometers                    Float
+  cost                          Float
+  fuelUnit                      FuelUnit @default(liters) @map("fuel_unit")
+  fillDate                      DateTime @map("fill_date")
+  notes                         String?
   // Deux paires de champs indépendantes : chaque détecteur écrit sa propre paire
   // sans jamais écraser l'autre. anomalyFlag/anomalyReason NE sont PLUS stockés :
   // ils sont dérivés en lecture (consumption OR gps) et exposés en lecture seule
   // dans les DTOs de réponse (voir common/fuel/fuel-anomaly.utils.ts).
-  consumptionAnomalyFlag   Boolean  @default(false) @map("consumption_anomaly_flag")
-  consumptionAnomalyReason String?  @map("consumption_anomaly_reason")
-  gpsAnomalyFlag           Boolean  @default(false) @map("gps_anomaly_flag")
-  gpsAnomalyReason         String?  @map("gps_anomaly_reason")
-  calculatedConsumption    Float?   @map("calculated_consumption") // L/100km auto-calculated
-  createdAt                DateTime @default(now()) @map("created_at")
+  consumptionAnomalyFlag        Boolean  @default(false) @map("consumption_anomaly_flag")
+  consumptionAnomalyReason      String?  @map("consumption_anomaly_reason")
+  gpsAnomalyFlag                Boolean  @default(false) @map("gps_anomaly_flag")
+  gpsAnomalyReason              String?  @map("gps_anomaly_reason")
+  // Paire dédiée à l'ABSENCE de couverture GPS (gpsKm <= 0 sur la période du cross-check).
+  // Sémantiquement distincte de gpsAnomalyFlag : « aucune donnée GPS pour vérifier »
+  // ≠ « le GPS contredit le kilométrage ». Écrite par crossCheckFuelLogWithGps, exposée
+  // séparément dans l'API (jamais fusionnée dans anomalyFlag) pour que le frontend puisse
+  // afficher « non vérifiable » (neutre) vs « anomalie » (rouge).
+  gpsCoverageInsufficientFlag   Boolean  @default(false) @map("gps_coverage_insufficient_flag")
+  gpsCoverageInsufficientReason String?  @map("gps_coverage_insufficient_reason")
+  calculatedConsumption         Float?   @map("calculated_consumption") // L/100km auto-calculated
+  createdAt                     DateTime @default(now()) @map("created_at")
 
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
