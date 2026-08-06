@@ -395,6 +395,19 @@
     "searchAria": "Rechercher sur la carte",
     "filterAria": "Filtrer",
     "layersAria": "Couches cartographiques",
+    "clearAria": "Effacer la recherche",
+    "live": "En direct",
+    "noResults": "Aucun résultat — essayez un nom, une plaque ou une adresse",
+    "results": {
+      "title": "Résultats",
+      "driver": "Chauffeur",
+      "vehicle": "Véhicule",
+      "delivery": "Livraison"
+    },
+    "toast": {
+      "centered": "Centrage sur {label}",
+      "noPosition": "Aucune position disponible pour {label}"
+    },
     "filters": {
       "moving": "En mouvement",
       "stopped": "À l'arrêt",

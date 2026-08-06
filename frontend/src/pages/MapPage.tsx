@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Filter, Layers, User, Truck, Package } from 'lucide-react';
+import { Search, Filter, Layers, User, Truck, Package, MapPin, SearchX, Radio } from 'lucide-react';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import RealTimeMap from '../features/map/RealTimeMap';
@@ -80,10 +80,10 @@ export default function MapPage() {
       setFocusId(r.id);
       setFocusCenter({ lat: r.lat, lng: r.lng });
       const found = vehicles.find((v) => v.id === r.id);
-      if (found) toast(`Centrage sur ${r.label}`, 'info');
+      if (found) toast(t('map.toast.centered', { label: r.label }), 'info');
       setTimeout(() => { setFocusId(null); setFocusCenter(null); }, 3000);
     } else {
-      toast(`Aucune position disponible pour ${r.label}`, 'error');
+      toast(t('map.toast.noPosition', { label: r.label }), 'error');
     }
   };
 
@@ -110,11 +110,22 @@ export default function MapPage() {
   }, []);
 
   const typeIcons: Record<string, React.ElementType> = { driver: User, vehicle: Truck, delivery: Package };
-  const typeLabels: Record<string, string> = { driver: 'Chauffeur', vehicle: 'Véhicule', delivery: 'Livraison' };
+  const typeLabels: Record<string, string> = {
+    driver: t('map.results.driver'),
+    vehicle: t('map.results.vehicle'),
+    delivery: t('map.results.delivery'),
+  };
 
   return (
     <div className={styles.pageWrap}>
       <RealTimeMap focusId={focusId} focusCenter={focusCenter} onVehiclesUpdate={setVehicles} />
+
+      <div className={styles.liveChip}>
+        <span className={styles.liveDot} />
+        <Radio size={13} className={styles.liveIcon} />
+        <span className={styles.liveText}>{t('map.live')}</span>
+        <span className={styles.liveCount}>{vehicles.length}</span>
+      </div>
 
       <div className={styles.searchContainer}>
         <div className={styles.searchBar}>
@@ -130,7 +141,7 @@ export default function MapPage() {
             aria-label={t('map.searchAria')}
           />
           {search && (
-            <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setResults([]); setOpen(false); }}>✕</Button>
+            <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setResults([]); setOpen(false); }} aria-label={t('map.clearAria')}>✕</Button>
           )}
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -150,6 +161,10 @@ export default function MapPage() {
 
         {open && results.length > 0 && (
           <div ref={dropdownRef} className={styles.dropdown}>
+            <div className={styles.dropdownHeader}>
+              <span className={styles.dropdownCount}>{results.length}</span>
+              <span className={styles.dropdownTitle}>{t('map.results.title')}</span>
+            </div>
             {results.map((r, i) => {
               const Icon = typeIcons[r.type];
               return (
@@ -157,9 +172,11 @@ export default function MapPage() {
                   key={`${r.type}-${r.id}`}
                   onClick={() => selectResult(r)}
                   onMouseEnter={() => setSelectedIdx(i)}
-                  className={`${styles.resultItem} ${i === selectedIdx ? styles.resultItemSelected : styles.resultItemDefault} ${i < results.length - 1 ? styles.resultItemBorder : ''}`}
+                  className={`${styles.resultItem} ${i === selectedIdx ? styles.resultItemSelected : styles.resultItemDefault}`}
                 >
-                  <Icon size={14} className={styles.resultIcon} />
+                  <span className={`${styles.resultAvatar} ${styles[`resultAvatar${r.type.charAt(0).toUpperCase()}${r.type.slice(1)}`] || ''}`}>
+                    <Icon size={14} />
+                  </span>
                   <div className={styles.resultContent}>
                     <div className={styles.resultLabel}>
                       {r.label}
@@ -170,7 +187,7 @@ export default function MapPage() {
                       </div>
                     )}
                   </div>
-                  <span className={styles.resultType}>
+                  <span className={`${styles.resultType} ${styles[`resultType${r.type.charAt(0).toUpperCase()}${r.type.slice(1)}`] || ''}`}>
                     {typeLabels[r.type]}
                   </span>
                 </button>
@@ -181,15 +198,24 @@ export default function MapPage() {
 
         {open && results.length === 0 && (
           <div className={styles.noResults}>
-            Aucun résultat — essayez un nom, une plaque ou une adresse
+            <SearchX size={16} className={styles.noResultsIcon} />
+            <span>{t('map.noResults')}</span>
           </div>
         )}
       </div>
 
       <div className={styles.legend}>
-        <span>🟡 <span className={styles.legendFontBody}>{t('map.legend.moving')}</span></span>
-        <span>🟢 <span className={styles.legendFontBody}>{t('map.legend.stopped')}</span></span>
-        <span className={styles.legendFontMono}>
+        <span className={styles.legendItem}>
+          <span className={`${styles.legendDot} ${styles.legendDotMoving}`} />
+          {t('map.legend.moving')}
+        </span>
+        <span className={styles.legendItem}>
+          <span className={`${styles.legendDot} ${styles.legendDotStopped}`} />
+          {t('map.legend.stopped')}
+        </span>
+        <span className={styles.legendDivider} />
+        <span className={styles.legendHint}>
+          <MapPin size={12} />
           {t('map.legend.doubleClick')}
         </span>
       </div>
