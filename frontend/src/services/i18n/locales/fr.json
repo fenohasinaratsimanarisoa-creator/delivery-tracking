@@ -336,6 +336,12 @@
   "drivers": {
     "title": "Chauffeurs",
     "subtitle": "Gérez vos chauffeurs",
+    "kicker": "Équipe de livraison",
+    "countSubtitle": "{{count}} chauffeur dans votre flotte",
+    "countSubtitle_plural": "{{count}} chauffeurs dans votre flotte",
+    "fromUsersHint": "Les chauffeurs apparaissent ici depuis Utilisateurs (rôle Chauffeur)",
+    "vehicleAssignment": "Assignation du véhicule",
+    "noVehicle": "Aucun véhicule",
     "newDriver": "Nouveau chauffeur",
     "searchPlaceholder": "Rechercher un chauffeur…",
     "drawerSubtitle": "Ajoutez un chauffeur à votre flotte",
@@ -347,19 +353,27 @@
       "contact": "Contact",
       "license": "Permis de conduire"
     },
+    "kpis": {
+      "total": "Effectif",
+      "active": "Actifs",
+      "inactive": "Inactifs",
+      "unassigned": "Sans véhicule"
+    },
     "fields": {
       "firstName": "Prénom",
       "lastName": "Nom",
       "email": "Email professionnel",
       "phone": "Téléphone",
-      "licenseNumber": "Numéro de permis"
+      "licenseNumber": "Numéro de permis",
+      "vehicleId": "Véhicule assigné"
     },
     "table": {
       "name": "Nom",
       "email": "Email",
       "phone": "Téléphone",
       "license": "Permis",
-      "status": "Statut"
+      "status": "Statut",
+      "vehicle": "Véhicule"
     },
     "status": {
       "active": "Actif",
@@ -378,7 +392,8 @@
       "updated": "Chauffeur modifié",
       "created": "Chauffeur créé",
       "deleted": "Chauffeur supprimé",
-      "deleteError": "Erreur lors de la suppression"
+      "deleteError": "Erreur lors de la suppression",
+      "saveError": "Erreur lors de l'enregistrement"
     },
     "confirmDelete": {
       "title": "Supprimer le chauffeur",

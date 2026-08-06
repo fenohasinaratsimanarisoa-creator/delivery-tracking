@@ -1,6 +1,10 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Power, PowerOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import {
+  Search, Power, PowerOff, UsersRound, UserCheck, UserX, Users,
+  Mail, Phone, Car, IdCard, Truck,
+} from 'lucide-react';
 import Button from '../components/Button';
 import api from '../services/api/client';
 import DataTable from '../components/DataTable';
@@ -17,48 +21,91 @@ interface DriverFormValues {
   phone: string; licenseNumber: string; vehicleId: string;
 }
 
-const driverFields: FieldDef<DriverFormValues>[] = [
-  { name: 'firstName', label: 'Prénom', type: 'text', required: true, section: 'identity', autoFocus: true,
-    rules: { minLength: 2, maxLength: 50 } },
-  { name: 'lastName', label: 'Nom', type: 'text', required: true, section: 'identity',
-    rules: { minLength: 2, maxLength: 50 } },
-  { name: 'email', label: 'Email professionnel', type: 'email', section: 'contact' },
-  { name: 'phone', label: 'Téléphone', type: 'tel', section: 'contact',
-    rules: { pattern: /^0[1-9][0-9]{8}$/, patternMessage: 'Le numéro doit commencer par 0 et faire 10 chiffres' } },
-  { name: 'licenseNumber', label: 'Numéro de permis', type: 'text', required: true, section: 'license',
-    rules: { minLength: 3, maxLength: 30 } },
-  { name: 'vehicleId', label: 'Véhicule assigné', type: 'select', section: 'license' },
-];
+function useCountUp(target: number, duration = 650) {
+  const [value, setValue] = useState(target);
+  useEffect(() => {
+    const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false;
+    if (reduced) {
+      setValue(target);
+      return;
+    }
+    let raf: number;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(target * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return value;
+}
 
-const driverSections: FormSection[] = [
-  { title: 'Identité', fields: ['firstName', 'lastName'] },
-  { title: 'Contact', fields: ['email', 'phone'] },
-  { title: 'Permis de conduire', fields: ['licenseNumber', 'vehicleId'] },
-];
+function KpiCard({ icon, label, value, color, delay }: {
+  icon: React.ReactNode; label: string; value: number; color: string; delay: number;
+}) {
+  const animated = useCountUp(value);
+  return (
+    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color, animationDelay: `${delay}ms` }}>
+      <div className={styles.kpiTop}>
+        <span className={styles.kpiIcon}>{icon}</span>
+      </div>
+      <div className={styles.kpiValue}>{animated}</div>
+      <div className={styles.kpiLabel}>{label}</div>
+    </div>
+  );
+}
+
+function DriverNameCell({ driver }: { driver: Driver }) {
+  const initials = `${(driver.firstName[0] || '').toUpperCase()}${(driver.lastName[0] || '').toUpperCase()}`;
+  return (
+    <span className={styles.userCell}>
+      <span className={styles.userAvatar}>{initials}</span>
+      <span className={styles.userText}>
+        <span className={styles.userName}>{driver.firstName} {driver.lastName}</span>
+        <span className={styles.userEmail}>{driver.email || '—'}</span>
+      </span>
+    </span>
+  );
+}
+
+function LicenseCell({ licenseNumber }: { licenseNumber: string }) {
+  return (
+    <span className={styles.licensePill}>
+      <IdCard size={12} />
+      {licenseNumber}
+    </span>
+  );
+}
+
+function VehicleCell({ vehicle }: { vehicle: Driver['vehicle'] }) {
+  return vehicle ? (
+    <span className={styles.vehicleCell}>
+      <span className={styles.vehicleIcon}><Car size={13} /></span>
+      <span className={styles.vehicleText}>
+        <span className={styles.vehiclePlate}>{vehicle.licensePlate}</span>
+        <span className={styles.vehicleModel}>{vehicle.brand} {vehicle.model}</span>
+      </span>
+    </span>
+  ) : (
+    <span className={styles.vehicleNone}>—</span>
+  );
+}
 
 function SkeletonRows() {
   return (
     <>
-      {[1, 2, 3, 4, 5].map((i) => (
+      {[1, 2, 3, 4].map((i) => (
         <tr key={`sk-${i}`} className={styles.skeletonRow}>
-          <td className={styles.skeletonCell}>
-            <div className={styles.shimmer} style={{ width: '60%' }} />
-          </td>
-          <td className={styles.skeletonCell}>
-            <div className={styles.shimmer} style={{ width: '40%' }} />
-          </td>
-          <td className={styles.skeletonCell}>
-            <div className={styles.shimmer} style={{ width: '35%' }} />
-          </td>
-          <td className={styles.skeletonCell}>
-            <div className={styles.shimmer} style={{ width: '50%' }} />
-          </td>
-          <td className={styles.skeletonCell}>
-            <div className={styles.shimmer} style={{ width: '40%' }} />
-          </td>
-          <td className={styles.skeletonCell} style={{ textAlign: 'right' }}>
-            <div className={styles.shimmer} style={{ width: 60, marginLeft: 'auto' }} />
-          </td>
+          {[42, 32, 26, 30, 36, 30, 20].map((w, j) => (
+            <td key={j} className={styles.skeletonCell}>
+              <div className={styles.shimmer} style={{ width: `${w}%`, animationDelay: `${(i + j) * 90}ms` }} />
+            </td>
+          ))}
         </tr>
       ))}
     </>
@@ -66,6 +113,7 @@ function SkeletonRows() {
 }
 
 export default function DriversPage() {
+  const { t } = useTranslation();
   const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Driver | null>(null);
@@ -103,6 +151,13 @@ export default function DriversPage() {
     );
   }, [drivers, search]);
 
+  const stats = useMemo(() => ({
+    total: meta.total ?? 0,
+    active: drivers.filter((d) => d.isActive).length,
+    inactive: drivers.filter((d) => !d.isActive).length,
+    unassigned: drivers.filter((d) => !d.vehicle).length,
+  }), [drivers, meta.total]);
+
   const handleSearch = useCallback((val: string) => {
     clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => setSearch(val), 200);
@@ -115,7 +170,7 @@ export default function DriversPage() {
       queryClient.invalidateQueries({ queryKey: ['drivers'] });
     },
     onError: (err: ApiError) => {
-      toast(err?.response?.data?.message || 'Erreur', 'error');
+      toast(err?.response?.data?.message || t('common.error'), 'error');
     },
   });
 
@@ -137,17 +192,17 @@ export default function DriversPage() {
       const id = editing?.id || '';
       setHighlightedId(id);
       setTimeout(() => setHighlightedId(null), 1500);
-      toast(editing ? 'Chauffeur modifié' : 'Chauffeur créé');
+      toast(editing ? t('drivers.toast.updated') : t('drivers.toast.created'));
       setDrawerOpen(false);
       setEditing(null);
     },
     onError: (err: ApiError) => {
-      toast(err?.response?.data?.message || 'Erreur lors de l\'enregistrement', 'error');
+      toast(err?.response?.data?.message || t('drivers.toast.saveError'), 'error');
     },
   });
 
   const vehicleOptions = useMemo(() => {
-    const opts = [{ value: '', label: 'Aucun véhicule' }];
+    const opts = [{ value: '', label: t('drivers.noVehicle') }];
     for (const v of availableVehicles) {
       opts.push({
         value: v.id,
@@ -155,7 +210,26 @@ export default function DriversPage() {
       });
     }
     return opts;
-  }, [availableVehicles]);
+  }, [availableVehicles, t]);
+
+  const driverFields = useMemo<FieldDef<DriverFormValues>[]>(() => [
+    { name: 'firstName', label: t('drivers.fields.firstName'), type: 'text', required: true, section: 'identity', autoFocus: true,
+      rules: { minLength: 2, maxLength: 50 } },
+    { name: 'lastName', label: t('drivers.fields.lastName'), type: 'text', required: true, section: 'identity',
+      rules: { minLength: 2, maxLength: 50 } },
+    { name: 'email', label: t('drivers.fields.email'), type: 'email', section: 'contact' },
+    { name: 'phone', label: t('drivers.fields.phone'), type: 'tel', section: 'contact',
+      rules: { pattern: /^0[1-9][0-9]{8}$/, patternMessage: t('drivers.validation.phoneFormat') } },
+    { name: 'licenseNumber', label: t('drivers.fields.licenseNumber'), type: 'text', required: true, section: 'license',
+      rules: { minLength: 3, maxLength: 30 } },
+    { name: 'vehicleId', label: t('drivers.fields.vehicleId'), type: 'select', section: 'license' },
+  ], [t]);
+
+  const driverSections: FormSection[] = [
+    { title: t('drivers.formSections.identity'), fields: ['firstName', 'lastName'] },
+    { title: t('drivers.formSections.contact'), fields: ['email', 'phone'] },
+    { title: t('drivers.formSections.license'), fields: ['licenseNumber', 'vehicleId'] },
+  ];
 
   const driverForm = useEntityForm<DriverFormValues>({
     initial: editing ? {
@@ -176,54 +250,55 @@ export default function DriversPage() {
   }, [drawerOpen, editing?.id]);
 
   const drawerTitle = editing ? `${editing.firstName} ${editing.lastName}` : '';
-  const drawerSubtitle = editing ? `Permis : ${editing.licenseNumber} — Assignation du véhicule` : '';
+  const drawerSubtitle = editing
+    ? `${t('drivers.editDriverSubtitle', { licenseNumber: editing.licenseNumber })} — ${t('drivers.vehicleAssignment')}`
+    : '';
   const onCancel = () => { setDrawerOpen(false); setEditing(null); };
 
   return (
-    <div className={`page-padding ${styles.pageContainer}`}>
-      <div className={styles.headerRow}>
-        <div>
-          <h1 className={`page-title ${styles.pageTitle}`}>
-            Chauffeurs
-          </h1>
+    <div className={styles.pageContainer}>
+      <header className={styles.pageHeader}>
+        <div className={styles.titleIconChip}><UsersRound size={24} /></div>
+        <div className={styles.headerText}>
+          <span className={styles.kicker}>{t('drivers.kicker')}</span>
+          <h1 className={styles.pageTitle}>{t('drivers.title')}</h1>
           <p className={styles.pageSubtitle}>
-            {meta.total > 0 ? `${meta.total} chauffeur${meta.total > 1 ? 's' : ''} dans votre flotte` : 'Les chauffeurs apparaissent ici après création depuis Utilisateurs (rôle "Chauffeur")'}
+            {meta.total > 0 ? t('drivers.countSubtitle', { count: meta.total }) : t('drivers.fromUsersHint')}
           </p>
         </div>
+      </header>
+
+      <div className={styles.kpiGrid}>
+        <KpiCard icon={<Truck size={18} />} label={t('drivers.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" delay={0} />
+        <KpiCard icon={<UserCheck size={18} />} label={t('drivers.kpis.active')} value={stats.active} color="#22c55e" delay={70} />
+        <KpiCard icon={<UserX size={18} />} label={t('drivers.kpis.inactive')} value={stats.inactive} color="var(--color-text-tertiary, #7A8BA3)" delay={140} />
+        <KpiCard icon={<Car size={18} />} label={t('drivers.kpis.unassigned')} value={stats.unassigned} color="var(--color-blue, #3b82f6)" delay={210} />
       </div>
 
-      <div className={styles.searchBarContainer}>
-        <div style={{
-          position: 'relative', flex: 1, maxWidth: 320,
-        }}>
-          <Search size={14} className={styles.searchIcon} style={{
-            position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-          }} />
+      <div className={styles.filtersRow}>
+        <div className={styles.searchInputWrapper}>
+          <Search size={14} className={styles.searchIcon} />
           <input
-            placeholder="Rechercher un chauffeur…"
+            placeholder={t('drivers.searchPlaceholder')}
             onChange={(e) => handleSearch(e.target.value)}
             className={styles.searchInput}
           />
         </div>
         {search && (
           <span className={styles.resultCount}>
-            {filtered.length} résultat{filtered.length !== 1 ? 's' : ''}
+            {t('drivers.resultCount', { count: filtered.length })}
           </span>
         )}
       </div>
 
       <div className={styles.tableContainer}>
         {isLoading ? (
-          <div className={styles.skeletonWrapper}>
+          <div className={styles.skeletonTableWrapper}>
             <table className={styles.skeletonTable}>
               <thead>
                 <tr className={styles.skeletonTheadTr}>
-                  {['Nom', 'Email', 'Téléphone', 'Permis', 'Véhicule', 'Statut', ''].map((l) => (
-                    <th key={l} className={styles.skeletonTh} style={{
-                      textAlign: l === '' ? 'right' : 'left',
-                    }}>
-                      {l}
-                    </th>
+                  {[t('drivers.table.name'), t('drivers.table.email'), t('drivers.table.phone'), t('drivers.table.license'), t('drivers.table.vehicle'), t('drivers.table.status'), ''].map((l) => (
+                    <th key={l} className={styles.skeletonTh} style={{ textAlign: l === '' ? 'right' : 'left' }}>{l}</th>
                   ))}
                 </tr>
               </thead>
@@ -234,48 +309,68 @@ export default function DriversPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className={styles.emptyState}>
-            <div className={styles.emptyStateIcon}>
-              <Search size={24} />
-            </div>
-            <p className={styles.emptyStateTitle}>
-            {search ? 'Aucun chauffeur ne correspond à cette recherche' : 'Aucun chauffeur enregistré'}
-          </p>
-          <p className={styles.emptyStateDesc}>
-            {search ? 'Essayez un autre terme' : 'Créez un chauffeur depuis Utilisateurs → Nouvel utilisateur → rôle Chauffeur'}
-          </p>
-        </div>
+            <span className={styles.emptyIconWrap}><Users size={26} /></span>
+            <p className={styles.emptyTitle}>{search ? t('drivers.empty.noMatch') : t('drivers.empty.noData')}</p>
+            <p className={styles.emptyDesc}>{search ? t('drivers.empty.tryDifferent') : t('drivers.fromUsersHint')}</p>
+          </div>
         ) : (
-          <DataTable
-            columns={[
-              {
-                key: 'name', label: 'Nom',
-                render: (r: Driver) => `${r.firstName} ${r.lastName}`,
-                sortable: true,
-              },
-              { key: 'email', label: 'Email', render: (r: Driver) => r.email ?? '-', sortable: true },
-              { key: 'phone', label: 'Téléphone', render: (r: Driver) => r.phone ?? '-', sortable: false },
-              { key: 'licenseNumber', label: 'Permis', sortable: true },
-              {
-                key: 'vehicle', label: 'Véhicule',
-                render: (r: Driver) => r.vehicle ? `${r.vehicle.licensePlate} — ${r.vehicle.brand} ${r.vehicle.model}` : '-',
-              },
-              {
-                key: 'isActive', label: 'Statut',
-                render: (r: Driver) => (
-                  <Button variant="ghost" size="sm" icon={r.isActive ? <Power size={14} /> : <PowerOff size={14} />} onClick={() => toggleMutation.mutate({ id: r.id, isActive: !r.isActive })} title={r.isActive ? 'Désactiver' : 'Activer'} />
-                ),
-              },
-            ]}
-            data={filtered}
-            total={meta.total}
-            page={page}
-            limit={20}
-            onPageChange={setPage}
-            onEdit={(r) => { setEditing(r); setDrawerOpen(true); }}
-            loading={false}
-            emptyMessage=""
-            keyExtractor={(r) => r.id}
-          />
+          <div className={styles.tableCard}>
+            <DataTable
+              columns={[
+                {
+                  key: 'name', label: t('drivers.table.name'), sortable: true,
+                  render: (r: Driver) => <DriverNameCell driver={r} />,
+                },
+                {
+                  key: 'email', label: t('drivers.table.email'), sortable: true,
+                  render: (r: Driver) => (
+                    <span className={styles.emailCell}><Mail size={12} />{r.email || '—'}</span>
+                  ),
+                },
+                {
+                  key: 'phone', label: t('drivers.table.phone'), sortable: false,
+                  render: (r: Driver) => (
+                    <span className={styles.phoneCell}><Phone size={12} />{r.phone || '—'}</span>
+                  ),
+                },
+                {
+                  key: 'licenseNumber', label: t('drivers.table.license'), sortable: true,
+                  render: (r: Driver) => <LicenseCell licenseNumber={r.licenseNumber} />,
+                },
+                {
+                  key: 'vehicle', label: t('drivers.table.vehicle'), sortable: false,
+                  render: (r: Driver) => <VehicleCell vehicle={r.vehicle} />,
+                },
+                {
+                  key: 'isActive', label: t('drivers.table.status'),
+                  render: (r: Driver) => (
+                    <span className={styles.statusCell}>
+                      <span className={`${styles.activePill} ${r.isActive ? styles.activePillOn : styles.activePillOff}`}>
+                        <span className={styles.activeDot} />
+                        {r.isActive ? t('drivers.status.active') : t('drivers.status.inactive')}
+                      </span>
+                      <Button
+                        variant={r.isActive ? 'ghost' : 'outline'}
+                        size="sm"
+                        icon={r.isActive ? <Power size={14} /> : <PowerOff size={14} />}
+                        onClick={() => toggleMutation.mutate({ id: r.id, isActive: !r.isActive })}
+                        title={r.isActive ? t('drivers.status.deactivate') : t('drivers.status.activate')}
+                      />
+                    </span>
+                  ),
+                },
+              ]}
+              data={filtered}
+              total={meta.total}
+              page={page}
+              limit={20}
+              onPageChange={setPage}
+              onEdit={(r) => { setEditing(r); setDrawerOpen(true); }}
+              loading={false}
+              emptyMessage=""
+              keyExtractor={(r) => r.id}
+            />
+          </div>
         )}
       </div>
 
@@ -289,7 +384,7 @@ export default function DriversPage() {
             form="entity-form"
             loading={driverForm.saving}
             onCancel={onCancel}
-            submitLabel="Enregistrer"
+            submitLabel={t('common.save') || 'Enregistrer'}
             error={driverForm.serverError}
           />
         }

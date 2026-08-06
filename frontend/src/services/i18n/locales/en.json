@@ -336,6 +336,12 @@
   "drivers": {
     "title": "Drivers",
     "subtitle": "Manage your drivers",
+    "kicker": "Delivery team",
+    "countSubtitle": "{{count}} driver in your fleet",
+    "countSubtitle_plural": "{{count}} drivers in your fleet",
+    "fromUsersHint": "Drivers appear here after being created from Users (Role \u201cDriver\u201d)",
+    "vehicleAssignment": "Vehicle assignment",
+    "noVehicle": "No vehicle",
     "newDriver": "New driver",
     "searchPlaceholder": "Search drivers…",
     "drawerSubtitle": "Add a driver to your fleet",
@@ -347,19 +353,27 @@
       "contact": "Contact",
       "license": "Driving License"
     },
+    "kpis": {
+      "total": "Team size",
+      "active": "Active",
+      "inactive": "Inactive",
+      "unassigned": "Unassigned"
+    },
     "fields": {
       "firstName": "First name",
       "lastName": "Last name",
       "email": "Work email",
       "phone": "Phone",
-      "licenseNumber": "License number"
+      "licenseNumber": "License number",
+      "vehicleId": "Assigned vehicle"
     },
     "table": {
       "name": "Name",
       "email": "Email",
       "phone": "Phone",
       "license": "License",
-      "status": "Status"
+      "status": "Status",
+      "vehicle": "Vehicle"
     },
     "status": {
       "active": "Active",
@@ -378,7 +392,8 @@
       "updated": "Driver updated",
       "created": "Driver created",
       "deleted": "Driver deleted",
-      "deleteError": "Error deleting driver"
+      "deleteError": "Error deleting driver",
+      "saveError": "Error saving driver"
     },
     "confirmDelete": {
       "title": "Delete driver",
