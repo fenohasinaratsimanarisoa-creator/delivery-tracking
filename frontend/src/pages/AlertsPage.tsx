@@ -27,8 +27,7 @@ import {
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import { formatDateTime } from '../services/i18n/formatDate';
-import { io } from 'socket.io-client';
-import { getAccessToken } from '../services/auth/tokenStore';
+import { useNotificationSocket } from '../services/notifications/notificationsSocket';
 
 type ApiError = { response?: { data?: { message?: string } } };
 import styles from './AlertsPage.module.css';
@@ -82,7 +81,6 @@ export default function AlertsPage() {
   const [selectedAlert, setSelectedAlert] = useState<AlertItem | null>(null);
   const [resolveComment, setResolveComment] = useState('');
   const [liveCount, setLiveCount] = useState(0);
-  const [liveConnected, setLiveConnected] = useState(false);
 
   const queryParams = useMemo(() => {
     const p = new URLSearchParams();
@@ -123,28 +121,6 @@ export default function AlertsPage() {
   });
 
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) return;
-    let socket: ReturnType<typeof io>;
-    try {
-      socket = io('/notifications', {
-        auth: (cb: (data: { token: string }) => void) => cb({ token: getAccessToken() || '' }),
-        transports: ['websocket'],
-        reconnection: true,
-        reconnectionDelay: 1000,
-      });
-      socket.on('connect', () => setLiveConnected(true));
-      socket.on('disconnect', () => setLiveConnected(false));
-      socket.on('notification', () => {
-        setLiveCount((c) => c + 1);
-        queryClient.invalidateQueries({ queryKey: ['alerts'] });
-        queryClient.invalidateQueries({ queryKey: ['alerts-stats'] });
-      });
-    } catch {}
-    return () => { try { socket?.disconnect(); } catch {} };
-  }, [queryClient]);
-
-  useEffect(() => {
     if (!selectedAlert) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -155,6 +131,12 @@ export default function AlertsPage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedAlert]);
+
+  const { connected: liveConnected } = useNotificationSocket(() => {
+    setLiveCount((c) => c + 1);
+    queryClient.invalidateQueries({ queryKey: ['alerts'] });
+    queryClient.invalidateQueries({ queryKey: ['alerts-stats'] });
+  });
 
   const alerts: AlertItem[] = data?.data ?? [];
   const meta = data?.meta ?? { total: 0 };

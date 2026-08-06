@@ -46,7 +46,8 @@
     "expandSidebar": "Développer la barre latérale",
     "collapseSidebar": "Réduire la barre latérale",
     "closeMenu": "Fermer le menu",
-    "openMenu": "Ouvrir le menu"
+    "openMenu": "Ouvrir le menu",
+    "notifications": "Notifications"
   },
   "auth": {
     "callback": {
@@ -1235,7 +1236,11 @@
       "title": "Notifications",
       "markAllRead": "Tout marquer lu",
       "empty": "Aucune notification",
-      "unreadCount": "{{unreadCount}} non lues"
+      "unreadCount": "{{unreadCount}} non lues",
+      "today": "Aujourd'hui",
+      "yesterday": "Hier",
+      "seeAll": "Voir toutes mes notifications",
+      "emptyTitle": "Boîte de réception vide"
     },
     "quotaBanner": {
       "deliveryUsage": "{used}/{limit} livraisons",
@@ -1674,5 +1679,70 @@
   },
   "tracking": {
     "geolocationDeniedHint": "Autorisez la géolocalisation dans les paramètres de votre navigateur pour activer le suivi GPS."
+  },
+  "notificationsPage": {
+    "title": "Notifications",
+    "subtitle": "Suivez en temps réel vos alertes de livraison, de carburant et de flotte.",
+    "unreadCount": "{{count}} non lues",
+    "backToDashboard": "Tableau de bord",
+    "live": "En direct",
+    "markAllRead": "Tout marquer lu",
+    "clearAll": "Tout effacer",
+    "read": "Lue",
+    "markRead": "Marquer comme lu",
+    "delete": "Supprimer",
+    "related": "Détail lié",
+    "priority": {
+      "critical": "Critique",
+      "high": "Haute",
+      "medium": "Moyenne",
+      "low": "Basse"
+    },
+    "group": {
+      "today": "Aujourd'hui",
+      "yesterday": "Hier",
+      "thisWeek": "Cette semaine"
+    },
+    "kpi": {
+      "unread": "Non lues",
+      "total": "Total",
+      "urgent": "Urgentes",
+      "today": "Aujourd'hui"
+    },
+    "filters": {
+      "title": "Filtres",
+      "reset": "Réinitialiser",
+      "all": "Toutes",
+      "unread": "Non lues",
+      "read": "Lues",
+      "status": "Statut",
+      "priority": "Priorité",
+      "type": "Type",
+      "allTypes": "Tous les types"
+    },
+    "type": {
+      "delivery_status": "Statut de livraison",
+      "fuel_anomaly": "Anomalie carburant",
+      "fuel_gps_coverage_missing": "Couverture GPS manquante",
+      "maintenance_due": "Maintenance due",
+      "system": "Système",
+      "speed_alert": "Excès de vitesse",
+      "prolonged_stop": "Arrêt prolongé",
+      "delay_alert": "Retard de livraison",
+      "device_offline": "Dispositif hors ligne",
+      "geofence_event": "Événement géofence",
+      "location_mismatch": "Position incohérente"
+    },
+    "empty": {
+      "title": "Aucune notification",
+      "desc": "Vous serez notifié en temps réel ici.",
+      "filteredTitle": "Aucun résultat",
+      "filteredDesc": "Essayez d’ajuster vos filtres."
+    },
+    "toast": {
+      "markRead": "Toutes les notifications marquées comme lues.",
+      "deletedAll": "Toutes les notifications ont été effacées.",
+      "deleted": "Notification supprimée."
+    }
   }
 }

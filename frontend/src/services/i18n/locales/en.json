@@ -46,7 +46,8 @@
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar",
     "closeMenu": "Close menu",
-    "openMenu": "Open menu"
+    "openMenu": "Open menu",
+    "notifications": "Notifications"
   },
   "auth": {
     "callback": {
@@ -1235,7 +1236,11 @@
       "title": "Notifications",
       "markAllRead": "Mark all read",
       "empty": "No notifications",
-      "unreadCount": "{{unreadCount}} unread"
+      "unreadCount": "{{unreadCount}} unread",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "seeAll": "See all notifications",
+      "emptyTitle": "Inbox is all clear"
     },
     "quotaBanner": {
       "deliveryUsage": "{used}/{limit} deliveries",
@@ -1674,5 +1679,70 @@
   },
   "tracking": {
     "geolocationDeniedHint": "Enable geolocation in your browser settings to activate GPS tracking."
+  },
+  "notificationsPage": {
+    "title": "Notifications",
+    "subtitle": "Stay on top of delivery, fuel, and fleet alerts in real time.",
+    "unreadCount": "{{count}} unread",
+    "backToDashboard": "Dashboard",
+    "live": "Live",
+    "markAllRead": "Mark all read",
+    "clearAll": "Clear all",
+    "read": "Read",
+    "markRead": "Mark as read",
+    "delete": "Delete",
+    "related": "Related detail",
+    "priority": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "group": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "thisWeek": "This week"
+    },
+    "kpi": {
+      "unread": "Unread",
+      "total": "Total",
+      "urgent": "Urgent",
+      "today": "Today"
+    },
+    "filters": {
+      "title": "Filters",
+      "reset": "Reset",
+      "all": "All",
+      "unread": "Unread",
+      "read": "Read",
+      "status": "Status",
+      "priority": "Priority",
+      "type": "Type",
+      "allTypes": "All types"
+    },
+    "type": {
+      "delivery_status": "Delivery status",
+      "fuel_anomaly": "Fuel anomaly",
+      "fuel_gps_coverage_missing": "Missing GPS coverage",
+      "maintenance_due": "Maintenance due",
+      "system": "System",
+      "speed_alert": "Speed alert",
+      "prolonged_stop": "Prolonged stop",
+      "delay_alert": "Delivery delay",
+      "device_offline": "Device offline",
+      "geofence_event": "Geofence event",
+      "location_mismatch": "Location mismatch"
+    },
+    "empty": {
+      "title": "No notifications",
+      "desc": "You will be notified here in real time.",
+      "filteredTitle": "No results",
+      "filteredDesc": "Try adjusting your filters."
+    },
+    "toast": {
+      "markRead": "All notifications marked as read.",
+      "deletedAll": "All notifications cleared.",
+      "deleted": "Notification deleted."
+    }
   }
 }

@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Truck, Users, MapPin, Fuel, FileText, Settings, UserCog,
-  Package, ClipboardList, Eye, Bell,
+  Package, ClipboardList, Eye, Bell, BellRing,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Role } from '../types';
@@ -28,6 +28,7 @@ const allMenuItems: MenuItem[] = [
   { labelKey: 'nav.myVehicle', icon: Truck, path: '/my-vehicle', roles: ['driver'] },
   { labelKey: 'nav.myOrders', icon: Package, path: '/my-orders', roles: ['client'] },
   { labelKey: 'nav.tracking', icon: Eye, path: '/tracking', roles: ['client'] },
+  { labelKey: 'nav.notifications', icon: BellRing, path: '/notifications', roles: ['admin', 'dispatcher', 'driver', 'client'] },
 ];
 
 function getMenuItemsForRole(role: Role, t: (key: string) => string): (MenuItem & { label: string })[] {

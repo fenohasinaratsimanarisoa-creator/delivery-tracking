@@ -14,6 +14,7 @@ const mockT = (key: string): string => {
     'nav.settings': 'Paramètres',
     'nav.alerts': 'Alertes',
     'nav.deliveryProofs': 'Preuves de livraison',
+    'nav.notifications': 'Notifications',
     'nav.myDeliveries': 'Mes livraisons',
     'nav.myVehicle': 'Mon véhicule',
     'nav.myOrders': 'Mes commandes',
@@ -39,26 +40,26 @@ describe('getMenuItemsForRole', () => {
     expect(labels).toContain('Alertes');
   });
 
-  it('dispatcher has access to 7 items', () => {
+  it('dispatcher has access to 8 items', () => {
     const items = getMenuItemsForRole('dispatcher', mockT);
-    expect(items).toHaveLength(7);
+    expect(items).toHaveLength(8);
     for (const item of items) {
       expect(item.roles).toContain('dispatcher');
     }
   });
 
-  it('driver has access to 2 items', () => {
+  it('driver has access to 3 items', () => {
     const items = getMenuItemsForRole('driver', mockT);
-    expect(items).toHaveLength(2);
+    expect(items).toHaveLength(3);
     const labels = items.map((i) => i.label);
-    expect(labels).toEqual(['Mes livraisons', 'Mon véhicule']);
+    expect(labels).toEqual(['Mes livraisons', 'Mon véhicule', 'Notifications']);
   });
 
-  it('client has access to 2 items', () => {
+  it('client has access to 3 items', () => {
     const items = getMenuItemsForRole('client', mockT);
-    expect(items).toHaveLength(2);
+    expect(items).toHaveLength(3);
     const labels = items.map((i) => i.label);
-    expect(labels).toEqual(['Mes commandes', 'Suivi livraison']);
+    expect(labels).toEqual(['Mes commandes', 'Suivi livraison', 'Notifications']);
   });
 
   it('every item in allMenuItems has at least one role', () => {

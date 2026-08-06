@@ -42,6 +42,7 @@ const ClientTrackingPage = lazy(() => import('./pages/ClientTrackingPage'));
 const TripReplayPage = lazy(() => import('./pages/TripReplayPage'));
 const TripReportPage = lazy(() => import('./pages/TripReportPage'));
 const AlertsPage = lazy(() => import('./pages/AlertsPage'));
+const NotificationsPage = lazy(() => import('./features/notifications/NotificationsPage'));
 const DeliveryDetailPage = lazy(() => import('./pages/DeliveryDetailPage'));
 const DeliveryProofsPage = lazy(() => import('./pages/DeliveryProofsPage'));
 
@@ -173,6 +174,12 @@ export default function App() {
               <Route path="/delivery-proofs" element={
                 <ProtectedRoute roles={['admin', 'dispatcher']}>
                   <AppLayout><SuspenseWrapper><DeliveryProofsPage /></SuspenseWrapper></AppLayout>
+                </ProtectedRoute>
+              } />
+              {/* All roles */}
+              <Route path="/notifications" element={
+                <ProtectedRoute roles={['admin', 'dispatcher', 'driver', 'client']}>
+                  <AppLayout><SuspenseWrapper><NotificationsPage /></SuspenseWrapper></AppLayout>
                 </ProtectedRoute>
               } />
               <Route path="/users" element={
