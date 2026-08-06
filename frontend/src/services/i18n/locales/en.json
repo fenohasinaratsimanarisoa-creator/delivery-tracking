@@ -545,6 +545,7 @@
   "users": {
     "title": "Users",
     "subtitle": "Manage platform access",
+    "kicker": "Access & roles",
     "newUser": "New user",
     "searchPlaceholder": "Search users…",
     "drawerSubtitle": "Create an account for a team member",
@@ -553,7 +554,8 @@
     "formSections": {
       "identity": "Identity",
       "contact": "Contact",
-      "account": "Account"
+      "account": "Account",
+      "license": "Driver license"
     },
     "fields": {
       "firstName": "First name",
@@ -561,7 +563,9 @@
       "email": "Email address",
       "phone": "Phone",
       "role": "Role",
-      "password": "Password"
+      "password": "Password",
+      "licenseNumber": "License number",
+      "vehicleId": "Assigned vehicle"
     },
     "roles": {
       "admin": "Administrator",
@@ -595,6 +599,14 @@
       "inviteTeam": "Invite your team members"
     },
     "inviteUser": "Invite a user",
+    "allRoles": "All roles",
+    "noVehicle": "No vehicle",
+    "kpis": {
+      "total": "Total",
+      "active": "Active",
+      "inactive": "Inactive",
+      "drivers": "Drivers"
+    },
     "toast": {
       "updated": "User updated",
       "created": "User created",

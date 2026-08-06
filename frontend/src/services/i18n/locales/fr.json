@@ -545,6 +545,7 @@
   "users": {
     "title": "Utilisateurs",
     "subtitle": "Gérez les accès à votre plateforme",
+    "kicker": "Accès & rôles",
     "newUser": "Nouvel utilisateur",
     "searchPlaceholder": "Rechercher un utilisateur…",
     "drawerSubtitle": "Créez un compte pour un membre de votre équipe",
@@ -553,7 +554,8 @@
     "formSections": {
       "identity": "Identité",
       "contact": "Contact",
-      "account": "Compte"
+      "account": "Compte",
+      "license": "Permis chauffeur"
     },
     "fields": {
       "firstName": "Prénom",
@@ -561,7 +563,9 @@
       "email": "Adresse email",
       "phone": "Téléphone",
       "role": "Rôle",
-      "password": "Mot de passe"
+      "password": "Mot de passe",
+      "licenseNumber": "Numéro de permis",
+      "vehicleId": "Véhicule assigné"
     },
     "roles": {
       "admin": "Administrateur",
@@ -595,6 +599,14 @@
       "inviteTeam": "Invitez les membres de votre équipe"
     },
     "inviteUser": "Inviter un utilisateur",
+    "allRoles": "Tous les rôles",
+    "noVehicle": "Aucun véhicule",
+    "kpis": {
+      "total": "Total",
+      "active": "Actifs",
+      "inactive": "Inactifs",
+      "drivers": "Chauffeurs"
+    },
     "toast": {
       "updated": "Utilisateur modifié",
       "created": "Utilisateur créé",
