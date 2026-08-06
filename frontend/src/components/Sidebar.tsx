@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ChevronLeft, ChevronRight, LogOut, Menu, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { getMenuItemsForRole } from './menuItems';
 import { useAuth } from '../hooks/AuthContext';
 import NotificationBell from './NotificationBell';
@@ -11,7 +11,6 @@ import styles from './Sidebar.module.css';
 
 const SIDEBAR_EXPANDED = 240;
 const SIDEBAR_COLLAPSED = 60;
-const MOBILE_BREAKPOINT = 768;
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
@@ -19,22 +18,10 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
   const tooltipTimer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    const onResize = () => {
-      const mobile = window.innerWidth < MOBILE_BREAKPOINT;
-      setIsMobile(mobile);
-      if (!mobile) setMobileOpen(false);
-    };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
-  useEffect(() => {
-    setMobileOpen(false);
+    setCollapsed(false);
   }, [location.pathname]);
 
   const role = user?.role ?? 'admin';
@@ -48,46 +35,33 @@ export default function Sidebar() {
 
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
 
-  const s = (collapsed && !isMobile);
-
   const sidebarContent = (
     <div className={styles.sidebarInner}
-      style={{ width: s ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED }}>
+      style={{ width: collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED }}>
       {/* Header */}
       <div className={styles.header}
-        style={{ justifyContent: s ? 'center' : 'space-between', padding: s ? 'var(--space-lg) 0' : 'var(--space-lg) var(--space-lg)' }}>
-        {!s && (
+        style={{ justifyContent: collapsed ? 'center' : 'space-between', padding: collapsed ? 'var(--space-lg) 0' : 'var(--space-lg) var(--space-lg)' }}>
+        {!collapsed && (
           <span className={styles.logoExpanded}>
             LogiTrack
           </span>
         )}
-        {s && (
+        {collapsed && (
           <span className={styles.logoCollapsed}>
             L
           </span>
         )}
-        {!isMobile && (
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className={styles.collapseBtn}
-            aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
-          >
-            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-          </button>
-        )}
-        {isMobile && (
-          <button
-            onClick={() => setMobileOpen(false)}
-            className={styles.mobileCloseBtn}
-            aria-label={t('nav.closeMenu')}
-          >
-            <X size={20} />
-          </button>
-        )}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className={styles.collapseBtn}
+          aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
       </div>
 
       {/* Notification bell in sidebar header area for expanded */}
-      {!s && (
+      {!collapsed && (
         <div className={styles.notifArea}>
           <NotificationBell />
         </div>
@@ -104,15 +78,15 @@ export default function Sidebar() {
               onClick={() => navigate(item.path)}
               className={styles.navItem}
               style={{
-                padding: s ? 'var(--space-md) 0' : 'var(--space-sm) var(--space-lg)',
+                padding: collapsed ? 'var(--space-md) 0' : 'var(--space-sm) var(--space-lg)',
                 background: active ? 'var(--color-accent-muted)' : 'transparent',
                 color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-                margin: s ? 'var(--space-xs) auto' : 'var(--space-xs) var(--space-sm)',
-                width: s ? 40 : 'auto',
-                justifyContent: s ? 'center' : 'flex-start',
+                margin: collapsed ? 'var(--space-xs) auto' : 'var(--space-xs) var(--space-sm)',
+                width: collapsed ? 40 : 'auto',
+                justifyContent: collapsed ? 'center' : 'flex-start',
               }}
               onMouseEnter={(e) => {
-                if (collapsed && !isMobile) {
+                if (collapsed) {
                   tooltipTimer.current = setTimeout(() => {
                     const tip = e.currentTarget.querySelector('[data-tooltip]') as HTMLElement;
                     if (tip) tip.style.opacity = '1';
@@ -128,13 +102,13 @@ export default function Sidebar() {
               <div className={styles.navItemIcon}>
                 <Icon size={18} />
               </div>
-              {!s && (
+              {!collapsed && (
                 <span className={styles.navItemLabel}
                   style={{ fontWeight: active ? 600 : 400 }}>
                   {item.label}
                 </span>
               )}
-              {s && (
+              {collapsed && (
                 <div
                   data-tooltip
                   className={styles.tooltip}
@@ -150,8 +124,8 @@ export default function Sidebar() {
 
       {/* User info + Logout */}
       <div className={styles.userSection}
-        style={{ padding: s ? 'var(--space-sm) 0' : 'var(--space-md) var(--space-lg)' }}>
-        {!s && user && (
+        style={{ padding: collapsed ? 'var(--space-sm) 0' : 'var(--space-md) var(--space-lg)' }}>
+        {!collapsed && user && (
           <div className={styles.userInfo}>
             <div className={styles.userName}>
               {user.firstName} {user.lastName}
@@ -167,39 +141,15 @@ export default function Sidebar() {
         <button
           onClick={logout}
           className={styles.logoutBtn}
-          style={{ padding: s ? 'var(--space-sm)' : 'var(--space-sm) var(--space-md)' }}
+          style={{ padding: collapsed ? 'var(--space-sm)' : 'var(--space-sm) var(--space-md)' }}
           aria-label={t('nav.logout')}
         >
           <LogOut size={16} />
-          {!s && <span>{t('nav.logout')}</span>}
+          {!collapsed && <span>{t('nav.logout')}</span>}
         </button>
       </div>
     </div>
   );
-
-  if (isMobile) {
-    return (
-      <>
-        <button
-          onClick={() => setMobileOpen(true)}
-          className={styles.hamburgerBtn}
-          aria-label={t('nav.openMenu')}
-        >
-          <Menu size={20} />
-        </button>
-        {mobileOpen && (
-          <div
-            onClick={() => setMobileOpen(false)}
-            className={styles.mobileOverlay}
-          />
-        )}
-        <div className={styles.mobilePanel}
-          style={{ transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)' }}>
-          {sidebarContent}
-        </div>
-      </>
-    );
-  }
 
   return (
     <div className={styles.desktopWrapper} style={{ width: sidebarWidth }}>

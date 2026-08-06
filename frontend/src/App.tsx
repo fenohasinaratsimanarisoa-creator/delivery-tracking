@@ -6,6 +6,7 @@ import QueryProvider from './components/QueryProvider';
 import { ToastProvider } from './components/Toast';
 import { ThemeProvider } from './styles/ThemeContext';
 import Sidebar from './components/Sidebar';
+import BottomNav from './components/BottomNav';
 import ProtectedRoute from './components/ProtectedRoute';
 import CookieConsentBanner from './components/CookieConsentBanner';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -84,6 +85,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className={styles.appLayoutRoot}>
       <Sidebar />
+      <BottomNav />
       <div className={styles.appLayoutContent}>
         <div className={styles.appLayoutMain}>
           {children}

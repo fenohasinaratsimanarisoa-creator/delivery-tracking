@@ -47,7 +47,11 @@
     "collapseSidebar": "Réduire la barre latérale",
     "closeMenu": "Fermer le menu",
     "openMenu": "Ouvrir le menu",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "title": "Navigation principale",
+    "more": "Plus",
+    "moreTitle": "Plus d'options",
+    "signedInAs": "Connecté en tant que"
   },
   "auth": {
     "callback": {

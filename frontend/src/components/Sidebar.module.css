@@ -180,3 +180,10 @@
   flex-shrink: 0;
   transition: width 0.2s ease;
 }
+
+/* Mobile navigation is handled by BottomNav — hide the desktop sidebar entirely */
+@media (max-width: 767px) {
+  .desktopWrapper {
+    display: none;
+  }
+}
