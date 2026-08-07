@@ -1796,5 +1796,56 @@ describe('FuelConsumptionService', () => {
       );
       expect(captured.create.estimatedCost).toBeGreaterThan(0);
     });
+
+    it('véhicule électrique sans prix configuré → pricePerLiterUsed null (pas de 0 Ar trompeur)', async () => {
+      const VEHICLE_ELECTRIC = {
+        id: 'vehicle-e',
+        licensePlate: 'TRK-E',
+        fuelType: 'Électrique',
+        theoreticalConsumption: 15,
+      };
+      mockPrisma.driver.findFirst.mockResolvedValue({
+        id: 'driver-1',
+        firstName: 'Jean',
+        lastName: 'Rakoto',
+      });
+      mockPrisma.gpsPosition.findMany.mockResolvedValue([
+        { latitude: 0, longitude: 0, vehicleId: 'vehicle-e' },
+        { latitude: 0, longitude: 0.01004, vehicleId: 'vehicle-e' },
+        { latitude: 0, longitude: 0.02004, vehicleId: 'vehicle-e' },
+      ] as any);
+      mockPrisma.vehicle.findUnique.mockResolvedValue(VEHICLE_ELECTRIC as any);
+      mockPrisma.vehicle.findMany.mockResolvedValue([]);
+      // Aucun prix historique pour 'electric' → repli sur le défaut (0 Ar).
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue(null);
+      mockPrisma.companyFuelSettings.upsert.mockResolvedValue({
+        defaultFuelPrices: null,
+      });
+      let captured: any;
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (a: any) => {
+        captured = a;
+        return a;
+      });
+
+      await service.generateDailyReportForSingleDriver(
+        'company-1',
+        'driver-1',
+        new Date('2026-07-20T12:00:00.000Z'),
+      );
+
+      expect(captured.create.fuelType).toBe('electric');
+      // Pas de prix → null, pas un 0 Ar qui ressemble à un prix configuré.
+      expect(captured.create.pricePerLiterUsed).toBeNull();
+      // estimatedCost reste 0 (colonne NOT NULL) ; le signal fiable est pricePerLiterUsed=null.
+      expect(captured.create.estimatedCost).toBe(0);
+      // Un prix historique explicitement configuré prime : null seulement SANS config.
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 1500 });
+      const priced = await (service as any).getFuelPriceForDate(
+        'company-1',
+        'electric',
+        new Date('2026-07-20'),
+      );
+      expect(priced).toBe(1500);
+    });
   });
 });

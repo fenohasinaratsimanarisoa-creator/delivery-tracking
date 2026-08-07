@@ -89,7 +89,7 @@ export class FuelConsumptionService {
     companyId: string,
     fuelType: string,
     date: Date,
-  ): Promise<number> {
+  ): Promise<number | null> {
     // Token canonique : le formulaire véhicule stocke 'Hybride Diesel',
     // 'Électrique', 'Essence'… qui ne sont PAS les clés du dictionnaire de prix.
     const canonical = this.normalizeFuelType(fuelType);
@@ -114,7 +114,16 @@ export class FuelConsumptionService {
     });
     const defaults =
       (settings.defaultFuelPrices as Record<string, number> | null) ?? DEFAULT_FUEL_PRICES;
-    return defaults[canonical] ?? 0;
+    const resolved = defaults[canonical] ?? 0;
+    // Électrique : le prix par défaut est 0 Ar = AUCUN prix configuré (ni entrée
+    // FuelPriceHistory, ni prix défini par la company). Renvoyer 0 ferait afficher
+    // un "0 Ar" qui ressemble à un coût calculé normal alors qu'il s'agit d'une
+    // absence de prix. On renvoie null pour que l'appelant (le report) signale
+    // explicitement un coût non disponible, sans tromper l'utilisateur.
+    if (canonical === 'electric' && resolved === 0) {
+      return null;
+    }
+    return resolved;
   }
 
   async create(companyId: string, dto: CreateFuelLogDto) {
@@ -992,8 +1001,16 @@ export class FuelConsumptionService {
     const fuelType = this.normalizeFuelType(vehicle.fuelType);
     const consumption = vehicle.theoreticalConsumption || 8;
     const pricePerLiter = await this.getFuelPriceForDate(companyId, fuelType, targetDate);
-    const estimatedCost =
-      Math.round(((distanceKm * consumption) / 100) * pricePerLiter * 100) / 100;
+    // pricePerLiter === null ⇔ véhicule ÉLECTRIQUE sans prix configuré (voir
+    // getFuelPriceForDate) : on ne produit PAS un montant fiable — un "0 Ar"
+    // calculé serait confondu avec un vrai coût nul. estimatedCost reste 0
+    // (colonne NOT NULL) mais pricePerLiterUsed = null signale de façon fiable
+    // l'absence de prix (le front peut alors afficher "non configuré"). Pour les
+    // autres carburants, pricePerLiter est toujours un nombre → coût calculé normal.
+    const costUnavailable = pricePerLiter === null;
+    const estimatedCost = costUnavailable
+      ? 0
+      : Math.round(((distanceKm * consumption) / 100) * pricePerLiter * 100) / 100;
 
     const reportDate = new Date(
       Date.UTC(targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate()),
@@ -1017,7 +1034,7 @@ export class FuelConsumptionService {
         gpsDataQuality,
         consumptionLPer100Km: consumption,
         estimatedCost,
-        pricePerLiterUsed: pricePerLiter,
+        pricePerLiterUsed: costUnavailable ? null : pricePerLiter,
         companyId,
       },
       update: {
@@ -1027,7 +1044,7 @@ export class FuelConsumptionService {
         fuelType,
         consumptionLPer100Km: consumption,
         vehiclePlate: vehicle.licensePlate || 'N/A',
-        pricePerLiterUsed: pricePerLiter,
+        pricePerLiterUsed: costUnavailable ? null : pricePerLiter,
       },
     });
 
