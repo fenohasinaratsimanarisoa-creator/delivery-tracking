@@ -1,3 +1,5 @@
+import { parseToken } from '../jwt';
+
 let _accessToken: string | null = null;
 
 const SESSION_KEY = 'dt_access_token';
@@ -21,4 +23,18 @@ export function getAccessToken(): string | null {
     }
   } catch {}
   return null;
+}
+
+/** Décode le claim "exp" (secondes) d'un JWT et le convertit en timestamp ms. */
+export function getTokenExpiryMs(token: string): number | null {
+  const payload = parseToken(token);
+  if (!payload || typeof payload.exp !== 'number') return null;
+  const ms = payload.exp * 1000;
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/** Timestamp d'expiration (ms) du token d'accès courant, ou null si absent/invalide. */
+export function getAccessTokenExpiryMs(): number | null {
+  const token = getAccessToken();
+  return token ? getTokenExpiryMs(token) : null;
 }
