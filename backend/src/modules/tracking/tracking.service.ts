@@ -259,6 +259,7 @@ export class TrackingService {
               message: `Vehicle exceeded ${settings.speedAlertThreshold} km/h (${Math.round(speedKmh)} km/h)`,
               link: `/tracking/${dto.deliveryId}`,
               deliveryId: dto.deliveryId,
+              userId: driverId ?? undefined,
             }),
           );
         }
@@ -283,6 +284,7 @@ export class TrackingService {
               message: `Vehicle stopped for ${Math.round(stoppedMin)} minutes`,
               link: `/tracking/${dto.deliveryId}`,
               deliveryId: dto.deliveryId,
+              userId: driverId ?? undefined,
             }),
           );
         }
@@ -322,6 +324,7 @@ export class TrackingService {
                 message: `Estimated arrival ${delayMin} min late (scheduled: ${delivery.scheduledDate.toLocaleString()})`,
                 link: `/tracking/${dto.deliveryId}`,
                 deliveryId: dto.deliveryId ?? undefined,
+                userId: driverId ?? undefined,
               }),
             );
           }
@@ -342,6 +345,7 @@ export class TrackingService {
             message: `Vehicle signal lost for ${Math.round(gapMin)} minutes — now reconnected`,
             link: `/tracking/${dto.deliveryId}`,
             deliveryId: dto.deliveryId,
+            userId: driverId ?? undefined,
           }),
         );
       }
@@ -364,6 +368,7 @@ export class TrackingService {
           message: `Vehicle ${geofenceEvent.event === 'entry' ? 'entered' : 'exited'} "${geofenceEvent.geofenceName}"`,
           link: `/tracking/${dto.deliveryId}`,
           deliveryId: dto.deliveryId,
+          userId: driverId ?? undefined,
         }),
       );
       this.dataUpdateBus.emit('dataUpdate', {

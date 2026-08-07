@@ -22,7 +22,7 @@ const allMenuItems: MenuItem[] = [
   { labelKey: 'nav.reports', icon: FileText, path: '/reports', roles: ['admin'] },
   { labelKey: 'nav.users', icon: UserCog, path: '/users', roles: ['admin'] },
   { labelKey: 'nav.settings', icon: Settings, path: '/settings', roles: ['admin'] },
-  { labelKey: 'nav.alerts', icon: Bell, path: '/alerts', roles: ['admin', 'dispatcher'] },
+  { labelKey: 'nav.alerts', icon: Bell, path: '/alerts', roles: ['admin', 'dispatcher', 'driver'] },
   { labelKey: 'nav.deliveryProofs', icon: Bell, path: '/delivery-proofs', roles: ['admin', 'dispatcher'] },
   { labelKey: 'nav.myDeliveries', icon: ClipboardList, path: '/my-deliveries', roles: ['driver'] },
   { labelKey: 'nav.myVehicle', icon: Truck, path: '/my-vehicle', roles: ['driver'] },

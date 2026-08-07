@@ -28,6 +28,7 @@ import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import { formatDateTime } from '../services/i18n/formatDate';
 import { useNotificationSocket } from '../services/notifications/notificationsSocket';
+import { useAuth } from '../hooks/AuthContext';
 
 type ApiError = { response?: { data?: { message?: string } } };
 import styles from './AlertsPage.module.css';
@@ -64,6 +65,10 @@ const PERIOD_VALUES = ['today', '7d', '30d', 'all'] as const;
 export default function AlertsPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { user } = useAuth();
+  // Un driver consulte ses propres alertes en lecture seule (liste filtrée
+  // côté backend) : pas de KPIs/stats ni de résolution, réservés au dispatch.
+  const isDriver = user?.role === 'driver';
   const PRIORITY_LABELS: Record<string, string> = {
     critical: t('alerts.priority.critical'), high: t('alerts.priority.high'),
     medium: t('alerts.priority.medium'), low: t('alerts.priority.low'),
@@ -103,6 +108,7 @@ export default function AlertsPage() {
   const { data: stats } = useQuery({
     queryKey: ['alerts-stats', period],
     queryFn: () => api.get(`/alerts/stats?period=${period}`).then((r) => r.data),
+    enabled: !isDriver,
   });
 
   const resolveMutation = useMutation({
@@ -203,13 +209,13 @@ export default function AlertsPage() {
           <p className={styles.pageSubtitle}>{t('alerts.subtitle')}</p>
         </div>
         <div className={styles.headerActions}>
-          {liveConnected && (
+          {!isDriver && liveConnected && (
             <span className={styles.livePill}>
               <span className={styles.livePulseDot} />
               {t('alerts.live')}
             </span>
           )}
-          {liveCount > 0 && (
+          {!isDriver && liveCount > 0 && (
             <span className={styles.newCountPill}>
               {t('alerts.liveNew', { count: liveCount })}
             </span>
@@ -217,7 +223,7 @@ export default function AlertsPage() {
         </div>
       </div>
 
-      {alertStats && (
+      {!isDriver && alertStats && (
         <div className={styles.kpiGrid}>
           <KpiCard
             icon={<BellRing size={16} />}
@@ -250,9 +256,10 @@ export default function AlertsPage() {
         </div>
       )}
 
-      <div className={styles.filtersPanel}>
-        <div className={styles.filtersHeader}>
-          <div className={styles.filtersTitle}>{t('alerts.filters.title')}</div>
+      {!isDriver && (
+        <div className={styles.filtersPanel}>
+          <div className={styles.filtersHeader}>
+            <div className={styles.filtersTitle}>{t('alerts.filters.title')}</div>
           {hasActiveFilters && (
             <button onClick={resetFilters} className={styles.resetBtn}>
               <RotateCcw size={13} />
@@ -308,6 +315,7 @@ export default function AlertsPage() {
           </div>
         </div>
       </div>
+      )}
 
       {isLoading ? (
         <div className={styles.loadingContainer}>
@@ -366,14 +374,14 @@ export default function AlertsPage() {
                   </div>
                 </div>
                 <div className={styles.alertActions}>
-                  {!r.resolved ? (
+                  {!r.resolved && !isDriver ? (
                     <button onClick={(e) => { e.stopPropagation(); resolveMutation.mutate({ id: r.id }); }}
                       className={styles.resolveBtn}>
                       <Check size={13} />
                       {t('alerts.resolveButton')}
                     </button>
                   ) : (
-                    <span className={styles.checkSeal}><Check size={14} /></span>
+                    r.resolved && <span className={styles.checkSeal}><Check size={14} /></span>
                   )}
                 </div>
               </div>
@@ -449,7 +457,7 @@ export default function AlertsPage() {
               </Section>
             )}
 
-            {!selectedAlert.resolved && (
+            {!selectedAlert.resolved && !isDriver && (
               <div className={styles.resolveSection}>
                 <div className={styles.resolveSectionTitle}>{t('alerts.detail.markResolved')}</div>
                 <textarea placeholder={t('alerts.detail.commentPlaceholder')} value={resolveComment} onChange={(e) => setResolveComment(e.target.value)} rows={3}

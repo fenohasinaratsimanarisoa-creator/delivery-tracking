@@ -71,6 +71,31 @@ describe('AlertsService', () => {
         }),
       );
     });
+
+    it('scopes strictly to a driver: own userId OR deliveries assigned to them', async () => {
+      mockPrisma.notification.findMany.mockResolvedValueOnce([]);
+      mockPrisma.notification.count.mockResolvedValueOnce(0);
+
+      await service.findAll('company-1', { page: 1, limit: 20 }, 'driver-1');
+
+      expect(mockPrisma.notification.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            companyId: 'company-1',
+            OR: [
+              { userId: 'driver-1' },
+              { delivery: { assignedDriverId: 'driver-1' } },
+            ],
+          }),
+        }),
+      );
+      // Le scope driver N'EST PAS appliqué pour admin/dispatcher (pas de driverUserId)
+      mockPrisma.notification.findMany.mockClear();
+      mockPrisma.notification.count.mockClear();
+      await service.findAll('company-1', { page: 1, limit: 20 });
+      const call = mockPrisma.notification.findMany.mock.calls[0][0] as { where: any };
+      expect(call.where.OR).toBeUndefined();
+    });
   });
 
   describe('resolve', () => {

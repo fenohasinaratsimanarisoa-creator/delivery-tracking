@@ -185,7 +185,7 @@ export default function App() {
                 </ProtectedRoute>
               } />
               <Route path="/alerts" element={
-                <ProtectedRoute roles={['admin', 'dispatcher']}>
+                <ProtectedRoute roles={['admin', 'dispatcher', 'driver']}>
                   <AppLayout><SuspenseWrapper><AlertsPage /></SuspenseWrapper></AppLayout>
                 </ProtectedRoute>
               } />

@@ -577,7 +577,11 @@ describe('FuelConsumptionService', () => {
           vehicleId: 'vehicle-1',
           companyId: 'company-1',
         },
-        include: { vehicle: true },
+        include: {
+          vehicle: {
+            include: { driver: { select: { userId: true } } },
+          },
+        },
       });
       expect(mockQueue.add).toHaveBeenCalledWith('analyze', {
         fuelLogId: 'fuel-1',
@@ -718,7 +722,11 @@ describe('FuelConsumptionService', () => {
       expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith({
         where: { id: 'fuel-1' },
         data: { notes: 'Corrected note' },
-        include: { vehicle: true },
+        include: {
+          vehicle: {
+            include: { driver: { select: { userId: true } } },
+          },
+        },
       });
       // Aucun champ mesuré changé : ni le cross-check ni le job 'analyze' ne sont relancés.
       expect(mockPrisma.dailyFuelReport.aggregate).not.toHaveBeenCalled();
@@ -791,7 +799,11 @@ describe('FuelConsumptionService', () => {
           gpsCoverageInsufficientFlag: false,
           gpsCoverageInsufficientReason: null,
         },
-        include: { vehicle: true },
+        include: {
+          vehicle: {
+            include: { driver: { select: { userId: true } } },
+          },
+        },
       });
       // Le cross-check a été relancé après la correction de saisie.
       expect(mockPrisma.dailyFuelReport.aggregate).toHaveBeenCalled();

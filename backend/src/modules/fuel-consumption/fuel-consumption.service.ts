@@ -106,7 +106,11 @@ export class FuelConsumptionService {
         vehicleId: dto.vehicleId,
         companyId,
       },
-      include: { vehicle: true },
+      include: {
+        vehicle: {
+          include: { driver: { select: { userId: true } } },
+        },
+      },
     });
 
     try {
@@ -214,7 +218,11 @@ export class FuelConsumptionService {
     const updated = await this.prisma.fuelLog.update({
       where: { id },
       data,
-      include: { vehicle: true },
+      include: {
+        vehicle: {
+          include: { driver: { select: { userId: true } } },
+        },
+      },
     });
 
     // Re-déclenche le job 'analyze' pour recalculer calculatedConsumption et
@@ -794,6 +802,7 @@ export class FuelConsumptionService {
             `${periodStart.toISOString().slice(0, 10)} et ${periodEnd.toISOString().slice(0, 10)} (${manualKm} km déclarés).`,
           link: `/fuel-consumption`,
           deliveryId: undefined,
+          userId: fuelLog.vehicle?.driver?.userId ?? undefined,
         });
       }
       return;
@@ -849,6 +858,7 @@ export class FuelConsumptionService {
         message: `Vehicle ${fuelLog.vehicle?.licensePlate || fuelLog.vehicleId}: manual km (${manualKm}) vs GPS km (${gpsKm.toFixed(1)}) — ratio ${ratio.toFixed(1)}x`,
         link: `/fuel-consumption`,
         deliveryId: undefined,
+        userId: fuelLog.vehicle?.driver?.userId ?? undefined,
       });
     }
   }

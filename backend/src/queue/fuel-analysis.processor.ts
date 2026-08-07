@@ -79,7 +79,11 @@ export class FuelAnalysisProcessor extends WorkerHost {
       const [fuelLog, fuelSettings] = await Promise.all([
         this.prisma.fuelLog.findFirst({
           where: { id: fuelLogId, companyId },
-          include: { vehicle: true },
+          include: {
+            vehicle: {
+              include: { driver: { select: { userId: true } } },
+            },
+          },
         }),
         this.prisma.companyFuelSettings.findUnique({
           where: { companyId },
@@ -156,6 +160,7 @@ export class FuelAnalysisProcessor extends WorkerHost {
           message: `Vehicle ${fuelLog.vehicle.licensePlate}: consumption ${calculatedConsumption.toFixed(1)} L/100km is ${deviation.toFixed(0)}% ${direction} the expected ${theoretical?.toFixed(1) || 'N/A'} L/100km`,
           link: `/fuel-consumption`,
           deliveryId: undefined,
+          userId: fuelLog.vehicle?.driver?.userId ?? undefined,
         });
       }
     } catch (error) {

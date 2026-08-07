@@ -48,11 +48,11 @@ describe('getMenuItemsForRole', () => {
     }
   });
 
-  it('driver has access to 3 items', () => {
+  it('driver has access to 4 items', () => {
     const items = getMenuItemsForRole('driver', mockT);
-    expect(items).toHaveLength(3);
+    expect(items).toHaveLength(4);
     const labels = items.map((i) => i.label);
-    expect(labels).toEqual(['Mes livraisons', 'Mon véhicule', 'Notifications']);
+    expect(labels).toEqual(['Alertes', 'Mes livraisons', 'Mon véhicule', 'Notifications']);
   });
 
   it('client has access to 3 items', () => {

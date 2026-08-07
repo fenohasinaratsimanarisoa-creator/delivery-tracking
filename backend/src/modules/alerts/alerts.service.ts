@@ -16,12 +16,24 @@ export interface AlertsQuery {
 export class AlertsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(companyId: string, query: AlertsQuery) {
+  async findAll(companyId: string, query: AlertsQuery, driverUserId?: string) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
     const where: any = { companyId };
+
+    // Scope strict par driver : un driver ne voit QUE les alertes qui le
+    // concernent — celles qui le ciblent directement (userId) ou qui portent
+    // sur une livraison qui lui est assignée (delivery.assignedDriverId).
+    // Jamais les alertes des autres livreurs ni les alertes société non
+    // liées (userId: null, delivery: null).
+    if (driverUserId) {
+      where.OR = [
+        { userId: driverUserId },
+        { delivery: { assignedDriverId: driverUserId } },
+      ];
+    }
 
     if (query.types && query.types.length > 0) {
       where.type = { in: query.types };

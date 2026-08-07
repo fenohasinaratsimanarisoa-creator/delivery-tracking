@@ -13,10 +13,12 @@ export class AlertsController {
   constructor(private readonly alertsService: AlertsService) {}
 
   @UseGuards(RolesGuard)
-  @Roles('admin', 'dispatcher')
+  @Roles('admin', 'dispatcher', 'driver')
   @Get()
   findAll(
     @CurrentUser('companyId') companyId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('types') typesStr?: string,
@@ -33,7 +35,9 @@ export class AlertsController {
       resolved: resolved === 'true' ? true : resolved === 'false' ? false : undefined,
       deliveryId,
       period: period as any,
-    });
+    },
+    // Un driver ne voit QUE ses propres alertes — scope strict côté backend.
+    role === 'driver' ? userId : undefined);
   }
 
   @UseGuards(RolesGuard)
