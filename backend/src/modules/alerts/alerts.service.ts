@@ -29,10 +29,7 @@ export class AlertsService {
     // Jamais les alertes des autres livreurs ni les alertes société non
     // liées (userId: null, delivery: null).
     if (driverUserId) {
-      where.OR = [
-        { userId: driverUserId },
-        { delivery: { assignedDriverId: driverUserId } },
-      ];
+      where.OR = [{ userId: driverUserId }, { delivery: { assignedDriverId: driverUserId } }];
     }
 
     if (query.types && query.types.length > 0) {

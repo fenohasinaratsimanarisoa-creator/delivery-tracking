@@ -241,6 +241,8 @@ describe('Alerts driver scoping (e2e)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
     const idsAdmin = (resAdmin.body.data as { id: string }[]).map((n) => n.id);
-    expect(idsAdmin).toEqual(expect.arrayContaining([alertA.id, alertB.id, alertFuelA.id, alertCompany.id]));
+    expect(idsAdmin).toEqual(
+      expect.arrayContaining([alertA.id, alertB.id, alertFuelA.id, alertCompany.id]),
+    );
   });
 });

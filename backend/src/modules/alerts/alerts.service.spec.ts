@@ -82,10 +82,7 @@ describe('AlertsService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             companyId: 'company-1',
-            OR: [
-              { userId: 'driver-1' },
-              { delivery: { assignedDriverId: 'driver-1' } },
-            ],
+            OR: [{ userId: 'driver-1' }, { delivery: { assignedDriverId: 'driver-1' } }],
           }),
         }),
       );

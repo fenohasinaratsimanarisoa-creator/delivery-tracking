@@ -27,17 +27,22 @@ export class AlertsController {
     @Query('deliveryId') deliveryId?: string,
     @Query('period') period?: string,
   ) {
-    return this.alertsService.findAll(companyId, {
-      page: page ? +page : 1,
-      limit: limit ? +limit : 20,
-      types: typesStr ? (typesStr.split(',') as NotificationType[]) : undefined,
-      priorities: prioritiesStr ? (prioritiesStr.split(',') as NotificationPriority[]) : undefined,
-      resolved: resolved === 'true' ? true : resolved === 'false' ? false : undefined,
-      deliveryId,
-      period: period as any,
-    },
-    // Un driver ne voit QUE ses propres alertes — scope strict côté backend.
-    role === 'driver' ? userId : undefined);
+    return this.alertsService.findAll(
+      companyId,
+      {
+        page: page ? +page : 1,
+        limit: limit ? +limit : 20,
+        types: typesStr ? (typesStr.split(',') as NotificationType[]) : undefined,
+        priorities: prioritiesStr
+          ? (prioritiesStr.split(',') as NotificationPriority[])
+          : undefined,
+        resolved: resolved === 'true' ? true : resolved === 'false' ? false : undefined,
+        deliveryId,
+        period: period as any,
+      },
+      // Un driver ne voit QUE ses propres alertes — scope strict côté backend.
+      role === 'driver' ? userId : undefined,
+    );
   }
 
   @UseGuards(RolesGuard)
