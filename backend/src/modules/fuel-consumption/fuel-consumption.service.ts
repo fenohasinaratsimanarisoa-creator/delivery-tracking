@@ -19,7 +19,7 @@ import { FuelFilterDto } from './dto/fuel-filter.dto';
 import { CreateFuelPriceDto } from './dto/create-fuel-price.dto';
 import { UpdateFuelPriceDto } from './dto/update-fuel-price.dto';
 import { UpdateDefaultFuelPricesDto } from './dto/update-default-fuel-prices.dto';
-import { computeFilteredDistance } from '../../common/geo/geo.utils';
+import { computeFilteredDistance, haversineDistance } from '../../common/geo/geo.utils';
 import { hasFuelAnomaly, withDerivedAnomaly } from '../../common/fuel/fuel-anomaly.utils';
 
 // Valeurs initiales (seed) utilisées UNIQUEMENT tant que la company n'a pas configuré
@@ -318,6 +318,190 @@ export class FuelConsumptionService {
       orderBy: { reportDate: 'desc' },
       take: 100,
     });
+  }
+
+  /**
+   * Diagnostic des données GPS brutes d'une journée, GROUPÉ par véhicule —
+   * route GET /fuel-consumption/gps-diagnostics?date=YYYY-MM-DD.
+   *
+   * Ce endpoint ne CALCULE AUCUNE donnée : il NE FAIT QUE refléter ce qui est
+   * réellement stocké dans gps_positions, pour expliquer pourquoi un rapport
+   * sous-estime la distance réelle (app fermée / arrière-plan → gaps > 60 s,
+   * positions suspectées exclues, aucun fix du tout, vitesse jamais remontée,
+   * etc.) et croiser :
+   *  - rawDistanceKm : distance en ligne droite (haversine) sur les positions
+   *    validées (non suspectes) — borne haute accessible depuis les fixes ;
+   *  - filteredDistanceKm : distance APRÈS le filtre de bruit (le même
+   *    computeFilteredDistance que le DailyFuelReport) ;
+   *  - reportDistanceKm : ce que le DailyFuelReport du jour a réellement stocké.
+   *
+   * Aucun chiffre inventé : si les fixes manquent, la distance brute est elle
+   * aussi incomplète — seul le signal de couverture (avgGapSec/longGapCount/
+   * coveragePercent) explique le sous-comptage.
+   */
+  async getGpsDiagnostics(companyId: string, dateStr?: string) {
+    const targetDate = dateStr ? new Date(dateStr) : new Date();
+    const bounds = this.getMadagascarDayBounds(targetDate);
+
+    const positions = await this.prisma.gpsPosition.findMany({
+      where: { companyId, timestamp: { gte: bounds.start, lte: bounds.end } },
+      orderBy: { timestamp: 'asc' },
+      select: {
+        latitude: true,
+        longitude: true,
+        vehicleId: true,
+        driverId: true,
+        accuracy: true,
+        speed: true,
+        timestamp: true,
+        suspect: true,
+      },
+    });
+
+    const byVehicle = new Map<
+      string,
+      Array<{
+        latitude: number;
+        longitude: number;
+        accuracy?: number | null;
+        speed?: number | null;
+        timestamp: Date;
+        suspect: boolean;
+        driverId?: string | null;
+      }>
+    >();
+    let unattributed = 0;
+    for (const p of positions) {
+      if (!p.vehicleId) {
+        unattributed++;
+        continue;
+      }
+      const group = byVehicle.get(p.vehicleId) ?? [];
+      group.push({
+        latitude: p.latitude,
+        longitude: p.longitude,
+        accuracy: p.accuracy,
+        speed: p.speed,
+        timestamp: p.timestamp,
+        suspect: p.suspect,
+        driverId: p.driverId,
+      });
+      byVehicle.set(p.vehicleId, group);
+    }
+
+    const vehicleIds = [...byVehicle.keys()];
+
+    // driverId du rapport : dernier driver NON NULL du groupe (même règle que
+    // generateDailyReportForVehicle).
+    const driverIds = new Set<string>();
+    for (const group of byVehicle.values()) {
+      const d = [...group].reverse().find((p) => p.driverId)?.driverId;
+      if (d) driverIds.add(d);
+    }
+
+    const [vehicles, drivers, reports] = await Promise.all([
+      vehicleIds.length
+        ? this.prisma.vehicle.findMany({
+            where: { id: { in: vehicleIds }, companyId },
+            select: { id: true, licensePlate: true },
+          })
+        : Promise.resolve([]),
+      driverIds.size
+        ? this.prisma.driver.findMany({
+            where: { id: { in: [...driverIds] }, companyId },
+            select: { id: true, firstName: true, lastName: true },
+          })
+        : Promise.resolve([]),
+      this.prisma.dailyFuelReport.findMany({
+        where: { companyId, reportDate: this.dateUtcWindow(targetDate) },
+        select: { vehicleId: true, distanceKm: true },
+      }),
+    ]);
+
+    const plateById = new Map(vehicles.map((v) => [v.id, v.licensePlate]));
+    const driverById = new Map(drivers.map((d) => [d.id, d]));
+    const reportKmByVehicle = new Map(reports.map((r) => [r.vehicleId, r.distanceKm]));
+
+    const vehiclesDiag = [...byVehicle.entries()].map(([vehicleId, group]) => {
+      const valid = group.filter((p) => !p.suspect);
+      const suspectCount = group.length - valid.length;
+
+      let rawKm = 0;
+      let filteredKm = 0;
+      for (let i = 1; i < valid.length; i++) {
+        const a = valid[i - 1];
+        const b = valid[i];
+        rawKm += haversineDistance(a.latitude, a.longitude, b.latitude, b.longitude) / 1000;
+      }
+      filteredKm = computeFilteredDistance(valid) / 1000;
+
+      let spanSec = 0;
+      let avgGapSec = 0;
+      let maxGapSec = 0;
+      let longGapCount = 0;
+      if (valid.length >= 2) {
+        spanSec =
+          (valid[valid.length - 1].timestamp.getTime() - valid[0].timestamp.getTime()) / 1000;
+        const gaps: number[] = [];
+        for (let i = 1; i < valid.length; i++) {
+          gaps.push((valid[i].timestamp.getTime() - valid[i - 1].timestamp.getTime()) / 1000);
+        }
+        avgGapSec = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+        maxGapSec = Math.max(...gaps);
+        longGapCount = gaps.filter((g) => g > 60).length;
+      }
+
+      const accuracies = valid.map((p) => p.accuracy).filter((a): a is number => a != null);
+      const speeds = valid.map((p) => p.speed).filter((s): s is number => s != null);
+      const accuracyMin = accuracies.length ? Math.min(...accuracies) : null;
+      const accuracyMax = accuracies.length ? Math.max(...accuracies) : null;
+      const accuracyAvg = accuracies.length
+        ? accuracies.reduce((a, b) => a + b, 0) / accuracies.length
+        : null;
+      const speedMaxMs = speeds.length ? Math.max(...speeds) : null;
+      const movingCount = speeds.filter((s) => s > 1).length;
+
+      const lastDriver = [...group].reverse().find((p) => p.driverId)?.driverId;
+      const driver = lastDriver ? driverById.get(lastDriver) : undefined;
+
+      return {
+        vehicleId,
+        vehiclePlate: plateById.get(vehicleId) ?? 'N/A',
+        driverId: driver?.id ?? null,
+        driverName: driver ? `${driver.firstName} ${driver.lastName}` : null,
+        fixCount: group.length,
+        validCount: valid.length,
+        suspectCount,
+        spanSec: Math.round(spanSec),
+        avgGapSec: Math.round(avgGapSec),
+        maxGapSec: Math.round(maxGapSec),
+        longGapCount,
+        coveragePercent: spanSec > 0 ? Math.min(100, Math.round((spanSec / 86400) * 100)) : 0,
+        rawDistanceKm: Math.round(rawKm * 100) / 100,
+        filteredDistanceKm: Math.round(filteredKm * 100) / 100,
+        reportDistanceKm: reportKmByVehicle.get(vehicleId) ?? null,
+        accuracyMin,
+        accuracyMax,
+        accuracyAvg: accuracyAvg != null ? Math.round(accuracyAvg * 10) / 10 : null,
+        speedMaxMs: speedMaxMs != null ? Math.round(speedMaxMs * 10) / 10 : null,
+        movingCount,
+        speedReportedCount: speeds.length,
+      };
+    });
+
+    return {
+      date: targetDate.toISOString().slice(0, 10),
+      bounds: { start: bounds.start.toISOString(), end: bounds.end.toISOString() },
+      totalPositions: positions.length,
+      unattributedPositions: unattributed,
+      vehicles: vehiclesDiag,
+    };
+  }
+
+  /** Fenêtre [minuit UTC, minuit UTC + 1j) d'un jour — alignée sur dailyFuelReport.reportDate. */
+  private dateUtcWindow(date: Date): { gte: Date; lt: Date } {
+    const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    return { gte: start, lt: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
   }
 
   // ----------------------------------------------------------------

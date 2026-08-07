@@ -1482,4 +1482,206 @@ describe('FuelConsumptionService', () => {
       expect(mockPrisma.fuelPriceHistory.delete).toHaveBeenCalledWith({ where: { id: 'fp-1' } });
     });
   });
+
+  // ----------------------------------------------------------------
+  // GPS DIAGNOSTICS — getGpsDiagnostics() : reflet brut des gps_positions du jour
+  // ----------------------------------------------------------------
+  describe('getGpsDiagnostics', () => {
+    const BOUNDS = {
+      start: new Date('2026-07-19T21:00:00.000Z'),
+      end: new Date('2026-07-20T20:59:59.999Z'),
+    };
+
+    it('returns an empty payload when the company has no GPS positions that day', async () => {
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
+      mockPrisma.dailyFuelReport.findMany.mockResolvedValueOnce([] as any);
+
+      const result = await service.getGpsDiagnostics('company-1', '2026-07-20');
+
+      expect(result.totalPositions).toBe(0);
+      expect(result.vehicles).toEqual([]);
+      // La requête couvre la fenêtre malgache du jour (21h UTC J-1 → 20h59 UTC J).
+      const findManyArgs = mockPrisma.gpsPosition.findMany.mock.calls[0][0];
+      expect(findManyArgs.where.companyId).toBe('company-1');
+      expect(findManyArgs.where.timestamp).toEqual({ gte: BOUNDS.start, lte: BOUNDS.end });
+      // Aucun véhicule ni driver référencé → pas de look-up inutile.
+      expect(mockPrisma.vehicle.findMany).not.toHaveBeenCalled();
+      expect(mockPrisma.driver.findMany).not.toHaveBeenCalled();
+    });
+
+    it('per-vehicle breakdown: solves valid/suspect, gaps, brute vs filtrée vs rapport', async () => {
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([
+        // Véhicule 1 : 3 fixes valides (mouvement réel) + 1 position SUSPECTE (exclue).
+        {
+          latitude: 0,
+          longitude: 0,
+          vehicleId: 'vehicle-1',
+          driverId: 'driver-1',
+          accuracy: 5,
+          speed: 2.5,
+          timestamp: new Date('2026-07-20T06:00:00Z'),
+          suspect: false,
+        },
+        {
+          latitude: 0,
+          longitude: 0.001,
+          vehicleId: 'vehicle-1',
+          driverId: 'driver-1',
+          accuracy: 5,
+          speed: 3,
+          timestamp: new Date('2026-07-20T06:00:30Z'),
+          suspect: false,
+        },
+        {
+          latitude: 0,
+          longitude: 0.002,
+          vehicleId: 'vehicle-1',
+          driverId: 'driver-1',
+          accuracy: 40,
+          speed: 4,
+          timestamp: new Date('2026-07-20T06:01:00Z'),
+          suspect: true,
+        },
+        {
+          latitude: 0,
+          longitude: 0.003,
+          vehicleId: 'vehicle-1',
+          driverId: 'driver-1',
+          accuracy: 5,
+          speed: 4.5,
+          timestamp: new Date('2026-07-20T06:03:30Z'),
+          suspect: false,
+        },
+        // Véhicule 2 : dérive à l'arrêt (segments ~2.2m, speed jamais remontée) → filtrée = 0.
+        {
+          latitude: 0,
+          longitude: 0,
+          vehicleId: 'vehicle-2',
+          driverId: null,
+          accuracy: 10,
+          speed: null,
+          timestamp: new Date('2026-07-20T07:00:00Z'),
+          suspect: false,
+        },
+        {
+          latitude: 0,
+          longitude: 0.00002,
+          vehicleId: 'vehicle-2',
+          driverId: null,
+          accuracy: 10,
+          speed: null,
+          timestamp: new Date('2026-07-20T07:00:10Z'),
+          suspect: false,
+        },
+        {
+          latitude: 0,
+          longitude: 0.00004,
+          vehicleId: 'vehicle-2',
+          driverId: null,
+          accuracy: 10,
+          speed: null,
+          timestamp: new Date('2026-07-20T07:00:20Z'),
+          suspect: false,
+        },
+        {
+          latitude: 0,
+          longitude: 0.00006,
+          vehicleId: 'vehicle-2',
+          driverId: null,
+          accuracy: 10,
+          speed: null,
+          timestamp: new Date('2026-07-20T07:00:30Z'),
+          suspect: false,
+        },
+      ] as any);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([
+        { id: 'vehicle-1', licensePlate: 'TRK-1' },
+        { id: 'vehicle-2', licensePlate: 'TRK-2' },
+      ] as any);
+      mockPrisma.driver.findMany.mockResolvedValueOnce([
+        { id: 'driver-1', firstName: 'Jean', lastName: 'Rakoto' },
+      ] as any);
+      mockPrisma.dailyFuelReport.findMany.mockResolvedValueOnce([
+        { vehicleId: 'vehicle-1', distanceKm: 0.33 },
+        { vehicleId: 'vehicle-2', distanceKm: 0 },
+      ] as any);
+
+      const result = await service.getGpsDiagnostics('company-1', '2026-07-20');
+
+      expect(result.totalPositions).toBe(8);
+      expect(result.vehicles).toHaveLength(2);
+
+      const v1 = result.vehicles.find((v) => v.vehicleId === 'vehicle-1')!;
+      const v2 = result.vehicles.find((v) => v.vehicleId === 'vehicle-2')!;
+
+      // V1 : 4 fixes → 3 valides (le suspect est exclu du calcul, pas de la base).
+      expect(v1.fixCount).toBe(4);
+      expect(v1.validCount).toBe(3);
+      expect(v1.suspectCount).toBe(1);
+      expect(v1.driverName).toBe('Jean Rakoto');
+      expect(v1.speedMaxMs).toBe(4.5);
+      expect(v1.movingCount).toBe(3);
+      expect(v1.speedReportedCount).toBe(3);
+      // Gaps entre valides : 30s puis 3min (le suspect est ignoré) → 1 gap > 60s.
+      expect(v1.avgGapSec).toBe(105);
+      expect(v1.maxGapSec).toBe(180);
+      expect(v1.longGapCount).toBe(1);
+
+      // Distance brute ~= distance filtrée pour un réel déplacement (segments > seuil).
+      const rawV1M = haversineDistance(0, 0, 0, 0.001) + haversineDistance(0, 0.001, 0, 0.003);
+      expect(v1.rawDistanceKm).toBeCloseTo(rawV1M / 1000, 2);
+      expect(v1.filteredDistanceKm).toBeCloseTo(rawV1M / 1000, 2);
+      expect(v1.reportDistanceKm).toBe(0.33);
+
+      // V2 : dérive à l'arrêt (speed jamais remontée) → brut faible, filtrée = 0.
+      expect(v2.fixCount).toBe(4);
+      expect(v2.suspectCount).toBe(0);
+      expect(v2.speedReportedCount).toBe(0);
+      expect(v2.speedMaxMs).toBeNull();
+      expect(v2.movingCount).toBe(0);
+      expect(v2.filteredDistanceKm).toBe(0);
+      expect(v2.rawDistanceKm).toBeGreaterThan(0);
+      expect(v2.accuracyMin).toBe(10);
+      expect(v2.accuracyMax).toBe(10);
+
+      // Le dailyFuelReport du jour est interrogé sur la fenêtre UTC du jour.
+      const reportArgs = mockPrisma.dailyFuelReport.findMany.mock.calls[0][0];
+      expect(reportArgs.where.reportDate).toEqual({
+        gte: new Date('2026-07-20T00:00:00.000Z'),
+        lt: new Date('2026-07-21T00:00:00.000Z'),
+      });
+    });
+
+    it('signale une couverture clairsemée (app fermée / arrière-plan) quand l’écart moyen dépasse 60s', async () => {
+      const positions = Array.from({ length: 5 }, (_, i) => ({
+        latitude: 0,
+        longitude: i * 0.001,
+        vehicleId: 'vehicle-1',
+        driverId: 'driver-1',
+        accuracy: 5,
+        speed: i === 0 ? null : 5,
+        timestamp: new Date(Date.UTC(2026, 6, 20, 6, 0, 0) + i * 90 * 60 * 1000),
+        suspect: false,
+      }));
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positions as any);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([
+        { id: 'vehicle-1', licensePlate: 'TRK-SPARSE' },
+      ] as any);
+      mockPrisma.driver.findMany.mockResolvedValueOnce([
+        { id: 'driver-1', firstName: 'Jean', lastName: 'Rakoto' },
+      ] as any);
+      mockPrisma.dailyFuelReport.findMany.mockResolvedValueOnce([] as any);
+
+      const result = await service.getGpsDiagnostics('company-1', '2026-07-20');
+
+      const v = result.vehicles[0];
+      // 4 gaps de 90 min → écart moyen/max énormes, 4 gaps > 60s ; fenêtre couverte 6h/24h.
+      expect(v.avgGapSec).toBe(5400);
+      expect(v.maxGapSec).toBe(5400);
+      expect(v.longGapCount).toBe(4);
+      expect(v.coveragePercent).toBe(25);
+      // La distance brute ne couvre QUE les segments entre fixes existants.
+      expect(v.rawDistanceKm).toBeGreaterThan(0);
+    });
+  });
 });

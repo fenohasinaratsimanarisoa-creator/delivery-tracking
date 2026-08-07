@@ -63,6 +63,12 @@ export class FuelConsumptionController {
     return { generated: true, reports };
   }
 
+  @Roles('admin', 'dispatcher')
+  @Get('gps-diagnostics')
+  getGpsDiagnostics(@CurrentUser('companyId') companyId: string, @Query('date') date?: string) {
+    return this.fuelService.getGpsDiagnostics(companyId, date);
+  }
+
   // --- Prix carburant (modifiables et persistés) ---
 
   @Roles('admin', 'dispatcher')
