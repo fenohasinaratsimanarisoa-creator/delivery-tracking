@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { formatDate } from '../../services/i18n/formatDate';
+import { isNativeApp } from '../../services/native/nativeAuth';
 import api from '../../services/api/client';
 import { useToast } from '../../components/Toast';
 import EntityDialog, { DialogSubmitBar } from '../../components/EntityDialog';
@@ -23,6 +24,18 @@ const getPlanHighlight = (tier: string) => {
   if (tier === 'pro') return 'var(--color-accent)';
   return 'var(--color-text)';
 };
+
+async function openPaymentUrl(url: string): Promise<void> {
+  // URL externe (checkout Stripe, futur paiement Mobile Money web) :
+  // dans l'app native on ouvre un custom tab via @capacitor/browser au lieu de
+  // naviguer la WebView hors du domaine de l'app (server.allowNavigation).
+  if (isNativeApp() && !url.startsWith(window.location.origin)) {
+    const { Browser } = await import('@capacitor/browser');
+    await Browser.open({ url });
+    return;
+  }
+  window.location.href = url;
+}
 
 export default function PlansPage() {
   const { t } = useTranslation();
@@ -50,7 +63,10 @@ export default function PlansPage() {
         toast(t('billing.plans.toast.paymentSent', { reference: data.transactionRef || '' }), 'success');
       }
       if (data?.sessionUrl) {
-        window.location.href = data.sessionUrl;
+        void (async () => {
+          await openPaymentUrl(data.sessionUrl);
+          queryClient.invalidateQueries({ queryKey: ['billing-subscription'] });
+        })();
         return;
       }
       toast(t('billing.plans.toast.subscriptionUpdated'), 'success');
