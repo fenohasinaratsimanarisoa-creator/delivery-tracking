@@ -9,6 +9,9 @@ import android.location.Location;
 import android.os.Build;
 
 import androidx.core.content.ContextCompat;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -20,6 +23,7 @@ import com.getcapacitor.annotation.PermissionCallback;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Pont natif pour le tracking en arrière-plan (Android uniquement).
@@ -78,6 +82,11 @@ public class BackgroundLocationPlugin extends Plugin {
         } else {
             context.startService(intent);
         }
+        // Watchdog : marque le tracking comme "devrait être actif" et planifie la
+        // vérification périodique (15 min). KEEP : si une planification existe déjà,
+        // on la laisse en place (idempotent, pas de reset du compteur WorkManager).
+        setTrackingActive(true);
+        scheduleWatchdog();
         JSObject ret = new JSObject();
         ret.put("running", isServiceRunning());
         ret.put("permissions", buildPermissionStatus());
@@ -87,11 +96,46 @@ public class BackgroundLocationPlugin extends Plugin {
     @PluginMethod
     public void stop(PluginCall call) {
         unsubscribeFromLocations();
+        setTrackingActive(false);
+        cancelWatchdog();
         getContext().stopService(new Intent(getContext(), LocationForegroundService.class));
         JSObject ret = new JSObject();
         ret.put("running", false);
         ret.put("permissions", buildPermissionStatus());
         call.resolve(ret);
+    }
+
+    /** Persiste l'intention de tracking pour le watchdog (survit à la mort du process). */
+    private void setTrackingActive(boolean active) {
+        getContext()
+            .getSharedPreferences(TrackingWatchdogWorker.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(TrackingWatchdogWorker.PREF_TRACKING_ACTIVE, active)
+            .apply();
+    }
+
+    /**
+     * Planifie TrackingWatchdogWorker toutes les 15 min (intervalle minimal
+     * WorkManager). Tant que start() reste appelé, le worker redémarre le service
+     * s'il meurt sans être arrêté volontairement.
+     */
+    private void scheduleWatchdog() {
+        PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(
+            TrackingWatchdogWorker.class,
+            15,
+            TimeUnit.MINUTES
+        ).build();
+        WorkManager.getInstance(getContext())
+            .enqueueUniquePeriodicWork(
+                TrackingWatchdogWorker.WATCHDOG_WORK_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                request
+            );
+    }
+
+    private void cancelWatchdog() {
+        WorkManager.getInstance(getContext())
+            .cancelUniqueWork(TrackingWatchdogWorker.WATCHDOG_WORK_NAME);
     }
 
     /**
