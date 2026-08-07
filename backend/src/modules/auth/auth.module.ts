@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { OAuthRelayService } from './oauth-relay.service';
 import { TotpService } from './totp.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
@@ -18,13 +19,18 @@ import { EmailModule } from '../email/email.module';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_ACCESS_SECRET'),
-        signOptions: { expiresIn: configService.get<string>('JWT_ACCESS_EXPIRATION', '15m') as jwt.SignOptions['expiresIn'] },
+        signOptions: {
+          expiresIn: configService.get<string>(
+            'JWT_ACCESS_EXPIRATION',
+            '15m',
+          ) as jwt.SignOptions['expiresIn'],
+        },
       }),
     }),
     EmailModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, TotpService, JwtStrategy, GoogleStrategy],
+  providers: [AuthService, OAuthRelayService, TotpService, JwtStrategy, GoogleStrategy],
   exports: [AuthService, TotpService],
 })
 export class AuthModule {}

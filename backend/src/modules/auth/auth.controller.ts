@@ -22,11 +22,15 @@ import * as passport from 'passport';
 import Redis from 'ioredis';
 import { AuthService } from './auth.service';
 import { TotpService } from './totp.service';
+import { OAuthRelayService } from './oauth-relay.service';
+import { GoogleAuthStateGuard } from './guards/google-auth-state.guard';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Enable2faDto, Verify2faDto, Disable2faDto } from './dto/two-factor.dto';
+import { OAuthBeginDto } from './dto/oauth-begin.dto';
+import { OAuthExchangeDto } from './dto/oauth-exchange.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { BlockImpersonationGuard } from '../../common/guards/block-impersonation.guard';
 import { CsrfGuard, getDevFallbackSecret } from '../../common/guards/csrf.guard';
@@ -64,6 +68,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly totpService: TotpService,
+    private readonly oauthRelayService: OAuthRelayService,
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis | null,
@@ -307,14 +312,60 @@ export class AuthController {
   }
 
   @Public()
+  @SkipCsrf()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Get('google/status')
   googleStatus() {
     const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
     return { configured: !!(clientId && clientId !== '...' && clientId !== 'unconfigured') };
   }
 
+  /**
+   * Démarre le flux OAuth natif : émet un nonce (relayId) lié au codeChallenge
+   * PKCE de l'app. Le relayId fera l'aller-retour via le paramètre `state` de
+   * Google et sera vérifié dans appUrlOpen puis au callback.
+   */
   @Public()
-  @UseGuards(AuthGuard('google'))
+  @SkipCsrf()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('oauth/begin')
+  @HttpCode(HttpStatus.OK)
+  oauthBegin(@Body() dto: OAuthBeginDto) {
+    const relayId = this.oauthRelayService.begin(dto.codeChallenge);
+    return { relayId };
+  }
+
+  /**
+   * Échange un code à usage unique (TTL 60 s) contre une session. Le JWT
+   * d'accès n'existe que dans le corps de la réponse — jamais dans une URL.
+   * La vérification PKCE garantit que seul le possesseur du verifier (l'app
+   * légitime, qui ne l'a jamais exposé dans un deep link) peut échanger.
+   */
+  @Public()
+  @SkipCsrf()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('exchange')
+  @HttpCode(HttpStatus.OK)
+  async oauthExchange(
+    @Body() dto: OAuthExchangeDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = this.oauthRelayService.verifyAndConsumeCode(dto.code, dto.verifier);
+    if (!result) {
+      throw new UnauthorizedException('Invalid or expired exchange code');
+    }
+    const session = await this.authService.createSessionForUser(result.userId);
+    res.cookie('refreshToken', session.refreshToken, this.getRefreshCookieOpts());
+    const configuredSecret = this.configService.get<string>('CSRF_SECRET');
+    const secret = configuredSecret || getDevFallbackSecret();
+    const { token: csrfTok } = CsrfGuard.generateToken(secret);
+    res.cookie('csrf-token', csrfTok, this.getCsrfCookieOpts());
+    this.logger.log(`OAuth native exchange success for user ${result.userId}`);
+    return { accessToken: session.accessToken, user: session.user };
+  }
+
+  @Public()
+  @UseGuards(GoogleAuthStateGuard)
   @Get('google')
   googleAuth() {
     // Guard handles redirect to Google
@@ -343,7 +394,9 @@ export class AuthController {
           else if (err?.message === 'Email not verified') error = 'email_not_verified';
           else if (err?.message === 'Account deactivated') error = 'account_deactivated';
           else if (err?.message === 'Domain not found') error = 'account_not_found';
-          this.logger.error(`Google OAuth callback failed: err=${err?.message || 'none'}, info=${info?.message || 'none'}, user=${!!user}`);
+          this.logger.error(
+            `Google OAuth callback failed: err=${err?.message || 'none'}, info=${info?.message || 'none'}, user=${!!user}`,
+          );
           if (err?.stack) this.logger.error(`Google OAuth stack: ${err.stack}`);
           return res.redirect(`${frontendUrl}/auth/callback?error=${error}`);
         }
@@ -355,6 +408,9 @@ export class AuthController {
 
         this.logger.log(`Google OAuth success for user ${user.user?.id}`);
 
+        const relayId =
+          req.query && typeof req.query.state === 'string' ? req.query.state : null;
+
         const tokenParam = encodeURIComponent(user.accessToken);
         res.cookie('refreshToken', user.refreshToken || '', refreshOpts);
 
@@ -362,6 +418,21 @@ export class AuthController {
         const secret = configuredSecret || getDevFallbackSecret();
         const { token: csrfTok } = CsrfGuard.generateToken(secret);
         res.cookie('csrf-token', csrfTok, csrfOpts);
+
+        // Flux natif : `state` (nonce) présent et valide → on ne met JAMAIS le
+        // JWT de session dans l'URL. On émet un code à usage unique (TTL 60 s)
+        // lié au codeChallenge PKCE, échangé ensuite par POST /auth/exchange.
+        if (relayId && this.oauthRelayService.isRelayValid(relayId)) {
+          const code = this.oauthRelayService.issueCode(relayId, user.user?.id);
+          if (!code) {
+            this.logger.error(`Google OAuth native: relay expired for ${user.user?.id}`);
+            return res.redirect(`${frontendUrl}/auth/callback?error=google_auth_failed`);
+          }
+          this.logger.log(`Google OAuth native: single-use code issued (state bound)`);
+          return res.redirect(
+            `${frontendUrl}/auth/callback#code=${code}&state=${encodeURIComponent(relayId)}`,
+          );
+        }
 
         return res.redirect(`${frontendUrl}/auth/callback#accessToken=${tokenParam}`);
       },

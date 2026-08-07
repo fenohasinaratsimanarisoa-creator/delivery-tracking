@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/AuthContext';
 import { setAccessToken } from '../../services/auth/tokenStore';
 import { parseToken } from '../../services/jwt';
-import { isNativeApp, isWebView, isMobileBrowser, relayTokenToNativeApp } from '../../services/native/nativeAuth';
+import { isNativeApp, isWebView, isMobileBrowser, relayTokenToNativeApp, OAUTH_VERIFIER_KEY, clearOAuthNativeState } from '../../services/native/nativeAuth';
 import type { User } from '../../types';
 import { Loader2, AlertCircle } from 'lucide-react';
 import styles from './AuthCallbackPage.module.css';
@@ -41,10 +41,45 @@ export default function AuthCallbackPage() {
       lastName: (payload.lastName || payload.family_name || '') as string,
     };
     setAccessToken(token);
+    clearOAuthNativeState();
     loginRef.current(u, token);
     setStatus('success');
     navigateRef.current('/', { replace: true });
   };
+
+  // Échange le code à usage unique contre une session (PKCE + single-use).
+  // Le JWT d'accès n'est présent que dans la réponse, jamais dans une URL.
+  const exchangeCode = useCallback(
+    async (code: string) => {
+      processedRef.current = true;
+      try {
+        const verifier = sessionStorage.getItem(OAUTH_VERIFIER_KEY);
+        if (!verifier) {
+          throw new Error('missing PKCE verifier');
+        }
+        const res = await fetch('/api/auth/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, verifier }),
+        });
+        if (!res.ok) {
+          throw new Error(`exchange failed: ${res.status}`);
+        }
+        const data = (await res.json()) as { accessToken?: string };
+        const payload = data.accessToken ? parseToken(data.accessToken) : null;
+        if (!data.accessToken || !payload) {
+          throw new Error('invalid exchange response');
+        }
+        applyLogin(data.accessToken, payload);
+      } catch (err) {
+        console.warn('[auth] code exchange rejected:', err);
+        setStatus('error');
+        setErrorMessage(t('auth.callback.finalizeError'));
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t],
+  );
 
   useEffect(() => {
     if (processedRef.current) return;
@@ -61,23 +96,29 @@ export default function AuthCallbackPage() {
     const hashParams = new URLSearchParams(hash);
     const tokenFromHash = hashParams.get('accessToken');
 
+    // Nouveau flux natif sécurisé : code d'échange + state (nonce).
+    const codeFromHash = hashParams.get('code');
+    const stateFromHash = hashParams.get('state');
+
+    if (codeFromHash && stateFromHash) {
+      if (!isNativeApp() && !isWebView() && isMobileBrowser()) {
+        // Custom tab : on relaie code + state vers l'app native via le custom
+        // scheme. L'app vérifie le state dans appUrlOpen, puis échange le code
+        // dans le WebView (elle seule détient le verifier PKCE).
+        relayTokenToNativeApp(codeFromHash, stateFromHash);
+        return;
+      }
+      // WebView native : échange immédiat du code contre une session.
+      void exchangeCode(codeFromHash);
+      return;
+    }
+
     if (tokenFromHash) {
       const payload = parseToken(tokenFromHash);
       if (payload) {
-        // Custom tab / navigateur mobile (app non détectée) : renvoie le token
-        // vers l'app native via le scheme logitrack://, avec repli web.
-        if (!isNativeApp() && !isWebView() && isMobileBrowser()) {
-          const schedule = window.setTimeout(() => {
-            applyLogin(tokenFromHash, payload);
-          }, 1200);
-          try {
-            relayTokenToNativeApp(tokenFromHash);
-          } catch {
-            window.clearTimeout(schedule);
-            applyLogin(tokenFromHash, payload);
-          }
-          return;
-        }
+        // Flux web : le JWT ne transite plus par le custom scheme. Le flux natif
+        // sécurisé passe exclusivement par code+state (#code&state), relayés par
+        // relayTokenToNativeApp dans la branche au-dessus.
         applyLogin(tokenFromHash, payload);
         return;
       }

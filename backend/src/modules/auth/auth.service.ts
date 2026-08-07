@@ -34,8 +34,14 @@ export class AuthService {
     private emailService: EmailService,
     private totpService: TotpService,
   ) {
-    this.accessExpiration = this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m') as jwt.SignOptions['expiresIn'];
-    this.refreshExpiration = this.configService.get<string>('JWT_REFRESH_EXPIRATION', '7d') as jwt.SignOptions['expiresIn'];
+    this.accessExpiration = this.configService.get<string>(
+      'JWT_ACCESS_EXPIRATION',
+      '15m',
+    ) as jwt.SignOptions['expiresIn'];
+    this.refreshExpiration = this.configService.get<string>(
+      'JWT_REFRESH_EXPIRATION',
+      '7d',
+    ) as jwt.SignOptions['expiresIn'];
   }
 
   private getDummyHash(): string {
@@ -92,10 +98,7 @@ export class AuthService {
       where: { email: dto.email, deletedAt: null },
     });
 
-    await bcrypt.compare(
-      dto.password,
-      user?.passwordHash || this.getDummyHash(),
-    );
+    await bcrypt.compare(dto.password, user?.passwordHash || this.getDummyHash());
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid credentials');
@@ -119,7 +122,10 @@ export class AuthService {
       const tempToken = this.jwtService.sign(
         { sub: user.id, scope: '2fa_pending' },
         {
-          secret: this.configService.get<string>('JWT_2FA_TEMP_SECRET', this.configService.get<string>('JWT_ACCESS_SECRET')!),
+          secret: this.configService.get<string>(
+            'JWT_2FA_TEMP_SECRET',
+            this.configService.get<string>('JWT_ACCESS_SECRET')!,
+          ),
           expiresIn: this.tempTokenExpiration,
         },
       );
@@ -146,7 +152,10 @@ export class AuthService {
     let payload: { sub: string; scope: string };
     try {
       payload = this.jwtService.verify<{ sub: string; scope: string }>(dto.tempToken, {
-        secret: this.configService.get<string>('JWT_2FA_TEMP_SECRET', this.configService.get<string>('JWT_ACCESS_SECRET')!),
+        secret: this.configService.get<string>(
+          'JWT_2FA_TEMP_SECRET',
+          this.configService.get<string>('JWT_ACCESS_SECRET')!,
+        ),
         algorithms: ['HS256'],
       });
     } catch {
@@ -361,6 +370,25 @@ export class AuthService {
       });
     }
 
+    return this.generateTokens(user.id, user.email, user.role, user.companyId);
+  }
+
+  /**
+   * Émet une session (access + refresh) pour un utilisateur identifié par un
+   * code d'échange OAuth natif validé (voir POST /auth/exchange). Le refresh
+   * token est stocké haché (rotation) comme dans login/refresh.
+   */
+  async createSessionForUser(userId: string): Promise<TokenResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, role: true, companyId: true, isActive: true },
+    });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    if (!user.isActive) {
+      throw new UnauthorizedException('Account deactivated');
+    }
     return this.generateTokens(user.id, user.email, user.role, user.companyId);
   }
 

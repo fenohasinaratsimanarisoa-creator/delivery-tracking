@@ -223,7 +223,9 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
               className={styles.ssoButton}
               onClick={() => {
                 if (isNativeApp()) {
-                  void openGoogleOAuthInNative();
+                  openGoogleOAuthInNative().catch((err) => {
+                    console.error('[login] native Google OAuth failed to start:', err);
+                  });
                   return;
                 }
                 window.location.href = '/api/auth/google';
