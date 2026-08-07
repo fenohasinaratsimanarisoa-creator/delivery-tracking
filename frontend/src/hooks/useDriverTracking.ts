@@ -373,6 +373,14 @@ export function useDriverTracking() {
         clearTimeout(posTimeout);
         isSendingRef.current = false;
       });
+      // Position rejetée par le serveur (ex. véhicule désactivé/mal configuré) :
+      // on la remet en file d'attente locale (même mécanisme que le cas socket
+      // déconnecté) pour qu'elle soit retentée via drainQueue plutôt que perdue, et
+      // on libère isSendingRef comme dans le cas de succès.
+      socket.once('positionRejected', () => {
+        clearTimeout(posTimeout);
+        enqueuePosition(payload).then(() => { refreshQueueCount(); isSendingRef.current = false; });
+      });
     } else {
       enqueuePosition(payload).then(() => { refreshQueueCount(); isSendingRef.current = false; });
     }

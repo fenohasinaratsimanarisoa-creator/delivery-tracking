@@ -171,7 +171,16 @@ export class TrackingGateway
         user.companyId,
         'phone',
       );
-      if (!position) return;
+      if (!position) {
+        // savePosition() a rejeté la position (véhicule désactivé, mal configuré…).
+        // Renvoyer silencieusement empêchait le client de savoir que sa position a
+        // été rejetée : il la considérait comme envoyée → perte GPS totale et
+        // invisible pendant toute la session. On répond donc par un événement
+        // d'échec explicite, même forme que le succès (positionSaved), avec un motif
+        // générique : aucun détail interne ni cross-tenant ne fuite côté client
+        // (la source de vérité détaillée reste les logs de savePosition côté serveur).
+        return { event: 'positionRejected', data: { reason: 'rejected' } };
+      }
 
       this.logger.log(
         `[POSITION] driver=${driver.id} lat=${dto.latitude.toFixed(6)} lng=${dto.longitude.toFixed(6)} speed=${speed?.toFixed(2)} heading=${dto.heading} delivery=${dto.deliveryId || 'none'} company=${user.companyId}`,

@@ -346,6 +346,21 @@ describe('TrackingGateway — cross-tenant security', () => {
       expect(trackingService.savePosition).toHaveBeenCalled();
     });
 
+    it('emits positionRejected when savePosition returns null (vehicle disabled/misconfigured)', async () => {
+      const client = setupDriverClient('company-a');
+      trackingService.assertVehicleOwnership.mockResolvedValueOnce(undefined);
+      // Véhicule désactivé / mal configuré → savePosition refuse la position.
+      trackingService.savePosition.mockResolvedValueOnce(null);
+
+      const result = await gateway.handlePosition(client, positionDto());
+
+      // Le client reçoit un échec EXPLICITE (motif générique, sans fuite interne),
+      // pour qu'il puisse remettre la position en file au lieu de la perdre.
+      expect(result).toEqual({ event: 'positionRejected', data: { reason: 'rejected' } });
+      // Aucun broadcast de la position rejetée.
+      expect(mockServer.to).not.toHaveBeenCalled();
+    });
+
     it('does not call getLastPosition when assertVehicleOwnership fails', async () => {
       const client = setupDriverClient('company-a');
       trackingService.assertVehicleOwnership.mockRejectedValueOnce(
