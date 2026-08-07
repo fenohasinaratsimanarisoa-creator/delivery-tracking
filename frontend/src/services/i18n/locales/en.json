@@ -630,6 +630,7 @@
     "gpsDiagColGap": "Avg. / max gap",
     "gpsDiagColDist": "Brute / Filtered",
     "gpsDiagColReport": "Report",
+    "gpsDiagColFuel": "Fuel / Price",
     "table": {
       "vehicle": "Vehicle",
       "driver": "Driver",

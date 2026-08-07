@@ -61,15 +61,42 @@ export class FuelConsumptionService {
     return settings?.anomalyThreshold ?? this.fallbackThresholdPercent;
   }
 
+  /**
+   * Normalise le `fuelType` D'UN VÉHICULE vers le token canonique du système de
+   * prix (essence | diesel | electric | hybrid). Le formulaire véhicule stocke
+   * des libellés français capitalisés / accentué : 'Essence', 'Diesel',
+   * 'Hybride Essence', 'Hybride Diesel', 'Électrique' (FleetPage).
+   * Sans cette normalisation, un véhicule non littéralement 'diesel' (ex.
+   * 'Hybride Diesel', 'Électrique') résolvait un prix de 0 Ar via
+   * `defaults[fuelType.toLowerCase()] ?? 0` : les clés du dictionnaire de prix
+   * sont des tokens anglais, aucune ne correspond → coût estimé 0 même pour un
+   * véhicule thermique. `electric` reste à 0 Ar (prix par défaut délibéré).
+   */
+  private normalizeFuelType(raw?: string | null): string {
+    const s = (raw ?? 'essence')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    if (s.includes('elect')) return 'electric'; // 'electrique' (accentué) et 'electric'
+    if (s.includes('gasoil') || s.includes('gazoil')) return 'gasoil'; // historique gasoil distinct
+    if (s.includes('diesel')) return 'diesel';
+    if (s.includes('essence')) return 'essence';
+    if (s.includes('hybr')) return 'hybrid';
+    return 'essence';
+  }
+
   private async getFuelPriceForDate(
     companyId: string,
     fuelType: string,
     date: Date,
   ): Promise<number> {
+    // Token canonique : le formulaire véhicule stocke 'Hybride Diesel',
+    // 'Électrique', 'Essence'… qui ne sont PAS les clés du dictionnaire de prix.
+    const canonical = this.normalizeFuelType(fuelType);
     const price = await this.prisma.fuelPriceHistory.findFirst({
       where: {
         companyId,
-        fuelType: fuelType.toLowerCase(),
+        fuelType: canonical,
         effectiveFrom: { lte: date },
         OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: date } }],
       },
@@ -87,7 +114,7 @@ export class FuelConsumptionService {
     });
     const defaults =
       (settings.defaultFuelPrices as Record<string, number> | null) ?? DEFAULT_FUEL_PRICES;
-    return defaults[fuelType.toLowerCase()] ?? 0;
+    return defaults[canonical] ?? 0;
   }
 
   async create(companyId: string, dto: CreateFuelLogDto) {
@@ -403,7 +430,12 @@ export class FuelConsumptionService {
       vehicleIds.length
         ? this.prisma.vehicle.findMany({
             where: { id: { in: vehicleIds }, companyId },
-            select: { id: true, licensePlate: true },
+            select: {
+              id: true,
+              licensePlate: true,
+              fuelType: true,
+              theoreticalConsumption: true,
+            },
           })
         : Promise.resolve([]),
       driverIds.size
@@ -414,13 +446,19 @@ export class FuelConsumptionService {
         : Promise.resolve([]),
       this.prisma.dailyFuelReport.findMany({
         where: { companyId, reportDate: this.dateUtcWindow(targetDate) },
-        select: { vehicleId: true, distanceKm: true },
+        select: { vehicleId: true, distanceKm: true, fuelType: true, pricePerLiterUsed: true },
       }),
     ]);
 
     const plateById = new Map(vehicles.map((v) => [v.id, v.licensePlate]));
+    const vehicleFuel = new Map(
+      vehicles.map((v) => [
+        v.id,
+        { fuelType: v.fuelType, theoreticalConsumption: v.theoreticalConsumption },
+      ]),
+    );
     const driverById = new Map(drivers.map((d) => [d.id, d]));
-    const reportKmByVehicle = new Map(reports.map((r) => [r.vehicleId, r.distanceKm]));
+    const reportByVehicle = new Map(reports.map((r) => [r.vehicleId, r]));
 
     const vehiclesDiag = [...byVehicle.entries()].map(([vehicleId, group]) => {
       const valid = group.filter((p) => !p.suspect);
@@ -463,12 +501,19 @@ export class FuelConsumptionService {
 
       const lastDriver = [...group].reverse().find((p) => p.driverId)?.driverId;
       const driver = lastDriver ? driverById.get(lastDriver) : undefined;
+      const vehFuel = vehicleFuel.get(vehicleId);
+      const report = reportByVehicle.get(vehicleId);
 
       return {
         vehicleId,
         vehiclePlate: plateById.get(vehicleId) ?? 'N/A',
         driverId: driver?.id ?? null,
         driverName: driver ? `${driver.firstName} ${driver.lastName}` : null,
+        fuelType: vehFuel ? this.normalizeFuelType(vehFuel.fuelType) : null,
+        vehicleFuelTypeRaw: vehFuel?.fuelType ?? null,
+        theoreticalConsumption: vehFuel?.theoreticalConsumption ?? null,
+        reportFuelType: report?.fuelType ?? null,
+        reportPricePerLiter: report?.pricePerLiterUsed ?? null,
         fixCount: group.length,
         validCount: valid.length,
         suspectCount,
@@ -479,7 +524,7 @@ export class FuelConsumptionService {
         coveragePercent: spanSec > 0 ? Math.min(100, Math.round((spanSec / 86400) * 100)) : 0,
         rawDistanceKm: Math.round(rawKm * 100) / 100,
         filteredDistanceKm: Math.round(filteredKm * 100) / 100,
-        reportDistanceKm: reportKmByVehicle.get(vehicleId) ?? null,
+        reportDistanceKm: report?.distanceKm ?? null,
         accuracyMin,
         accuracyMax,
         accuracyAvg: accuracyAvg != null ? Math.round(accuracyAvg * 10) / 10 : null,
@@ -922,7 +967,7 @@ export class FuelConsumptionService {
     });
     if (!vehicle) return;
 
-    const fuelType = vehicle.fuelType?.toLowerCase() || 'essence';
+    const fuelType = this.normalizeFuelType(vehicle.fuelType);
     const consumption = vehicle.theoreticalConsumption || 8;
     const pricePerLiter = await this.getFuelPriceForDate(companyId, fuelType, targetDate);
     const estimatedCost =

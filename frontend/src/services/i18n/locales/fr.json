@@ -630,6 +630,7 @@
     "gpsDiagColGap": "Écart moy. / max",
     "gpsDiagColDist": "Brute / Filtrée",
     "gpsDiagColReport": "Rapport",
+    "gpsDiagColFuel": "Carburant / Prix",
     "table": {
       "vehicle": "Véhicule",
       "driver": "Chauffeur",

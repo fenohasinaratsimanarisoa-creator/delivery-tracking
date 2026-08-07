@@ -82,6 +82,11 @@ interface GpsVehicleDiagnostics {
   speedMaxMs: number | null;
   movingCount: number;
   speedReportedCount: number;
+  fuelType: string | null;
+  vehicleFuelTypeRaw: string | null;
+  theoreticalConsumption: number | null;
+  reportFuelType: string | null;
+  reportPricePerLiter: number | null;
 }
 
 interface GpsDiagnostics {
@@ -1175,6 +1180,9 @@ export default function FuelPage() {
                           <th className={styles.tableHeadCell}>
                             {t("fuel.gpsDiagColReport")}
                           </th>
+                          <th className={styles.tableHeadCell}>
+                            {t("fuel.gpsDiagColFuel")}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1230,6 +1238,36 @@ export default function FuelPage() {
                                   : "—"}
                               </span>
                               {" km"}
+                            </td>
+                            <td className={styles.tableCell}>
+                              {v.fuelType ? (
+                                <span className={styles.fuelTypeCell}>
+                                  <span
+                                    className={styles.fuelTypeIcon}
+                                    style={{
+                                      background: `color-mix(in srgb, ${FUEL_TYPE_COLORS[v.fuelType]} 14%, transparent)`,
+                                      color: FUEL_TYPE_COLORS[v.fuelType],
+                                    }}
+                                  >
+                                    {FUEL_TYPE_ICONS[v.fuelType]}
+                                  </span>
+                                  <span className={styles.fuelTypeName}>
+                                    {t(`fuel.types.${v.fuelType}`, {
+                                      defaultValue: v.fuelType,
+                                    })}
+                                  </span>
+                                  <span className={styles.diagSlash}>
+                                    {" · "}
+                                  </span>
+                                  <span className={styles.monoValue}>
+                                    {v.reportPricePerLiter != null
+                                      ? `${v.reportPricePerLiter} Ar/L`
+                                      : "—"}
+                                  </span>
+                                </span>
+                              ) : (
+                                "—"
+                              )}
                             </td>
                           </tr>
                         ))}

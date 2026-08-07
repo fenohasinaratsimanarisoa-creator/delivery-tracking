@@ -1595,15 +1595,20 @@ describe('FuelConsumptionService', () => {
         },
       ] as any);
       mockPrisma.vehicle.findMany.mockResolvedValueOnce([
-        { id: 'vehicle-1', licensePlate: 'TRK-1' },
-        { id: 'vehicle-2', licensePlate: 'TRK-2' },
+        { id: 'vehicle-1', licensePlate: 'TRK-1', fuelType: 'Diesel', theoreticalConsumption: 10 },
+        {
+          id: 'vehicle-2',
+          licensePlate: 'TRK-2',
+          fuelType: 'Électrique',
+          theoreticalConsumption: 0,
+        },
       ] as any);
       mockPrisma.driver.findMany.mockResolvedValueOnce([
         { id: 'driver-1', firstName: 'Jean', lastName: 'Rakoto' },
       ] as any);
       mockPrisma.dailyFuelReport.findMany.mockResolvedValueOnce([
-        { vehicleId: 'vehicle-1', distanceKm: 0.33 },
-        { vehicleId: 'vehicle-2', distanceKm: 0 },
+        { vehicleId: 'vehicle-1', distanceKm: 0.33, fuelType: 'diesel', pricePerLiterUsed: 4900 },
+        { vehicleId: 'vehicle-2', distanceKm: 0, fuelType: 'electric', pricePerLiterUsed: 0 },
       ] as any);
 
       const result = await service.getGpsDiagnostics('company-1', '2026-07-20');
@@ -1622,6 +1627,12 @@ describe('FuelConsumptionService', () => {
       expect(v1.speedMaxMs).toBe(4.5);
       expect(v1.movingCount).toBe(3);
       expect(v1.speedReportedCount).toBe(3);
+      // Carburant & prix : reflète le véhicule et ce que le rapport a réellement stocké.
+      expect(v1.fuelType).toBe('diesel');
+      expect(v1.reportFuelType).toBe('diesel');
+      expect(v1.reportPricePerLiter).toBe(4900);
+      expect(v2.fuelType).toBe('electric'); // 'Électrique' → token canonique electric
+      expect(v2.reportPricePerLiter).toBe(0);
       // Gaps entre valides : 30s puis 3min (le suspect est ignoré) → 1 gap > 60s.
       expect(v1.avgGapSec).toBe(105);
       expect(v1.maxGapSec).toBe(180);
@@ -1682,6 +1693,83 @@ describe('FuelConsumptionService', () => {
       expect(v.coveragePercent).toBe(25);
       // La distance brute ne couvre QUE les segments entre fixes existants.
       expect(v.rawDistanceKm).toBeGreaterThan(0);
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // COÛT — normalisation du carburant du formulaire véhicule (fr/capitalisé/accentué)
+  // vers les tokens de prix, pour ne plus produire de coût 0 Ar sur un VE thermique.
+  // ----------------------------------------------------------------
+  describe('normalizeFuelType — coût correct pour un véhicule Diesel', () => {
+    it.each([
+      ['Diesel', 'diesel'],
+      ['gasoil', 'gasoil'],
+      ['Essence', 'essence'],
+      ['Électrique', 'electric'],
+      ['electric', 'electric'],
+      ['Hybride Essence', 'essence'], // hybride essence brûle de l'essence
+      ['Hybride Diesel', 'diesel'], // hybride diesel brûle du diesel
+    ])('normalizeFuelType("%s") → "%s"', (raw, expected) => {
+      expect((service as any).normalizeFuelType(raw)).toBe(expected);
+    });
+
+    it('résout le prix DIESEL pour un véhicule "Hybride Diesel" (avant la correction : 0 Ar)', async () => {
+      // Aucun prix historique → prix par défaut de la company.
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.companyFuelSettings.upsert.mockResolvedValueOnce({ defaultFuelPrices: null });
+
+      const price = await (service as any).getFuelPriceForDate(
+        'company-1',
+        'Hybride Diesel',
+        new Date('2026-08-07'),
+      );
+
+      expect(price).toBe(4900); // DEFAULT_FUEL_PRICES.diesel, et non plus 0
+      // La requête historique interroge bien le token canonique 'diesel'.
+      expect(mockPrisma.fuelPriceHistory.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ fuelType: 'diesel' }) }),
+      );
+    });
+
+    it('génère un DailyFuelReport Diesel (fuelType="diesel", coût non nul) pour un véhicule "Hybride Diesel"', async () => {
+      const driver = { id: 'driver-1', firstName: 'Jean', lastName: 'Rakoto' };
+      const VEHICLE_HYBRID_DIESEL = {
+        id: 'vehicle-hd',
+        licensePlate: 'TRK-HD',
+        fuelType: 'Hybride Diesel',
+        theoreticalConsumption: 10,
+      };
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue([
+        { latitude: 0, longitude: 0, vehicleId: 'vehicle-hd' },
+        { latitude: 0, longitude: 0.01004, vehicleId: 'vehicle-hd' },
+        { latitude: 0, longitude: 0.02004, vehicleId: 'vehicle-hd' },
+      ] as any);
+      mockPrisma.vehicle.findUnique.mockResolvedValue(VEHICLE_HYBRID_DIESEL as any);
+      mockPrisma.vehicle.findMany.mockResolvedValue([]);
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue(null);
+      mockPrisma.companyFuelSettings.upsert.mockResolvedValue({
+        defaultFuelPrices: null,
+      });
+      let captured: any;
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (a: any) => {
+        captured = a;
+        return a;
+      });
+
+      await service.generateDailyReportForSingleDriver(
+        'company-1',
+        'driver-1',
+        new Date('2026-07-20T12:00:00.000Z'),
+      );
+
+      expect(captured.create.fuelType).toBe('diesel');
+      expect(captured.create.pricePerLiterUsed).toBe(4900);
+      // Coût selon la formule avec le prix diesel — PAS 0 Ar pour un véhicule thermique.
+      expect(captured.create.estimatedCost).toBe(
+        Math.round(((captured.create.distanceKm * 10) / 100) * 4900 * 100) / 100,
+      );
+      expect(captured.create.estimatedCost).toBeGreaterThan(0);
     });
   });
 });
