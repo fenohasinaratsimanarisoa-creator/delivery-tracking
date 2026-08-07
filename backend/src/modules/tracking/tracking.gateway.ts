@@ -121,7 +121,14 @@ export class TrackingGateway
     if (!user || user.role !== 'driver') return;
 
     return CompanyScopedContext.run(user.companyId, async () => {
-      if (await this.trackingService.isRateLimited(user.id)) return;
+      if (await this.trackingService.isRateLimited(user.id)) {
+        // Rate limiting : on rejette l'envoi, mais PAS silencieusement. Sans signal,
+        // le client croirait sa position acceptée et la perdrait définitivement (elle
+        // n'est ni sauvée ni mise en file). On réutilise l'événement positionRejected
+        // du Bug n°10 avec un motif dédié, pour que sendPosition remette la position
+        // en file d'attente locale (retentative via drainQueue).
+        return { event: 'positionRejected', data: { reason: 'rate_limited' } };
+      }
 
       if (dto.deliveryId) {
         try {

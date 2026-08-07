@@ -346,6 +346,22 @@ describe('TrackingGateway — cross-tenant security', () => {
       expect(trackingService.savePosition).toHaveBeenCalled();
     });
 
+    it('emits positionRejected with reason rate_limited when the send is rate limited', async () => {
+      const client = setupDriverClient('company-a');
+      trackingService.isRateLimited.mockResolvedValueOnce(true);
+
+      const result = await gateway.handlePosition(client, positionDto());
+
+      expect(result).toEqual({
+        event: 'positionRejected',
+        data: { reason: 'rate_limited' },
+      });
+      // Rien d'autre n'est exécuté (ni ownership ni savePosition).
+      expect(trackingService.assertVehicleOwnership).not.toHaveBeenCalled();
+      expect(trackingService.savePosition).not.toHaveBeenCalled();
+      expect(mockServer.to).not.toHaveBeenCalled();
+    });
+
     it('emits positionRejected when savePosition returns null (vehicle disabled/misconfigured)', async () => {
       const client = setupDriverClient('company-a');
       trackingService.assertVehicleOwnership.mockResolvedValueOnce(undefined);
