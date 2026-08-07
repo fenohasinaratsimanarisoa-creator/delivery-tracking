@@ -8,8 +8,8 @@
   align-items: stretch;
   gap: 2px;
   padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
-  background: var(--color-bg, #0E1625);
-  border-top: 1px solid var(--color-border, rgba(242, 169, 60, 0.16));
+  background: var(--color-bg, #0B1220);
+  border-top: 1px solid var(--color-border, rgba(242, 169, 60, 0.2));
   backdrop-filter: blur(18px) saturate(1.2);
   -webkit-backdrop-filter: blur(18px) saturate(1.2);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
@@ -30,7 +30,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--color-text-secondary, #8A94A7);
+  color: var(--color-text-secondary, #9BA6B9);
   font-family: var(--font-body);
   -webkit-tap-highlight-color: transparent;
   transition: color 0.18s ease, transform 0.12s ease;
@@ -57,7 +57,7 @@
   height: 17px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--color-red, #ef4444);
+  background: var(--color-red, #E8544C);
   color: #fff;
   font-size: 0.625rem;
   font-weight: 700;
@@ -123,9 +123,9 @@
 }
 
 .sheet {
-  background: var(--color-surface, #141D2E);
+  background: var(--color-surface, #121B2E);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  border: 1px solid var(--color-border-subtle, rgba(232, 236, 243, 0.1));
+  border: 1px solid var(--color-border-subtle, rgba(232, 236, 243, 0.08));
   box-shadow: var(--shadow-2xl, 0 -12px 40px rgba(0, 0, 0, 0.5));
   padding: 8px 8px calc(12px + env(safe-area-inset-bottom));
   max-height: 70vh;
@@ -137,21 +137,21 @@
   width: 40px;
   height: 4px;
   border-radius: 999px;
-  background: var(--color-border, rgba(232, 236, 243, 0.2));
+  background: var(--color-border-subtle, rgba(232, 236, 243, 0.08));
   margin: 4px auto 10px;
 }
 
 .sheetTitle {
   font-family: var(--font-display);
   font-size: var(--text-sm);
-  color: var(--color-text-tertiary, #6B7792);
+  color: var(--color-text-tertiary, #7A8BA3);
   padding: 3px 16px 10px;
   letter-spacing: 0.01em;
 }
 
 .sheetDivider {
   height: 1px;
-  background: var(--color-border-subtle, rgba(232, 236, 243, 0.1));
+  background: var(--color-border-subtle, rgba(232, 236, 243, 0.08));
   margin: 8px 16px;
 }
 
@@ -169,7 +169,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--color-surface, rgba(255, 255, 255, 0.05));
+  background: var(--color-surface-alt, #182339);
   color: var(--color-accent, #F2A93C);
   flex-shrink: 0;
 }
@@ -183,7 +183,7 @@
 
 .sheetUserName {
   font-size: var(--text-sm);
-  color: var(--color-text, #E8ECF2);
+  color: var(--color-text, #E8ECF3);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -192,7 +192,7 @@
 
 .sheetUserRole {
   font-size: 0.6875rem;
-  color: var(--color-text-tertiary, #6B7792);
+  color: var(--color-text-tertiary, #7A8BA3);
   text-transform: capitalize;
 }
 
@@ -205,7 +205,7 @@
   background: none;
   border: none;
   border-radius: var(--radius-md);
-  color: var(--color-red, #ef4444);
+  color: var(--color-red, #E8544C);
   font-family: var(--font-body);
   font-size: var(--text-base, 0.9375rem);
   cursor: pointer;
@@ -214,7 +214,7 @@
 
 .sheetLogout:hover,
 .sheetLogout:focus-visible {
-  background: rgba(239, 68, 68, 0.08);
+  background: var(--color-red-muted, rgba(232, 84, 76, 0.15));
 }
 
 .sheetItem {
@@ -236,7 +236,7 @@
 
 .sheetItem:hover,
 .sheetItem:focus-visible {
-  background: var(--color-surface, rgba(255, 255, 255, 0.04));
+  background: var(--color-surface-hover, #1E2A45);
   color: var(--color-text);
 }
 

@@ -251,7 +251,7 @@
   align-items: flex-start;
   gap: 6px;
   padding: var(--space-md);
-  background: var(--color-surface, rgba(18,27,46,0.7));
+  background: var(--color-glass, rgba(18,27,46,0.88));
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-lg, 8px);
   overflow: hidden;

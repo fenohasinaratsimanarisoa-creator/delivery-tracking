@@ -311,3 +311,14 @@
   font-size: 15px;
   color: #4285f4;
 }
+
+/* Confort tactile (WCAG 2.5.5) : toggle œil >=44px + padding input sur écrans tactiles. */
+@media (pointer: coarse) {
+  .passwordToggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .input {
+    padding-right: 56px;
+  }
+}

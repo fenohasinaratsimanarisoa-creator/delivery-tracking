@@ -80,7 +80,7 @@
   min-width: 16px;
   text-align: center;
   font-family: var(--font-mono);
-  box-shadow: 0 0 0 2px var(--color-surface), 0 2px 8px rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 0 2px var(--color-surface), 0 2px 8px var(--color-red-muted, rgba(232, 84, 76, 0.15));
   animation: dt-notif-pop 0.35s var(--ease-premium, cubic-bezier(0.16, 1, 0.3, 1)) both;
 }
 

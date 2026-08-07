@@ -446,3 +446,13 @@
 .spinner {
   animation: dt-spin 0.8s linear infinite;
 }
+/* Confort tactile (WCAG 2.5.5) : toggle œil >=44px + padding input sur écrans tactiles. */
+@media (pointer: coarse) {
+  .passwordToggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .input {
+    padding-right: 56px;
+  }
+}

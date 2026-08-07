@@ -239,17 +239,17 @@
 }
 
 .deliveryCard:hover {
-  border-color: var(--color-border, rgba(242,169,60,0.22));
+  border-color: var(--color-border, rgba(242,169,60,0.2));
 }
 
 /* Fond teinté plat (pas de dégradé), statut fonctionnel conservé */
 .deliveryCardActive {
-  background: var(--color-teal-muted, rgba(63,167,150,0.1));
+  background: var(--color-teal-muted, rgba(63,167,150,0.15));
   border-color: var(--color-teal, #3FA796);
 }
 
 .deliveryCardPending {
-  background: var(--color-accent-muted, rgba(242,169,60,0.07));
+  background: var(--color-accent-muted, rgba(242,169,60,0.15));
 }
 
 .accentBar {
@@ -383,7 +383,7 @@
   width: 2px;
   background: repeating-linear-gradient(
     to bottom,
-    var(--color-border, rgba(242,169,60,0.25)) 0 6px,
+    var(--color-border, rgba(242,169,60,0.2)) 0 6px,
     transparent 6px 12px
   );
 }
@@ -391,7 +391,7 @@
 /* ─── Détails repliables ──────────────────────────────────── */
 .cardDetails {
   margin: 0;
-  border-top: 1px solid var(--color-border-subtle, rgba(232,236,243,0.06));
+  border-top: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   padding-top: var(--space-md);
 }
 
@@ -466,7 +466,7 @@
   font-weight: 600;
   letter-spacing: 0.03em;
   color: var(--color-accent, #F2A93C);
-  background: var(--color-accent-muted, rgba(242,169,60,0.12));
+  background: var(--color-accent-muted, rgba(242,169,60,0.15));
   padding: 1px 7px;
   border-radius: var(--radius-sm);
 }
@@ -497,7 +497,7 @@
   gap: var(--space-sm);
   flex-wrap: wrap;
   justify-content: flex-end;
-  border-top: 1px solid var(--color-border-subtle, rgba(232,236,243,0.06));
+  border-top: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   padding-top: var(--space-md);
 }
 
@@ -543,7 +543,7 @@
 }
 
 .actionSuccess:hover {
-  background: var(--color-teal, #2c7f72);
+  background: var(--color-teal, #3FA796);
 }
 
 .actionDanger {
@@ -553,7 +553,7 @@
 }
 
 .actionDanger:hover {
-  background: var(--color-red-muted, rgba(232,84,76,0.12));
+  background: var(--color-red-muted, rgba(232,84,76,0.15));
   border-color: var(--color-red, #E8544C);
 }
 
@@ -652,5 +652,15 @@
   .actionStretch {
     flex: 1;
     min-height: 44px;
+  }
+}
+
+/* Aération mobile : cartes plus spacieuses et listes moins denses. */
+@media (max-width: 560px) {
+  .deliveryCard {
+    padding: var(--space-xl);
+  }
+  .list {
+    gap: var(--space-lg);
   }
 }

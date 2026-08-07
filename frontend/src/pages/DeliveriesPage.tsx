@@ -514,9 +514,9 @@ export default function DeliveriesPage() {
 
       <div className={styles.kpiGrid}>
         <KpiCard icon={<Package size={18} />} label={t('deliveries.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" delay={0} />
-        <KpiCard icon={<Clock size={18} />} label={t('deliveries.kpis.pending')} value={stats.pending} color="#f59e0b" delay={70} />
+        <KpiCard icon={<Clock size={18} />} label={t('deliveries.kpis.pending')} value={stats.pending} color="var(--color-warning, #f59e0b)" delay={70} />
         <KpiCard icon={<Truck size={18} />} label={t('deliveries.kpis.inProgress')} value={stats.inProgress} color="var(--color-blue, #3b82f6)" delay={140} />
-        <KpiCard icon={<CheckCircle2 size={18} />} label={t('deliveries.kpis.delivered')} value={stats.delivered} color="#22c55e" delay={210} />
+        <KpiCard icon={<CheckCircle2 size={18} />} label={t('deliveries.kpis.delivered')} value={stats.delivered} color="var(--color-teal, #3FA796)" delay={210} />
       </div>
 
       <div className={styles.filtersRow}>
@@ -883,7 +883,7 @@ export default function DeliveriesPage() {
             </h2>
             <div className={styles.importStatsRow}>
               <div className={styles.importStatCard}>
-                <div className={styles.importStatNumber} style={{ color: '#22c55e' }}>{importReport.created}</div>
+                <div className={styles.importStatNumber} style={{ color: 'var(--color-teal, #3FA796)' }}>{importReport.created}</div>
                 <div className={styles.importStatLabel}>{t('deliveries.import.stats.created')}</div>
               </div>
               <div className={styles.importStatCard}>
