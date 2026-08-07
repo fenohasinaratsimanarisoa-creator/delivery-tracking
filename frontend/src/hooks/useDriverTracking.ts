@@ -14,15 +14,16 @@ import {
 } from '../services/tracking/backgroundLocation';
 import type { Delivery } from '../types';
 
+// Wake lock 'screen' RETIRÉ : il n'empêche l'écran de s'éteindre que PENDANT que
+// l'app est visible, et le navigateur le relâche automatiquement dès que
+// document.visibilityState passe à 'hidden' — donc juste au moment où on en aurait
+// besoin (écran verrouillé / app en arrière-plan). Il n'a donc AUCUN effet utile
+// pour maintenir l'acquisition GPS en arrière-plan. La vraie continuité derrière
+// l'écran verrouillé vient du foreground service natif LocationForegroundService
+// (acquisition via FusedLocationProviderClient, indépendante de la WebView), pas
+// d'un Wake Lock JS. releaseWakeLock() est conservé pour symétrie/robustesse
+// (no-op tant que rien n'est acquis).
 let wakeLockRef: WakeLockSentinel | null = null;
-async function acquireWakeLock() {
-  if (!navigator.wakeLock) return false;
-  try {
-    wakeLockRef = await navigator.wakeLock.request('screen');
-    wakeLockRef!.addEventListener('release', () => { wakeLockRef = null; });
-    return true;
-  } catch { return false; }
-}
 function releaseWakeLock() {
   if (wakeLockRef) { wakeLockRef.release?.(); wakeLockRef = null; }
 }
@@ -493,7 +494,9 @@ export function useDriverTracking() {
 
     sensorFusion.init().then(() => {}).catch(() => {});
 
-    acquireWakeLock();
+    // (Wake lock 'screen' retiré : illusoire en arrière-plan — voir en-tête du
+    // fichier. La continuité derrière l'écran verrouillé est assurée par le
+    // foreground service natif LocationForegroundService, démarré ci-dessous.)
 
     // Demande la permission de notification native (Android 13+) + permission de
     // localisation "toujours" (flow Android 11+), puis démarre le foreground
@@ -570,7 +573,10 @@ export function useDriverTracking() {
             })
             .catch(() => {});
         }
-        acquireWakeLock();
+        // (Wake lock 'screen' retiré ici aussi : le navigateur le relâche dès que
+        // la page passe en 'hidden', donc inutile au retour depuis l'écran
+        // verrouillé. La continuité en arrière-plan est le rôle du foreground
+        // service natif LocationForegroundService.)
         hiddenSinceRef.current = 0;
       }
     };
