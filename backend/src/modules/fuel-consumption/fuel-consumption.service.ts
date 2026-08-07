@@ -584,12 +584,26 @@ export class FuelConsumptionService {
     for (const [key, value] of Object.entries(prices)) {
       if (value !== undefined) sanitized[key] = value;
     }
+    // Récupère les prix existants pour FUSIONNER au lieu de remplacer : la colonne
+    // JSON defaultFuelPrices stocke toute la map { type → prix }. Sans ce merge,
+    // update remplace l'objet entier par `sanitized`, donc un appel avec un seul
+    // type supprime les autres → ils retombent à 0 via `defaults[canonical] ?? 0`
+    // dans getFuelPriceForDate. Ici, seules les clés fournies écrasent ; les clés
+    // existantes non mentionnées sont conservées. Si la ligne n'existe pas encore,
+    // existingDefaults est vide → merged == sanitized (rien à fusionner).
+    const existing = await this.prisma.companyFuelSettings.findUnique({
+      where: { companyId },
+      select: { defaultFuelPrices: true },
+    });
+    const existingDefaults =
+      (existing?.defaultFuelPrices as Record<string, number> | null) ?? {};
+    const merged = { ...existingDefaults, ...sanitized };
     await this.prisma.companyFuelSettings.upsert({
       where: { companyId },
-      update: { defaultFuelPrices: sanitized },
-      create: { companyId, defaultFuelPrices: sanitized },
+      update: { defaultFuelPrices: merged },
+      create: { companyId, defaultFuelPrices: merged },
     });
-    return { defaults: sanitized };
+    return { defaults: merged };
   }
 
   /** Ajoute un prix dans l'historique et ferme l'entrée ouverte précédente du même type. */

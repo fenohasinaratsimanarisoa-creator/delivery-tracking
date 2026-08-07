@@ -1350,6 +1350,29 @@ describe('FuelConsumptionService', () => {
       });
     });
 
+    it('updateDefaultFuelPrices merges with existing defaults — a single field must not erase the others', async () => {
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({
+        defaultFuelPrices: { diesel: 5400, essence: 5200, gasoil: 5000 },
+      });
+      mockPrisma.companyFuelSettings.upsert.mockResolvedValueOnce({});
+
+      const result = await service.updateDefaultFuelPrices('company-1', {
+        diesel: 5500,
+      });
+
+      expect(result.defaults).toEqual({ diesel: 5500, essence: 5200, gasoil: 5000 });
+      expect(mockPrisma.companyFuelSettings.upsert).toHaveBeenCalledWith({
+        where: { companyId: 'company-1' },
+        update: {
+          defaultFuelPrices: { diesel: 5500, essence: 5200, gasoil: 5000 },
+        },
+        create: {
+          companyId: 'company-1',
+          defaultFuelPrices: { diesel: 5500, essence: 5200, gasoil: 5000 },
+        },
+      });
+    });
+
     it('createFuelPrice closes the previous open-ended entry of the same fuel type', async () => {
       const effectiveFrom = new Date('2026-08-01T00:00:00.000Z');
       mockPrisma.fuelPriceHistory.updateMany.mockResolvedValueOnce({ count: 1 });
