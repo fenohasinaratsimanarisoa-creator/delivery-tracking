@@ -4,4 +4,8 @@
     <string name="title_activity_main">LogiTrack</string>
     <string name="package_name">com.logitrack.app</string>
     <string name="custom_url_scheme">com.logitrack.app</string>
+    <string name="location_notification_channel_name">Suivi de livraison</string>
+    <string name="location_notification_channel_desc">Notification persistante indiquant que la localisation est active pendant la livraison.</string>
+    <string name="location_notification_title">Livraison en cours</string>
+    <string name="location_notification_text">Localisation active</string>
 </resources>

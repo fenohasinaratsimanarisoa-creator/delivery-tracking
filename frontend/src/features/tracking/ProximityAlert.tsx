@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Bell, BellOff, ArrowRight, X,
-  MapPin, AlertTriangle, Construction, Antenna, Radio, Ban,
+  MapPin, AlertTriangle, Construction, Antenna, Radio, Ban, ShieldCheck,
 } from 'lucide-react';
 import type { TrackingStatus, DriverAlert } from '../../hooks/useDriverTracking';
 import styles from './ProximityAlert.module.css';
@@ -22,6 +22,7 @@ function alertIcon(type: string): React.ReactNode {
     case 'poor_accuracy': return <Antenna size={16} />;
     case 'queue_full': return <Radio size={16} />;
     case 'geo_denied': return <Ban size={16} />;
+    case 'background_continued': return <ShieldCheck size={16} />;
     default: return <Bell size={16} />;
   }
 }
@@ -115,7 +116,8 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
 export default function ProximityAlert({ status }: { status: TrackingStatus }) {
   const shownAlerts = status.alerts.filter((a) =>
     a.type === 'proximity' || a.type === 'cascade' || a.type === 'geofence' ||
-    a.type === 'poor_accuracy' || a.type === 'queue_full' || a.type === 'geo_denied'
+    a.type === 'poor_accuracy' || a.type === 'queue_full' || a.type === 'geo_denied' ||
+    a.type === 'background_continued'
   );
 
   if (shownAlerts.length === 0) return null;

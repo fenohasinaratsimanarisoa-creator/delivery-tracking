@@ -5,6 +5,12 @@ import { getSocket } from '../services/socket/socket';
 import { enqueuePosition, queueSize, flushQueue } from '../services/offlineQueue';
 import { KalmanFilter } from '../services/tracking/KalmanFilter';
 import { sensorFusion, simulateStationaryFromSpeed } from '../services/tracking/sensorFusion';
+import {
+  getBackgroundLocationStatus,
+  requestBackgroundLocationPermissions,
+  startBackgroundLocation,
+  stopBackgroundLocation,
+} from '../services/tracking/backgroundLocation';
 import type { Delivery } from '../types';
 
 let wakeLockRef: WakeLockSentinel | null = null;
@@ -58,7 +64,7 @@ export interface DriverPosition {
 }
 
 export interface DriverAlert {
-  type: 'proximity' | 'cascade' | 'geofence' | 'poor_accuracy' | 'queue_full' | 'geo_denied' | 'background_stop';
+  type: 'proximity' | 'cascade' | 'geofence' | 'poor_accuracy' | 'queue_full' | 'geo_denied' | 'background_continued';
   title: string;
   message: string;
   deliveryId?: string;
@@ -462,6 +468,25 @@ export function useDriverTracking() {
 
     acquireWakeLock();
 
+    // Demande la permission de notification native (Android 13+) + permission de
+    // localisation "toujours" (flow Android 11+), puis démarre le foreground
+    // service de type "location" : il maintient le process vivant pendant
+    // l'écran verrouillé afin que watchPosition + setInterval continuent.
+    getBackgroundLocationStatus()
+      .then((status) => {
+        if (!status.running) {
+          return requestBackgroundLocationPermissions()
+            .then(() => startBackgroundLocation())
+            .catch((err) => {
+              console.warn('[tracking] native background service start failed:', err);
+            });
+        }
+        return undefined;
+      })
+      .catch((err) => {
+        console.warn('[tracking] native background status check failed:', err);
+      });
+
     // Request notification permission when driver starts tracking (non-intrusive)
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
@@ -478,12 +503,22 @@ export function useDriverTracking() {
       } else if (document.visibilityState === 'visible' && hiddenSinceRef.current > 0) {
         const gapSec = Math.round((Date.now() - hiddenSinceRef.current) / 1000);
         if (gapSec > 15) {
-          addAlert({
-            type: 'background_stop',
-            title: 'Tracking interrompu',
-            message: `L\'application était en arrière-plan pendant ${gapSec}s. Les positions GPS n\'ont pas été envoyées durant cette période. Gardez l\'app ouverte pour un tracking continu.`,
-            urgency: 'high',
-          });
+          // Depuis le passage en arrière-plan natif (foreground service location),
+          // le tracking continue pendant l'écran verrouillé. Cette alerte ne signale
+          // plus un tracking cassé : elle confirme que le suivi est resté actif.
+          getBackgroundLocationStatus()
+            .then((status) => {
+              if (status.running) {
+                const gapMin = Math.round(gapSec / 60);
+                addAlert({
+                  type: 'background_continued',
+                  title: 'Tracking maintenu en arrière-plan',
+                  message: `Le suivi est resté actif pendant ${gapMin} min derrière l'écran verrouillé. Les positions continuent d'être envoyées au dispatcher.`,
+                  urgency: 'normal',
+                });
+              }
+            })
+            .catch(() => {});
         }
         acquireWakeLock();
         hiddenSinceRef.current = 0;
@@ -510,6 +545,7 @@ export function useDriverTracking() {
       visibilityHandlerRef.current();
       visibilityHandlerRef.current = null;
     }
+    stopBackgroundLocation().catch(() => {});
     releaseWakeLock();
     hiddenSinceRef.current = 0;
     lastMovingRef.current = Date.now();
