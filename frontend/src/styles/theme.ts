@@ -94,10 +94,58 @@ export const colors = {
     chartGrid: 'rgba(11, 18, 32, 0.08)',
     chartTooltip: '#FFFFFF',
   },
+  // Variante « field » : usage terrain mobile en extérieur (drivers / clients).
+  // Palette sobre, accent désaturé, fort contraste lisible en plein soleil,
+  // ombres légères, aucun glow/halo. Appliquée via [data-context="field"]
+  // sur <html>, indépendamment du choix dark/light de l'admin. Les tokens de
+  // structure (space/radius/typography) restent identiques au control room.
+  field: {
+    bg: '#EEF2F5',
+    surface: '#FFFFFF',
+    surfaceAlt: '#F6F8FA',
+    surfaceHover: '#E7ECF1',
+    border: 'rgba(15, 23, 42, 0.14)',
+    borderSubtle: 'rgba(15, 23, 42, 0.07)',
+    text: '#0F172A',
+    textSecondary: '#334155',
+    textTertiary: '#64748B',
+    accent: '#0E7490',
+    accentHover: '#155E75',
+    accentMuted: 'rgba(14, 116, 144, 0.12)',
+    teal: '#047857',
+    tealMuted: 'rgba(4, 120, 87, 0.1)',
+    red: '#B91C1C',
+    redMuted: 'rgba(185, 28, 28, 0.1)',
+    overlay: 'rgba(15, 23, 42, 0.4)',
+    glass: 'rgba(255, 255, 255, 0.92)',
+    glassBorder: 'rgba(15, 23, 42, 0.08)',
+    inputBg: '#FFFFFF',
+    inputBorder: '#CBD5E1',
+    inputFocus: '#0E7490',
+    skeleton: '#E2E8F0',
+    mapAttribution: 'rgba(15, 23, 42, 0.65)',
+    statusMoving: '#B45309',
+    statusStatic: '#047857',
+    statusAlert: '#B91C1C',
+    blue: '#2563EB',
+    blueMuted: 'rgba(37, 99, 235, 0.1)',
+    purple: '#6D28D9',
+    purpleMuted: 'rgba(109, 40, 217, 0.1)',
+    orange: '#C2410C',
+    orangeMuted: 'rgba(194, 65, 12, 0.1)',
+    warning: '#B45309',
+    warningMuted: 'rgba(180, 83, 9, 0.08)',
+    warningSubtle: 'rgba(180, 83, 9, 0.05)',
+    shadow: '0 1px 2px rgba(15,23,42,0.05)',
+    shadowLg: '0 4px 14px rgba(15,23,42,0.08)',
+    shadowDialog: '0 2px 8px rgba(15,23,42,0.06), 0 16px 40px rgba(15,23,42,0.14)',
+    chartGrid: 'rgba(15, 23, 42, 0.08)',
+    chartTooltip: '#FFFFFF',
+  },
 };
 
 export type ThemeMode = 'dark' | 'light';
-export type ThemeColors = typeof colors.dark;
+export type ThemeColors = { [K in keyof typeof colors.dark]: string };
 
 export const typography = {
   display: "'Space Grotesk', sans-serif",
@@ -182,10 +230,13 @@ export const duration = {
   slow: '350ms',
 } as const;
 
-export function buildCssVars(mode: ThemeMode): string {
-  const c = colors[mode];
+function cssVarBody(
+  c: ThemeColors,
+  shadowMap: { [K in keyof (typeof shadows)['light']]: string },
+  glow: string,
+  glowDanger: string,
+): string {
   return `
-:root[data-theme="${mode}"] {
   --color-bg: ${c.bg};
   --color-surface: ${c.surface};
   --color-surface-alt: ${c.surfaceAlt};
@@ -260,20 +311,55 @@ export function buildCssVars(mode: ThemeMode): string {
   --radius-xl: ${radius.xl}px;
   --radius-2xl: ${radius['2xl']}px;
   --radius-full: ${radius.full}px;
-  --shadow-xs: ${mode === 'dark' ? shadows.xs : shadows.light.xs};
-  --shadow-sm: ${mode === 'dark' ? shadows.sm : shadows.light.sm};
-  --shadow-md: ${mode === 'dark' ? shadows.md : shadows.light.md};
-  --shadow-lg: ${mode === 'dark' ? shadows.lg : shadows.light.lg};
-  --shadow-xl: ${mode === 'dark' ? shadows.xl : shadows.light.xl};
-  --shadow-2xl: ${mode === 'dark' ? shadows['2xl'] : shadows.light['2xl']};
-  --shadow-glow: ${mode === 'dark' ? shadows.glow : shadows.light.glow};
-  --shadow-glow-danger: ${mode === 'dark' ? shadows.glowDanger : shadows.light.glowDanger};
+  --shadow-xs: ${shadowMap.xs};
+  --shadow-sm: ${shadowMap.sm};
+  --shadow-md: ${shadowMap.md};
+  --shadow-lg: ${shadowMap.lg};
+  --shadow-xl: ${shadowMap.xl};
+  --shadow-2xl: ${shadowMap['2xl']};
+  --shadow-glow: ${glow};
+  --shadow-glow-danger: ${glowDanger};
   --ease-premium: ${easing.premium};
   --ease-snappy: ${easing.snappy};
   --ease-smooth: ${easing.smooth};
   --duration-fast: ${duration.fast};
   --duration-base: ${duration.base};
   --duration-slow: ${duration.slow};
+`;
+}
+
+export function buildCssVars(mode: ThemeMode): string {
+  const c = colors[mode];
+  const isDark = mode === 'dark';
+  const shadowMap = isDark ? shadows : shadows.light;
+  return `:root[data-theme="${mode}"] {\n${cssVarBody(c, shadowMap, shadowMap.glow, shadowMap.glowDanger)}\n}`;
+}
+
+// Bloc « field » : mêmes variables, mais scopées sur le layout driver/field.
+// Sélecteur `html[data-context="field"][data-context="field"]` → spécificité
+// (0,2,1), strictement supérieure à `:root[data-theme]` (0,2,0) — le thème
+// field l'emporte sur dark/light. Glow désactivé (none) + animations
+// neutralisées + transitions réduites.
+export function buildFieldVars(): string {
+  const s = 'html[data-context="field"][data-context="field"]';
+  return `
+${s} {
+${cssVarBody(colors.field, shadows.light, 'none', 'none')}
+  --duration-fast: 80ms;
+  --duration-base: 130ms;
+  --duration-slow: 200ms;
+}
+${s} *,
+${s} *::before,
+${s} *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+${s} button,
+${s} a,
+${s} .clickable {
+  box-shadow: none !important;
 }
 `;
 }

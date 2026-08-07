@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { buildCssVars, globalStyles } from './theme';
+import { buildCssVars, buildFieldVars, globalStyles } from './theme';
 import type { ThemeMode } from './theme';
 
 interface ThemeCtx {
@@ -29,6 +29,12 @@ function injectStyles(mode: ThemeMode) {
     const s = document.createElement('style');
     s.id = 'dt-global-styles';
     s.textContent = globalStyles;
+    document.head.appendChild(s);
+  }
+  if (!document.getElementById('dt-field-vars')) {
+    const s = document.createElement('style');
+    s.id = 'dt-field-vars';
+    s.textContent = buildFieldVars();
     document.head.appendChild(s);
   }
   const existing = document.getElementById('dt-theme-vars');

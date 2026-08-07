@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './hooks/AuthContext';
 import QueryProvider from './components/QueryProvider';
@@ -82,6 +82,22 @@ function HomeRedirect() {
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   useDataUpdates();
+  const { user } = useAuth();
+  // Contexte « field » : usagers terrain (driver / client) → thème sobre
+  // haute lisibilité extérieur (buildFieldVars), indépendant de dark/light.
+  // Les rôles admin/dispatcher gardent le « control room » tel quel.
+  const isField = user?.role === 'driver' || user?.role === 'client';
+  useEffect(() => {
+    const html = document.documentElement;
+    if (isField) {
+      html.setAttribute('data-context', 'field');
+    } else {
+      html.removeAttribute('data-context');
+    }
+    return () => {
+      html.removeAttribute('data-context');
+    };
+  }, [isField]);
   return (
     <div className={styles.appLayoutRoot}>
       <Sidebar />
