@@ -477,6 +477,7 @@ export class FuelConsumptionService {
       let avgGapSec = 0;
       let maxGapSec = 0;
       let longGapCount = 0;
+      let coveredGapSec = 0;
       if (valid.length >= 2) {
         spanSec =
           (valid[valid.length - 1].timestamp.getTime() - valid[0].timestamp.getTime()) / 1000;
@@ -487,6 +488,12 @@ export class FuelConsumptionService {
         avgGapSec = gaps.reduce((a, b) => a + b, 0) / gaps.length;
         maxGapSec = Math.max(...gaps);
         longGapCount = gaps.filter((g) => g > 60).length;
+        // Couverture "densité réelle" : la somme des gaps <= 300 s (5 min de
+        // tolérance, cohérent avec l'échantillonnage mobile 3-20 s) est considérée
+        // couverte ; au-delà de 300 s, seules les 300 premières secondes comptent
+        // (le reste du trou = période sans donnée fiable). Contrairement à
+        // spanSec/86400, un trou au milieu de la période est bien pénalisé.
+        coveredGapSec = gaps.reduce((acc, g) => acc + Math.min(g, 300), 0);
       }
 
       const accuracies = valid.map((p) => p.accuracy).filter((a): a is number => a != null);
@@ -521,7 +528,8 @@ export class FuelConsumptionService {
         avgGapSec: Math.round(avgGapSec),
         maxGapSec: Math.round(maxGapSec),
         longGapCount,
-        coveragePercent: spanSec > 0 ? Math.min(100, Math.round((spanSec / 86400) * 100)) : 0,
+        coveragePercent:
+          spanSec > 0 ? Math.min(100, Math.round((coveredGapSec / spanSec) * 100)) : 0,
         rawDistanceKm: Math.round(rawKm * 100) / 100,
         filteredDistanceKm: Math.round(filteredKm * 100) / 100,
         reportDistanceKm: report?.distanceKm ?? null,

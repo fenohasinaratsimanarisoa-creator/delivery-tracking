@@ -1686,11 +1686,13 @@ describe('FuelConsumptionService', () => {
       const result = await service.getGpsDiagnostics('company-1', '2026-07-20');
 
       const v = result.vehicles[0];
-      // 4 gaps de 90 min → écart moyen/max énormes, 4 gaps > 60s ; fenêtre couverte 6h/24h.
+      // 4 gaps de 90 min → écart moyen/max énormes, 4 gaps > 60s.
+      // Couverture densité : chaque trou > 300 s ne compte que 300 s →
+      // 4×300 / (4×5400) ≈ 5,6 % (au lieu de 6h/24h = 25 % avec l'ancien calcul).
       expect(v.avgGapSec).toBe(5400);
       expect(v.maxGapSec).toBe(5400);
       expect(v.longGapCount).toBe(4);
-      expect(v.coveragePercent).toBe(25);
+      expect(v.coveragePercent).toBe(6);
       // La distance brute ne couvre QUE les segments entre fixes existants.
       expect(v.rawDistanceKm).toBeGreaterThan(0);
     });
