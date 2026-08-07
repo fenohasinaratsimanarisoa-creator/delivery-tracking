@@ -307,9 +307,18 @@ export function useDriverTracking() {
       await flushQueue(async (positions) => {
         return new Promise<void>((resolve, reject) => {
           socket.emit('batchPosition', { positions });
-          socket.once('positionsSaved', () => resolve());
-          const timeout = setTimeout(() => reject(new Error('flush timeout')), 15000);
-          socket.once('positionsSaved', () => { clearTimeout(timeout); resolve(); });
+          // Un seul listener nommé (les deux .once précédents étaient redondants :
+          // le premier ne résolvait que la promesse sans clear le timeout, et restait
+          // actif 15s ; s'il ne se déclenchait jamais, il aurait pu résoudre une
+          // promesse déjà rejetée). Ce handler retire le timeout puis résout.
+          const onPositionsSaved = () => { clearTimeout(timeout); resolve(); };
+          const timeout = setTimeout(() => {
+            // Retire le listener restant : un 'positionsSaved' tardif (ex. d'un flush
+            // suivant) ne doit pas résoudre une promesse déjà rejetée, ni fuiter.
+            socket.off('positionsSaved', onPositionsSaved);
+            reject(new Error('flush timeout'));
+          }, 15000);
+          socket.once('positionsSaved', onPositionsSaved);
         });
       });
     } catch (err) {
