@@ -77,9 +77,7 @@ describe('Critical delivery flow (e2e)', () => {
     const csrf: CsrfContext = await fetchCsrf(app);
 
     const vehicleRes = await withCsrf(
-      request(app.getHttpServer())
-        .post('/vehicles')
-        .set('Authorization', `Bearer ${accessToken}`),
+      request(app.getHttpServer()).post('/vehicles').set('Authorization', `Bearer ${accessToken}`),
       csrf,
     )
       .send({
@@ -108,9 +106,7 @@ describe('Critical delivery flow (e2e)', () => {
     expect(deliveryRes.body.status).toBe(DeliveryStatus.pending);
 
     const driverRes = await withCsrf(
-      request(app.getHttpServer())
-        .post('/drivers')
-        .set('Authorization', `Bearer ${accessToken}`),
+      request(app.getHttpServer()).post('/drivers').set('Authorization', `Bearer ${accessToken}`),
       csrf,
     )
       .send({

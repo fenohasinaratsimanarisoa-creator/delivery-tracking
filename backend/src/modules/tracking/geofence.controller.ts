@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  UseGuards,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -19,10 +29,7 @@ export class GeofenceController {
   @Roles('admin', 'dispatcher')
   @Post()
   @ApiOperation({ summary: 'Create a geofence for a delivery' })
-  async create(
-    @CurrentUser('companyId') companyId: string,
-    @Body() data: CreateGeofenceDto,
-  ) {
+  async create(@CurrentUser('companyId') companyId: string, @Body() data: CreateGeofenceDto) {
     if (data.deliveryId) {
       const delivery = await this.prisma.delivery.findUnique({
         where: { id: data.deliveryId },

@@ -26,10 +26,7 @@ describe('GeocodingService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new GeocodingService(
-      mockRedis as any,
-      mockConfigService as unknown as ConfigService,
-    );
+    service = new GeocodingService(mockRedis as any, mockConfigService as unknown as ConfigService);
   });
 
   afterEach(() => {
@@ -42,7 +39,9 @@ describe('GeocodingService', () => {
 
   describe('placesAutocomplete', () => {
     it('returns cached results when available', async () => {
-      const cached = [{ placeId: 'abc', description: 'Test', mainText: 'Test', secondaryText: 'MG' }];
+      const cached = [
+        { placeId: 'abc', description: 'Test', mainText: 'Test', secondaryText: 'MG' },
+      ];
       mockRedis.get.mockResolvedValueOnce(JSON.stringify(cached));
 
       const result = await service.placesAutocomplete('Antananarivo');
@@ -89,9 +88,7 @@ describe('GeocodingService', () => {
       const result = await service.placesAutocomplete('test');
 
       expect(result).toEqual([]);
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Google Places API HTTP 403'),
-      );
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Google Places API HTTP 403'));
       expect(mockRedis.set).not.toHaveBeenCalled();
       errorSpy.mockRestore();
     });
@@ -111,11 +108,14 @@ describe('GeocodingService', () => {
 
     it('fetches place details from Google Places API', async () => {
       mockRedis.get.mockResolvedValueOnce(null);
-      mockFetchOnce({
-        location: { latitude: -18.91, longitude: 47.52 },
-        formattedAddress: 'Antananarivo, Madagascar',
-        displayName: { text: 'Antananarivo' },
-      }, true);
+      mockFetchOnce(
+        {
+          location: { latitude: -18.91, longitude: 47.52 },
+          formattedAddress: 'Antananarivo, Madagascar',
+          displayName: { text: 'Antananarivo' },
+        },
+        true,
+      );
 
       const result = await service.placeDetails('abc');
 
@@ -137,15 +137,18 @@ describe('GeocodingService', () => {
 
     it('performs geocoding search via Nominatim', async () => {
       mockRedis.get.mockResolvedValueOnce(null);
-      mockFetchOnce([
-        {
-          lat: '-18.91',
-          lon: '47.52',
-          display_name: 'Antananarivo, Madagascar',
-          name: 'Antananarivo',
-          address: { city: 'Antananarivo', country: 'Madagascar' },
-        },
-      ], true);
+      mockFetchOnce(
+        [
+          {
+            lat: '-18.91',
+            lon: '47.52',
+            display_name: 'Antananarivo, Madagascar',
+            name: 'Antananarivo',
+            address: { city: 'Antananarivo', country: 'Madagascar' },
+          },
+        ],
+        true,
+      );
 
       const result = await service.search('Antananarivo');
 

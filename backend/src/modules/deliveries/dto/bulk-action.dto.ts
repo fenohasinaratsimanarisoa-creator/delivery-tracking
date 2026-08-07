@@ -11,7 +11,7 @@ export class BulkActionDto {
 
   @IsString()
   @IsIn(VALID_ACTIONS)
-  action: typeof VALID_ACTIONS[number];
+  action: (typeof VALID_ACTIONS)[number];
 
   @IsOptional()
   @IsString()

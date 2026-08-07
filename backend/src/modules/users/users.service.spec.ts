@@ -135,11 +135,14 @@ describe('UsersService', () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce(null);
       mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'existing-driver' });
 
-      const driverDto: CreateUserDto = { ...dto, role: 'driver', email: 'driver@test.com', licenseNumber: 'EXISTING-LIC-123' };
+      const driverDto: CreateUserDto = {
+        ...dto,
+        role: 'driver',
+        email: 'driver@test.com',
+        licenseNumber: 'EXISTING-LIC-123',
+      };
 
-      await expect(
-        service.create('comp-1', driverDto),
-      ).rejects.toThrow(ConflictException);
+      await expect(service.create('comp-1', driverDto)).rejects.toThrow(ConflictException);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
@@ -147,11 +150,14 @@ describe('UsersService', () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce(null);
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
 
-      const driverDto: CreateUserDto = { ...dto, role: 'driver', email: 'driver2@test.com', vehicleId: 'nonexistent-vehicle' };
+      const driverDto: CreateUserDto = {
+        ...dto,
+        role: 'driver',
+        email: 'driver2@test.com',
+        vehicleId: 'nonexistent-vehicle',
+      };
 
-      await expect(
-        service.create('comp-1', driverDto),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.create('comp-1', driverDto)).rejects.toThrow(BadRequestException);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
@@ -160,11 +166,14 @@ describe('UsersService', () => {
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1', companyId: 'comp-1' });
       mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'other-driver' });
 
-      const driverDto: CreateUserDto = { ...dto, role: 'driver', email: 'driver3@test.com', vehicleId: 'vehicle-1' };
+      const driverDto: CreateUserDto = {
+        ...dto,
+        role: 'driver',
+        email: 'driver3@test.com',
+        vehicleId: 'vehicle-1',
+      };
 
-      await expect(
-        service.create('comp-1', driverDto),
-      ).rejects.toThrow(ConflictException);
+      await expect(service.create('comp-1', driverDto)).rejects.toThrow(ConflictException);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
   });
@@ -275,10 +284,16 @@ describe('UsersService', () => {
 
     it('should allow admin to view any user', async () => {
       const user = {
-        id: 'other-user', email: 'other@test.com', firstName: 'Other',
-        lastName: 'User', role: 'driver', isActive: true,
-        companyId: 'comp-1', createdAt: new Date(),
-        avatarUrl: null, googleId: null,
+        id: 'other-user',
+        email: 'other@test.com',
+        firstName: 'Other',
+        lastName: 'User',
+        role: 'driver',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+        avatarUrl: null,
+        googleId: null,
       };
       mockPrisma.user.findFirst.mockResolvedValueOnce(user);
 
@@ -288,10 +303,16 @@ describe('UsersService', () => {
 
     it('should allow dispatcher to view any user', async () => {
       const user = {
-        id: 'other-user', email: 'other@test.com', firstName: 'Other',
-        lastName: 'User', role: 'driver', isActive: true,
-        companyId: 'comp-1', createdAt: new Date(),
-        avatarUrl: null, googleId: null,
+        id: 'other-user',
+        email: 'other@test.com',
+        firstName: 'Other',
+        lastName: 'User',
+        role: 'driver',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+        avatarUrl: null,
+        googleId: null,
       };
       mockPrisma.user.findFirst.mockResolvedValueOnce(user);
 
@@ -301,10 +322,16 @@ describe('UsersService', () => {
 
     it('should allow user to view their own profile', async () => {
       const user = {
-        id: 'driver-1', email: 'driver@test.com', firstName: 'Driver',
-        lastName: 'User', role: 'driver', isActive: true,
-        companyId: 'comp-1', createdAt: new Date(),
-        avatarUrl: null, googleId: null,
+        id: 'driver-1',
+        email: 'driver@test.com',
+        firstName: 'Driver',
+        lastName: 'User',
+        role: 'driver',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+        avatarUrl: null,
+        googleId: null,
       };
       mockPrisma.user.findFirst.mockResolvedValueOnce(user);
 
@@ -313,16 +340,16 @@ describe('UsersService', () => {
     });
 
     it('should throw NotFoundException when driver tries to view another user', async () => {
-      await expect(
-        service.findById('other-user', 'comp-1', 'driver-1', 'driver'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.findById('other-user', 'comp-1', 'driver-1', 'driver')).rejects.toThrow(
+        NotFoundException,
+      );
       expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundException when client tries to view another user', async () => {
-      await expect(
-        service.findById('other-user', 'comp-1', 'client-1', 'client'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.findById('other-user', 'comp-1', 'client-1', 'client')).rejects.toThrow(
+        NotFoundException,
+      );
       expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
     });
   });
@@ -452,7 +479,12 @@ describe('UsersService', () => {
         createdAt: new Date(),
       });
 
-      await service.update('comp-1', 'user-1', { ...updateDto, password: 'NewPass123!' }, 'current-user');
+      await service.update(
+        'comp-1',
+        'user-1',
+        { ...updateDto, password: 'NewPass123!' },
+        'current-user',
+      );
 
       expect(bcrypt.hash).toHaveBeenCalledWith('NewPass123!', 10);
       expect(mockPrisma.user.update).toHaveBeenCalledWith(
@@ -484,10 +516,19 @@ describe('UsersService', () => {
         companyId: 'comp-1',
         createdAt: new Date(),
       });
-      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-1', userId: 'user-drv', companyId: 'comp-1' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({
+        id: 'driver-1',
+        userId: 'user-drv',
+        companyId: 'comp-1',
+      });
       mockPrisma.driver.update.mockResolvedValueOnce({ id: 'driver-1', vehicleId: 'vehicle-1' });
 
-      const result = await service.update('comp-1', 'user-drv', { vehicleId: 'vehicle-1' }, 'current-user');
+      const result = await service.update(
+        'comp-1',
+        'user-drv',
+        { vehicleId: 'vehicle-1' },
+        'current-user',
+      );
 
       expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(mockPrisma.driver.update).toHaveBeenCalledWith({
@@ -520,9 +561,18 @@ describe('UsersService', () => {
         createdAt: new Date(),
       });
       mockPrisma.driver.findFirst.mockResolvedValueOnce(null);
-      mockPrisma.driver.create.mockResolvedValueOnce({ id: 'driver-new', userId: 'user-new-drv', vehicleId: 'vehicle-2' });
+      mockPrisma.driver.create.mockResolvedValueOnce({
+        id: 'driver-new',
+        userId: 'user-new-drv',
+        vehicleId: 'vehicle-2',
+      });
 
-      const result = await service.update('comp-1', 'user-new-drv', { role: 'driver', vehicleId: 'vehicle-2' }, 'current-user');
+      const result = await service.update(
+        'comp-1',
+        'user-new-drv',
+        { role: 'driver', vehicleId: 'vehicle-2' },
+        'current-user',
+      );
 
       expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(mockPrisma.driver.create).toHaveBeenCalledWith(
@@ -543,7 +593,11 @@ describe('UsersService', () => {
       };
       mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1', companyId: 'comp-1' });
-      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'other-driver', userId: 'other-user', vehicleId: 'vehicle-1' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({
+        id: 'other-driver',
+        userId: 'other-user',
+        vehicleId: 'vehicle-1',
+      });
 
       await expect(
         service.update('comp-1', 'user-drv-2', { vehicleId: 'vehicle-1' }, 'current-user'),
@@ -560,7 +614,11 @@ describe('UsersService', () => {
         role: 'driver',
       };
       mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
-      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'other-driver-lic', userId: 'other-user', licenseNumber: 'LIC-999' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({
+        id: 'other-driver-lic',
+        userId: 'other-user',
+        licenseNumber: 'LIC-999',
+      });
 
       await expect(
         service.update('comp-1', 'user-drv-3', { licenseNumber: 'LIC-999' }, 'current-user'),
@@ -577,7 +635,11 @@ describe('UsersService', () => {
         role: 'driver',
       };
       mockPrisma.user.findFirst.mockResolvedValueOnce(existingUser);
-      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-4', userId: 'user-drv-4', licenseNumber: 'LIC-777' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({
+        id: 'driver-4',
+        userId: 'user-drv-4',
+        licenseNumber: 'LIC-777',
+      });
       mockPrisma.user.update.mockResolvedValueOnce({
         id: 'user-drv-4',
         email: 'driver4@test.com',
@@ -589,10 +651,19 @@ describe('UsersService', () => {
         companyId: 'comp-1',
         createdAt: new Date(),
       });
-      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-4', userId: 'user-drv-4', companyId: 'comp-1' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({
+        id: 'driver-4',
+        userId: 'user-drv-4',
+        companyId: 'comp-1',
+      });
       mockPrisma.driver.update.mockResolvedValueOnce({ id: 'driver-4', licenseNumber: 'LIC-777' });
 
-      const result = await service.update('comp-1', 'user-drv-4', { licenseNumber: 'LIC-777' }, 'current-user');
+      const result = await service.update(
+        'comp-1',
+        'user-drv-4',
+        { licenseNumber: 'LIC-777' },
+        'current-user',
+      );
 
       expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(mockPrisma.driver.update).toHaveBeenCalledWith({

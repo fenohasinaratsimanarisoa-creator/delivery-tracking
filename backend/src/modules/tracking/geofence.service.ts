@@ -49,7 +49,9 @@ export class GeofenceService {
           });
           events.push({ event: 'entry', geofenceId: gf.id, geofenceName: gf.name });
         } catch (err) {
-          this.logger.error(`Failed to create geofence entry event for ${gf.id}: ${(err as Error).message}`);
+          this.logger.error(
+            `Failed to create geofence entry event for ${gf.id}: ${(err as Error).message}`,
+          );
         }
       }
 
@@ -60,12 +62,13 @@ export class GeofenceService {
           });
           events.push({ event: 'exit', geofenceId: gf.id, geofenceName: gf.name });
         } catch (err) {
-          this.logger.error(`Failed to create geofence exit event for ${gf.id}: ${(err as Error).message}`);
+          this.logger.error(
+            `Failed to create geofence exit event for ${gf.id}: ${(err as Error).message}`,
+          );
         }
       }
     }
 
     return events;
   }
-
 }

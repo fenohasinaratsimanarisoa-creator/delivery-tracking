@@ -41,17 +41,25 @@ describe('RoutingService', () => {
     };
 
     const osrmRoute = {
-      geometry: { coordinates: [[47.52, -18.91], [47.53, -18.87]] },
+      geometry: {
+        coordinates: [
+          [47.52, -18.91],
+          [47.53, -18.87],
+        ],
+      },
       distance: 5000,
       duration: 300,
       legs: [{ steps: [] }],
     };
 
     it('returns directions from local OSRM', async () => {
-      mockFetchOnce({
-        code: 'Ok',
-        routes: [osrmRoute],
-      }, true);
+      mockFetchOnce(
+        {
+          code: 'Ok',
+          routes: [osrmRoute],
+        },
+        true,
+      );
 
       const result = await service.getDirections(dto);
 
@@ -96,10 +104,13 @@ describe('RoutingService', () => {
     });
 
     it('includes alternatives when requested', async () => {
-      mockFetchOnce({
-        code: 'Ok',
-        routes: [osrmRoute, { ...osrmRoute, distance: 6000, duration: 400 }],
-      }, true);
+      mockFetchOnce(
+        {
+          code: 'Ok',
+          routes: [osrmRoute, { ...osrmRoute, distance: 6000, duration: 400 }],
+        },
+        true,
+      );
 
       const result = await service.getDirections({ ...dto, alternatives: true });
 
@@ -110,20 +121,33 @@ describe('RoutingService', () => {
 
   describe('matchToRoad', () => {
     const dto = {
-      coordinates: [[-18.91, 47.52], [-18.87, 47.53]] as [number, number][],
+      coordinates: [
+        [-18.91, 47.52],
+        [-18.87, 47.53],
+      ] as [number, number][],
     };
 
     it('returns matched polyline from OSRM', async () => {
-      mockFetchOnce({
-        code: 'Ok',
-        matchings: [{
-          confidence: 0.95,
-          geometry: { coordinates: [[47.52, -18.91], [47.53, -18.87]] },
-          distance: 5000,
-          duration: 300,
-        }],
-        tracepoints: [{ location: [47.52, -18.91], waypoint_index: 0 }],
-      }, true);
+      mockFetchOnce(
+        {
+          code: 'Ok',
+          matchings: [
+            {
+              confidence: 0.95,
+              geometry: {
+                coordinates: [
+                  [47.52, -18.91],
+                  [47.53, -18.87],
+                ],
+              },
+              distance: 5000,
+              duration: 300,
+            },
+          ],
+          tracepoints: [{ location: [47.52, -18.91], waypoint_index: 0 }],
+        },
+        true,
+      );
 
       const result = await service.matchToRoad(dto);
 

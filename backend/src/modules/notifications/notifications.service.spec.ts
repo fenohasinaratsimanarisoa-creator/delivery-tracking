@@ -62,7 +62,7 @@ describe('NotificationsService', () => {
     });
   });
 
-  it('markRead() on another user\'s notification throws 403 ForbiddenException (not 500)', async () => {
+  it("markRead() on another user's notification throws 403 ForbiddenException (not 500)", async () => {
     mockPrisma.notification.updateMany.mockResolvedValueOnce({ count: 0 });
     // La notification existe mais appartient à un autre utilisateur.
     mockPrisma.notification.findUnique.mockResolvedValueOnce({ id: 'notif-1' });
@@ -87,7 +87,7 @@ describe('NotificationsService', () => {
     await expect(service.markRead('missing', 'company-1')).rejects.toThrow(NotFoundException);
   });
 
-  it('remove() on another user\'s notification throws 403 ForbiddenException (not 500)', async () => {
+  it("remove() on another user's notification throws 403 ForbiddenException (not 500)", async () => {
     mockPrisma.notification.deleteMany.mockResolvedValueOnce({ count: 0 });
     mockPrisma.notification.findUnique.mockResolvedValueOnce({ id: 'notif-1' });
 

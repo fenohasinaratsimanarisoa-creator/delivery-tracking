@@ -82,9 +82,7 @@ describe('tenantScopeMiddleware', () => {
       args: { where: { isActive: true } },
     };
 
-    await CompanyScopedContext.run(null, () =>
-      tenantScopeMiddleware(params as any, nextSpy),
-    );
+    await CompanyScopedContext.run(null, () => tenantScopeMiddleware(params as any, nextSpy));
 
     expect(nextSpy.mock.calls[0][0].args.where.companyId).toBeUndefined();
   });

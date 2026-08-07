@@ -28,7 +28,8 @@ export class WebhookRetryProcessor extends WorkerHost {
       include: { webhook: true },
     });
 
-    if (!delivery || delivery.status === 'success' || delivery.attempts >= delivery.maxAttempts) return;
+    if (!delivery || delivery.status === 'success' || delivery.attempts >= delivery.maxAttempts)
+      return;
 
     try {
       await assertSafeWebhookUrl(delivery.webhook.url);
@@ -83,9 +84,8 @@ export class WebhookRetryProcessor extends WorkerHost {
 
     const newAttempts = delivery.attempts + 1;
     const remaining = delivery.maxAttempts - newAttempts;
-    const nextRetryAt = !successful && remaining > 0
-      ? new Date(Date.now() + Math.pow(2, newAttempts) * 60000)
-      : null;
+    const nextRetryAt =
+      !successful && remaining > 0 ? new Date(Date.now() + Math.pow(2, newAttempts) * 60000) : null;
 
     await this.prisma.webhookDelivery.update({
       where: { id: webhookDeliveryId },
@@ -113,11 +113,15 @@ export class WebhookRetryProcessor extends WorkerHost {
     });
 
     for (const delivery of failed) {
-      await this.retryQueue.add('retry', { webhookDeliveryId: delivery.id }, {
-        attempts: 1,
-        removeOnComplete: { age: 3600 },
-        removeOnFail: { age: 86400 },
-      });
+      await this.retryQueue.add(
+        'retry',
+        { webhookDeliveryId: delivery.id },
+        {
+          attempts: 1,
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        },
+      );
     }
   }
 }

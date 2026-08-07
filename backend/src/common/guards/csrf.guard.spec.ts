@@ -47,7 +47,9 @@ describe('CsrfGuard', () => {
 
     it('should allow HEAD and OPTIONS without tokens', () => {
       for (const method of ['HEAD', 'OPTIONS']) {
-        expect(guard.canActivate(mockCtx({ request: { method, cookies: {}, headers: {} } }))).toBe(true);
+        expect(guard.canActivate(mockCtx({ request: { method, cookies: {}, headers: {} } }))).toBe(
+          true,
+        );
       }
     });
 
@@ -59,7 +61,9 @@ describe('CsrfGuard', () => {
 
     it('should throw on POST with missing header token', () => {
       expect(() =>
-        guard.canActivate(mockCtx({ request: { method: 'POST', cookies: { 'csrf-token': 'abc' }, headers: {} } })),
+        guard.canActivate(
+          mockCtx({ request: { method: 'POST', cookies: { 'csrf-token': 'abc' }, headers: {} } }),
+        ),
       ).toThrow(ForbiddenException);
     });
 
@@ -67,7 +71,11 @@ describe('CsrfGuard', () => {
       expect(() =>
         guard.canActivate(
           mockCtx({
-            request: { method: 'POST', cookies: { 'csrf-token': 'abc' }, headers: { 'x-csrf-token': 'def', 'x-csrf-hmac': 'xyz' } },
+            request: {
+              method: 'POST',
+              cookies: { 'csrf-token': 'abc' },
+              headers: { 'x-csrf-token': 'def', 'x-csrf-hmac': 'xyz' },
+            },
           }),
         ),
       ).toThrow(ForbiddenException);
@@ -78,7 +86,11 @@ describe('CsrfGuard', () => {
       expect(() =>
         guard.canActivate(
           mockCtx({
-            request: { method: 'POST', cookies: { 'csrf-token': token }, headers: { 'x-csrf-token': token, 'x-csrf-hmac': 'invalid-hmac' } },
+            request: {
+              method: 'POST',
+              cookies: { 'csrf-token': token },
+              headers: { 'x-csrf-token': token, 'x-csrf-hmac': 'invalid-hmac' },
+            },
           }),
         ),
       ).toThrow(ForbiddenException);
@@ -89,7 +101,11 @@ describe('CsrfGuard', () => {
       expect(
         guard.canActivate(
           mockCtx({
-            request: { method: 'POST', cookies: { 'csrf-token': token }, headers: { 'x-csrf-token': token, 'x-csrf-hmac': hmac } },
+            request: {
+              method: 'POST',
+              cookies: { 'csrf-token': token },
+              headers: { 'x-csrf-token': token, 'x-csrf-hmac': hmac },
+            },
           }),
         ),
       ).toBe(true);

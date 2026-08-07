@@ -1,7 +1,8 @@
 const { Client } = require('pg');
 const nodeCrypto = require('crypto');
 
-const PROD_DB = 'postgresql://delivery_tracking_ghba_user:aRAlcrSvohQdwVZbVrmnAZx0afCxPbdq@dpg-d9hjlmbeo5us73eb5e8g-a.frankfurt-postgres.render.com/delivery_tracking_ghba';
+const PROD_DB =
+  'postgresql://delivery_tracking_ghba_user:aRAlcrSvohQdwVZbVrmnAZx0afCxPbdq@dpg-d9hjlmbeo5us73eb5e8g-a.frankfurt-postgres.render.com/delivery_tracking_ghba';
 
 describe('Traccar → PostGIS data coherence', () => {
   let client: any;
@@ -71,12 +72,16 @@ describe('Traccar → PostGIS data coherence', () => {
     const expectedMs = knots * 0.514444;
     const expectedKmh = expectedMs * 3.6;
 
-    console.log(`Vitesse test: ${knots} noeuds → ${expectedMs.toFixed(3)} m/s → ${expectedKmh.toFixed(1)} km/h`);
+    console.log(
+      `Vitesse test: ${knots} noeuds → ${expectedMs.toFixed(3)} m/s → ${expectedKmh.toFixed(1)} km/h`,
+    );
     console.log('');
     console.log('Lignes de preuve:');
     console.log('  traccar-bridge.service.ts:513  | speed: (pos.speed || 0) * 0.514444');
     console.log('  tracking.service.ts:130         | const speedMs = distance / timeDiffSec');
-    console.log('  tracking.service.ts:140         | speed=${(speedMs * 3.6).toFixed(1)}km/h (affichage)');
+    console.log(
+      '  tracking.service.ts:140         | speed=${(speedMs * 3.6).toFixed(1)}km/h (affichage)',
+    );
     console.log('  tracking.service.ts:199         | const speedKmh = dto.speed * 3.6');
     console.log('  tracking.service.ts:222         | dto.speed < STOP_SPEED_THRESHOLD_MS');
 

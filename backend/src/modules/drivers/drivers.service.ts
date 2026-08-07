@@ -43,7 +43,19 @@ export class DriversService {
     const driver = await this.prisma.$transaction(async (tx) => {
       const created = await tx.driver.create({
         data: { ...dto, companyId },
-        include: { vehicle: { select: { id: true, brand: true, model: true, year: true, licensePlate: true, fuelType: true, positionSource: true } } },
+        include: {
+          vehicle: {
+            select: {
+              id: true,
+              brand: true,
+              model: true,
+              year: true,
+              licensePlate: true,
+              fuelType: true,
+              positionSource: true,
+            },
+          },
+        },
       });
       if (dto.vehicleId) {
         await this.assignmentHistory.assign(tx, {
@@ -54,14 +66,31 @@ export class DriversService {
       }
       return created;
     });
-    this.dataUpdateBus.emitUpdate({ companyId, entity: 'driver', action: 'created', payload: { id: driver.id } });
+    this.dataUpdateBus.emitUpdate({
+      companyId,
+      entity: 'driver',
+      action: 'created',
+      payload: { id: driver.id },
+    });
     return driver;
   }
 
   async findByUserId(userId: string) {
     return this.prisma.driver.findFirst({
       where: { userId, deletedAt: null },
-      include: { vehicle: { select: { id: true, brand: true, model: true, year: true, licensePlate: true, fuelType: true, positionSource: true } } },
+      include: {
+        vehicle: {
+          select: {
+            id: true,
+            brand: true,
+            model: true,
+            year: true,
+            licensePlate: true,
+            fuelType: true,
+            positionSource: true,
+          },
+        },
+      },
     });
   }
 
@@ -127,7 +156,9 @@ export class DriversService {
       const updated = await tx.driver.update({
         where: { id },
         data: dto,
-        include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
+        include: {
+          vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } },
+        },
       });
       if (dto.vehicleId !== undefined) {
         if (dto.vehicleId === null) {
@@ -142,7 +173,12 @@ export class DriversService {
       }
       return updated;
     });
-    this.dataUpdateBus.emitUpdate({ companyId, entity: 'driver', action: 'updated', payload: { id: driver.id } });
+    this.dataUpdateBus.emitUpdate({
+      companyId,
+      entity: 'driver',
+      action: 'updated',
+      payload: { id: driver.id },
+    });
     return driver;
   }
 
@@ -160,7 +196,12 @@ export class DriversService {
       where: { id },
       data: { deletedAt: new Date() },
     });
-    this.dataUpdateBus.emitUpdate({ companyId, entity: 'driver', action: 'deleted', payload: { id: driver.id } });
+    this.dataUpdateBus.emitUpdate({
+      companyId,
+      entity: 'driver',
+      action: 'deleted',
+      payload: { id: driver.id },
+    });
     return driver;
   }
 }

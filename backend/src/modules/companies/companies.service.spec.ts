@@ -53,6 +53,8 @@ describe('CompaniesService', () => {
   it('should reject delete when company name does not match', async () => {
     mockPrisma.company.findUnique.mockResolvedValueOnce({ id: 'comp-1', name: 'Acme Inc' });
 
-    await expect(service.deleteCompany('comp-1', 'Wrong Name')).rejects.toThrow('Company name confirmation does not match');
+    await expect(service.deleteCompany('comp-1', 'Wrong Name')).rejects.toThrow(
+      'Company name confirmation does not match',
+    );
   });
 });

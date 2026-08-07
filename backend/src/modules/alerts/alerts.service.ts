@@ -102,7 +102,11 @@ export class AlertsService {
   }
 
   async stats(companyId: string, period?: string) {
-    const where: any = { companyId, resolved: false, type: { not: NotificationType.delivery_status } };
+    const where: any = {
+      companyId,
+      resolved: false,
+      type: { not: NotificationType.delivery_status },
+    };
 
     if (period && period !== 'all') {
       const now = new Date();

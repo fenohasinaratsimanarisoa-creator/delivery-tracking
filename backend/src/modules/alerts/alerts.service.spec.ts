@@ -101,9 +101,9 @@ describe('AlertsService', () => {
     it('throws when notification is not found', async () => {
       mockPrisma.notification.findFirst.mockResolvedValueOnce(null);
 
-      await expect(
-        service.resolve('company-1', 'missing', 'user-1'),
-      ).rejects.toThrow('Notification not found');
+      await expect(service.resolve('company-1', 'missing', 'user-1')).rejects.toThrow(
+        'Notification not found',
+      );
     });
   });
 
@@ -115,9 +115,7 @@ describe('AlertsService', () => {
           { priority: 'high', _count: 5 },
           { priority: 'low', _count: 5 },
         ])
-        .mockResolvedValueOnce([
-          { type: 'alert', _count: 10 },
-        ]);
+        .mockResolvedValueOnce([{ type: 'alert', _count: 10 }]);
 
       const result = await service.stats('company-1');
 

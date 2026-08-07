@@ -194,7 +194,13 @@ describe('Fuel Consumption (e2e)', () => {
       .send({ essence: 5000, gasoil: 4900, diesel: 4900, electric: 0, hybrid: 3000 })
       .expect(200);
 
-    expect(res.body.defaults).toEqual({ essence: 5000, gasoil: 4900, diesel: 4900, electric: 0, hybrid: 3000 });
+    expect(res.body.defaults).toEqual({
+      essence: 5000,
+      gasoil: 4900,
+      diesel: 4900,
+      electric: 0,
+      hybrid: 3000,
+    });
 
     const settings = await prisma.companyFuelSettings.findUnique({ where: { companyId } });
     expect(settings?.defaultFuelPrices).toMatchObject({ essence: 5000, diesel: 4900 });

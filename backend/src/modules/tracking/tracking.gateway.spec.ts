@@ -149,7 +149,15 @@ describe('TrackingGateway — cross-tenant security', () => {
 
     it('handleConnection joins company room for all authenticated users', async () => {
       const client = mockSocket();
-      const wsAuthService = { verify: jest.fn().mockResolvedValue({ id: 'user-1', role: 'admin', companyId: 'company-a', firstName: 'A', lastName: 'B' }) };
+      const wsAuthService = {
+        verify: jest.fn().mockResolvedValue({
+          id: 'user-1',
+          role: 'admin',
+          companyId: 'company-a',
+          firstName: 'A',
+          lastName: 'B',
+        }),
+      };
       gateway['wsAuthService'] = wsAuthService as any;
 
       await gateway.handleConnection(client);
@@ -159,7 +167,15 @@ describe('TrackingGateway — cross-tenant security', () => {
 
     it('handleConnection joins driver room for drivers', async () => {
       const client = mockSocket();
-      const wsAuthService = { verify: jest.fn().mockResolvedValue({ id: 'driver-1', role: 'driver', companyId: 'company-a', firstName: 'A', lastName: 'B' }) };
+      const wsAuthService = {
+        verify: jest.fn().mockResolvedValue({
+          id: 'driver-1',
+          role: 'driver',
+          companyId: 'company-a',
+          firstName: 'A',
+          lastName: 'B',
+        }),
+      };
       gateway['wsAuthService'] = wsAuthService as any;
 
       await gateway.handleConnection(client);
@@ -172,11 +188,29 @@ describe('TrackingGateway — cross-tenant security', () => {
   describe('handleBatchPosition — broadcast integrity', () => {
     it('only broadcasts positions that were actually saved', async () => {
       const client = mockSocket();
-      client.data.user = { id: 'user-1', role: 'driver', companyId: 'company-a', firstName: 'Test', lastName: 'Driver' };
+      client.data.user = {
+        id: 'user-1',
+        role: 'driver',
+        companyId: 'company-a',
+        firstName: 'Test',
+        lastName: 'Driver',
+      };
 
       trackingService.findDriverByUserId.mockResolvedValueOnce({ id: 'driver-1' });
       trackingService.saveBatch.mockResolvedValueOnce([
-        { id: 'pos-1', latitude: 1, longitude: 2, speed: 10, heading: 90, altitude: 0, accuracy: 5, suspect: false, timestamp: new Date('2026-07-21T10:00:00.000Z'), deliveryId: 'delivery-1', vehicleId: 'vehicle-1' },
+        {
+          id: 'pos-1',
+          latitude: 1,
+          longitude: 2,
+          speed: 10,
+          heading: 90,
+          altitude: 0,
+          accuracy: 5,
+          suspect: false,
+          timestamp: new Date('2026-07-21T10:00:00.000Z'),
+          deliveryId: 'delivery-1',
+          vehicleId: 'vehicle-1',
+        },
       ]);
 
       const dto = {
@@ -203,11 +237,29 @@ describe('TrackingGateway — cross-tenant security', () => {
 
     it('handles positions without deliveryId (no delivery room)', async () => {
       const client = mockSocket();
-      client.data.user = { id: 'user-1', role: 'driver', companyId: 'company-a', firstName: 'Test', lastName: 'Driver' };
+      client.data.user = {
+        id: 'user-1',
+        role: 'driver',
+        companyId: 'company-a',
+        firstName: 'Test',
+        lastName: 'Driver',
+      };
 
       trackingService.findDriverByUserId.mockResolvedValueOnce({ id: 'driver-1' });
       trackingService.saveBatch.mockResolvedValueOnce([
-        { id: 'pos-2', latitude: 3, longitude: 4, speed: null, heading: null, altitude: null, accuracy: null, suspect: false, timestamp: new Date(), deliveryId: null, vehicleId: 'vehicle-1' },
+        {
+          id: 'pos-2',
+          latitude: 3,
+          longitude: 4,
+          speed: null,
+          heading: null,
+          altitude: null,
+          accuracy: null,
+          suspect: false,
+          timestamp: new Date(),
+          deliveryId: null,
+          vehicleId: 'vehicle-1',
+        },
       ]);
 
       const dto = {
@@ -315,7 +367,10 @@ describe('TrackingGateway — cross-tenant security', () => {
         new NotFoundException('Driver is not assigned to this delivery'),
       );
 
-      await gateway.handleSnoozeProximityAlert(client, { deliveryId: 'delivery-1', escalationLevel: 0 });
+      await gateway.handleSnoozeProximityAlert(client, {
+        deliveryId: 'delivery-1',
+        escalationLevel: 0,
+      });
 
       expect(deliveryProximityService.snoozeProximity).not.toHaveBeenCalled();
     });
@@ -324,18 +379,31 @@ describe('TrackingGateway — cross-tenant security', () => {
       const client = mockSocket();
       client.data.user = { id: 'driver-user-1', role: 'driver', companyId: 'company-a' };
       trackingService.verifyDriverAssignment.mockResolvedValueOnce(undefined);
-      trackingService.findDriverByUserId.mockResolvedValueOnce({ id: 'driver-1', vehicleId: 'vehicle-1' });
+      trackingService.findDriverByUserId.mockResolvedValueOnce({
+        id: 'driver-1',
+        vehicleId: 'vehicle-1',
+      });
 
-      await gateway.handleSnoozeProximityAlert(client, { deliveryId: 'delivery-1', escalationLevel: 2 });
+      await gateway.handleSnoozeProximityAlert(client, {
+        deliveryId: 'delivery-1',
+        escalationLevel: 2,
+      });
 
-      expect(deliveryProximityService.snoozeProximity).toHaveBeenCalledWith('delivery-1', 'vehicle-1', 2);
+      expect(deliveryProximityService.snoozeProximity).toHaveBeenCalledWith(
+        'delivery-1',
+        'vehicle-1',
+        2,
+      );
     });
 
     it('does nothing for non-driver roles', async () => {
       const client = mockSocket();
       client.data.user = { id: 'admin-1', role: 'admin', companyId: 'company-a' };
 
-      await gateway.handleSnoozeProximityAlert(client, { deliveryId: 'delivery-1', escalationLevel: 0 });
+      await gateway.handleSnoozeProximityAlert(client, {
+        deliveryId: 'delivery-1',
+        escalationLevel: 0,
+      });
 
       expect(trackingService.verifyDriverAssignment).not.toHaveBeenCalled();
       expect(deliveryProximityService.snoozeProximity).not.toHaveBeenCalled();

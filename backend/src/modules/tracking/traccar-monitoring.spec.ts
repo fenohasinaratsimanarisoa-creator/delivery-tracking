@@ -98,7 +98,7 @@ describe('Tâche 5 — Surveillance indépendante Traccar', () => {
       }
     });
 
-    it('ne déclenche PAS d\'alerte si le device a déjà reçu une position', async () => {
+    it("ne déclenche PAS d'alerte si le device a déjà reçu une position", async () => {
       const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
       mockPrisma.vehicle.findMany.mockResolvedValue([
         {
@@ -119,7 +119,7 @@ describe('Tâche 5 — Surveillance indépendante Traccar', () => {
       await (bridge as any).startNeverConnectedCheck();
     });
 
-    it('ne déclenche PAS d\'alerte si le device a été créé il y a moins de 30min', async () => {
+    it("ne déclenche PAS d'alerte si le device a été créé il y a moins de 30min", async () => {
       mockPrisma.vehicle.findMany.mockResolvedValue([
         {
           id: 'vehicle-3',

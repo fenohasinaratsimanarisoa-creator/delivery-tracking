@@ -48,9 +48,15 @@ export class DeliveriesController {
     @Query('mode') mode?: string,
   ) {
     if (!file) throw new BadRequestException('Aucun fichier fourni');
-    if (!file.originalname.match(/\.xlsx$/i)) throw new BadRequestException('Format de fichier invalide, .xlsx attendu');
+    if (!file.originalname.match(/\.xlsx$/i))
+      throw new BadRequestException('Format de fichier invalide, .xlsx attendu');
     const defaultPickupAddress = process.env.DEFAULT_PICKUP_ADDRESS || 'Entrepôt principal';
-    return this.deliveriesService.importExcel(companyId, file.buffer, defaultPickupAddress, mode === 'upsert' ? 'upsert' : 'create-only');
+    return this.deliveriesService.importExcel(
+      companyId,
+      file.buffer,
+      defaultPickupAddress,
+      mode === 'upsert' ? 'upsert' : 'create-only',
+    );
   }
 
   @UseGuards(RolesGuard)
@@ -155,10 +161,7 @@ export class DeliveriesController {
   @UseGuards(RolesGuard)
   @Roles('admin', 'dispatcher')
   @Post('bulk-action')
-  async bulkAction(
-    @CurrentUser('companyId') companyId: string,
-    @Body() dto: BulkActionDto,
-  ) {
+  async bulkAction(@CurrentUser('companyId') companyId: string, @Body() dto: BulkActionDto) {
     return this.deliveriesService.bulkAction(companyId, dto);
   }
 

@@ -153,7 +153,10 @@ export class TrackingController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Archiver les positions GPS avant une date' })
   @Post('archive')
-  async archivePositions(@Body('before') before: string, @CurrentUser('companyId') companyId: string) {
+  async archivePositions(
+    @Body('before') before: string,
+    @CurrentUser('companyId') companyId: string,
+  ) {
     const count = await this.trackingService.archivePositionsBefore(new Date(before), companyId);
     return { archived: count };
   }
@@ -201,13 +204,28 @@ export class TrackingController {
     const lastPos = await this.trackingService.getLastPositionByTraccarId(deviceId, companyId);
     const now = Date.now();
     if (!lastPos) {
-      return { status: 'never_connected', deviceId, message: 'No position received for this device' };
+      return {
+        status: 'never_connected',
+        deviceId,
+        message: 'No position received for this device',
+      };
     }
     const elapsedMin = (now - lastPos.timestamp.getTime()) / 60000;
     if (elapsedMin < 5) {
-      return { status: 'receiving', deviceId, lastPosition: lastPos.timestamp, elapsedMin: Math.round(elapsedMin) };
+      return {
+        status: 'receiving',
+        deviceId,
+        lastPosition: lastPos.timestamp,
+        elapsedMin: Math.round(elapsedMin),
+      };
     }
-    return { status: 'stale', deviceId, lastPosition: lastPos.timestamp, elapsedMin: Math.round(elapsedMin), message: `Last position received ${Math.round(elapsedMin)} minutes ago` };
+    return {
+      status: 'stale',
+      deviceId,
+      lastPosition: lastPos.timestamp,
+      elapsedMin: Math.round(elapsedMin),
+      message: `Last position received ${Math.round(elapsedMin)} minutes ago`,
+    };
   }
 
   @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)

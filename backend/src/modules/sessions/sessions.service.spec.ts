@@ -130,14 +130,26 @@ describe('SessionsService', () => {
 
   it('returns login history from user sessions, newest first, with ip/device', async () => {
     const sessions = [
-      { createdAt: new Date('2026-07-22T08:00:00.000Z'), ip: '10.0.0.9', device: 'Chrome', lastActivity: new Date('2026-07-22T09:00:00.000Z') },
-      { createdAt: new Date('2026-07-21T08:00:00.000Z'), ip: '10.0.0.1', device: 'Firefox', lastActivity: new Date('2026-07-21T09:00:00.000Z') },
+      {
+        createdAt: new Date('2026-07-22T08:00:00.000Z'),
+        ip: '10.0.0.9',
+        device: 'Chrome',
+        lastActivity: new Date('2026-07-22T09:00:00.000Z'),
+      },
+      {
+        createdAt: new Date('2026-07-21T08:00:00.000Z'),
+        ip: '10.0.0.1',
+        device: 'Firefox',
+        lastActivity: new Date('2026-07-21T09:00:00.000Z'),
+      },
     ];
     mockPrisma.userSession.findMany.mockResolvedValueOnce(sessions);
 
     const result = await service.getLoginHistory('user-1', 5);
 
-    console.log(`[loginHistory] ${result.length} sessions, première : createdAt=${result[0].createdAt.toISOString()}, ip=${result[0].ip}, device=${result[0].device}`);
+    console.log(
+      `[loginHistory] ${result.length} sessions, première : createdAt=${result[0].createdAt.toISOString()}, ip=${result[0].ip}, device=${result[0].device}`,
+    );
 
     expect(result).toEqual(sessions);
     expect(mockPrisma.userSession.findMany).toHaveBeenCalledWith({

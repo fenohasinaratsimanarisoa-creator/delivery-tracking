@@ -1,6 +1,4 @@
-import {
-  IsString, IsInt, IsOptional, IsBoolean, Min, Max, MinLength, IsIn,
-} from 'class-validator';
+import { IsString, IsInt, IsOptional, IsBoolean, Min, Max, MinLength, IsIn } from 'class-validator';
 
 export class CreateVehicleDto {
   @IsString()

@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Put, Body, Param, Query, Patch, Delete, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Body,
+  Param,
+  Query,
+  Patch,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
 import { FuelConsumptionService } from './fuel-consumption.service';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
 import { UpdateFuelLogDto } from './dto/update-fuel-log.dto';
@@ -37,10 +48,7 @@ export class FuelConsumptionController {
 
   @Roles('admin', 'dispatcher')
   @Get('daily-reports')
-  getDailyReports(
-    @CurrentUser('companyId') companyId: string,
-    @Query('date') date?: string,
-  ) {
+  getDailyReports(@CurrentUser('companyId') companyId: string, @Query('date') date?: string) {
     return this.fuelService.getDailyReports(companyId, date);
   }
 

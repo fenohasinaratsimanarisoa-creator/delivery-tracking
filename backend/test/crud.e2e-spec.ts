@@ -137,9 +137,7 @@ describe('CRUD Operations (e2e)', () => {
   describe('Drivers', () => {
     it('POST /drivers - should create a driver', async () => {
       const res = await withCsrf(
-        request(app.getHttpServer())
-          .post('/drivers')
-          .set('Authorization', `Bearer ${accessToken}`),
+        request(app.getHttpServer()).post('/drivers').set('Authorization', `Bearer ${accessToken}`),
         csrf,
       )
         .send({ firstName: 'John', lastName: 'Driver', licenseNumber: 'LIC-CRUD-001' })

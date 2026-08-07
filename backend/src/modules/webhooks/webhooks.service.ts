@@ -226,5 +226,4 @@ export class WebhooksService {
 
     return { status: successful ? 'success' : 'failed', statusCode };
   }
-
 }

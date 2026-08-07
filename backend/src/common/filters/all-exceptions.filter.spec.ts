@@ -30,8 +30,12 @@ function mockHost(req: any, res: any): ArgumentsHost {
     }),
     getArgs: () => [req, res],
     getArgByIndex: (_i: number) => req,
-    switchToRpc: () => { throw new Error('Not implemented'); },
-    switchToWs: () => { throw new Error('Not implemented'); },
+    switchToRpc: () => {
+      throw new Error('Not implemented');
+    },
+    switchToWs: () => {
+      throw new Error('Not implemented');
+    },
     getType: () => 'http' as any,
   } as ArgumentsHost;
 }
@@ -118,10 +122,10 @@ describe('AllExceptionsFilter', () => {
     it('should return 404 Not Found', () => {
       const req = mockRequest('/users/some-id');
       const res = mockResponse();
-      const err = new Prisma.PrismaClientKnownRequestError(
-        'Record to update not found.',
-        { code: 'P2025', clientVersion: '5.22' },
-      );
+      const err = new Prisma.PrismaClientKnownRequestError('Record to update not found.', {
+        code: 'P2025',
+        clientVersion: '5.22',
+      });
 
       filter.catch(err, mockHost(req, res));
 
@@ -185,10 +189,9 @@ describe('AllExceptionsFilter', () => {
     it('should return 400 Bad Request', () => {
       const req = mockRequest('/users');
       const res = mockResponse();
-      const err = new Prisma.PrismaClientValidationError(
-        'Invalid value for argument',
-        { clientVersion: '5.22' },
-      );
+      const err = new Prisma.PrismaClientValidationError('Invalid value for argument', {
+        clientVersion: '5.22',
+      });
 
       filter.catch(err, mockHost(req, res));
 

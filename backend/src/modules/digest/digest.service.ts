@@ -64,7 +64,8 @@ export class DigestService {
         const totalDeliveries = deliveries.length;
         const delivered = deliveries.filter((d) => d.status === 'delivered').length;
         const failed = deliveries.filter((d) => d.status === 'failed').length;
-        const punctuality = totalDeliveries > 0 ? Math.round((delivered / totalDeliveries) * 100) : 100;
+        const punctuality =
+          totalDeliveries > 0 ? Math.round((delivered / totalDeliveries) * 100) : 100;
 
         const pendingAnomalies = fuelAnomalies.filter((a) => hasFuelAnomaly(a));
 

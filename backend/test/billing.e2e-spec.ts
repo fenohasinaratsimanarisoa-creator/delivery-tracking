@@ -118,9 +118,7 @@ describe('Billing Flow (e2e)', () => {
     });
 
     const res = await withCsrf(
-      request(app.getHttpServer())
-        .post('/vehicles')
-        .set('Authorization', `Bearer ${accessToken}`),
+      request(app.getHttpServer()).post('/vehicles').set('Authorization', `Bearer ${accessToken}`),
       csrf,
     )
       .send({
@@ -143,9 +141,7 @@ describe('Billing Flow (e2e)', () => {
     });
 
     const res = await withCsrf(
-      request(app.getHttpServer())
-        .post('/vehicles')
-        .set('Authorization', `Bearer ${accessToken}`),
+      request(app.getHttpServer()).post('/vehicles').set('Authorization', `Bearer ${accessToken}`),
       csrf,
     )
       .send({

@@ -44,6 +44,11 @@ package-lock.json
 
 # Mobile builds (never commit)
 *.apk
+*.jks
+*.keystore
 frontend/android/.gradle/
 frontend/android/build/
 frontend/android/app/build/
+frontend/android/local.properties
+frontend/android/keystore.properties
+frontend/android/captures/

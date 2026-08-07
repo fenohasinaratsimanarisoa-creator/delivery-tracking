@@ -47,7 +47,8 @@ export class AlertService {
       const durationSec = Math.round((now - entry.firstSeen) / 1000);
       await this.send({
         title: `Repeated Error — ${errorKey}`,
-        message: `${error.name}: ${error.message.substring(0, 200)} ` +
+        message:
+          `${error.name}: ${error.message.substring(0, 200)} ` +
           `— repeated ${entry.count} times in ${durationSec}s`,
         level: 'critical',
         metadata: {

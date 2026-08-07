@@ -47,7 +47,13 @@ describe('GeofenceService', () => {
   it('returns BOTH entry events when vehicle enters 2 simultaneous geofences', async () => {
     mockPrisma.geofence.findMany.mockResolvedValue([
       { id: 'gf-1', name: 'Zone A', lat: baseLat, lng: baseLng, radiusMeters: 200 },
-      { id: 'gf-2', name: 'Zone B', lat: baseLat + 0.0005, lng: baseLng + 0.0005, radiusMeters: 200 },
+      {
+        id: 'gf-2',
+        name: 'Zone B',
+        lat: baseLat + 0.0005,
+        lng: baseLng + 0.0005,
+        radiusMeters: 200,
+      },
     ]);
     mockPrisma.geofenceEvent.findMany.mockResolvedValue([]);
 

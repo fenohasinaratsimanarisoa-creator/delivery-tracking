@@ -49,7 +49,16 @@ export class WsAuthService {
 
       const dbUser = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { id: true, email: true, role: true, companyId: true, firstName: true, lastName: true, isActive: true, company: { select: { deletedAt: true } } },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          companyId: true,
+          firstName: true,
+          lastName: true,
+          isActive: true,
+          company: { select: { deletedAt: true } },
+        },
       });
 
       if (!dbUser || !dbUser.isActive) {

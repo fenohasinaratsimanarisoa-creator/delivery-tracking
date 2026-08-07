@@ -24,7 +24,12 @@ import { RedisModule } from '../../common/redis/redis.module';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_ACCESS_SECRET'),
-        signOptions: { expiresIn: configService.get<string>('JWT_ACCESS_EXPIRATION', '15m') as jwt.SignOptions['expiresIn'] },
+        signOptions: {
+          expiresIn: configService.get<string>(
+            'JWT_ACCESS_EXPIRATION',
+            '15m',
+          ) as jwt.SignOptions['expiresIn'],
+        },
       }),
     }),
     NotificationsModule,
@@ -42,6 +47,12 @@ import { RedisModule } from '../../common/redis/redis.module';
     WsAuthService,
     ApiKeyOrJwtGuard,
   ],
-  exports: [TrackingService, GeofenceService, DeliveryProximityService, TraccarBridgeService, TrackingGateway],
+  exports: [
+    TrackingService,
+    GeofenceService,
+    DeliveryProximityService,
+    TraccarBridgeService,
+    TrackingGateway,
+  ],
 })
 export class TrackingModule {}

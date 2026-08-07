@@ -25,7 +25,9 @@ export class CompaniesService {
     });
     for (const company of expired) {
       await this.purgeQueue.add('purge', { companyId: company.id });
-      this.logger.log(`Scheduled purge for company ${company.id} (deleted ${company.deletedAt?.toISOString()})`);
+      this.logger.log(
+        `Scheduled purge for company ${company.id} (deleted ${company.deletedAt?.toISOString()})`,
+      );
     }
   }
 

@@ -19,7 +19,9 @@ export class CompanyPurgeProcessor extends WorkerHost {
 
   async process(job: Job<CompanyPurgeJobData>): Promise<void> {
     const { companyId } = job.data;
-    this.logger.log(`Starting purge for company ${companyId} (grace period: ${COMPANY_PURGE_GRACE_DAYS}d)`);
+    this.logger.log(
+      `Starting purge for company ${companyId} (grace period: ${COMPANY_PURGE_GRACE_DAYS}d)`,
+    );
 
     try {
       const company = await this.prisma.company.findUnique({
@@ -36,7 +38,9 @@ export class CompanyPurgeProcessor extends WorkerHost {
       const elapsed = Date.now() - company.deletedAt.getTime();
       if (elapsed < graceMs) {
         const remainingDays = Math.ceil((graceMs - elapsed) / (24 * 60 * 60 * 1000));
-        this.logger.log(`Company ${companyId} still within grace period (${remainingDays}d remaining)`);
+        this.logger.log(
+          `Company ${companyId} still within grace period (${remainingDays}d remaining)`,
+        );
         return;
       }
 

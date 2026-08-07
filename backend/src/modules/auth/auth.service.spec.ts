@@ -612,14 +612,18 @@ describe('AuthService', () => {
     });
 
     it('should throw BadRequestException when combined token has no colon separator', async () => {
-      await expect(service.resetPassword('no-colon', newPassword)).rejects.toThrow(BadRequestException);
+      await expect(service.resetPassword('no-colon', newPassword)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(mockPrisma.user.findUnique).not.toHaveBeenCalled();
     });
 
     it('should throw BadRequestException when resetTokenId not found', async () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce(null);
 
-      await expect(service.resetPassword(combinedToken, newPassword)).rejects.toThrow(BadRequestException);
+      await expect(service.resetPassword(combinedToken, newPassword)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException when token is expired', async () => {
@@ -630,7 +634,9 @@ describe('AuthService', () => {
       };
       mockPrisma.user.findUnique.mockResolvedValueOnce(user);
 
-      await expect(service.resetPassword(combinedToken, newPassword)).rejects.toThrow(BadRequestException);
+      await expect(service.resetPassword(combinedToken, newPassword)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException when secret is invalid', async () => {
@@ -642,7 +648,9 @@ describe('AuthService', () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce(user);
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
 
-      await expect(service.resetPassword(combinedToken, newPassword)).rejects.toThrow(BadRequestException);
+      await expect(service.resetPassword(combinedToken, newPassword)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -753,7 +761,11 @@ describe('AuthService', () => {
 
       expect(mockPrisma.company.findFirst).not.toHaveBeenCalled();
       expect(mockPrisma.invitation.findFirst).toHaveBeenCalledWith({
-        where: { email: 'user@example.com', status: 'pending', expiresAt: { gte: expect.any(Date) } },
+        where: {
+          email: 'user@example.com',
+          status: 'pending',
+          expiresAt: { gte: expect.any(Date) },
+        },
         include: { company: true },
       });
       expect(mockPrisma.company.create).toHaveBeenCalledWith({
@@ -821,7 +833,10 @@ describe('AuthService', () => {
         companyId: 'comp-a',
       };
       mockPrisma.user.create.mockResolvedValueOnce(createdUser);
-      mockPrisma.invitation.update.mockResolvedValueOnce({ ...pendingInvitation, status: 'accepted' });
+      mockPrisma.invitation.update.mockResolvedValueOnce({
+        ...pendingInvitation,
+        status: 'accepted',
+      });
       mockPrisma.user.findUnique
         .mockResolvedValueOnce({ firstName: 'Jane', lastName: 'Smith' })
         .mockResolvedValueOnce(createdUser);
@@ -831,7 +846,11 @@ describe('AuthService', () => {
       const result = await service.validateGoogleUser(profile);
 
       expect(mockPrisma.invitation.findFirst).toHaveBeenCalledWith({
-        where: { email: 'user@example.com', status: 'pending', expiresAt: { gte: expect.any(Date) } },
+        where: {
+          email: 'user@example.com',
+          status: 'pending',
+          expiresAt: { gte: expect.any(Date) },
+        },
         include: { company: true },
       });
       expect(mockPrisma.company.create).not.toHaveBeenCalled();

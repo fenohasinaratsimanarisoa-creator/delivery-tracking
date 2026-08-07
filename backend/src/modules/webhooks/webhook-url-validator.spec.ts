@@ -14,39 +14,45 @@ describe('assertSafeWebhookUrl', () => {
   });
 
   it('rejects non-https URLs', async () => {
-    await expect(assertSafeWebhookUrl('http://example.com/webhook'))
-      .rejects.toThrow(BadRequestException);
+    await expect(assertSafeWebhookUrl('http://example.com/webhook')).rejects.toThrow(
+      BadRequestException,
+    );
   });
 
   it('rejects private IP 127.0.0.1', async () => {
     dns.resolve4.mockResolvedValueOnce(['127.0.0.1']);
-    await expect(assertSafeWebhookUrl('https://localhost/webhook'))
-      .rejects.toThrow('public (non-private) IP');
+    await expect(assertSafeWebhookUrl('https://localhost/webhook')).rejects.toThrow(
+      'public (non-private) IP',
+    );
   });
 
   it('rejects private IP 10.x.x.x', async () => {
     dns.resolve4.mockResolvedValueOnce(['10.0.0.5']);
-    await expect(assertSafeWebhookUrl('https://internal.corp/webhook'))
-      .rejects.toThrow('public (non-private) IP');
+    await expect(assertSafeWebhookUrl('https://internal.corp/webhook')).rejects.toThrow(
+      'public (non-private) IP',
+    );
   });
 
   it('rejects private IP 192.168.x.x', async () => {
     dns.resolve4.mockResolvedValueOnce(['192.168.1.1']);
-    await expect(assertSafeWebhookUrl('https://router.local/webhook'))
-      .rejects.toThrow('public (non-private) IP');
+    await expect(assertSafeWebhookUrl('https://router.local/webhook')).rejects.toThrow(
+      'public (non-private) IP',
+    );
   });
 
   it('rejects link-local 169.254.x.x', async () => {
     dns.resolve4.mockResolvedValueOnce(['169.254.1.1']);
-    await expect(assertSafeWebhookUrl('https://metadata.internal/webhook'))
-      .rejects.toThrow('public (non-private) IP');
+    await expect(assertSafeWebhookUrl('https://metadata.internal/webhook')).rejects.toThrow(
+      'public (non-private) IP',
+    );
   });
 
   it('rejects loopback ::1', async () => {
     dns.resolve4.mockRejectedValueOnce(new Error('no ipv4'));
     dns.resolve6.mockResolvedValueOnce(['::1']);
-    await expect(assertSafeWebhookUrl('https://ip6-localhost/webhook'))
-      .rejects.toThrow('public (non-private) IP');
+    await expect(assertSafeWebhookUrl('https://ip6-localhost/webhook')).rejects.toThrow(
+      'public (non-private) IP',
+    );
   });
 
   it('accepts public HTTPS URLs', async () => {
@@ -55,7 +61,6 @@ describe('assertSafeWebhookUrl', () => {
   });
 
   it('rejects invalid URL strings', async () => {
-    await expect(assertSafeWebhookUrl('not-a-url'))
-      .rejects.toThrow(BadRequestException);
+    await expect(assertSafeWebhookUrl('not-a-url')).rejects.toThrow(BadRequestException);
   });
 });

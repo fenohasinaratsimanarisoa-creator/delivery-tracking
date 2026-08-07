@@ -18,9 +18,7 @@ const PRISMA_CODE_MAP: Record<string, { status: number; message: string }> = {
   P2025: { status: HttpStatus.NOT_FOUND, message: 'Ressource introuvable' },
 };
 
-function getPrismaFieldName(
-  exception: Prisma.PrismaClientKnownRequestError,
-): string | undefined {
+function getPrismaFieldName(exception: Prisma.PrismaClientKnownRequestError): string | undefined {
   const meta = exception.meta as Record<string, unknown> | undefined;
   if (meta?.target && Array.isArray(meta.target)) {
     return (meta.target as string[]).join(', ');

@@ -36,7 +36,10 @@ export class NotificationsService {
       data: { readAt: new Date() },
     });
     if (result.count === 0) {
-      const existing = await this.prisma.notification.findUnique({ where: { id }, select: { id: true } });
+      const existing = await this.prisma.notification.findUnique({
+        where: { id },
+        select: { id: true },
+      });
       if (existing) throw new ForbiddenException('Notification belongs to another user');
       throw new NotFoundException('Notification not found');
     }
@@ -61,7 +64,10 @@ export class NotificationsService {
     }
     const result = await this.prisma.notification.deleteMany({ where });
     if (result.count === 0) {
-      const existing = await this.prisma.notification.findUnique({ where: { id }, select: { id: true } });
+      const existing = await this.prisma.notification.findUnique({
+        where: { id },
+        select: { id: true },
+      });
       if (existing) throw new ForbiddenException('Notification belongs to another user');
       throw new NotFoundException('Notification not found');
     }

@@ -59,7 +59,16 @@ describe('ApiKeysService', () => {
   describe('findAll', () => {
     it('returns all keys for a company (without hashes)', async () => {
       const keys = [
-        { id: 'key-1', name: 'Test Key', prefix: 'dt_abc123', scopes: ['deliveries:read'], expiresAt: null, isActive: true, lastUsedAt: null, createdAt: new Date() },
+        {
+          id: 'key-1',
+          name: 'Test Key',
+          prefix: 'dt_abc123',
+          scopes: ['deliveries:read'],
+          expiresAt: null,
+          isActive: true,
+          lastUsedAt: null,
+          createdAt: new Date(),
+        },
       ];
       mockPrisma.apiKey.findMany.mockResolvedValueOnce(keys);
 

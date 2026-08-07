@@ -70,7 +70,10 @@ describe('DeliveriesService - State Machine', () => {
         { provide: NotificationsService, useValue: mockNotifications },
         { provide: WebhooksService, useValue: mockWebhooks },
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('false') } },
-        { provide: DataUpdateBus, useValue: { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() } },
+        {
+          provide: DataUpdateBus,
+          useValue: { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() },
+        },
         { provide: GeocodingService, useValue: { search: jest.fn().mockResolvedValue([]) } },
         { provide: getQueueToken('fuel-analysis'), useValue: mockQueue },
       ],
@@ -127,9 +130,13 @@ describe('DeliveriesService - State Machine', () => {
 
   describe('findOne (IDOR)', () => {
     const baseDelivery = {
-      id: 'del-1', companyId: 'comp-1', title: 'Test Delivery',
-      status: DeliveryStatus.pending, deletedAt: null,
-      vehicle: null, driver: null,
+      id: 'del-1',
+      companyId: 'comp-1',
+      title: 'Test Delivery',
+      status: DeliveryStatus.pending,
+      deletedAt: null,
+      vehicle: null,
+      driver: null,
     };
 
     it('should return delivery for admin/dispatcher (no role filter)', async () => {
@@ -145,7 +152,9 @@ describe('DeliveriesService - State Machine', () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(baseDelivery);
       await service.findOne('comp-1', 'del-1', 'client', 'client-123');
       expect(mockPrisma.delivery.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'del-1', companyId: 'comp-1', deletedAt: null, clientId: 'client-123' } }),
+        expect.objectContaining({
+          where: { id: 'del-1', companyId: 'comp-1', deletedAt: null, clientId: 'client-123' },
+        }),
       );
     });
 
@@ -153,7 +162,14 @@ describe('DeliveriesService - State Machine', () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(baseDelivery);
       await service.findOne('comp-1', 'del-1', 'driver', 'driver-123');
       expect(mockPrisma.delivery.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'del-1', companyId: 'comp-1', deletedAt: null, assignedDriverId: 'driver-123' } }),
+        expect.objectContaining({
+          where: {
+            id: 'del-1',
+            companyId: 'comp-1',
+            deletedAt: null,
+            assignedDriverId: 'driver-123',
+          },
+        }),
       );
     });
 
@@ -166,10 +182,17 @@ describe('DeliveriesService - State Machine', () => {
   describe('update (status transitions)', () => {
     it('should reject invalid status transition pending -> delivered', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce({
-        id: 'del-1', companyId: 'comp-1', title: 'Test',
-        status: DeliveryStatus.pending, deletedAt: null,
-        vehicle: null, driver: null, deliveryLat: null, deliveryLng: null,
-        assignedDriverId: null, clientId: null,
+        id: 'del-1',
+        companyId: 'comp-1',
+        title: 'Test',
+        status: DeliveryStatus.pending,
+        deletedAt: null,
+        vehicle: null,
+        driver: null,
+        deliveryLat: null,
+        deliveryLng: null,
+        assignedDriverId: null,
+        clientId: null,
       });
       await expect(
         service.update('comp-1', 'del-1', { status: DeliveryStatus.delivered } as any),
@@ -178,10 +201,17 @@ describe('DeliveriesService - State Machine', () => {
 
     it('should reject invalid status transition pending -> in_progress', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce({
-        id: 'del-2', companyId: 'comp-1', title: 'Test',
-        status: DeliveryStatus.pending, deletedAt: null,
-        vehicle: null, driver: null, deliveryLat: null, deliveryLng: null,
-        assignedDriverId: null, clientId: null,
+        id: 'del-2',
+        companyId: 'comp-1',
+        title: 'Test',
+        status: DeliveryStatus.pending,
+        deletedAt: null,
+        vehicle: null,
+        driver: null,
+        deliveryLat: null,
+        deliveryLng: null,
+        assignedDriverId: null,
+        clientId: null,
       });
       await expect(
         service.update('comp-1', 'del-2', { status: DeliveryStatus.in_progress } as any),
@@ -190,30 +220,50 @@ describe('DeliveriesService - State Machine', () => {
 
     it('should allow valid transition pending -> assigned', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce({
-        id: 'del-3', companyId: 'comp-1', title: 'Test',
-        status: DeliveryStatus.pending, deletedAt: null,
-        vehicle: null, driver: null, deliveryLat: null, deliveryLng: null,
-        assignedDriverId: null, clientId: null,
+        id: 'del-3',
+        companyId: 'comp-1',
+        title: 'Test',
+        status: DeliveryStatus.pending,
+        deletedAt: null,
+        vehicle: null,
+        driver: null,
+        deliveryLat: null,
+        deliveryLng: null,
+        assignedDriverId: null,
+        clientId: null,
       });
       mockPrisma.delivery.update.mockResolvedValueOnce({
-        id: 'del-3', status: DeliveryStatus.assigned,
+        id: 'del-3',
+        status: DeliveryStatus.assigned,
       });
-      const result = await service.update('comp-1', 'del-3', { status: DeliveryStatus.assigned } as any);
+      const result = await service.update('comp-1', 'del-3', {
+        status: DeliveryStatus.assigned,
+      } as any);
       expect(mockPrisma.delivery.update).toHaveBeenCalled();
       expect(result.status).toBe(DeliveryStatus.assigned);
     });
 
     it('should allow valid transition assigned -> cancelled', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce({
-        id: 'del-4', companyId: 'comp-1', title: 'Test',
-        status: DeliveryStatus.assigned, deletedAt: null,
-        vehicle: null, driver: null, deliveryLat: null, deliveryLng: null,
-        assignedDriverId: null, clientId: null,
+        id: 'del-4',
+        companyId: 'comp-1',
+        title: 'Test',
+        status: DeliveryStatus.assigned,
+        deletedAt: null,
+        vehicle: null,
+        driver: null,
+        deliveryLat: null,
+        deliveryLng: null,
+        assignedDriverId: null,
+        clientId: null,
       });
       mockPrisma.delivery.update.mockResolvedValueOnce({
-        id: 'del-4', status: DeliveryStatus.cancelled,
+        id: 'del-4',
+        status: DeliveryStatus.cancelled,
       });
-      const result = await service.update('comp-1', 'del-4', { status: DeliveryStatus.cancelled } as any);
+      const result = await service.update('comp-1', 'del-4', {
+        status: DeliveryStatus.cancelled,
+      } as any);
       expect(mockPrisma.delivery.update).toHaveBeenCalled();
       expect(result.status).toBe(DeliveryStatus.cancelled);
     });
@@ -235,7 +285,15 @@ describe('DeliveriesService - State Machine', () => {
       const buffer = await createXlsxBuffer([
         ['N° Commande', 'Lieu', 'Adresse', 'Téléphone', 'Montant', 'Prix', 'Produits commandés'],
         ['CMD-001', 'Ivato', 'Lot 45', '0341234567', '50 000Ar', '45 000Ar', 'Cartons A4'],
-        ['CMD-002', 'Analakely', 'Rue 12', '0327654321', '54\u202F000Ar', '50\u202F000Ar', 'Enveloppes'],
+        [
+          'CMD-002',
+          'Analakely',
+          'Rue 12',
+          '0327654321',
+          '54\u202F000Ar',
+          '50\u202F000Ar',
+          'Enveloppes',
+        ],
       ]);
 
       const result = await service.importExcel('comp-1', buffer, 'Entrepôt principal');
@@ -246,7 +304,15 @@ describe('DeliveriesService - State Machine', () => {
       expect(mockPrisma.delivery.findFirst).toHaveBeenCalledTimes(2);
       expect(mockPrisma.delivery.create).toHaveBeenCalledTimes(2);
       expect(mockPrisma.delivery.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ title: 'CMD-001', externalOrderRef: 'CMD-001', deliveryAddress: 'Ivato', amount: 50000, articlePrice: 45000 }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({
+            title: 'CMD-001',
+            externalOrderRef: 'CMD-001',
+            deliveryAddress: 'Ivato',
+            amount: 50000,
+            articlePrice: 45000,
+          }),
+        }),
       );
     });
 
@@ -279,15 +345,18 @@ describe('DeliveriesService - State Machine', () => {
 
     it('should skip duplicate external order refs with reason duplicate', async () => {
       mockPrisma.delivery.findFirst
-        .mockResolvedValueOnce(null)  // row 2: not found in DB
+        .mockResolvedValueOnce(null) // row 2: not found in DB
         .mockResolvedValueOnce(null); // row 3: not found in DB either (same file, not yet inserted)
       mockPrisma.delivery.create
-        .mockResolvedValueOnce({})                                     // row 2: create succeeds
-        .mockRejectedValueOnce(new MockPrismaClientKnownRequestError(   // row 3: P2002 duplicate
-          'Unique constraint failed',
-          'P2002',
-          { target: ['companyId', 'externalOrderRef'] },
-        ));
+        .mockResolvedValueOnce({}) // row 2: create succeeds
+        .mockRejectedValueOnce(
+          new MockPrismaClientKnownRequestError(
+            // row 3: P2002 duplicate
+            'Unique constraint failed',
+            'P2002',
+            { target: ['companyId', 'externalOrderRef'] },
+          ),
+        );
 
       const buffer = await createXlsxBuffer([
         ['N° Commande', 'Lieu'],
@@ -316,7 +385,9 @@ describe('DeliveriesService - State Machine', () => {
 
       expect(result.created).toBe(1);
       expect(mockPrisma.delivery.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ notes: 'Observation: Matinée 8h-12h' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ notes: 'Observation: Matinée 8h-12h' }),
+        }),
       );
     });
 
@@ -365,22 +436,27 @@ describe('DeliveriesService - State Machine', () => {
 
       expect(result1.created).toBe(1);
       expect(result2.created).toBe(1);
-      expect(mockPrisma.delivery.findFirst).toHaveBeenNthCalledWith(1,
-        expect.objectContaining({ where: { companyId: 'comp-1', externalOrderRef: 'CMD-SCOPE', deletedAt: null } }),
+      expect(mockPrisma.delivery.findFirst).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          where: { companyId: 'comp-1', externalOrderRef: 'CMD-SCOPE', deletedAt: null },
+        }),
       );
-      expect(mockPrisma.delivery.findFirst).toHaveBeenNthCalledWith(2,
-        expect.objectContaining({ where: { companyId: 'comp-2', externalOrderRef: 'CMD-SCOPE', deletedAt: null } }),
+      expect(mockPrisma.delivery.findFirst).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: { companyId: 'comp-2', externalOrderRef: 'CMD-SCOPE', deletedAt: null },
+        }),
       );
     });
 
     it('should catch P2002 from race condition in try/catch safety net', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValue(null); // pre-check misses (race condition)
-      mockPrisma.delivery.create
-        .mockRejectedValueOnce(new MockPrismaClientKnownRequestError(
-          'Unique constraint failed',
-          'P2002',
-          { target: ['companyId', 'externalOrderRef'] },
-        ));
+      mockPrisma.delivery.create.mockRejectedValueOnce(
+        new MockPrismaClientKnownRequestError('Unique constraint failed', 'P2002', {
+          target: ['companyId', 'externalOrderRef'],
+        }),
+      );
 
       const buffer = await createXlsxBuffer([
         ['N° Commande', 'Lieu'],
@@ -401,12 +477,18 @@ describe('DeliveriesService - State Machine', () => {
       const driver = { id: 'driver-1', userId: 'user-123', companyId: 'comp-1', deletedAt: null };
       mockPrisma.driver.findFirst.mockResolvedValueOnce(driver);
       mockPrisma.delivery.create.mockResolvedValueOnce({
-        id: 'del-new', title: 'Test', driverId: 'driver-1', assignedDriverId: 'user-123',
-        status: 'in_progress', companyId: 'comp-1',
+        id: 'del-new',
+        title: 'Test',
+        driverId: 'driver-1',
+        assignedDriverId: 'user-123',
+        status: 'in_progress',
+        companyId: 'comp-1',
       });
 
       const result = await service.create('comp-1', {
-        title: 'Test', pickupAddress: 'Pickup', deliveryAddress: 'Delivery',
+        title: 'Test',
+        pickupAddress: 'Pickup',
+        deliveryAddress: 'Delivery',
         driverId: 'driver-1',
       } as any);
 
@@ -428,7 +510,9 @@ describe('DeliveriesService - State Machine', () => {
 
       await expect(
         service.create('comp-1', {
-          title: 'Test', pickupAddress: 'Pickup', deliveryAddress: 'Delivery',
+          title: 'Test',
+          pickupAddress: 'Pickup',
+          deliveryAddress: 'Delivery',
           driverId: 'nonexistent-driver',
         } as any),
       ).rejects.toThrow(NotFoundException);
@@ -439,7 +523,9 @@ describe('DeliveriesService - State Machine', () => {
 
       await expect(
         service.create('comp-1', {
-          title: 'Test', pickupAddress: 'Pickup', deliveryAddress: 'Delivery',
+          title: 'Test',
+          pickupAddress: 'Pickup',
+          deliveryAddress: 'Delivery',
           driverId: 'driver-other-company',
         } as any),
       ).rejects.toThrow(NotFoundException);
@@ -447,16 +533,27 @@ describe('DeliveriesService - State Machine', () => {
 
     it('should assign driver via update', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce({
-        id: 'del-upd', companyId: 'comp-1', title: 'Test',
-        status: 'in_progress', deletedAt: null,
-        vehicle: null, driver: null, deliveryLat: null, deliveryLng: null,
-        assignedDriverId: null, clientId: null,
+        id: 'del-upd',
+        companyId: 'comp-1',
+        title: 'Test',
+        status: 'in_progress',
+        deletedAt: null,
+        vehicle: null,
+        driver: null,
+        deliveryLat: null,
+        deliveryLng: null,
+        assignedDriverId: null,
+        clientId: null,
       });
       const driver = { id: 'driver-2', userId: 'user-456', companyId: 'comp-1', deletedAt: null };
       mockPrisma.driver.findFirst.mockResolvedValueOnce(driver);
       const updatedDelivery = {
-        id: 'del-upd', title: 'Test', driverId: 'driver-2', assignedDriverId: 'user-456',
-        status: 'in_progress', companyId: 'comp-1',
+        id: 'del-upd',
+        title: 'Test',
+        driverId: 'driver-2',
+        assignedDriverId: 'user-456',
+        status: 'in_progress',
+        companyId: 'comp-1',
       };
       mockPrisma.delivery.update.mockResolvedValueOnce(updatedDelivery);
 
@@ -480,12 +577,16 @@ describe('DeliveriesService - State Machine', () => {
     it('should default to pending when no status provided in create', async () => {
       mockPrisma.driver.findFirst.mockResolvedValue(null);
       mockPrisma.delivery.create.mockResolvedValueOnce({
-        id: 'del-dflt', title: 'Default', status: DeliveryStatus.pending,
+        id: 'del-dflt',
+        title: 'Default',
+        status: DeliveryStatus.pending,
         companyId: 'comp-1',
       });
 
       const result = await service.create('comp-1', {
-        title: 'Default', pickupAddress: 'Pickup', deliveryAddress: 'Delivery',
+        title: 'Default',
+        pickupAddress: 'Pickup',
+        deliveryAddress: 'Delivery',
       } as any);
 
       expect(mockPrisma.delivery.create).toHaveBeenCalledWith(
@@ -499,12 +600,16 @@ describe('DeliveriesService - State Machine', () => {
     it('should respect explicit status when provided in create', async () => {
       mockPrisma.driver.findFirst.mockResolvedValue(null);
       mockPrisma.delivery.create.mockResolvedValueOnce({
-        id: 'del-exp', title: 'Explicit', status: DeliveryStatus.assigned,
+        id: 'del-exp',
+        title: 'Explicit',
+        status: DeliveryStatus.assigned,
         companyId: 'comp-1',
       });
 
       const result = await service.create('comp-1', {
-        title: 'Explicit', pickupAddress: 'Pickup', deliveryAddress: 'Delivery',
+        title: 'Explicit',
+        pickupAddress: 'Pickup',
+        deliveryAddress: 'Delivery',
         status: DeliveryStatus.assigned,
       } as any);
 
@@ -559,8 +664,11 @@ describe('DeliveriesService - State Machine', () => {
         { id: 'del-d1', status: 'pending', companyId: 'comp-1', deletedAt: null },
         { id: 'del-d2', status: 'pending', companyId: 'comp-1', deletedAt: null },
       ]);
-      mockPrisma.driver.findFirst
-        .mockResolvedValueOnce({ id: 'drv-1', userId: 'user-99', companyId: 'comp-1' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({
+        id: 'drv-1',
+        userId: 'user-99',
+        companyId: 'comp-1',
+      });
       mockPrisma.delivery.update.mockResolvedValue({});
 
       const result = await service.bulkAction('comp-1', {
@@ -573,17 +681,27 @@ describe('DeliveriesService - State Machine', () => {
       expect(result.failed).toHaveLength(1);
       expect(result.failed[0].reason).toContain('not found');
       expect(mockPrisma.delivery.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ driverId: 'drv-1', assignedDriverId: 'user-99' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ driverId: 'drv-1', assignedDriverId: 'user-99' }),
+        }),
       );
     });
   });
 
   describe('realtime fuel report recompute (delivered)', () => {
     const inProgressDelivery = {
-      id: 'del-1', companyId: 'comp-1', title: 'Test',
-      status: DeliveryStatus.in_progress, deletedAt: null,
-      vehicle: null, driver: null, deliveryLat: null, deliveryLng: null,
-      deliveryAddress: 'Ivato', assignedDriverId: 'user-1', clientId: null,
+      id: 'del-1',
+      companyId: 'comp-1',
+      title: 'Test',
+      status: DeliveryStatus.in_progress,
+      deletedAt: null,
+      vehicle: null,
+      driver: null,
+      deliveryLat: null,
+      deliveryLng: null,
+      deliveryAddress: 'Ivato',
+      assignedDriverId: 'user-1',
+      clientId: null,
       driverId: 'driver-1',
     };
     const expectJobAdded = (driverId: string, status?: DeliveryStatus) => {
@@ -601,9 +719,14 @@ describe('DeliveriesService - State Machine', () => {
 
     it('updateDriverStatus → delivered enqueues a recompute job with the driverId', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
-      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'delivered' });
+      mockPrisma.delivery.update.mockResolvedValueOnce({
+        ...inProgressDelivery,
+        status: 'delivered',
+      });
 
-      await service.updateDriverStatus('comp-1', 'del-1', 'user-1', { status: DeliveryStatus.delivered } as any);
+      await service.updateDriverStatus('comp-1', 'del-1', 'user-1', {
+        status: DeliveryStatus.delivered,
+      } as any);
 
       expectJobAdded('driver-1');
     });
@@ -612,7 +735,9 @@ describe('DeliveriesService - State Machine', () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
       mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'failed' });
 
-      await service.updateDriverStatus('comp-1', 'del-1', 'user-1', { status: DeliveryStatus.failed } as any);
+      await service.updateDriverStatus('comp-1', 'del-1', 'user-1', {
+        status: DeliveryStatus.failed,
+      } as any);
 
       expectJobAdded('driver-1', DeliveryStatus.failed);
     });
@@ -622,14 +747,19 @@ describe('DeliveriesService - State Machine', () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(noDriver);
       mockPrisma.delivery.update.mockResolvedValueOnce({ ...noDriver, status: 'delivered' });
 
-      await service.updateDriverStatus('comp-1', 'del-1', 'user-1', { status: DeliveryStatus.delivered } as any);
+      await service.updateDriverStatus('comp-1', 'del-1', 'user-1', {
+        status: DeliveryStatus.delivered,
+      } as any);
 
       expectNoJobAdded();
     });
 
     it('updateStatus → delivered enqueues a recompute job with the driverId', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
-      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'delivered' });
+      mockPrisma.delivery.update.mockResolvedValueOnce({
+        ...inProgressDelivery,
+        status: 'delivered',
+      });
 
       await service.updateStatus('comp-1', 'del-1', { status: DeliveryStatus.delivered } as any);
 
@@ -647,7 +777,10 @@ describe('DeliveriesService - State Machine', () => {
 
     it('update → delivered enqueues a recompute job using the delivery driverId', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
-      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'delivered' });
+      mockPrisma.delivery.update.mockResolvedValueOnce({
+        ...inProgressDelivery,
+        status: 'delivered',
+      });
 
       await service.update('comp-1', 'del-1', { status: DeliveryStatus.delivered } as any);
 
@@ -665,10 +798,21 @@ describe('DeliveriesService - State Machine', () => {
 
     it('update → delivered enqueues a recompute job using the new driverId when reassigning simultaneously', async () => {
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
-      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-2', userId: 'user-2', companyId: 'comp-1' });
-      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, driverId: 'driver-2', status: 'delivered' });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({
+        id: 'driver-2',
+        userId: 'user-2',
+        companyId: 'comp-1',
+      });
+      mockPrisma.delivery.update.mockResolvedValueOnce({
+        ...inProgressDelivery,
+        driverId: 'driver-2',
+        status: 'delivered',
+      });
 
-      await service.update('comp-1', 'del-1', { status: DeliveryStatus.delivered, driverId: 'driver-2' } as any);
+      await service.update('comp-1', 'del-1', {
+        status: DeliveryStatus.delivered,
+        driverId: 'driver-2',
+      } as any);
 
       expectJobAdded('driver-2');
     });
@@ -685,8 +829,20 @@ describe('DeliveriesService - State Machine', () => {
 
     it('bulkAction updateStatus → delivered enqueues a recompute job per affected delivery', async () => {
       mockPrisma.delivery.findMany.mockResolvedValue([
-        { id: 'del-a', status: 'in_progress', companyId: 'comp-1', deletedAt: null, driverId: 'driver-1' },
-        { id: 'del-b', status: 'in_progress', companyId: 'comp-1', deletedAt: null, driverId: 'driver-2' },
+        {
+          id: 'del-a',
+          status: 'in_progress',
+          companyId: 'comp-1',
+          deletedAt: null,
+          driverId: 'driver-1',
+        },
+        {
+          id: 'del-b',
+          status: 'in_progress',
+          companyId: 'comp-1',
+          deletedAt: null,
+          driverId: 'driver-2',
+        },
       ]);
       mockPrisma.delivery.update.mockResolvedValue({});
 
@@ -709,7 +865,13 @@ describe('DeliveriesService - State Machine', () => {
 
     it('bulkAction updateStatus → failed enqueues a recompute job per affected delivery', async () => {
       mockPrisma.delivery.findMany.mockResolvedValue([
-        { id: 'del-a', status: 'in_progress', companyId: 'comp-1', deletedAt: null, driverId: 'driver-1' },
+        {
+          id: 'del-a',
+          status: 'in_progress',
+          companyId: 'comp-1',
+          deletedAt: null,
+          driverId: 'driver-1',
+        },
       ]);
       mockPrisma.delivery.update.mockResolvedValue({});
 
@@ -732,13 +894,19 @@ describe('DeliveriesService - State Machine', () => {
           { provide: NotificationsService, useValue: mockNotifications },
           { provide: WebhooksService, useValue: mockWebhooks },
           { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('false') } },
-          { provide: DataUpdateBus, useValue: { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() } },
+          {
+            provide: DataUpdateBus,
+            useValue: { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() },
+          },
           { provide: GeocodingService, useValue: { search: jest.fn().mockResolvedValue([]) } },
         ],
       }).compile();
       const svc = moduleNoQueue.get<DeliveriesService>(DeliveriesService);
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(inProgressDelivery);
-      mockPrisma.delivery.update.mockResolvedValueOnce({ ...inProgressDelivery, status: 'delivered' });
+      mockPrisma.delivery.update.mockResolvedValueOnce({
+        ...inProgressDelivery,
+        status: 'delivered',
+      });
 
       await expect(
         svc.updateStatus('comp-1', 'del-1', { status: DeliveryStatus.delivered } as any),

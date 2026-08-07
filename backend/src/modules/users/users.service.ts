@@ -167,7 +167,13 @@ export class UsersService {
   }
 
   async findById(id: string, companyId?: string, currentUserId?: string, currentUserRole?: string) {
-    if (currentUserId && currentUserRole && id !== currentUserId && currentUserRole !== 'admin' && currentUserRole !== 'dispatcher') {
+    if (
+      currentUserId &&
+      currentUserRole &&
+      id !== currentUserId &&
+      currentUserRole !== 'admin' &&
+      currentUserRole !== 'dispatcher'
+    ) {
       throw new NotFoundException('User not found');
     }
     const where: any = { id, deletedAt: null };
@@ -302,7 +308,8 @@ export class UsersService {
         const alreadyAssigned = await this.prisma.driver.findFirst({
           where: { vehicleId: dto.vehicleId, deletedAt: null, userId: { not: id } },
         });
-        if (alreadyAssigned) throw new ConflictException('Vehicle is already assigned to another driver');
+        if (alreadyAssigned)
+          throw new ConflictException('Vehicle is already assigned to another driver');
       }
       if (dto.licenseNumber) {
         const existingLic = await this.prisma.driver.findFirst({
@@ -342,7 +349,10 @@ export class UsersService {
         },
       });
 
-      if (targetRole === 'driver' && (dto.vehicleId !== undefined || dto.licenseNumber !== undefined)) {
+      if (
+        targetRole === 'driver' &&
+        (dto.vehicleId !== undefined || dto.licenseNumber !== undefined)
+      ) {
         const existingDriver = await tx.driver.findFirst({
           where: { companyId, userId: id, deletedAt: null },
         });

@@ -1,7 +1,8 @@
 const PgClient = require('pg').Client;
 const alertCrypto = require('crypto');
 
-const ALERT_DB = 'postgresql://delivery_tracking_ghba_user:aRAlcrSvohQdwVZbVrmnAZx0afCxPbdq@dpg-d9hjlmbeo5us73eb5e8g-a.frankfurt-postgres.render.com/delivery_tracking_ghba';
+const ALERT_DB =
+  'postgresql://delivery_tracking_ghba_user:aRAlcrSvohQdwVZbVrmnAZx0afCxPbdq@dpg-d9hjlmbeo5us73eb5e8g-a.frankfurt-postgres.render.com/delivery_tracking_ghba';
 const alertUuid = () => alertCrypto.randomUUID();
 
 describe('Traccar → Alert chain (intégration réelle)', () => {
@@ -129,7 +130,9 @@ describe('Traccar → Alert chain (intégration réelle)', () => {
     );
     const distanceM = Number(dist.rows[0].dist_m);
     const speedMs = distanceM / (3 * 60);
-    console.log(`Distance: ${distanceM.toFixed(0)}m, Speed: ${speedMs.toFixed(2)} m/s (${(speedMs * 3.6).toFixed(1)} km/h)`);
+    console.log(
+      `Distance: ${distanceM.toFixed(0)}m, Speed: ${speedMs.toFixed(2)} m/s (${(speedMs * 3.6).toFixed(1)} km/h)`,
+    );
 
     expect(speedMs).toBeLessThan(100);
     expect(speedMs).toBeGreaterThan(0.5);

@@ -241,7 +241,9 @@ describe('DeliveryProximityService', () => {
       now,
     );
 
-    expect(mockCacheService.invalidate).toHaveBeenCalledWith(`proximity:entered:${firstDeliveryId}:${vehicleId}`);
+    expect(mockCacheService.invalidate).toHaveBeenCalledWith(
+      `proximity:entered:${firstDeliveryId}:${vehicleId}`,
+    );
   });
 
   it('handles Traccar positions identically to mobile positions', async () => {
@@ -292,7 +294,9 @@ describe('DeliveryProximityService', () => {
       store.set(key, val);
       return Promise.resolve();
     });
-    mockCacheService.get.mockImplementation((key: string) => Promise.resolve(store.get(key) ?? null));
+    mockCacheService.get.mockImplementation((key: string) =>
+      Promise.resolve(store.get(key) ?? null),
+    );
 
     // 1) Position dans le rayon de 300m → 1er événement proximityAlert.
     await service.checkProximity(driverId, vehicleId, companyId, deliveryLat, deliveryLng, now);

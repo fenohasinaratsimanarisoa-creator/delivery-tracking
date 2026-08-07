@@ -52,15 +52,13 @@ describe('GeofenceController — CreateGeofenceDto (validation radiusMeters)', (
   });
 
   it('rejette radiusMeters=0 avec 400 et un message clair (aucun insert)', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/geofences')
-      .send({
-        deliveryId: DELIVERY_ID,
-        name: 'Zone A',
-        lat: -18.87,
-        lng: 47.52,
-        radiusMeters: 0,
-      });
+    const res = await request(app.getHttpServer()).post('/geofences').send({
+      deliveryId: DELIVERY_ID,
+      name: 'Zone A',
+      lat: -18.87,
+      lng: 47.52,
+      radiusMeters: 0,
+    });
 
     expect(res.status).toBe(400);
     expect(res.body.message).toEqual(
@@ -71,15 +69,13 @@ describe('GeofenceController — CreateGeofenceDto (validation radiusMeters)', (
   });
 
   it('rejette radiusMeters=-5 avec 400 et un message clair (aucun insert)', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/geofences')
-      .send({
-        deliveryId: DELIVERY_ID,
-        name: 'Zone A',
-        lat: -18.87,
-        lng: 47.52,
-        radiusMeters: -5,
-      });
+    const res = await request(app.getHttpServer()).post('/geofences').send({
+      deliveryId: DELIVERY_ID,
+      name: 'Zone A',
+      lat: -18.87,
+      lng: 47.52,
+      radiusMeters: -5,
+    });
 
     expect(res.status).toBe(400);
     expect(res.body.message).toEqual(
@@ -105,15 +101,13 @@ describe('GeofenceController — CreateGeofenceDto (validation radiusMeters)', (
     mockPrisma.delivery.findUnique.mockResolvedValue({ companyId: 'c1' });
     mockPrisma.geofence.create.mockResolvedValue({ id: 'gf-1', companyId: 'c1' });
 
-    const res = await request(app.getHttpServer())
-      .post('/geofences')
-      .send({
-        deliveryId: DELIVERY_ID,
-        name: 'Zone A',
-        lat: -18.87,
-        lng: 47.52,
-        radiusMeters: 200,
-      });
+    const res = await request(app.getHttpServer()).post('/geofences').send({
+      deliveryId: DELIVERY_ID,
+      name: 'Zone A',
+      lat: -18.87,
+      lng: 47.52,
+      radiusMeters: 200,
+    });
 
     expect(res.status).toBe(201);
     expect(mockPrisma.geofence.create).toHaveBeenCalledTimes(1);

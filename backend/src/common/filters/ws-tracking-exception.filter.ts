@@ -1,9 +1,4 @@
-import {
-  Catch,
-  ArgumentsHost,
-  Inject,
-  Logger,
-} from '@nestjs/common';
+import { Catch, ArgumentsHost, Inject, Logger } from '@nestjs/common';
 import { BaseWsExceptionFilter } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
 import * as Sentry from '@sentry/node';

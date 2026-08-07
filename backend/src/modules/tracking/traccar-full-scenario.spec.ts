@@ -259,9 +259,7 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
   // ===========================================================================
   describe('Classic alerts with Traccar positions', () => {
     it('triggers speed alert from Traccar position', async () => {
-      mockPrisma.gpsPosition.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null);
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       mockPrisma.gpsPosition.create.mockResolvedValue({ id: 'gps-speed', suspect: false });
       mockPrisma.companySettings.findUnique.mockResolvedValue({
         speedAlertThreshold: 50,
@@ -289,7 +287,11 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null)
         .mockResolvedValue({ speed: 0.1, timestamp: sixMinAgo, id: 'last-pos' });
-      mockPrisma.gpsPosition.create.mockResolvedValue({ id: 'gps-stop-2', suspect: false, timestamp: now });
+      mockPrisma.gpsPosition.create.mockResolvedValue({
+        id: 'gps-stop-2',
+        suspect: false,
+        timestamp: now,
+      });
       mockPrisma.companySettings.findUnique.mockResolvedValue({
         prolongedStopMinutes: 5,
         speedAlertThreshold: null,
@@ -322,7 +324,7 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
     it('calculates distance from Traccar-sourced positions', async () => {
       const base = new Date('2026-07-21T10:00:00.000Z');
       const positions = [
-        { latitude: -18.88, longitude: 47.50, timestamp: new Date(base.getTime()) },
+        { latitude: -18.88, longitude: 47.5, timestamp: new Date(base.getTime()) },
         { latitude: -18.87, longitude: 47.51, timestamp: new Date(base.getTime() + 30000) },
         { latitude: -18.86, longitude: 47.52, timestamp: new Date(base.getTime() + 60000) },
       ];

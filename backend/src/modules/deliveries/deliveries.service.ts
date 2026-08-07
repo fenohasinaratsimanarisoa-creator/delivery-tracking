@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Logger, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DeliveryStatus, NotificationType, NotificationPriority, Prisma } from '@prisma/client';
@@ -47,10 +53,7 @@ export class DeliveriesService {
    * deux cas, donc consommé). Exclut explicitement pending/assigned/in_progress/cancelled.
    */
   private isFuelReportTriggerStatus(status: DeliveryStatus): boolean {
-    return (
-      status === DeliveryStatus.delivered ||
-      status === DeliveryStatus.failed
-    );
+    return status === DeliveryStatus.delivered || status === DeliveryStatus.failed;
   }
 
   /**
@@ -142,7 +145,12 @@ export class DeliveriesService {
       status: delivery.status,
     });
 
-    this.dataUpdateBus.emitUpdate({ companyId, entity: 'delivery', action: delivery.status, payload: { id: delivery.id } });
+    this.dataUpdateBus.emitUpdate({
+      companyId,
+      entity: 'delivery',
+      action: delivery.status,
+      payload: { id: delivery.id },
+    });
 
     return delivery;
   }
@@ -244,7 +252,12 @@ export class DeliveriesService {
 
     await this.dispatchWebhook(companyId, updated, dto.status);
 
-    this.dataUpdateBus.emitUpdate({ companyId, entity: 'delivery', action: dto.status, payload: { id } });
+    this.dataUpdateBus.emitUpdate({
+      companyId,
+      entity: 'delivery',
+      action: dto.status,
+      payload: { id },
+    });
 
     return updated;
   }
@@ -296,7 +309,12 @@ export class DeliveriesService {
     if (dto.scheduledDate) {
       updateData.scheduledDate = new Date(dto.scheduledDate);
     }
-    if (dto.deliveryLat === undefined && dto.deliveryLng === undefined && dto.deliveryAddress && dto.deliveryAddress !== delivery.deliveryAddress) {
+    if (
+      dto.deliveryLat === undefined &&
+      dto.deliveryLng === undefined &&
+      dto.deliveryAddress &&
+      dto.deliveryAddress !== delivery.deliveryAddress
+    ) {
       try {
         const results = await this.geocoding.search(dto.deliveryAddress);
         if (results.length > 0) {
@@ -328,7 +346,11 @@ export class DeliveriesService {
         if (dto.status === DeliveryStatus.delivered) {
           updateData.completedAt = new Date();
         }
-        this.dispatchDailyFuelReportRecompute(companyId, dto.driverId ?? delivery.driverId, dto.status);
+        this.dispatchDailyFuelReportRecompute(
+          companyId,
+          dto.driverId ?? delivery.driverId,
+          dto.status,
+        );
       }
     }
 
@@ -390,7 +412,12 @@ export class DeliveriesService {
 
     await this.dispatchWebhook(companyId, updated, dto.status);
 
-    this.dataUpdateBus.emitUpdate({ companyId, entity: 'delivery', action: dto.status, payload: { id } });
+    this.dataUpdateBus.emitUpdate({
+      companyId,
+      entity: 'delivery',
+      action: dto.status,
+      payload: { id },
+    });
 
     return updated;
   }
@@ -460,9 +487,10 @@ export class DeliveriesService {
       } catch {}
     }
 
-    const distance = destLat != null && destLng != null
-      ? Math.round(haversineDistance(dto.latitude, dto.longitude, destLat, destLng))
-      : 0;
+    const distance =
+      destLat != null && destLng != null
+        ? Math.round(haversineDistance(dto.latitude, dto.longitude, destLat, destLng))
+        : 0;
     proofData.deliveryProofDistance = distance;
 
     const threshold = this.configService.get<number>('LOCATION_MISMATCH_THRESHOLD_M', 200);
@@ -558,7 +586,10 @@ export class DeliveriesService {
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
-  async bulkAction(companyId: string, dto: { ids: string[]; action: string; status?: string; driverId?: string }): Promise<{
+  async bulkAction(
+    companyId: string,
+    dto: { ids: string[]; action: string; status?: string; driverId?: string },
+  ): Promise<{
     succeeded: string[];
     failed: { id: string; reason: string }[];
   }> {
@@ -593,7 +624,10 @@ export class DeliveriesService {
           const targetStatus = dto.status as DeliveryStatus;
           const allowed = TRANSITION_MATRIX[delivery.status];
           if (!allowed.includes(targetStatus)) {
-            result.failed.push({ id, reason: `Transition ${delivery.status} → ${targetStatus} not allowed` });
+            result.failed.push({
+              id,
+              reason: `Transition ${delivery.status} → ${targetStatus} not allowed`,
+            });
             continue;
           }
           const updateData: any = { status: targetStatus };
@@ -610,7 +644,12 @@ export class DeliveriesService {
             title: delivery.title,
             status: targetStatus,
           });
-          this.dataUpdateBus.emitUpdate({ companyId, entity: 'delivery', action: targetStatus, payload: { id } });
+          this.dataUpdateBus.emitUpdate({
+            companyId,
+            entity: 'delivery',
+            action: targetStatus,
+            payload: { id },
+          });
           result.succeeded.push(id);
         } else if (dto.action === 'assignDriver') {
           if (!dto.driverId) {
@@ -638,7 +677,12 @@ export class DeliveriesService {
             title: delivery.title,
             driverId: dto.driverId,
           });
-          this.dataUpdateBus.emitUpdate({ companyId, entity: 'delivery', action: 'assigned', payload: { id, driverId: dto.driverId } });
+          this.dataUpdateBus.emitUpdate({
+            companyId,
+            entity: 'delivery',
+            action: 'assigned',
+            payload: { id, driverId: dto.driverId },
+          });
           result.succeeded.push(id);
         } else {
           result.failed.push({ id, reason: `Unknown action: ${dto.action}` });
@@ -648,7 +692,10 @@ export class DeliveriesService {
       }
     }
 
-    Logger.log(`Bulk action "${dto.action}": ${result.succeeded.length} succeeded, ${result.failed.length} failed`, 'DeliveriesService');
+    Logger.log(
+      `Bulk action "${dto.action}": ${result.succeeded.length} succeeded, ${result.failed.length} failed`,
+      'DeliveriesService',
+    );
     return result;
   }
 
@@ -718,7 +765,10 @@ export class DeliveriesService {
       const produits = getCol(rowNum, 'Produits commandés') || undefined;
       const observation = getCol(rowNum, 'Observation');
       const notesExistantes = getCol(rowNum, 'Notes');
-      const notes = [notesExistantes, observation ? `Observation: ${observation}` : null].filter(Boolean).join('\n') || undefined;
+      const notes =
+        [notesExistantes, observation ? `Observation: ${observation}` : null]
+          .filter(Boolean)
+          .join('\n') || undefined;
 
       if (existing) {
         if (mode === 'create-only') {
@@ -772,14 +822,24 @@ export class DeliveriesService {
         await this.prisma.delivery.create({ data });
         result.created++;
       } catch (err: any) {
-        if ((err instanceof Prisma.PrismaClientKnownRequestError || err?.name === 'PrismaClientKnownRequestError') && err?.code === 'P2002') {
+        if (
+          (err instanceof Prisma.PrismaClientKnownRequestError ||
+            err?.name === 'PrismaClientKnownRequestError') &&
+          err?.code === 'P2002'
+        ) {
           result.skipped.push({ row: rowNum, orderRef, reason: 'duplicate' });
         } else {
-          result.errors.push({ row: rowNum, reason: err instanceof Error ? err.message : 'Erreur inconnue' });
+          result.errors.push({
+            row: rowNum,
+            reason: err instanceof Error ? err.message : 'Erreur inconnue',
+          });
         }
       }
     }
-    Logger.log(`Import Excel (${mode}): ${result.created} créées, ${result.updated} mises à jour, ${result.skipped.length} ignorées, ${result.errors.length} erreurs`, 'DeliveriesService');
+    Logger.log(
+      `Import Excel (${mode}): ${result.created} créées, ${result.updated} mises à jour, ${result.skipped.length} ignorées, ${result.errors.length} erreurs`,
+      'DeliveriesService',
+    );
     return result;
   }
 }

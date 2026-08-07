@@ -402,35 +402,58 @@ describe('FuelConsumptionService', () => {
     it.each([
       { name: 'accuracy 5m (seuil pondéré = 5m)', acc: 5 },
       { name: 'accuracy 15m (seuil pondéré = 7.5m)', acc: 15 },
-    ])('$name → segments réels ~111m conservés, distanceKm ≈ distance brute (< 2%)', async ({ acc }) => {
-      // Deux segments réels ~111m chacun (0.001° de longitude à l'équateur) — très au-dessus
-      // du seuil de bruit pondéré (5m ou 7.5m) : ils ne doivent JAMAIS être filtrés.
-      const positions = [
-        { latitude: 0, longitude: 0, accuracy: acc, vehicleId: 'vehicle-1', driverId: 'driver-1', timestamp: new Date('2026-07-20T06:00:00Z') },
-        { latitude: 0, longitude: 0.001, accuracy: acc, vehicleId: 'vehicle-1', driverId: 'driver-1', timestamp: new Date('2026-07-20T07:00:00Z') },
-        { latitude: 0, longitude: 0.002, accuracy: acc, vehicleId: 'vehicle-1', driverId: 'driver-1', timestamp: new Date('2026-07-20T08:00:00Z') },
-      ];
-      mockPrisma.driver.findFirst.mockResolvedValue(driver);
-      mockPrisma.gpsPosition.findMany.mockResolvedValue(positions as any);
-      mockPrisma.vehicle.findUnique.mockResolvedValue(VEHICLE as any);
-      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 4900 });
-      mockPrisma.vehicle.findMany.mockResolvedValue([]);
-      let captured: any;
-      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (a: any) => {
-        captured = a;
-        return a;
-      });
+    ])(
+      '$name → segments réels ~111m conservés, distanceKm ≈ distance brute (< 2%)',
+      async ({ acc }) => {
+        // Deux segments réels ~111m chacun (0.001° de longitude à l'équateur) — très au-dessus
+        // du seuil de bruit pondéré (5m ou 7.5m) : ils ne doivent JAMAIS être filtrés.
+        const positions = [
+          {
+            latitude: 0,
+            longitude: 0,
+            accuracy: acc,
+            vehicleId: 'vehicle-1',
+            driverId: 'driver-1',
+            timestamp: new Date('2026-07-20T06:00:00Z'),
+          },
+          {
+            latitude: 0,
+            longitude: 0.001,
+            accuracy: acc,
+            vehicleId: 'vehicle-1',
+            driverId: 'driver-1',
+            timestamp: new Date('2026-07-20T07:00:00Z'),
+          },
+          {
+            latitude: 0,
+            longitude: 0.002,
+            accuracy: acc,
+            vehicleId: 'vehicle-1',
+            driverId: 'driver-1',
+            timestamp: new Date('2026-07-20T08:00:00Z'),
+          },
+        ];
+        mockPrisma.driver.findFirst.mockResolvedValue(driver);
+        mockPrisma.gpsPosition.findMany.mockResolvedValue(positions as any);
+        mockPrisma.vehicle.findUnique.mockResolvedValue(VEHICLE as any);
+        mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 4900 });
+        mockPrisma.vehicle.findMany.mockResolvedValue([]);
+        let captured: any;
+        mockPrisma.dailyFuelReport.upsert.mockImplementation(async (a: any) => {
+          captured = a;
+          return a;
+        });
 
-      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+        await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
 
-      // Distance brute (somme haversine des segments) — le correctif ne doit PAS la réduire
-      // pour un vrai déplacement (seuls les segments < seuil pondéré sont filtrés).
-      const rawMeters =
-        haversineDistance(0, 0, 0, 0.001) + haversineDistance(0, 0.001, 0, 0.002);
-      const reportMeters = captured.create.distanceKm * 1000;
-      console.log(`[a ${acc}m] raw=${rawMeters.toFixed(1)}m report=${reportMeters.toFixed(1)}m`);
-      expect(Math.abs(reportMeters - rawMeters) / rawMeters).toBeLessThan(0.02);
-    });
+        // Distance brute (somme haversine des segments) — le correctif ne doit PAS la réduire
+        // pour un vrai déplacement (seuls les segments < seuil pondéré sont filtrés).
+        const rawMeters = haversineDistance(0, 0, 0, 0.001) + haversineDistance(0, 0.001, 0, 0.002);
+        const reportMeters = captured.create.distanceKm * 1000;
+        console.log(`[a ${acc}m] raw=${rawMeters.toFixed(1)}m report=${reportMeters.toFixed(1)}m`);
+        expect(Math.abs(reportMeters - rawMeters) / rawMeters).toBeLessThan(0.02);
+      },
+    );
   });
 
   describe('Point 1 — crossCheckFuelLogWithGps quand gpsKm <= 0', () => {

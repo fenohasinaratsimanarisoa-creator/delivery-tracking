@@ -23,8 +23,14 @@ export class PlatformAdminService {
     private configService: ConfigService,
     private totpService: TotpService,
   ) {
-    this.accessExpiration = this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m') as jwt.SignOptions['expiresIn'];
-    this.refreshExpiration = this.configService.get<string>('JWT_REFRESH_EXPIRATION', '7d') as jwt.SignOptions['expiresIn'];
+    this.accessExpiration = this.configService.get<string>(
+      'JWT_ACCESS_EXPIRATION',
+      '15m',
+    ) as jwt.SignOptions['expiresIn'];
+    this.refreshExpiration = this.configService.get<string>(
+      'JWT_REFRESH_EXPIRATION',
+      '7d',
+    ) as jwt.SignOptions['expiresIn'];
   }
 
   async login(dto: PlatformAdminLoginDto, ip?: string, userAgent?: string) {
@@ -248,17 +254,21 @@ export class PlatformAdminService {
     });
 
     // Write audit log in target company's own AuditLog as well
-    await this.prisma.auditLog.create({
-      data: {
-        userId: adminUser.id,
-        companyId,
-        action: AuditAction.admin_impersonation,
-        metadata: { impersonatedBy: adminId, platformAdminEmail: adminEmail },
-        ip,
-      },
-    }).catch((err: any) => {
-      this.logger.error(`Failed to write impersonation audit log for company ${companyId}: ${err.message}`);
-    });
+    await this.prisma.auditLog
+      .create({
+        data: {
+          userId: adminUser.id,
+          companyId,
+          action: AuditAction.admin_impersonation,
+          metadata: { impersonatedBy: adminId, platformAdminEmail: adminEmail },
+          ip,
+        },
+      })
+      .catch((err: any) => {
+        this.logger.error(
+          `Failed to write impersonation audit log for company ${companyId}: ${err.message}`,
+        );
+      });
 
     return {
       accessToken,

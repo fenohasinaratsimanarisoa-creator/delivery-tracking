@@ -58,10 +58,20 @@ describe('PlatformAdminService.login — 2FA optionnelle', () => {
     );
   });
 
-  const base = { id: 'admin-1', email: 'admin@test.com', firstName: 'A', lastName: 'B', isActive: true };
+  const base = {
+    id: 'admin-1',
+    email: 'admin@test.com',
+    firstName: 'A',
+    lastName: 'B',
+    isActive: true,
+  };
 
   it('logs in with password only when totpEnabled=false (no 2FA step)', async () => {
-    mockPrisma.platformAdmin.findUnique.mockResolvedValue({ ...base, totpEnabled: false, passwordHash });
+    mockPrisma.platformAdmin.findUnique.mockResolvedValue({
+      ...base,
+      totpEnabled: false,
+      passwordHash,
+    });
 
     const result = (await service.login({ email: 'admin@test.com', password: PASSWORD })) as any;
 
@@ -76,7 +86,11 @@ describe('PlatformAdminService.login — 2FA optionnelle', () => {
   });
 
   it('still requires 2FA when totpEnabled=true', async () => {
-    mockPrisma.platformAdmin.findUnique.mockResolvedValue({ ...base, totpEnabled: true, passwordHash });
+    mockPrisma.platformAdmin.findUnique.mockResolvedValue({
+      ...base,
+      totpEnabled: true,
+      passwordHash,
+    });
 
     const result = (await service.login({ email: 'admin@test.com', password: PASSWORD })) as any;
 
@@ -90,7 +104,11 @@ describe('PlatformAdminService.login — 2FA optionnelle', () => {
   });
 
   it('throws Invalid credentials on wrong password', async () => {
-    mockPrisma.platformAdmin.findUnique.mockResolvedValue({ ...base, totpEnabled: false, passwordHash });
+    mockPrisma.platformAdmin.findUnique.mockResolvedValue({
+      ...base,
+      totpEnabled: false,
+      passwordHash,
+    });
 
     await expect(service.login({ email: 'admin@test.com', password: 'wrong' })).rejects.toThrow(
       'Invalid credentials',
@@ -121,7 +139,10 @@ describe('PlatformAdminService.login — 2FA optionnelle', () => {
           userId: 'user-admin',
           companyId: 'company-1',
           action: AuditAction.admin_impersonation,
-          metadata: { impersonatedBy: 'platform-admin-1', platformAdminEmail: 'platform@admin.com' },
+          metadata: {
+            impersonatedBy: 'platform-admin-1',
+            platformAdminEmail: 'platform@admin.com',
+          },
           ip: '1.2.3.4',
         }),
       }),

@@ -22,13 +22,14 @@ function extractLocalLabel(item: any): string {
   const name = item.name || '';
   const road = addr.road || addr.street || addr.highway || '';
   const houseNum = addr.house_number || '';
-  const suburb = addr.suburb || addr.neighbourhood || addr.quarter || addr.hamlet || addr.village || '';
+  const suburb =
+    addr.suburb || addr.neighbourhood || addr.quarter || addr.hamlet || addr.village || '';
   const city = addr.city || addr.town || addr.municipality || addr.county || '';
   const district = addr.state_district || addr.region || '';
   const fallback = item.display_name?.split(',')[0] || '';
 
   const parts = [
-    road ? `${houseNum ? houseNum + ' ' : ''}${road}` : (name || fallback),
+    road ? `${houseNum ? houseNum + ' ' : ''}${road}` : name || fallback,
     suburb,
     city || district,
   ].filter(Boolean);
@@ -91,12 +92,16 @@ export class GeocodingService {
 
       if (!res.ok) {
         const errorBody = await res.text().catch(() => '(no body)');
-        this.logger.error(`Google Places API HTTP ${res.status} for input="${input}": ${errorBody.slice(0, 2000)}`);
+        this.logger.error(
+          `Google Places API HTTP ${res.status} for input="${input}": ${errorBody.slice(0, 2000)}`,
+        );
         return [];
       }
       const data: any = await res.json();
       if (!data.suggestions) {
-        this.logger.warn(`Google Places API returned no suggestions for input="${input}": ${JSON.stringify(data).slice(0, 1000)}`);
+        this.logger.warn(
+          `Google Places API returned no suggestions for input="${input}": ${JSON.stringify(data).slice(0, 1000)}`,
+        );
         return [];
       }
 
@@ -115,7 +120,9 @@ export class GeocodingService {
 
       return results;
     } catch (err: unknown) {
-      this.logger.error(`Google Places API fetch/parse error for input="${input}": ${(err as Error).message}`);
+      this.logger.error(
+        `Google Places API fetch/parse error for input="${input}": ${(err as Error).message}`,
+      );
       return [];
     }
   }
@@ -147,12 +154,16 @@ export class GeocodingService {
 
       if (!res.ok) {
         const errorBody = await res.text().catch(() => '(no body)');
-        this.logger.error(`Google Places Details API HTTP ${res.status} for placeId="${placeId}": ${errorBody.slice(0, 2000)}`);
+        this.logger.error(
+          `Google Places Details API HTTP ${res.status} for placeId="${placeId}": ${errorBody.slice(0, 2000)}`,
+        );
         return null;
       }
       const data: any = await res.json();
       if (!data?.location) {
-        this.logger.warn(`Google Places Details API no location for placeId="${placeId}": ${JSON.stringify(data).slice(0, 1000)}`);
+        this.logger.warn(
+          `Google Places Details API no location for placeId="${placeId}": ${JSON.stringify(data).slice(0, 1000)}`,
+        );
         return null;
       }
 
@@ -171,7 +182,9 @@ export class GeocodingService {
 
       return result;
     } catch (err: unknown) {
-      this.logger.error(`Google Places Details API fetch/parse error for placeId="${placeId}": ${(err as Error).message}`);
+      this.logger.error(
+        `Google Places Details API fetch/parse error for placeId="${placeId}": ${(err as Error).message}`,
+      );
       return null;
     }
   }
@@ -278,10 +291,20 @@ export class GeocodingService {
             const data: any[] = await res.json();
             for (const item of data) {
               const key = `${parseFloat(item.lat).toFixed(4)},${parseFloat(item.lon).toFixed(4)}`;
-              if (!seen.has(key)) { seen.add(key); results.push({ lat: parseFloat(item.lat), lng: parseFloat(item.lon), label: extractLocalLabel(item), displayName: item.display_name }); }
+              if (!seen.has(key)) {
+                seen.add(key);
+                results.push({
+                  lat: parseFloat(item.lat),
+                  lng: parseFloat(item.lon),
+                  label: extractLocalLabel(item),
+                  displayName: item.display_name,
+                });
+              }
             }
           }
-        } catch { /* continue */ }
+        } catch {
+          /* continue */
+        }
         if (results.length >= 5) break;
       }
     }

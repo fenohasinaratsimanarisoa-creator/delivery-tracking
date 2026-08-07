@@ -58,7 +58,19 @@ describe('DriversService', () => {
       await expect(service.create('company-1', dto)).resolves.toEqual(created);
       expect(mockPrisma.driver.create).toHaveBeenCalledWith({
         data: { ...dto, companyId: 'company-1' },
-        include: { vehicle: { select: { id: true, brand: true, model: true, year: true, licensePlate: true, fuelType: true, positionSource: true } } },
+        include: {
+          vehicle: {
+            select: {
+              id: true,
+              brand: true,
+              model: true,
+              year: true,
+              licensePlate: true,
+              fuelType: true,
+              positionSource: true,
+            },
+          },
+        },
       });
     });
 
@@ -85,7 +97,15 @@ describe('DriversService', () => {
       where: { userId: 'user-1', deletedAt: null },
       include: {
         vehicle: {
-          select: { id: true, brand: true, model: true, year: true, licensePlate: true, fuelType: true, positionSource: true },
+          select: {
+            id: true,
+            brand: true,
+            model: true,
+            year: true,
+            licensePlate: true,
+            fuelType: true,
+            positionSource: true,
+          },
         },
       },
     });
@@ -142,7 +162,9 @@ describe('DriversService', () => {
       expect(mockPrisma.driver.update).toHaveBeenCalledWith({
         where: { id: 'driver-1' },
         data: { licenseNumber: 'LIC-NEW' },
-        include: { vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } } },
+        include: {
+          vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } },
+        },
       });
     });
 

@@ -147,9 +147,9 @@ describe('StripeService', () => {
         return undefined;
       });
 
-      expect(() => StripeService.validateConfig(mockConfigService as unknown as ConfigService)).toThrow(
-        'STRIPE_SECRET_KEY is required in production',
-      );
+      expect(() =>
+        StripeService.validateConfig(mockConfigService as unknown as ConfigService),
+      ).toThrow('STRIPE_SECRET_KEY is required in production');
     });
 
     it('does not throw in production when billing is disabled (pilot mode, no Stripe key)', () => {
@@ -159,7 +159,9 @@ describe('StripeService', () => {
         return undefined;
       });
 
-      expect(() => StripeService.validateConfig(mockConfigService as unknown as ConfigService)).not.toThrow();
+      expect(() =>
+        StripeService.validateConfig(mockConfigService as unknown as ConfigService),
+      ).not.toThrow();
     });
 
     it('does not throw outside production without STRIPE_SECRET_KEY', () => {
@@ -169,7 +171,9 @@ describe('StripeService', () => {
         return undefined;
       });
 
-      expect(() => StripeService.validateConfig(mockConfigService as unknown as ConfigService)).not.toThrow();
+      expect(() =>
+        StripeService.validateConfig(mockConfigService as unknown as ConfigService),
+      ).not.toThrow();
     });
 
     it('does not throw in production when STRIPE_SECRET_KEY is set', () => {
@@ -180,7 +184,9 @@ describe('StripeService', () => {
         return undefined;
       });
 
-      expect(() => StripeService.validateConfig(mockConfigService as unknown as ConfigService)).not.toThrow();
+      expect(() =>
+        StripeService.validateConfig(mockConfigService as unknown as ConfigService),
+      ).not.toThrow();
     });
   });
 

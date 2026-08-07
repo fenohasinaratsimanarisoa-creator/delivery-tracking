@@ -68,7 +68,9 @@ describe('WebhooksService', () => {
     });
 
     it('rejects SSRF URLs like http://169.254.169.254', async () => {
-      assertSafeWebhookUrl.mockRejectedValueOnce(new BadRequestException('Webhook URL must use HTTPS protocol'));
+      assertSafeWebhookUrl.mockRejectedValueOnce(
+        new BadRequestException('Webhook URL must use HTTPS protocol'),
+      );
 
       await expect(
         service.create('company-1', {
@@ -81,7 +83,9 @@ describe('WebhooksService', () => {
     });
 
     it('rejects SSRF URLs like http://127.0.0.1:6379', async () => {
-      assertSafeWebhookUrl.mockRejectedValueOnce(new BadRequestException('Webhook URL must use HTTPS protocol'));
+      assertSafeWebhookUrl.mockRejectedValueOnce(
+        new BadRequestException('Webhook URL must use HTTPS protocol'),
+      );
 
       await expect(
         service.create('company-1', {
@@ -131,7 +135,10 @@ describe('WebhooksService', () => {
 
   describe('update', () => {
     it('updates a webhook owned by the company with URL validation', async () => {
-      mockPrisma.webhook.findFirst.mockResolvedValueOnce({ id: 'webhook-1', companyId: 'company-1' });
+      mockPrisma.webhook.findFirst.mockResolvedValueOnce({
+        id: 'webhook-1',
+        companyId: 'company-1',
+      });
       mockPrisma.webhook.update.mockResolvedValueOnce({
         id: 'webhook-1',
         url: 'https://example.com/updated',
@@ -166,7 +173,10 @@ describe('WebhooksService', () => {
 
   describe('remove', () => {
     it('deletes a webhook owned by the company', async () => {
-      mockPrisma.webhook.findFirst.mockResolvedValueOnce({ id: 'webhook-1', companyId: 'company-1' });
+      mockPrisma.webhook.findFirst.mockResolvedValueOnce({
+        id: 'webhook-1',
+        companyId: 'company-1',
+      });
       mockPrisma.webhook.delete.mockResolvedValueOnce({ id: 'webhook-1' });
 
       await service.remove('company-1', 'webhook-1');
@@ -183,7 +193,11 @@ describe('WebhooksService', () => {
 
   describe('toggle', () => {
     it('flips the isActive flag', async () => {
-      mockPrisma.webhook.findFirst.mockResolvedValueOnce({ id: 'webhook-1', companyId: 'company-1', isActive: true });
+      mockPrisma.webhook.findFirst.mockResolvedValueOnce({
+        id: 'webhook-1',
+        companyId: 'company-1',
+        isActive: true,
+      });
       mockPrisma.webhook.update.mockResolvedValueOnce({ id: 'webhook-1', isActive: false });
 
       const result = await service.toggle('company-1', 'webhook-1');

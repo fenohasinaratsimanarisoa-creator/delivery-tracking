@@ -16,7 +16,9 @@ export class CacheService {
         if (raw === null) return null;
         return JSON.parse(raw) as T;
       } catch (err) {
-        this.logger.warn(`Redis get failed for key "${key}", using in-memory fallback: ${(err as Error).message}`);
+        this.logger.warn(
+          `Redis get failed for key "${key}", using in-memory fallback: ${(err as Error).message}`,
+        );
       }
     }
     const entry = this.fallback.get(key);
@@ -34,7 +36,9 @@ export class CacheService {
         await this.redis.setex(key, ttlSeconds, JSON.stringify(value));
         return;
       } catch (err) {
-        this.logger.warn(`Redis set failed for key "${key}", using in-memory fallback: ${(err as Error).message}`);
+        this.logger.warn(
+          `Redis set failed for key "${key}", using in-memory fallback: ${(err as Error).message}`,
+        );
       }
     }
     this.fallback.set(key, {
@@ -58,7 +62,9 @@ export class CacheService {
         }
         return;
       } catch (err) {
-        this.logger.warn(`Redis invalidate failed for pattern "${pattern}", falling back to in-memory: ${(err as Error).message}`);
+        this.logger.warn(
+          `Redis invalidate failed for pattern "${pattern}", falling back to in-memory: ${(err as Error).message}`,
+        );
       }
     }
     for (const key of this.fallback.keys()) {

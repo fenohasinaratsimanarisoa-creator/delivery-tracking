@@ -31,7 +31,11 @@ export class DeliveryProximityService {
     return `proximity:snoozed:${deliveryId}:${vehicleId}`;
   }
 
-  private async setEnteredTime(deliveryId: string, vehicleId: string, timestamp: number): Promise<void> {
+  private async setEnteredTime(
+    deliveryId: string,
+    vehicleId: string,
+    timestamp: number,
+  ): Promise<void> {
     const key = await this.getProximityKey(deliveryId, vehicleId);
     if (this.redis) {
       await this.redis.set(key, timestamp, 'EX', 86400);
@@ -78,7 +82,11 @@ export class DeliveryProximityService {
    * Réutilise les constantes SNOOZE_MS / ESCALATION_SNOOZE_MS déjà définies —
    * mêmes durées que le snooze local côté client (pas de duplication).
    */
-  async snoozeProximity(deliveryId: string, vehicleId: string, escalationLevel: number): Promise<void> {
+  async snoozeProximity(
+    deliveryId: string,
+    vehicleId: string,
+    escalationLevel: number,
+  ): Promise<void> {
     const snoozeMs = escalationLevel >= 2 ? ESCALATION_SNOOZE_MS : SNOOZE_MS;
     const until = Date.now() + snoozeMs;
     const key = await this.getSnoozeKey(deliveryId, vehicleId);
@@ -145,15 +153,18 @@ export class DeliveryProximityService {
         }
 
         const timeInZone = now - (enteredAt ?? now);
-        const escalationLevel = timeInZone > ESCALATION_AFTER_MS ? 2 : timeInZone > ESCALATION_AFTER_MS / 2 ? 1 : 0;
+        const escalationLevel =
+          timeInZone > ESCALATION_AFTER_MS ? 2 : timeInZone > ESCALATION_AFTER_MS / 2 ? 1 : 0;
 
         if (await this.isSnoozed(inProgressDelivery.id, vehicleId)) return;
 
         const title = inProgressDelivery.title || 'Delivery';
-        const message = escalationLevel >= 2
-          ? `⚠️ You have been on site for ${Math.round(timeInZone / 60000)} min. Please validate the delivery.`
-          : 'You are near the delivery point. Please validate.';
-        const urgency = escalationLevel >= 2 ? 'critical' : escalationLevel >= 1 ? 'high' : 'normal';
+        const message =
+          escalationLevel >= 2
+            ? `⚠️ You have been on site for ${Math.round(timeInZone / 60000)} min. Please validate the delivery.`
+            : 'You are near the delivery point. Please validate.';
+        const urgency =
+          escalationLevel >= 2 ? 'critical' : escalationLevel >= 1 ? 'high' : 'normal';
 
         this.dataUpdateBus.emitUpdate({
           companyId,

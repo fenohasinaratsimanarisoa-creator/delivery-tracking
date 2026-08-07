@@ -26,10 +26,7 @@ export class VehiclesService {
     }
   }
 
-  private async checkTraccarDeviceIdUniqueness(
-    traccarDeviceId: string,
-    excludeId?: string,
-  ) {
+  private async checkTraccarDeviceIdUniqueness(traccarDeviceId: string, excludeId?: string) {
     const existing = await this.prisma.vehicle.findFirst({
       where: {
         traccarDeviceId,
@@ -244,17 +241,11 @@ export class VehiclesService {
           uniqueId: d.uniqueId,
         }));
     } catch (err: any) {
-      throw new BadRequestException(
-        `Traccar is unavailable: ${err.message}`,
-      );
+      throw new BadRequestException(`Traccar is unavailable: ${err.message}`);
     }
   }
 
-  private async authenticateTraccar(
-    url: string,
-    user: string,
-    password: string,
-  ): Promise<string> {
+  private async authenticateTraccar(url: string, user: string, password: string): Promise<string> {
     const loginResponse = await fetch(`${url}/api/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
