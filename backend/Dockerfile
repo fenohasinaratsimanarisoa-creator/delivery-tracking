@@ -23,4 +23,14 @@ ENV PRISMA_QUERY_ENGINE_BINARY=/app/node_modules/.prisma/client/libquery_engine-
 RUN chown -R node:node /app/node_modules/@prisma/engines /app/node_modules/.prisma
 USER node
 EXPOSE 3000
-CMD sh -c 'if [ "$RESET_DATABASE" = "true" ]; then npx prisma migrate reset --force; else npx prisma migrate deploy; fi && if [ -n "$SEED_ADMIN_EMAIL" ]; then echo "[startup] SEED_ADMIN_EMAIL set — seeding super admin ($SEED_ADMIN_EMAIL)"; npx ts-node prisma/seed.ts || echo "[startup] WARNING: seed failed (continuing)"; else echo "[startup] SEED_ADMIN_EMAIL not set — seed skipped"; fi && node dist/src/main'
+CMD sh -c '
+if [ "$RESET_DATABASE" = "true" ]; then
+  npx prisma migrate reset --force
+else
+  npx prisma migrate deploy || {
+    echo "[startup] migrate deploy a échoué — auto-réparation : résolution de 20260807000000_add_digest_sent_at puis reprise";
+    npx prisma migrate resolve --applied 20260807000000_add_digest_sent_at && npx prisma migrate deploy || exit 1;
+  }
+fi
+if [ -n "$SEED_ADMIN_EMAIL" ]; then echo "[startup] SEED_ADMIN_EMAIL set — seeding super admin ($SEED_ADMIN_EMAIL)"; npx ts-node prisma/seed.ts || echo "[startup] WARNING: seed failed (continuing)"; else echo "[startup] SEED_ADMIN_EMAIL not set — seed skipped"; fi
+node dist/src/main'
