@@ -61,7 +61,14 @@ export function getSocket(): Socket {
   if (!socket) {
     socket = io(getSocketBaseUrl(), {
       auth: (cb: (data: { token: string | null }) => void) => cb({ token: getAccessToken() }),
-      transports: ['websocket'],
+      // ['websocket', 'polling'] : le WebSocket reste le transport préféré, mais si
+      // l'upgrade échoue (réseaux mobiles dégradés, proxies d'opérateur qui bloquent
+      // le handshake Upgrade), socket.io retombe automatiquement sur le long-polling
+      // HTTP au lieu de rester déconnecté. Sans ce repli, les périodes de
+      // déconnexion s'allongent et les positions s'accumulent dans la file IndexedDB
+      // (offlineQueue.ts), plafonnée à 500 entrées avant suppression des plus
+      // anciennes.
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
