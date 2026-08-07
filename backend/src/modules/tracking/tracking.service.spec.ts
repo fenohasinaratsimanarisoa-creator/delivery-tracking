@@ -1491,30 +1491,41 @@ describe('TrackingService', () => {
     const COMPANY = 'company-1';
 
     it('Test D : trajet ~10 km avec bruit phone (accuracy 40m) → distance non gonflée par le bruit', async () => {
-      // P0→P1 et P1→P2 = bruit de jitter ~11 m (accuracy 40 → seuil pondéré 20 m → filtré).
-      // P2→P3→P4 = trajet réel ~9985 m. AVANT pondération (seuil fixe 5 m), le bruit était
-      // compté → ~10007 m ; APRÈS, il est filtré → ~9985 m.
+      // P0→P1 et P1→P2 = bruit de jitter ~3.3m chacun (accuracy 40 → seuil PONDÉRÉ plafonné à
+      // 1.5×5m = 7,5m → filtré). AVANT plafond, accuracy 40 donnait un seuil de 20m ; le cap
+      // GPS_NOISE_MAX_ACCURACY_SCALE garantit qu'un vrai déplacement urbain lent (segments
+      // 8-25m, voir règle vitesse) reste compté alors que le bruit à l'arrêt est filtré.
+      // P2→P3→P4 = trajet réel ~9985 m, segments bien au-dessus du seuil → conservés.
       const positions = [
         { latitude: 0, longitude: 0, accuracy: 40, timestamp: new Date('2026-07-20T06:00:00Z') },
         {
           latitude: 0,
-          longitude: 0.0001,
+          longitude: 0.00003,
           accuracy: 40,
+          speed: 0,
           timestamp: new Date('2026-07-20T06:01:00Z'),
         },
         {
           latitude: 0,
-          longitude: 0.0002,
+          longitude: 0.00006,
           accuracy: 40,
+          speed: 0,
           timestamp: new Date('2026-07-20T06:02:00Z'),
         },
         {
           latitude: 0,
           longitude: 0.045,
           accuracy: 40,
+          speed: 13,
           timestamp: new Date('2026-07-20T06:03:00Z'),
         },
-        { latitude: 0, longitude: 0.09, accuracy: 40, timestamp: new Date('2026-07-20T06:04:00Z') },
+        {
+          latitude: 0,
+          longitude: 0.09,
+          accuracy: 40,
+          speed: 13,
+          timestamp: new Date('2026-07-20T06:04:00Z'),
+        },
       ];
       mockPrisma.gpsPosition.count.mockResolvedValue(5);
       mockPrisma.gpsPosition.findMany.mockResolvedValue(positions as any);
@@ -1522,8 +1533,11 @@ describe('TrackingService', () => {
       const result = await service.calculateDistance(DELIVERY, COMPANY);
 
       console.log(`[Test D] distance = ${result.meters} m`);
-      expect(result.meters).toBeLessThan(10000);
+      // Le bruit à l'arrêt (vitesse 0, segments ~3m < seuil 7,5m) est filtré ; le vrai trajet
+      // (~9985m, vitesse 13 m/s) est compté intégralement → jamais sous 9900m ni au-delà du
+      // vrai trajet majoré du bruit filtré.
       expect(result.meters).toBeGreaterThan(9900);
+      expect(result.meters).toBeLessThan(10100);
     });
 
     it('Test E : cohérence calculateDistance() vs DailyFuelReport.distanceKm sur un même (véhicule, jour)', async () => {

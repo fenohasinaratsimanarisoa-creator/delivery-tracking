@@ -456,6 +456,74 @@ describe('FuelConsumptionService', () => {
     );
   });
 
+  // ----------------------------------------------------------------
+  // Non-régression (b) — RÈGLE VITESSE : circulation lente en ville (segments courts
+  // sous l'ancien seuil pondéré) mais vitesse > 1 m/s → déplacement réel COMPTÉ.
+  // C'est le correctif du sous-comptage massif (ex. 50 km réels → ~10 km au rapport) :
+  // un véhicule à 10-30 km/h couvre 8-25 m entre fixes à 3s, sous les seuils induits
+  // par une accuracy dégradée, et l'ancienne logique remettait ces segments à zéro.
+  // ----------------------------------------------------------------
+  describe('Non-régression (b) — déplacement lent en ville (speed > 0) conservé malgré le seuil', () => {
+    const TARGET_DATE = new Date('2026-07-20T12:00:00.000Z');
+    const driver = { id: 'driver-1', firstName: 'Jean', lastName: 'Rakoto' };
+    const VEHICLE = {
+      id: 'vehicle-1',
+      licensePlate: 'TRK-URB',
+      fuelType: 'Essence',
+      theoreticalConsumption: 8,
+    };
+
+    it.each([
+      {
+        name: 'trafic 10km/h (3 m/s), accuracy 40m → segments ~9m under old 20m seuil, vitesse compte',
+        acc: 40,
+        speed: 3.0,
+      },
+      {
+        name: 'embouteillage 5km/h (1.4 m/s), accuracy 60m → segments ~14m (6s) under old 30m, vitesse compte',
+        acc: 60,
+        speed: 1.5,
+      },
+    ])('$name', async ({ acc, speed }) => {
+      // Deux trajets réels de 8 segments lents chacun (~0.0002° de longitude à l'équateur
+      // ≈ 22.3 m par segment, cumul ≈ 178 m > 0.1 km), décalés pour simuler une
+      // progression en ville. AVANT le correctif : seuil pondéré 20m/30m → segments
+      // ~22.3m sous le seuil → 0 km. APRÈS : speed > 1 m/s → chaque segment compté.
+      const positions = Array.from({ length: 9 }, (_, i) => ({
+        latitude: i * 0.0002,
+        longitude: 0,
+        accuracy: acc,
+        speed,
+        vehicleId: 'vehicle-1',
+        driverId: 'driver-1',
+        timestamp: new Date(2026, 6, 20, 6 + i, 0, 0),
+      }));
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(positions as any);
+      mockPrisma.vehicle.findUnique.mockResolvedValue(VEHICLE as any);
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 5000 });
+      mockPrisma.vehicle.findMany.mockResolvedValue([]);
+      let captured: any;
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (a: any) => {
+        captured = a;
+        return a;
+      });
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      const rawMeters = 8 * haversineDistance(0, 0, 0.0002, 0);
+      const reportMeters = captured.create.distanceKm * 1000;
+      console.log(
+        `[b acc=${acc}m speed=${speed}m/s] raw=${rawMeters.toFixed(1)}m report=${reportMeters.toFixed(1)}m`,
+      );
+      // La règle vitesse garantit : chaque segment est compté si le véhicule est en mouvement,
+      // donc le cumul ~= distance brute (sans seuil, tolérance large à cause de l'arrondi
+      // au km au centième).
+      expect(captured.create.distanceKm).toBeGreaterThan(0.16); // ancien calcul rendait ~0
+      expect(Math.abs(reportMeters - rawMeters) / rawMeters).toBeLessThan(0.05);
+    });
+  });
+
   describe('Point 1 — crossCheckFuelLogWithGps quand gpsKm <= 0', () => {
     it('écrit gpsCoverageInsufficientFlag + notification quand AUCUNE position GPS sur la période', async () => {
       const fuelLog = {

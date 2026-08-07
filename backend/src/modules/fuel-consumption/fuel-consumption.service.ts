@@ -548,19 +548,38 @@ export class FuelConsumptionService {
         timestamp: { gte: bounds.start, lte: bounds.end },
       },
       orderBy: { timestamp: 'asc' },
-      select: { latitude: true, longitude: true, vehicleId: true, accuracy: true },
+      select: {
+        latitude: true,
+        longitude: true,
+        vehicleId: true,
+        accuracy: true,
+        speed: true,
+        timestamp: true,
+      },
     });
 
-    // GROUP BY vehicleId côté applicatif : chaque véhicule réellement utilisé ce
-    // jour produit son propre rapport (un chauffeur peut changer de véhicule à
+    // GROUP BY par vehicleId côté applicatif : chaque véhicule réellement utilisé ce
+    // jour produit son propre report (un chauffeur peut changer de véhicule à
     // midi : les km du matin restent attribués au véhicule du matin).
     const byVehicle = new Map<
       string,
-      Array<{ latitude: number; longitude: number; accuracy?: number | null }>
+      Array<{
+        latitude: number;
+        longitude: number;
+        accuracy?: number | null;
+        speed?: number | null;
+        timestamp?: Date;
+      }>
     >();
     for (const pos of positions) {
       const group = byVehicle.get(pos.vehicleId) ?? [];
-      group.push({ latitude: pos.latitude, longitude: pos.longitude, accuracy: pos.accuracy });
+      group.push({
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        accuracy: pos.accuracy,
+        speed: pos.speed,
+        timestamp: pos.timestamp,
+      });
       byVehicle.set(pos.vehicleId, group);
     }
 
@@ -598,7 +617,14 @@ export class FuelConsumptionService {
         timestamp: { gte: bounds.start, lte: bounds.end },
       },
       orderBy: { timestamp: 'asc' },
-      select: { latitude: true, longitude: true, driverId: true, accuracy: true },
+      select: {
+        latitude: true,
+        longitude: true,
+        driverId: true,
+        accuracy: true,
+        speed: true,
+        timestamp: true,
+      },
     });
 
     if (positions.length === 0) return;
@@ -631,6 +657,8 @@ export class FuelConsumptionService {
         latitude: p.latitude,
         longitude: p.longitude,
         accuracy: p.accuracy,
+        speed: p.speed,
+        timestamp: p.timestamp,
       })),
     );
   }
@@ -644,23 +672,55 @@ export class FuelConsumptionService {
     companyId: string,
     targetDate: Date,
     vehicleId: string,
-    positions: Array<{ latitude: number; longitude: number; accuracy?: number | null }>,
+    positions: Array<{
+      latitude: number;
+      longitude: number;
+      accuracy?: number | null;
+      speed?: number | null;
+      timestamp?: Date;
+    }>,
   ) {
     let distanceKm = 0;
     let gpsDataQuality: GpsDataQuality = GpsDataQuality.insufficient;
 
     if (positions.length >= 2) {
       // Distance filtrée par bruit PONDÉRÉ par l'accuracy moyenne de chaque segment
-      // (computeFilteredDistance, source unique dans geo.utils — même logique que
-      // calculateDistance du rapport de trajet). Un téléphone à l'arrêt (accuracy
-      // 10-50m) dérive de plusieurs mètres : le seuil fixe de 5m laissait passer ce
-      // bruit et gonflait distanceKm.
+      // ET plafonné (computeFilteredDistance, source unique dans geo.utils — même
+      // logique que calculateDistance du rapport de trajet). La RÈGLE VITESSE compte
+      // intégralement tout segment où une extrémité est en mouvement (speed > 1 m/s) :
+      // les segments courts d'une circulation lente en ville ne sont plus effacés.
+      // Un téléphone à l'arrêt (accuracy 10-50m) dérive de plusieurs mètres : le seuil
+      // pondéré (max 7,5m) filtre toujours cette dérive quand la vitesse ≈ 0.
       const totalDistance = computeFilteredDistance(positions);
       const computedKm = Math.round((totalDistance / 1000) * 100) / 100;
       // Données GPS exploitables uniquement si un déplacement est mesurable (>= 0.1 km).
       if (computedKm >= 0.1) {
         distanceKm = computedKm;
         gpsDataQuality = GpsDataQuality.sufficient;
+      }
+
+      // Signal de couverture clairsemée : quand les fixes sont trop rares (app fermée,
+      // arrière-plan long, GPS coupé), la distance calculée sous-estime la réalité.
+      // On ne change pas la valeur (impossible à reconstruire), mais on laisse une
+      // trace en log pour diagnostiquer le sous-comptage plutôt que de le masquer.
+      if (
+        positions.length >= 3 &&
+        positions[0].timestamp &&
+        positions[positions.length - 1].timestamp
+      ) {
+        const firstTs = positions[0].timestamp.getTime();
+        const lastTs = positions[positions.length - 1].timestamp!.getTime();
+        const spanSec = (lastTs - firstTs) / 1000;
+        if (spanSec > 0) {
+          const avgGapSec = spanSec / (positions.length - 1);
+          if (avgGapSec > 60) {
+            this.logger.warn(
+              `[fuel-report] Coverage sparse: vehicle=${vehicleId} driver=${driver.id} ` +
+                `positions=${positions.length} spanSec=${Math.round(spanSec)} avgGapSec=${Math.round(avgGapSec)} ` +
+                `distanceKm=${computedKm.toFixed(2)} — distance may undercount`,
+            );
+          }
+        }
       }
     }
 
