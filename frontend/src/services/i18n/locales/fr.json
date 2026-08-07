@@ -888,7 +888,8 @@
       "gpsRequired": "Activez la localisation pour confirmer la livraison"
     },
     "hello": "Bonjour",
-    "live": "En direct"
+    "live": "En direct",
+    "details": "Détails"
   },
   "myPosition": {
     "title": "Ma position",

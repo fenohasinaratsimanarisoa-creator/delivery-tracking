@@ -1,10 +1,14 @@
-@keyframes dt-radar-ring {
-  0% { box-shadow: 0 0 0 0 currentColor; opacity: 0.9; }
-  100% { box-shadow: 0 0 0 10px transparent; opacity: 0; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .container::after { animation: none !important; }
+  .container,
+  .container::before,
+  .container::after,
+  .physicalTracker,
+  .denied,
+  .searching,
+  .poorAccuracy,
+  .active {
+    animation: none !important;
+  }
 }
 
 .container {
@@ -18,45 +22,26 @@
   font-weight: 600;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   border: 1px solid transparent;
-  transition: border-color var(--duration-fast, 120ms) var(--ease-smooth, ease),
-    box-shadow var(--duration-fast, 120ms) var(--ease-smooth, ease);
+  transition: border-color var(--duration-fast, 120ms) var(--ease-smooth, ease);
 }
 
+/* Point de statut plat : le libellé + la couleur suffisent, pas de halo ni
+   de pulsation ambiante. */
 .container::before {
   content: '';
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 8px currentColor;
   flex-shrink: 0;
-}
-
-.container::after {
-  content: '';
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  width: 7px;
-  height: 7px;
-  margin-top: -3.5px;
-  border-radius: 50%;
-  border: 1.5px solid currentColor;
-  box-shadow: 0 0 0 0 transparent;
-  opacity: 0;
-  pointer-events: none;
 }
 
 /* GPS Traceur (hardware) */
 .physicalTracker {
-  background: linear-gradient(135deg, var(--color-teal-muted, rgba(63,167,150,0.18)), var(--color-teal-muted, rgba(63,167,150,0.08)));
+  background: var(--color-teal-muted, rgba(63,167,150,0.15));
   color: var(--color-teal, #3FA796);
   border-color: rgba(63, 167, 150, 0.3);
   cursor: help;
-}
-
-.physicalTracker::after {
-  animation: dt-radar-ring 1.8s ease-out infinite;
 }
 
 /* GPS bloqué */
@@ -65,10 +50,6 @@
   color: var(--color-red, #E8544C);
   border-color: rgba(232, 84, 76, 0.3);
   cursor: help;
-}
-
-.denied::after {
-  animation: dt-radar-ring 1.8s ease-out infinite;
 }
 
 /* GPS en attente / inactif */
@@ -85,10 +66,6 @@
   border-color: rgba(242, 169, 60, 0.3);
 }
 
-.searching::after {
-  animation: dt-radar-ring 1.4s ease-out infinite;
-}
-
 /* Précision faible */
 .poorAccuracy {
   background: var(--color-accent-muted, rgba(242,169,60,0.15));
@@ -96,18 +73,9 @@
   border-color: rgba(242, 169, 60, 0.3);
 }
 
-.poorAccuracy::after {
-  animation: dt-radar-ring 2s ease-out infinite;
-}
-
 /* Actif */
 .active {
-  background: linear-gradient(135deg, var(--color-teal-muted, rgba(63,167,150,0.2)), var(--color-teal-muted, rgba(63,167,150,0.08)));
+  background: var(--color-teal-muted, rgba(63,167,150,0.15));
   color: var(--color-teal, #3FA796);
   border-color: rgba(63, 167, 150, 0.35);
-  box-shadow: 0 0 14px rgba(63, 167, 150, 0.18);
-}
-
-.active::after {
-  animation: dt-radar-ring 1.6s ease-out infinite;
 }

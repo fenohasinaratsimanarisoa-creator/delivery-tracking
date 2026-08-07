@@ -888,7 +888,8 @@
       "gpsRequired": "Enable location to confirm delivery"
     },
     "hello": "Hello",
-    "live": "Live"
+    "live": "Live",
+    "details": "Details"
   },
   "myPosition": {
     "title": "My Position",

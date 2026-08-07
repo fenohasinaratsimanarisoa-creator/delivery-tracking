@@ -106,7 +106,6 @@ export default function MyVehiclePage() {
       </div>
 
       <div className={styles.vehicleCard}>
-        <div className={styles.vehicleGlow} />
         <div className={styles.vehicleHeader}>
           <div className={styles.vehicleIcon}>
             <Truck size={30} />

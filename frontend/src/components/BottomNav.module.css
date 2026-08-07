@@ -80,7 +80,7 @@
   width: 32px;
   height: 3px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--color-accent, #F2A93C), var(--color-teal, #2DD4BF));
+  background: var(--color-accent, #F2A93C);
   opacity: 0;
   transition: opacity 0.18s ease, transform 0.18s ease;
 }
@@ -280,7 +280,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .moreOverlay,
-  .sheet {
-    animation: none;
+  .sheet,
+  .badge,
+  .item {
+    animation: none !important;
+    transition: none !important;
   }
 }

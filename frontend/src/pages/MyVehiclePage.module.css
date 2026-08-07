@@ -4,17 +4,20 @@
 }
 
 @keyframes dt-card-in {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes dt-glow-pulse {
-  0%, 100% { opacity: 0.45; }
-  50% { opacity: 0.85; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .vehicleCard { animation: none !important; }
+  .vehicleCard,
+  .loadingSkeleton {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .pageContainer {
@@ -47,10 +50,9 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-xl, 12px);
-  background: linear-gradient(135deg, var(--color-accent-muted, rgba(242,169,60,0.15)), transparent);
+  background: var(--color-accent-muted, rgba(242,169,60,0.15));
   color: var(--color-accent, #F2A93C);
   border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
-  box-shadow: var(--shadow-glow, 0 0 12px rgba(242,169,60,0.3));
   flex-shrink: 0;
 }
 
@@ -136,33 +138,17 @@
   border-radius: var(--radius-2xl, 16px);
   overflow: hidden;
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
-  animation: dt-card-in 0.45s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
-  transition: transform var(--duration-base, 200ms) var(--ease-premium, cubic-bezier(0.16,1,0.3,1)),
-    border-color var(--duration-base, 200ms) var(--ease-smooth, ease),
-    box-shadow var(--duration-base, 200ms) var(--ease-smooth, ease);
+  animation: dt-card-in 0.28s var(--ease-smooth, ease) both;
+  transition: border-color var(--duration-base, 200ms) var(--ease-smooth, ease);
 }
 
 .vehicleCard:hover {
-  transform: translateY(-2px);
   border-color: var(--color-border, rgba(242,169,60,0.22));
-  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.45));
-}
-
-.vehicleGlow {
-  position: absolute;
-  top: -60px;
-  right: -60px;
-  width: 220px;
-  height: 220px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(242, 169, 60, 0.18), transparent 70%);
-  pointer-events: none;
-  animation: dt-glow-pulse 4s var(--ease-smooth, ease) infinite;
 }
 
 .vehicleHeader {
   position: relative;
-  background: linear-gradient(135deg, var(--color-accent, #F2A93C), #c87f1e);
+  background: var(--color-accent, #F2A93C);
   color: var(--color-bg, #0B1220);
   padding: var(--space-xl, 20px) var(--space-2xl, 28px);
   display: flex;

@@ -3,6 +3,25 @@
   100% { background-position: -200% 0; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .pillDot,
+  .livePulseDot,
+  .newCountPill,
+  .emptyIcon,
+  .alertCard,
+  .activePulse,
+  .skeletonCard,
+  .overlay,
+  .drawer {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
+
 .pageContainer {
   padding: var(--space-2xl, 32px);
   height: 100%;
@@ -45,10 +64,9 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-xl, 12px);
-  background: linear-gradient(135deg, var(--color-accent-muted, rgba(242,169,60,0.15)), transparent);
+  background: var(--color-accent-muted, rgba(242,169,60,0.15));
   color: var(--color-accent, #F2A93C);
   border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
-  box-shadow: var(--shadow-glow, 0 0 12px rgba(242,169,60,0.35));
   flex-shrink: 0;
 }
 
@@ -86,7 +104,6 @@
   height: 6px;
   border-radius: 50%;
   background: var(--color-red, #E8544C);
-  animation: dt-pulse-moving 1.6s infinite;
 }
 
 .headerActions {
@@ -108,7 +125,6 @@
   background: var(--color-teal-muted, rgba(63,167,150,0.15));
   color: var(--color-teal, #3FA796);
   border: 1px solid rgba(63, 167, 150, 0.3);
-  box-shadow: 0 0 16px rgba(63, 167, 150, 0.18);
 }
 
 .livePulseDot {
@@ -116,8 +132,6 @@
   height: 7px;
   border-radius: 50%;
   background: var(--color-teal, #3FA796);
-  box-shadow: 0 0 8px var(--color-teal, #3FA796);
-  animation: dt-pulse-moving 1.4s infinite;
 }
 
 .newCountPill {
@@ -129,8 +143,7 @@
   border-radius: var(--radius-full, 9999px);
   background: var(--color-accent, #F2A93C);
   color: var(--color-bg, #0B1220);
-  box-shadow: var(--shadow-glow, 0 0 12px rgba(242,169,60,0.35));
-  animation: dt-fade-in-up 0.4s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
+  animation: dt-fade-in-up 0.3s var(--ease-smooth, ease) both;
 }
 
 /* ─── KPIs ────────────────────────────────────────────────── */
@@ -162,8 +175,8 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, var(--kpi, #ef4444), transparent);
-  opacity: 0.85;
+  background: var(--kpi, #ef4444);
+  opacity: 0.55;
 }
 
 .kpiCard:hover {
@@ -374,7 +387,6 @@
 
 .emptyIcon {
   color: var(--color-text-tertiary, #7A8BA3);
-  animation: dt-pulse-glow 2.2s infinite;
 }
 
 .emptyTitle {
@@ -408,7 +420,7 @@
   border-radius: var(--radius-xl, 12px);
   cursor: pointer;
   overflow: hidden;
-  animation: dt-fade-in-up 0.5s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
+  animation: dt-fade-in-up 0.3s var(--ease-smooth, ease) both;
   transition: transform var(--duration-base, 200ms) var(--ease-premium, cubic-bezier(0.16,1,0.3,1)),
     border-color var(--duration-base, 200ms) var(--ease-smooth, ease),
     box-shadow var(--duration-base, 200ms) var(--ease-smooth, ease);
@@ -421,7 +433,7 @@
   bottom: 0;
   left: 0;
   width: 3px;
-  background: linear-gradient(180deg, var(--prio, #6b7280), color-mix(in srgb, var(--prio, #6b7280) 30%, transparent));
+  background: var(--prio, #6b7280);
   transition: width var(--duration-base, 200ms) var(--ease-smooth, ease);
 }
 
@@ -545,8 +557,6 @@
   height: 7px;
   border-radius: 50%;
   background: var(--prio, #ef4444);
-  box-shadow: 0 0 8px var(--prio, #ef4444);
-  animation: dt-pulse-moving 1.6s infinite;
   flex-shrink: 0;
 }
 
@@ -574,7 +584,6 @@
 
 .resolveBtn:hover {
   background: rgba(34, 197, 94, 0.22);
-  box-shadow: 0 0 14px rgba(34, 197, 94, 0.3);
   transform: translateY(-1px);
 }
 
@@ -779,7 +788,7 @@
 .resolveSection {
   margin-top: var(--space-lg, 16px);
   padding: var(--space-lg, 16px);
-  background: linear-gradient(160deg, var(--color-surface-alt, #182339), var(--color-surface, #121B2E));
+  background: var(--color-surface-alt, #182339);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-xl, 12px);
 }
@@ -818,19 +827,17 @@
   padding: 10px 22px;
   border-radius: var(--radius-lg, 8px);
   border: none;
-  background: linear-gradient(135deg, #22c55e, #16a34a);
+  background: #22c55e;
   color: #fff;
   cursor: pointer;
   font-weight: 600;
   font-size: var(--text-sm, 0.75rem);
   font-family: var(--font-body, Inter, sans-serif);
-  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.3);
-  transition: all var(--duration-fast, 120ms) var(--ease-snappy, cubic-bezier(0.34,1.56,0.64,1));
+  transition: all var(--duration-fast, 120ms) var(--ease-smooth, ease);
 }
 
 .confirmBtn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 22px rgba(34, 197, 94, 0.4);
+  background: #16a34a;
 }
 
 .confirmBtn:disabled {

@@ -16,17 +16,19 @@
     80%  { transform: rotate(4deg); }
     100% { transform: rotate(0); }
   }
-  @keyframes dt-notif-ping {
-    0%   { box-shadow: 0 0 0 0 var(--color-red); }
-    100% { box-shadow: 0 0 0 9px transparent; }
-  }
   @keyframes dt-notif-panel-in {
     from { opacity: 0; transform: translateY(-6px) scale(0.98); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .dt-notif-animate { animation: none !important; }
+    .bellRing,
+    .badge,
+    .panel,
+    .notifItem,
+    .dt-notif-animate {
+      animation: none !important;
+    }
   }
 }
 
@@ -57,7 +59,7 @@
 .bellBtnActive {
   color: var(--color-accent);
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px var(--color-accent-muted), var(--shadow-glow);
+  box-shadow: 0 0 0 3px var(--color-accent-muted);
 }
 
 .bellRing {
@@ -100,8 +102,8 @@
 .panelGlowLine {
   height: 2px;
   flex-shrink: 0;
-  background: linear-gradient(90deg, transparent, var(--color-accent), transparent);
-  opacity: 0.7;
+  background: var(--color-accent);
+  opacity: 0.45;
 }
 
 .panelHeader {
@@ -151,7 +153,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  animation: dt-notif-ping 1.4s ease-out infinite;
 }
 
 .panelHeaderActions {
@@ -226,7 +227,7 @@
 }
 
 .notifItemUnread {
-  background: linear-gradient(90deg, var(--color-accent-muted), transparent 85%);
+  background: var(--color-accent-muted);
 }
 
 .unreadBar {
@@ -299,7 +300,6 @@
 .criticalTag {
   display: inline-flex;
   color: var(--color-red);
-  animation: dt-notif-ping 1.6s ease-out infinite;
 }
 
 .itemDeleteBtn {

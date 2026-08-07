@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ClipboardList, MapPin, Flag, CalendarDays, Truck, StickyNote,
   PackagePlus, PackageCheck, XCircle, Inbox, Loader2, Navigation,
-  Radio, WifiOff, Cpu, AlertTriangle,
+  Radio, WifiOff, Cpu, AlertTriangle, ChevronDown,
 } from 'lucide-react';
 import { formatDate, formatDateShort } from '../services/i18n/formatDate';
 import api from '../services/api/client';
@@ -179,18 +179,11 @@ export default function MyDeliveriesPage() {
               {(isActive || isPending) && (
                 <span className={`${styles.accentBar} ${isPending ? styles.accentBarAmber : ''}`} />
               )}
-              <div className={styles.cardGlowLine} />
 
               <div className={styles.cardTop}>
                 <div className={styles.cardIdentity}>
                   <div className={styles.cardTagRow}>
                     <StatusBadge status={d.status} />
-                    {isActive && (
-                      <span className={styles.activePulse}>
-                        <span className={styles.activePulseDot} />
-                        {t('myDeliveries.live')}
-                      </span>
-                    )}
                   </div>
                   <h3 className={styles.cardTitle}>{d.title}</h3>
                 </div>
@@ -212,7 +205,6 @@ export default function MyDeliveriesPage() {
                 </div>
                 <div className={styles.routeConnector}>
                   <span className={styles.routeLine} />
-                  <span className={styles.routeFlow} />
                 </div>
                 <div className={styles.routeStop}>
                   <span className={`${styles.addressIcon} ${styles.addressIconDrop}`}>
@@ -225,29 +217,37 @@ export default function MyDeliveriesPage() {
                 </div>
               </div>
 
-              <div className={styles.infoRowWrap}>
-                {d.scheduledDate && (
-                  <div className={styles.infoRow}>
-                    <CalendarDays size={14} className={styles.infoIcon} />
-                    <span>{t('myDeliveries.scheduled')}</span>
-                    <span className={styles.infoValue}>{formatDate(d.scheduledDate)}</span>
+              <details className={styles.cardDetails}>
+                <summary className={styles.detailsSummary}>
+                  <ChevronDown size={14} className={styles.detailsChevron} />
+                  {t('myDeliveries.details')}
+                </summary>
+                <div className={styles.detailsBody}>
+                  <div className={styles.infoRowWrap}>
+                    {d.scheduledDate && (
+                      <div className={styles.infoRow}>
+                        <CalendarDays size={14} className={styles.infoIcon} />
+                        <span>{t('myDeliveries.scheduled')}</span>
+                        <span className={styles.infoValue}>{formatDate(d.scheduledDate)}</span>
+                      </div>
+                    )}
+                    {d.vehicle && (
+                      <div className={styles.infoRow}>
+                        <Truck size={14} className={styles.infoIcon} />
+                        <span>{d.vehicle.brand} {d.vehicle.model}</span>
+                        <span className={styles.plateChip}>{d.vehicle.licensePlate}</span>
+                      </div>
+                    )}
                   </div>
-                )}
-                {d.vehicle && (
-                  <div className={styles.infoRow}>
-                    <Truck size={14} className={styles.infoIcon} />
-                    <span>{d.vehicle.brand} {d.vehicle.model}</span>
-                    <span className={styles.plateChip}>{d.vehicle.licensePlate}</span>
-                  </div>
-                )}
-              </div>
 
-              {d.notes && (
-                <div className={styles.notesBox}>
-                  <StickyNote size={13} className={styles.notesIcon} />
-                  <span>{d.notes}</span>
+                  {d.notes && (
+                    <div className={styles.notesBox}>
+                      <StickyNote size={13} className={styles.notesIcon} />
+                      <span>{d.notes}</span>
+                    </div>
+                  )}
                 </div>
-              )}
+              </details>
 
               <div className={styles.actions}>
                 <ActionButtons
