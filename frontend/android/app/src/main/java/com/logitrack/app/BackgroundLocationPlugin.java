@@ -5,6 +5,7 @@ import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.location.Location;
 import android.os.Build;
 
 import androidx.core.content.ContextCompat;
@@ -24,8 +25,12 @@ import java.util.List;
  * Pont natif pour le tracking en arrière-plan (Android uniquement).
  *
  *  - start(): démarre le foreground service de type "location" qui maintient le
- *    process vivant pendant l'écran verrouillé (la WebView continue d'exécuter
- *    watchPosition + les setInterval de useDriverTracking.ts).
+ *    process vivant pendant l'écran verrouillé ET acquiert lui-même les positions
+ *    via FusedLocationProviderClient (voir LocationForegroundService). Le plugin
+ *    s'abonne aux positions du service (addLocationSink) et les transmet au JS via
+ *    notifyListeners("locationUpdate", data) : useDriverTracking.ts les fait alors
+ *    entrer dans son pipeline existant (Kalman, checkProximity, envoi socket, file
+ *    offline) — la logique n'est pas dupliquée en Java.
  *  - requestPermissions(): flow Android 11+ en deux étapes : d'abord la
  *    permission de localisation "pendant l'utilisation" (fine/coarse), puis
  *    ACCESS_BACKGROUND_LOCATION ("toujours") une fois la première accordée.
@@ -50,6 +55,11 @@ public class BackgroundLocationPlugin extends Plugin {
 
     private static final String CALLBACK_LOCATION = "locationPermissionCallback";
     private static final String CALLBACK_BACKGROUND = "backgroundPermissionCallback";
+    private static final String LOCATION_UPDATE_EVENT = "locationUpdate";
+
+    /** Sink enregistré auprès du service pour recevoir les positions natives. */
+    private LocationForegroundService.LocationSink locationSink;
+    private boolean locationSinkRegistered = false;
 
     @PluginMethod
     public void start(PluginCall call) {
@@ -58,6 +68,9 @@ public class BackgroundLocationPlugin extends Plugin {
             return;
         }
         Context context = getContext();
+        // S'abonne AVANT de démarrer le service pour ne rater aucune position.
+        // Le sink est statique : il survivra à la (ré)création du service.
+        subscribeToLocations();
         Intent intent = new Intent(context, LocationForegroundService.class);
         intent.setAction(LocationForegroundService.ACTION_START);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -73,11 +86,58 @@ public class BackgroundLocationPlugin extends Plugin {
 
     @PluginMethod
     public void stop(PluginCall call) {
+        unsubscribeFromLocations();
         getContext().stopService(new Intent(getContext(), LocationForegroundService.class));
         JSObject ret = new JSObject();
         ret.put("running", false);
         ret.put("permissions", buildPermissionStatus());
         call.resolve(ret);
+    }
+
+    /**
+     * S'abonne aux positions acquises par LocationForegroundService et les pousse
+     * vers le JS via notifyListeners("locationUpdate", ...). Le callback est reçu
+     * sur le main looper (celui utilisé pour requestLocationUpdates), ce qui est
+     * la condition requise par le bridge Capacitor pour notifyListeners.
+     */
+    private void subscribeToLocations() {
+        if (locationSinkRegistered) {
+            return;
+        }
+        locationSink = new LocationForegroundService.LocationSink() {
+            @Override
+            public void onLocationUpdate(Location location) {
+                emitLocation(location);
+            }
+        };
+        LocationForegroundService.addLocationSink(locationSink);
+        locationSinkRegistered = true;
+        // Si le service avait déjà une position (abonnement tardif), l'émettre
+        // immédiatement pour que le JS reparte de l'état courant.
+        Location latest = LocationForegroundService.getLatestLocation();
+        if (latest != null) {
+            emitLocation(latest);
+        }
+    }
+
+    private void unsubscribeFromLocations() {
+        if (locationSink != null) {
+            LocationForegroundService.removeLocationSink(locationSink);
+            locationSink = null;
+        }
+        locationSinkRegistered = false;
+    }
+
+    private void emitLocation(Location location) {
+        JSObject data = new JSObject();
+        data.put("latitude", location.getLatitude());
+        data.put("longitude", location.getLongitude());
+        data.put("accuracy", location.hasAccuracy() ? location.getAccuracy() : JSObject.NULL);
+        data.put("speed", location.hasSpeed() ? location.getSpeed() : JSObject.NULL);
+        data.put("heading", location.hasBearing() ? location.getBearing() : JSObject.NULL);
+        data.put("altitude", location.hasAltitude() ? location.getAltitude() : JSObject.NULL);
+        data.put("timestamp", location.getTime());
+        notifyListeners(LOCATION_UPDATE_EVENT, data);
     }
 
     @PluginMethod

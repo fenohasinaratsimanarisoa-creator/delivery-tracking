@@ -1,4 +1,18 @@
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
+
+export interface NativeLocationUpdate {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  speed?: number;
+  heading?: number;
+  altitude?: number;
+  timestamp?: number;
+}
+
+export interface NativeLocationSubscription {
+  unsubscribe: () => void;
+}
 
 export interface BackgroundLocationPermissions {
   fineGranted: boolean;
@@ -18,6 +32,10 @@ interface BackgroundLocationNative {
   stop(): Promise<BackgroundLocationStatus>;
   getStatus(): Promise<BackgroundLocationStatus>;
   requestPermissions(): Promise<BackgroundLocationStatus>;
+  addListener(
+    eventName: 'locationUpdate',
+    listenerFunc: (data: NativeLocationUpdate) => void,
+  ): Promise<PluginListenerHandle> & PluginListenerHandle;
 }
 
 const GRANTED_DEFAULTS: BackgroundLocationStatus = {
@@ -70,4 +88,31 @@ export async function requestBackgroundLocationPermissions(): Promise<Background
   const p = resolvePlugin();
   if (!p) return GRANTED_DEFAULTS;
   return p.requestPermissions();
+}
+
+/**
+ * S'abonne aux positions acquises nativement par LocationForegroundService
+ * (FusedLocationProviderClient, indépendant du cycle de vie de la WebView).
+ *
+ * Le plugin natif Android n'existe pas sur iOS/web : resolvePlugin() renvoie
+ * null et cette fonction retourne null — le flux JS watchPosition reste donc
+ * l'unique source sur ces plateformes (repli conservé).
+ */
+export async function subscribeToNativeLocations(
+  handler: (position: NativeLocationUpdate) => void,
+): Promise<NativeLocationSubscription | null> {
+  const p = resolvePlugin();
+  if (!p) return null;
+  try {
+    const handle = await p.addListener('locationUpdate', (data) => handler(data));
+    return {
+      unsubscribe: () => {
+        try {
+          void handle.remove();
+        } catch {}
+      },
+    };
+  } catch {
+    return null;
+  }
 }

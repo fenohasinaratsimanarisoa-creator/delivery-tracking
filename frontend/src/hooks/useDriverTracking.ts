@@ -10,6 +10,7 @@ import {
   requestBackgroundLocationPermissions,
   startBackgroundLocation,
   stopBackgroundLocation,
+  subscribeToNativeLocations,
 } from '../services/tracking/backgroundLocation';
 import type { Delivery } from '../types';
 
@@ -113,6 +114,7 @@ export function useDriverTracking() {
   const filteredPosRef = useRef<{ lat: number; lng: number; confidence: number } | null>(null);
   const rawPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const watchRef = useRef<number | null>(null);
+  const nativeSubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hiddenSinceRef = useRef<number>(0);
   const visibilityHandlerRef = useRef<(() => void) | null>(null);
@@ -386,57 +388,82 @@ export function useDriverTracking() {
     }
   }, [sendPosition]);
 
+  // Coords normalisés : servent aussi bien au callback watchPosition (JS) qu'aux
+  // positions natives du plugin Android (acquisitions FusedLocationProviderClient
+  // indépendantes de la WebView). Une seule et même logique de traitement
+  // (Kalman, stationnarité, checkProximity, intervalle d'envoi, alertes précision)
+  // alimente les deux sources, sans duplication.
+  type GeoCoords = {
+    latitude: number;
+    longitude: number;
+    speed?: number | null;
+    heading?: number | null;
+    altitude?: number | null;
+    accuracy?: number | null;
+  };
+
+  const processCoords = useCallback((coords: GeoCoords) => {
+    const { latitude, longitude, speed, heading, altitude } = coords;
+    const acc = coords.accuracy ?? 50;
+
+    if (!kalmanRef.current) {
+      kalmanRef.current = new KalmanFilter(latitude, longitude, acc);
+      kalmanRef.current.predict();
+    }
+    kalmanRef.current.predict();
+    const filtered = kalmanRef.current.update(latitude, longitude, acc);
+    const conf = kalmanRef.current.getConfidence();
+
+    const stationaryFromSensor = sensorFusion.isStationary();
+    const stationaryFromSpeed = simulateStationaryFromSpeed(speed ?? undefined);
+    const isActuallyStationary = stationaryFromSensor === null ? stationaryFromSpeed : stationaryFromSensor;
+
+    filteredPosRef.current = { lat: filtered.lat, lng: filtered.lng, confidence: conf };
+    rawPosRef.current = { lat: latitude, lng: longitude };
+
+    const p: DriverPosition = {
+      lat: filtered.lat,
+      lng: filtered.lng,
+      speed: speed ?? undefined,
+      heading: heading ?? undefined,
+      altitude: altitude ?? undefined,
+      accuracy: acc,
+    };
+    setPosition(p);
+    setConfidenceLevel(conf);
+    setIsStationary(isActuallyStationary);
+    recalcInterval(speed ?? undefined, acc, isActuallyStationary);
+    checkProximity(filtered.lat, filtered.lng);
+
+    if (acc <= ACCURACY_GOOD) {
+      setStatusMsg('');
+      setPoorAccuracy(false);
+      removeAlert('poor_accuracy', '');
+    } else if (acc <= ACCURACY_MODERATE) {
+      setStatusMsg('');
+      setPoorAccuracy(false);
+      removeAlert('poor_accuracy', '');
+    } else if (acc <= ACCURACY_POOR) {
+      setPoorAccuracy(true);
+      addAlert({ type: 'poor_accuracy', title: 'GPS faible', message: `La précision GPS est faible (±${Math.round(acc)}m). Déplacez-vous dans une zone dégagée.`, urgency: 'normal' });
+    } else {
+      setPoorAccuracy(true);
+      addAlert({ type: 'poor_accuracy', title: 'GPS très faible', message: `La précision GPS est très faible (±${Math.round(acc)}m). Les positions envoyées peuvent être imprécises.`, urgency: 'high' });
+    }
+  }, [recalcInterval, checkProximity, addAlert, removeAlert]);
+
   const tryWatch = useCallback((highAccuracy: boolean, triedLowAccuracyRef: { current: boolean }) => {
     if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
     watchRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        const { latitude, longitude, speed, heading, altitude, accuracy } = pos.coords;
-        const acc = accuracy ?? 50;
-
-        if (!kalmanRef.current) {
-          kalmanRef.current = new KalmanFilter(latitude, longitude, acc);
-          kalmanRef.current.predict();
-        }
-        kalmanRef.current.predict();
-        const filtered = kalmanRef.current.update(latitude, longitude, acc);
-        const conf = kalmanRef.current.getConfidence();
-
-        const stationaryFromSensor = sensorFusion.isStationary();
-        const stationaryFromSpeed = simulateStationaryFromSpeed(speed ?? undefined);
-        const isActuallyStationary = stationaryFromSensor === null ? stationaryFromSpeed : stationaryFromSensor;
-
-        filteredPosRef.current = { lat: filtered.lat, lng: filtered.lng, confidence: conf };
-        rawPosRef.current = { lat: latitude, lng: longitude };
-
-        const p: DriverPosition = {
-          lat: filtered.lat,
-          lng: filtered.lng,
-          speed: speed ?? undefined,
-          heading: heading ?? undefined,
-          altitude: altitude ?? undefined,
-          accuracy: acc,
-        };
-        setPosition(p);
-        setConfidenceLevel(conf);
-        setIsStationary(isActuallyStationary);
-        recalcInterval(speed ?? undefined, acc, isActuallyStationary);
-        checkProximity(filtered.lat, filtered.lng);
-
-        if (acc <= ACCURACY_GOOD) {
-          setStatusMsg('');
-          setPoorAccuracy(false);
-          removeAlert('poor_accuracy', '');
-        } else if (acc <= ACCURACY_MODERATE) {
-          setStatusMsg('');
-          setPoorAccuracy(false);
-          removeAlert('poor_accuracy', '');
-        } else if (acc <= ACCURACY_POOR) {
-          setPoorAccuracy(true);
-          addAlert({ type: 'poor_accuracy', title: 'GPS faible', message: `La précision GPS est faible (±${Math.round(acc)}m). Déplacez-vous dans une zone dégagée.`, urgency: 'normal' });
-        } else {
-          setPoorAccuracy(true);
-          addAlert({ type: 'poor_accuracy', title: 'GPS très faible', message: `La précision GPS est très faible (±${Math.round(acc)}m). Les positions envoyées peuvent être imprécises.`, urgency: 'high' });
-        }
+        processCoords({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          speed: pos.coords.speed,
+          heading: pos.coords.heading,
+          altitude: pos.coords.altitude,
+          accuracy: pos.coords.accuracy,
+        });
       },
       (err) => {
         if (highAccuracy && !triedLowAccuracyRef.current && (err.code === 2 || err.code === 3)) {
@@ -454,7 +481,7 @@ export function useDriverTracking() {
       },
       { enableHighAccuracy: highAccuracy, maximumAge: highAccuracy ? 30000 : 60000, timeout: highAccuracy ? 15000 : 30000 },
     );
-  }, [recalcInterval]);
+  }, [processCoords]);
 
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) return;
@@ -497,6 +524,29 @@ export function useDriverTracking() {
     intervalRef.current = setInterval(sendPosition, INTERVAL_DEFAULT);
     drainIntervalRef.current = setInterval(() => { drainQueue(); }, DRAIN_INTERVAL_MS);
 
+    // S'abonne aux positions acquises nativement par LocationForegroundService
+    // (FusedLocationProviderClient) : en arrière-plan / écran verrouillé, quand
+    // la WebView est suspendue et que watchPosition ne produit plus rien, ces
+    // positions natives continuent d'alimenter processCoords → même pipeline
+    // Kalman / checkProximity / sendPosition. Sur iOS/web le plugin est null et
+    // subscribeToNativeLocations retourne null : watchPosition reste l'unique
+    // source (repli conservé, aucune régression).
+    subscribeToNativeLocations((nativePos) => {
+      processCoords({
+        latitude: nativePos.latitude,
+        longitude: nativePos.longitude,
+        speed: nativePos.speed,
+        heading: nativePos.heading,
+        altitude: nativePos.altitude,
+        accuracy: nativePos.accuracy,
+      });
+    })
+      .then((sub) => {
+        nativeSubscriptionRef.current = sub;
+      })
+      .catch(() => {});
+
+
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
         hiddenSinceRef.current = Date.now();
@@ -526,7 +576,7 @@ export function useDriverTracking() {
     };
     document.addEventListener('visibilitychange', onVisibility);
     visibilityHandlerRef.current = () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [vehicleId, tryWatch, sendPosition, drainQueue, addAlert]);
+  }, [vehicleId, tryWatch, sendPosition, drainQueue, addAlert, processCoords]);
 
   const stopTracking = useCallback(() => {
     if (watchRef.current !== null) {
@@ -544,6 +594,10 @@ export function useDriverTracking() {
     if (visibilityHandlerRef.current) {
       visibilityHandlerRef.current();
       visibilityHandlerRef.current = null;
+    }
+    if (nativeSubscriptionRef.current) {
+      nativeSubscriptionRef.current.unsubscribe();
+      nativeSubscriptionRef.current = null;
     }
     stopBackgroundLocation().catch(() => {});
     releaseWakeLock();
@@ -590,6 +644,10 @@ export function useDriverTracking() {
       if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
       if (intervalRef.current !== null) clearInterval(intervalRef.current);
       if (drainIntervalRef.current !== null) clearInterval(drainIntervalRef.current);
+      if (nativeSubscriptionRef.current) {
+        nativeSubscriptionRef.current.unsubscribe();
+        nativeSubscriptionRef.current = null;
+      }
       socket.off('connect', drainQueue);
       socket.off('dataUpdate');
       socket.off('proximityAlert');
