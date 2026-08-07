@@ -649,4 +649,8 @@
   .actionBtn {
     flex: 1;
   }
+  .actionStretch {
+    flex: 1;
+    min-height: 44px;
+  }
 }

@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, CheckCircle2, UserPlus } from 'lucide-react';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../../hooks/AuthContext';
 import api from '../../services/api/client';
 import { isNativeApp, openGoogleOAuthInNative } from '../../services/native/nativeAuth';
+import Button from '../../components/Button';
 import styles from './RegisterPage.module.css';
 
 const MIN_LEN = 12;
@@ -256,23 +257,17 @@ export default function RegisterPage() {
               </Trans>
             </label>
 
-            <button
+            <Button
               type="submit"
-              disabled={loading || !isFormValid}
-              className={`${styles.submitBtn} ${loading || !isFormValid ? styles.submitBtnDisabled : styles.submitBtnActive}`}
+              variant="primary"
+              size="lg"
+              fullWidth
+              loading={loading}
+              disabled={!isFormValid}
+              icon={<UserPlus size={18} />}
             >
-              {loading ? (
-                <>
-                  <Loader2 size={18} className={styles.spinner} />
-                  {t('auth.register.submitting')}
-                </>
-              ) : (
-                <>
-                  <UserPlus size={18} />
-                  {t('auth.register.submit')}
-                </>
-              )}
-            </button>
+              {loading ? t('auth.register.submitting') : t('auth.register.submit')}
+            </Button>
           </form>
 
           {googleConfigured && (
@@ -283,8 +278,11 @@ export default function RegisterPage() {
                 <span className={styles.dividerLine} />
               </div>
 
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="lg"
+                fullWidth
                 onClick={() => {
                   if (isNativeApp()) {
                     void openGoogleOAuthInNative();
@@ -292,19 +290,10 @@ export default function RegisterPage() {
                   }
                   window.location.href = '/api/auth/google';
                 }}
-                className={styles.ssoButton}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--color-accent)';
-                  e.currentTarget.style.background = 'var(--color-accent-muted)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--color-input-border)';
-                  e.currentTarget.style.background = 'var(--color-input-bg)';
-                }}
               >
                 <span className={styles.googleG}>G</span>
                 {t('auth.register.googleLogin')}
-              </button>
+              </Button>
             </>
           )}
 

@@ -3,12 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   ClipboardList, MapPin, Flag, CalendarDays, Truck, StickyNote,
-  PackagePlus, PackageCheck, XCircle, Inbox, Loader2, Navigation,
+  PackagePlus, PackageCheck, XCircle, Inbox, Navigation,
   Radio, WifiOff, Cpu, AlertTriangle, ChevronDown,
 } from 'lucide-react';
 import { formatDate, formatDateShort } from '../services/i18n/formatDate';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
+import Button from '../components/Button';
 import { useDataUpdates } from '../hooks/useDataUpdates';
 import { useAuth } from '../hooks/AuthContext';
 import { useTrackingStatus } from '../services/tracking/TrackingContext';
@@ -354,39 +355,45 @@ function ActionButtons({ status, loading, onAction }: { status: string; loading:
 
   if (status === 'assigned') {
     return (
-      <button
+      <Button
         type="button"
-        disabled={loading}
+        variant="primary"
+        size="md"
+        className={styles.actionStretch}
+        loading={loading}
+        icon={<PackagePlus size={15} />}
         onClick={() => onAction('in_progress')}
-        className={`${styles.actionBtn} ${styles.actionPrimary}`}
       >
-        {loading ? <Loader2 size={15} className={styles.spinner} /> : <PackagePlus size={15} />}
         {t('myDeliveries.actions.takeCharge')}
-      </button>
+      </Button>
     );
   }
 
   if (status === 'in_progress') {
     return (
       <>
-        <button
+        <Button
           type="button"
-          disabled={loading}
+          variant="success"
+          size="md"
+          className={styles.actionStretch}
+          loading={loading}
+          icon={<PackageCheck size={15} />}
           onClick={() => onAction('delivered')}
-          className={`${styles.actionBtn} ${styles.actionSuccess}`}
         >
-          {loading ? <Loader2 size={15} className={styles.spinner} /> : <PackageCheck size={15} />}
           {t('myDeliveries.actions.deliver')}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          disabled={loading}
+          variant="danger"
+          size="md"
+          className={styles.actionStretch}
+          loading={loading}
+          icon={<XCircle size={15} />}
           onClick={() => onAction('failed')}
-          className={`${styles.actionBtn} ${styles.actionDanger}`}
         >
-          {loading ? <Loader2 size={15} className={styles.spinner} /> : <XCircle size={15} />}
           {t('myDeliveries.actions.fail')}
-        </button>
+        </Button>
       </>
     );
   }

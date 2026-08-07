@@ -1072,3 +1072,16 @@
     white-space: normal;
   }
 }
+/* Confort tactile (WCAG 2.5.5) : cibles ≥44px sur écrans tactiles uniquement. */
+@media (pointer: coarse) {
+  .eyeBtn {
+    width: 44px;
+    height: 44px;
+  }
+  .inputWithSuffix {
+    padding-right: 52px;
+  }
+  .copyBtn {
+    min-height: 44px;
+  }
+}

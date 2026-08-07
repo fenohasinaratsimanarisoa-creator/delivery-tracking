@@ -10,22 +10,25 @@ import { useNotifications } from '../services/notifications/useNotifications';
 import type { Notification } from '../types';
 import styles from './NotificationBell.module.css';
 
-const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string }> = {
-  delivery_status: { icon: <Package size={14} />, color: '#3b82f6' },
-  fuel_anomaly: { icon: <Fuel size={14} />, color: '#f59e0b' },
-  fuel_gps_coverage_missing: { icon: <Gauge size={14} />, color: '#0ea5e9' },
-  maintenance_due: { icon: <Wrench size={14} />, color: '#8b5cf6' },
-  speed_alert: { icon: <Gauge size={14} />, color: '#f97316' },
-  prolonged_stop: { icon: <Clock size={14} />, color: '#eab308' },
-  delay_alert: { icon: <Timer size={14} />, color: '#f43f5e' },
-  device_offline: { icon: <WifiOff size={14} />, color: '#ef4444' },
-  geofence_event: { icon: <MapPin size={14} />, color: '#14b8a6' },
-  location_mismatch: { icon: <Crosshair size={14} />, color: '#8b5cf6' },
-  system: { icon: <Info size={14} />, color: '#6b7280' },
+// Couleurs des types de notification alignées sur les tokens du thème (--color-*).
+// Chaque type fournit couleur + fond teinté (token *-muted) : un hex + alpha "1a"
+// ne fonctionnerait pas sur une var() CSS.
+const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
+  delivery_status: { icon: <Package size={14} />, color: 'var(--color-blue)', bg: 'var(--color-blue-muted)' },
+  fuel_anomaly: { icon: <Fuel size={14} />, color: 'var(--color-warning)', bg: 'var(--color-warning-muted)' },
+  fuel_gps_coverage_missing: { icon: <Gauge size={14} />, color: 'var(--color-blue)', bg: 'var(--color-blue-muted)' },
+  maintenance_due: { icon: <Wrench size={14} />, color: 'var(--color-purple)', bg: 'var(--color-purple-muted)' },
+  speed_alert: { icon: <Gauge size={14} />, color: 'var(--color-orange)', bg: 'var(--color-orange-muted)' },
+  prolonged_stop: { icon: <Clock size={14} />, color: 'var(--color-warning)', bg: 'var(--color-warning-muted)' },
+  delay_alert: { icon: <Timer size={14} />, color: 'var(--color-red)', bg: 'var(--color-red-muted)' },
+  device_offline: { icon: <WifiOff size={14} />, color: 'var(--color-red)', bg: 'var(--color-red-muted)' },
+  geofence_event: { icon: <MapPin size={14} />, color: 'var(--color-teal)', bg: 'var(--color-teal-muted)' },
+  location_mismatch: { icon: <Crosshair size={14} />, color: 'var(--color-purple)', bg: 'var(--color-purple-muted)' },
+  system: { icon: <Info size={14} />, color: 'var(--color-text-secondary)', bg: 'var(--color-border-subtle)' },
 };
 
 function typeIcon(type: string) {
-  return TYPE_CONFIG[type] ?? { icon: <Bell size={14} />, color: '#6b7280' };
+  return TYPE_CONFIG[type] ?? { icon: <Bell size={14} />, color: 'var(--color-text-secondary)', bg: 'var(--color-border-subtle)' };
 }
 
 function priorityColor(priority: string) {
@@ -206,7 +209,7 @@ export default function NotificationBell() {
                       style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
                     >
                       <span className={styles.unreadBar} style={{ background: pColor }} />
-                      <div className={styles.itemIconTile} style={{ background: `${cfg.color}1a`, color: cfg.color }}>
+                      <div className={styles.itemIconTile} style={{ background: cfg.bg, color: cfg.color }}>
                         {cfg.icon}
                       </div>
                       <div className={styles.itemBody}>

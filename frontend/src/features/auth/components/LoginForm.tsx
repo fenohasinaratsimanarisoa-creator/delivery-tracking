@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Eye, EyeOff, LogIn, Loader2, AlertCircle, Lock, ShieldCheck,
+  Eye, EyeOff, LogIn, AlertCircle, Lock, ShieldCheck,
   MapPin, FileCheck, Radio,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { isNativeApp, openGoogleOAuthInNative } from '../../../services/native/nativeAuth';
+import Button from '../../../components/Button';
 import styles from './LoginForm.module.css';
 
 interface Props {
@@ -183,24 +184,17 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
           </div>
 
           <div style={animate(0.22)}>
-            <button
+            <Button
               type="submit"
-              disabled={loading || !isFormValid}
-              className={`${styles.submitBtn} ${loading || !isFormValid ? styles.submitBtnDisabled : styles.submitBtnActive}`}
+              variant="primary"
+              size="lg"
+              fullWidth
+              loading={loading}
+              disabled={!isFormValid}
+              icon={<LogIn size={18} />}
             >
-              <span className={styles.buttonShine} aria-hidden />
-              {loading ? (
-                <>
-                  <Loader2 size={18} className={styles.spinner} />
-                  {t('auth.login.submitting')}
-                </>
-              ) : (
-                <>
-                  <LogIn size={18} />
-                  {t('auth.login.submit')}
-                </>
-              )}
-            </button>
+              {loading ? t('auth.login.submitting') : t('auth.login.submit')}
+            </Button>
           </div>
         </form>
 
@@ -218,9 +212,11 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
               <span className={styles.dividerText}>{t('common.or')}</span>
               <span className={styles.dividerLine} />
             </div>
-            <button
+            <Button
               type="button"
-              className={styles.ssoButton}
+              variant="outline"
+              size="lg"
+              fullWidth
               onClick={() => {
                 if (isNativeApp()) {
                   openGoogleOAuthInNative().catch((err) => {
@@ -233,7 +229,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
             >
               <span className={styles.googleG}>G</span>
               {t('auth.login.googleLogin')}
-            </button>
+            </Button>
           </div>
         )}
 

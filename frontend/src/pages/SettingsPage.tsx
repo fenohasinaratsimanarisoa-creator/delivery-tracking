@@ -64,7 +64,7 @@ function PasswordStrength({ password }: { password: string }) {
     [/[a-z]/, /[A-Z]/, /\d/, /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/].filter(r => r.test(password)).length
   );
   const index = Math.max(0, score - 1);
-  const colors = ['var(--color-red, #E8544C)', 'var(--color-accent, #F2A93C)', 'var(--color-blue, #4A90E2)', 'var(--color-teal, #3FA796)'];
+  const colors = ['var(--color-red, #E8544C)', 'var(--color-accent, #F2A93C)', 'var(--color-blue, #3b82f6)', 'var(--color-teal, #3FA796)'];
   const labels = [
     t('settingsSecurity.passwordStrength.veryWeak'),
     t('settingsSecurity.passwordStrength.weak'),

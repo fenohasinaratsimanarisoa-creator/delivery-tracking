@@ -59,7 +59,7 @@ export const colors = {
     border: 'rgba(11, 18, 32, 0.12)',
     borderSubtle: 'rgba(11, 18, 32, 0.06)',
     text: '#1A2332',
-    textSecondary: '#5D6B83',
+    textSecondary: '#4B5A72',
     textTertiary: '#9BA6B9',
     accent: '#D48B1E',
     accentHover: '#B87614',

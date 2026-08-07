@@ -32,3 +32,25 @@
   display: inline-flex;
   flex-shrink: 0;
 }
+
+.sizeSm {
+  min-height: 28px;
+}
+
+.sizeMd {
+  min-height: 36px;
+}
+
+.sizeLg {
+  min-height: 44px;
+}
+
+/* Confort tactile : sur écrans tactiles, toutes les tailles passent à ≥44px
+   (recommandation WCAG 2.5.5 / material touch target) sans toucher au desktop. */
+@media (pointer: coarse) {
+  .sizeSm,
+  .sizeMd,
+  .sizeLg {
+    min-height: 44px;
+  }
+}

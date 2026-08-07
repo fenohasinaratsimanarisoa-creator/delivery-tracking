@@ -328,3 +328,15 @@
   border-radius: 50%;
   box-shadow: 0 0 8px rgba(232,84,76,0.6);
 }
+
+/* Confort tactile (WCAG 2.5.5) : cibles ≥44px sur écrans tactiles uniquement. */
+@media (pointer: coarse) {
+  .searchResultItem {
+    min-height: 44px;
+  }
+  .searchClearButton,
+  .driverCardClose {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

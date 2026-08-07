@@ -321,9 +321,9 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       suspectBadge.style.fontWeight = '700';
       suspectBadge.style.textTransform = 'uppercase';
       suspectBadge.style.letterSpacing = '0.04em';
-      suspectBadge.style.background = 'rgba(231,76,60,0.15)';
-      suspectBadge.style.color = '#e74c3c';
-      suspectBadge.style.border = '1px solid rgba(231,76,60,0.3)';
+      suspectBadge.style.background = 'var(--color-red-muted, rgba(232,84,76,0.15))';
+      suspectBadge.style.color = 'var(--color-red, #E8544C)';
+      suspectBadge.style.border = '1px solid var(--color-red-muted, rgba(232,84,76,0.15))';
       suspectBadge.style.marginBottom = '4px';
       suspectBadge.textContent = '⚠️ SIGNAL GPS INSTABLE';
       container.appendChild(suspectBadge);
@@ -338,19 +338,19 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     badge.style.textTransform = 'uppercase';
     badge.style.letterSpacing = '0.04em';
     if (vehicle.suspect) {
-      badge.style.background = 'rgba(155,89,182,0.12)';
-      badge.style.color = '#9B59B6';
-      badge.style.border = '1px solid rgba(155,89,182,0.25)';
+      badge.style.background = 'var(--color-purple-muted, rgba(139,92,246,0.15))';
+      badge.style.color = 'var(--color-purple, #8b5cf6)';
+      badge.style.border = '1px solid var(--color-purple-muted, rgba(139,92,246,0.15))';
       badge.textContent = vehicle.status === 'moving' ? '🟡 DÉPLACEMENT (NON CONFIRMÉ)' : '🟢 ARRÊT (NON CONFIRMÉ)';
     } else if (vehicle.status === 'moving') {
-      badge.style.background = 'rgba(242,169,60,0.15)';
+      badge.style.background = 'var(--color-accent-muted, rgba(242,169,60,0.15))';
       badge.style.color = 'var(--color-status-moving, #F2A93C)';
-      badge.style.border = '1px solid rgba(242,169,60,0.3)';
+      badge.style.border = '1px solid var(--color-accent-muted, rgba(242,169,60,0.15))';
       badge.textContent = '🟡 EN MOUVEMENT';
     } else {
-      badge.style.background = 'rgba(63,167,150,0.12)';
+      badge.style.background = 'var(--color-teal-muted, rgba(63,167,150,0.15))';
       badge.style.color = 'var(--color-status-static, #3FA796)';
-      badge.style.border = '1px solid rgba(63,167,150,0.25)';
+      badge.style.border = '1px solid var(--color-teal-muted, rgba(63,167,150,0.15))';
       badge.textContent = '🟢 À L\'ARRÊT';
     }
     container.appendChild(badge);

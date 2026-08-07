@@ -416,3 +416,14 @@
     right: 8px;
   }
 }
+
+/* Confort tactile (WCAG 2.5.5) : cibles ≥44px sur écrans tactiles uniquement. */
+@media (pointer: coarse) {
+  .bellBtn,
+  .iconActionBtn,
+  .itemDeleteBtn,
+  .seeAllBtn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

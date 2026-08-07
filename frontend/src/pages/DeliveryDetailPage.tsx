@@ -16,10 +16,28 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b', assigned: '#06b6d4', in_progress: '#3b82f6',
-  delivered: '#22c55e', failed: '#ef4444', cancelled: '#6b7280',
+// Couleurs des statuts alignées sur les tokens du thème (--color-*) au lieu de
+// valeurs hex hardcodées hors palette (ex. #3b82f6 était utilisé en dur). Le fond
+// teinté utilise le token *-muted correspondant (un hex + alpha "20" ne marcherait
+// pas sur une var() CSS). assigned et in_progress partagent le bleu du thème.
+const STATUS_COLORS: Record<string, { color: string; bg: string }> = {
+  pending: { color: 'var(--color-warning, #f59e0b)', bg: 'var(--color-warning-muted, rgba(245,158,11,0.12))' },
+  assigned: { color: 'var(--color-blue, #3b82f6)', bg: 'var(--color-blue-muted, rgba(59,130,246,0.15))' },
+  in_progress: { color: 'var(--color-blue, #3b82f6)', bg: 'var(--color-blue-muted, rgba(59,130,246,0.15))' },
+  delivered: { color: 'var(--color-teal, #3FA796)', bg: 'var(--color-teal-muted, rgba(63,167,150,0.15))' },
+  failed: { color: 'var(--color-red, #E8544C)', bg: 'var(--color-red-muted, rgba(232,84,76,0.15))' },
+  cancelled: { color: 'var(--color-text-tertiary, #7A8BA3)', bg: 'var(--color-border-subtle, rgba(232,236,243,0.08))' },
 };
+
+// Leaflet applique la couleur de la polyligne via un attribut SVG ("stroke"), qui
+// ne supporte pas les var() CSS : on résout donc le token --color-blue à l'exécution.
+function themeBlue(): string {
+  try {
+    return getComputedStyle(document.documentElement).getPropertyValue('--color-blue').trim() || '#3b82f6';
+  } catch {
+    return '#3b82f6';
+  }
+}
 
 export default function DeliveryDetailPage() {
   const { t } = useTranslation();
@@ -62,8 +80,8 @@ export default function DeliveryDetailPage() {
           {d.description && <p className={styles.description}>{d.description}</p>}
         </div>
         <span className={styles.statusBadge} style={{
-          background: `${STATUS_COLORS[d.status] || '#6b7280'}20`,
-          color: STATUS_COLORS[d.status] || '#6b7280',
+          background: STATUS_COLORS[d.status]?.bg || 'var(--color-border-subtle)',
+          color: STATUS_COLORS[d.status]?.color || 'var(--color-text-tertiary)',
         }}>{t(`deliveryDetail.status${d.status.charAt(0).toUpperCase() + d.status.slice(1)}`)}</span>
       </div>
 
@@ -93,7 +111,7 @@ export default function DeliveryDetailPage() {
             <TileLayer attribution='&copy; OSM' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             <Marker position={[d.pickupLat!, d.pickupLng!]} />
             <Marker position={[d.deliveryLat!, d.deliveryLng!]} />
-            <Polyline positions={[[d.pickupLat!, d.pickupLng!], [d.deliveryLat!, d.deliveryLng!]]} color="#3B82F6" weight={3} dashArray="10 6" />
+            <Polyline positions={[[d.pickupLat!, d.pickupLng!], [d.deliveryLat!, d.deliveryLng!]]} color={themeBlue()} weight={3} dashArray="10 6" />
           </MapContainer>
         </div>
       )}
