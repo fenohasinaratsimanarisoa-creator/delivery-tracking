@@ -8,6 +8,14 @@ const TILE_PROVIDERS = {
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   },
+  // Repli automatique si OpenStreetMap rate-limite (elle renvoie alors la tuile d'erreur
+  // « Map data not yet available »). CARTO basemaps (plan) et Esri (satellite) restent
+  // fonctionnels pour les apps de production avec un usage raisonnable.
+  planFallback: {
+    name: 'Plan (repli)',
+    url: 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+  },
   satellite: {
     name: 'Satellite',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -30,6 +38,7 @@ export default function MapLayerSwitcher() {
   useEffect(() => {
     const saved = getSavedLayer();
     const plan = L.tileLayer(TILE_PROVIDERS.plan.url, { attribution: TILE_PROVIDERS.plan.attribution });
+    const planFallback = L.tileLayer(TILE_PROVIDERS.planFallback.url, { attribution: TILE_PROVIDERS.planFallback.attribution });
     const satellite = L.tileLayer(TILE_PROVIDERS.satellite.url, { attribution: TILE_PROVIDERS.satellite.attribution });
 
     const baseLayers: Record<string, L.TileLayer> = {
@@ -37,7 +46,7 @@ export default function MapLayerSwitcher() {
       [TILE_PROVIDERS.satellite.name]: satellite,
     };
 
-    const active = saved === 'satellite' ? satellite : plan;
+    let active = saved === 'satellite' ? satellite : plan;
     active.addTo(map);
 
     const control = L.control.layers(baseLayers, {}, {
@@ -49,8 +58,42 @@ export default function MapLayerSwitcher() {
       saveLayer(e.name === TILE_PROVIDERS.satellite.name ? 'satellite' : 'plan');
     });
 
+    // Détection de la tuile d'erreur OpenStreetMap (« Map data not yet available ») :
+    // OSM renvoie une image quasi-blanche uniforme quand elle rate-limite ou juge le
+    // User-Agent non standard. On bascule alors automatiquement sur le repli CARTO.
+    let fallbackApplied = false;
+    const applyFallback = () => {
+      if (fallbackApplied) return;
+      fallbackApplied = true;
+      if (active !== satellite) {
+        map.removeLayer(plan);
+        planFallback.addTo(map);
+        active = planFallback;
+        console.warn('[map] tuiles OSM bloquées (rate-limit) — bascule sur le repli CARTO');
+      }
+    };
+
+    let tileErrorCount = 0;
+    let errorTimer: ReturnType<typeof setTimeout> | null = null;
+    const onTileError = (e: L.LeafletEvent) => {
+      const tile = (e as { tile?: HTMLImageElement }).tile as HTMLImageElement | undefined;
+      if (!tile) return;
+      tileErrorCount++;
+      if (errorTimer) clearTimeout(errorTimer);
+      // Plusieurs échecs de tuiles en peu de temps = blocage OSM.
+      errorTimer = setTimeout(() => {
+        if (tileErrorCount >= 3) {
+          applyFallback();
+        }
+        tileErrorCount = 0;
+      }, 4000);
+    };
+    map.on('tileerror', onTileError);
+
     return () => {
       control.remove();
+      map.off('tileerror', onTileError);
+      if (errorTimer) clearTimeout(errorTimer);
       map.eachLayer((layer) => {
         if (layer instanceof L.TileLayer) map.removeLayer(layer);
       });

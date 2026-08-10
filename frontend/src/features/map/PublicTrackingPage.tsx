@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { MapContainer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../../services/api/client';
+import ResilientTileLayer from './ResilientTileLayer';
 import type { DeliveryInfo } from '../../types';
 import styles from './PublicTrackingPage.module.css';
 
@@ -92,10 +93,7 @@ export default function PublicTrackingPage() {
       </div>
       <div className={styles.mapContainer}>
         <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <ResilientTileLayer />
           <Polyline positions={path} color="blue" weight={3} opacity={0.6} />
           {currentPos && (
             <Marker position={[currentPos.latitude, currentPos.longitude]}>

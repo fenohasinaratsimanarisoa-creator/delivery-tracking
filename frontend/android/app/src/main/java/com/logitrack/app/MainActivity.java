@@ -25,10 +25,21 @@ public class MainActivity extends BridgeActivity {
         try {
             if (getBridge() != null && getBridge().getWebView() != null) {
                 getBridge().getWebView().setBackgroundColor(Color.rgb(11, 18, 32));
+
+                // User-Agent navigateur STANDARD : OpenStreetMap renvoie la tuile d'erreur
+                // "Map data not yet available" aux User-Agents WebView/Capacitor qu'elle ne
+                // reconnaît pas (politique anti-scraping). Un UA Chrome Android complet
+                // contourne ce blocage et restaure le fond de carte.
+                android.webkit.WebSettings settings = getBridge().getWebView().getSettings();
+                String ua = settings.getUserAgentString();
+                // Évite de dupliquer le marqueur si le fix est déjà appliqué.
+                if (ua != null && !ua.contains("deliverytrack-app-ua")) {
+                    settings.setUserAgentString(ua + " deliverytrack-app-ua Chrome/120 Mobile Safari/537.36");
+                }
             }
         } catch (Exception e) {
             // Non bloquant : la WebView garde son fond par défaut.
-            android.util.Log.w("MainActivity", "WebView background set skipped: " + e.getMessage());
+            android.util.Log.w("MainActivity", "WebView init skipped: " + e.getMessage());
         }
     }
 }
