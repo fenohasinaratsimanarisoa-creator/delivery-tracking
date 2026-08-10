@@ -1049,6 +1049,7 @@ export class TrackingService {
         speed: number | null;
         heading: number | null;
         accuracy: number | null;
+        suspect: boolean;
         timestamp: Date;
         vehicle_id: string;
         delivery_id: string | null;
@@ -1064,6 +1065,7 @@ export class TrackingService {
         gp.speed,
         gp.heading,
         gp.accuracy,
+        gp.suspect,
         gp.timestamp,
         gp.vehicle_id,
         gp.delivery_id,
@@ -1084,6 +1086,7 @@ export class TrackingService {
       speed: p.speed,
       heading: p.heading,
       accuracy: p.accuracy,
+      suspect: p.suspect,
       timestamp: p.timestamp,
       vehicleId: p.vehicle_id,
       deliveryId: p.delivery_id,

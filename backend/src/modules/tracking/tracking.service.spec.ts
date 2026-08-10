@@ -1242,6 +1242,7 @@ describe('TrackingService', () => {
           speed: 8.33,
           heading: 135,
           accuracy: 10,
+          suspect: false,
           timestamp: new Date(),
           vehicle_id: 'vehicle-1',
           delivery_id: 'delivery-1',
@@ -1256,6 +1257,33 @@ describe('TrackingService', () => {
       expect(result[0].driverId).toBe('driver-1');
       expect(result[0].driverName).toBe('Driver One');
       expect(result[0].minutesAgo).toBe(0.5);
+      expect(result[0].suspect).toBe(false);
+    });
+
+    it('returns suspect=true positions with the suspect field exposed (no suspect=false filter)', async () => {
+      mockPrisma.$queryRaw = jest.fn().mockResolvedValue([
+        {
+          driver_id: 'driver-2',
+          driver_first_name: 'Driver',
+          driver_last_name: 'Two',
+          latitude: -18.87,
+          longitude: 47.51,
+          speed: 0,
+          heading: null,
+          accuracy: 10,
+          suspect: true,
+          timestamp: new Date(),
+          vehicle_id: 'vehicle-2',
+          delivery_id: null,
+          minutes_ago: 0.2,
+        },
+      ]);
+
+      const result = await service.getLivePositions('company-a');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].vehicleId).toBe('vehicle-2');
+      expect(result[0].suspect).toBe(true);
     });
 
     it('excludes soft-deleted and inactive vehicles', async () => {

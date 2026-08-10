@@ -632,6 +632,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
             confidence: pos.accuracy ? Math.max(0.1, 1 - pos.accuracy / 50) : 1,
             timestamp: pos.timestamp,
             status: isOffline ? 'offline' as const : pos.speed && pos.speed > 0.5 ? 'moving' as const : 'static' as const,
+            suspect: pos.suspect ?? false,
             eta,
           });
         }
