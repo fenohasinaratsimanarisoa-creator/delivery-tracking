@@ -11,6 +11,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import CookieConsentBanner from './components/CookieConsentBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useDataUpdates } from './hooks/useDataUpdates';
+import { useKeyboardHandling } from './hooks/useKeyboardHandling';
 import styles from './App.module.css';
 
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
@@ -112,6 +113,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  useKeyboardHandling();
   return (
     <ErrorBoundary>
     <ThemeProvider>

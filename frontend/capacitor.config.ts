@@ -25,6 +25,10 @@ const config: CapacitorConfig = {
   },
   plugins: {
     Keyboard: {
+      // Stratégie de redimensionnement clavier UNIQUE : c'est LUI (resize:'body') qui
+      // redimensionne le body via JS. Le natif est passé en windowSoftInputMode="adjustPan"
+      // (AndroidManifest.xml) pour ne PAS redimensionner la WebView en parallèle — sinon le
+      // double resize (natif + JS) produit un rectangle noir au moment de la transition.
       resize: 'body',
       resizeOnFullScreen: true,
     },

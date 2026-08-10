@@ -12,6 +12,17 @@ const STATUS_COLORS: Record<string, string> = {
   delivered: '#22c55e', failed: '#ef4444', cancelled: '#6b7280',
 };
 
+// Fallback 100vh → 100dvh (dynamic viewport height, WebView Android moderne) : avec le
+// clavier ouvert, 100vh dépasse la zone visible et un fond quasi-noir (#0B1220) sur un
+// conteneur mal dimensionné reproduit le rectangle noir décrit. (Deux déclarations
+// successives — la dernière écrase la première si dvh est supporté, sinon ignorée.)
+const PAGE_WRAPPER_STYLE: React.CSSProperties = {
+  padding: 'var(--space-2xl, 32px)',
+  background: 'var(--color-bg, #0B1220)',
+  ...({ minHeight: '100vh' } as React.CSSProperties),
+  ...({ minHeight: '100dvh' } as React.CSSProperties),
+};
+
 export default function MyOrdersPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -30,10 +41,7 @@ export default function MyOrdersPage() {
 
   if (isLoading) {
     return (
-      <div style={{
-        padding: 'var(--space-2xl, 32px)',
-        background: 'var(--color-bg, #0B1220)', minHeight: '100vh',
-      }}>
+      <div style={PAGE_WRAPPER_STYLE}>
         <h1 style={{
           color: 'var(--color-text, #E8ECF3)',
           fontFamily: 'var(--font-display, Space Grotesk, sans-serif)',
@@ -59,10 +67,7 @@ export default function MyOrdersPage() {
   }
 
   return (
-    <div style={{
-      padding: 'var(--space-2xl, 32px)',
-      background: 'var(--color-bg, #0B1220)', minHeight: '100vh',
-    }}>
+    <div style={PAGE_WRAPPER_STYLE}>
       <h1 style={{
         color: 'var(--color-text, #E8ECF3)',
         fontFamily: 'var(--font-display, Space Grotesk, sans-serif)',

@@ -77,6 +77,7 @@ const dialogKeyframes = `
   .dt-dialog-card {
     width: calc(100vw - 16px) !important;
     max-height: calc(100vh - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
     border-radius: var(--radius-lg) !important;
   }
 }
