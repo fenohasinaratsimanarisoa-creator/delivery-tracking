@@ -356,21 +356,29 @@ public class BackgroundLocationPlugin extends Plugin {
             return;
         }
         Activity activity = getActivity();
-        if (activity == null) {
-            call.reject("NO_ACTIVITY", "no_activity");
-            return;
-        }
         Intent intent = new Intent(
             Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
             Uri.parse("package:" + getContext().getPackageName())
         );
-        if (intent.resolveActivity(activity.getPackageManager()) == null) {
-            // Écran système absent (surcouches agressives) : on bascule vers les réglages
-            // batterie génériques pour au moins y conduire le chauffeur manuellement.
+        // Écran dédié absent (MIUI/HyperOS, surcouches agressives) → on ouvre la page de
+        // réglages batterie génériques, présente sur toutes les surcouches. Priorité à un
+        // écran qui existe plutôt qu'à un clic silencieux.
+        if (activity != null && intent.resolveActivity(activity.getPackageManager()) == null) {
             intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
         }
         try {
-            startActivityForResult(call, intent, CALLBACK_BATTERY_EXEMPTION);
+            if (activity != null) {
+                startActivityForResult(call, intent, CALLBACK_BATTERY_EXEMPTION);
+            } else {
+                // Aucune activité hôte : on ouvre quand même l'écran (avec NEW_TASK) pour
+                // que le clic ne soit jamais silencieux, puis on résout avec l'état courant.
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(intent);
+                JSObject ret = new JSObject();
+                ret.put("batteryOptimizationIgnored", isBatteryOptimizationIgnored());
+                ret.put("requested", true);
+                call.resolve(ret);
+            }
         } catch (Exception ex) {
             call.reject("INTENT_FAILED", "intent_failed", ex);
         }

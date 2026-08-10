@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { BatteryWarning } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TrackingStatus } from '../../hooks/useDriverTracking';
@@ -10,8 +11,23 @@ import styles from './BatteryExemptionBanner.module.css';
 // (y compris manuellement via les réglages constructeur type MIUI — docs/android-battery-settings.md).
 export default function BatteryExemptionBanner({ status }: { status: TrackingStatus }) {
   const { t } = useTranslation();
+  const [opening, setOpening] = useState(false);
 
   if (status.batteryOptimizationIgnored) return null;
+
+  const handleOpen = async () => {
+    if (opening) return;
+    setOpening(true);
+    try {
+      await status.requestBatteryExemption();
+    } catch (err) {
+      console.warn('[batteryExemption] open failed:', err);
+    } finally {
+      // L'app passe en arrière-plan pour afficher l'écran système : on relâche l'état
+      // au retour (le refresh via visibilitychange mettra à jour batteryOptimizationIgnored).
+      setTimeout(() => setOpening(false), 1500);
+    }
+  };
 
   return (
     <div className={styles.banner}>
@@ -33,17 +49,20 @@ export default function BatteryExemptionBanner({ status }: { status: TrackingSta
         <button
           type="button"
           className={styles.actionBtn}
-          onClick={() => void status.requestBatteryExemption()}
+          disabled={opening}
+          onClick={() => void handleOpen()}
         >
-          {t('batteryExemption.allow', "Autoriser l'app à fonctionner en arrière-plan")}
+          {opening
+            ? t('batteryExemption.opening', 'Ouverture des réglages…')
+            : t('batteryExemption.allow', "Autoriser l'app à fonctionner en arrière-plan")}
         </button>
       </div>
-      <button type="button" className={styles.hintLink}>
+      <p className={styles.hintLink}>
         {t(
           'batteryExemption.manualHint',
           'Certains téléphones (Xiaomi/MIUI…) exigent des réglages manuels supplémentaires',
         )}
-      </button>
+      </p>
     </div>
   );
 }
