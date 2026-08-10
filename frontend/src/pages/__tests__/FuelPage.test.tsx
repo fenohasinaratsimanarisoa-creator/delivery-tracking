@@ -26,12 +26,13 @@ vi.mock("../../components/Toast", () => ({
 
 const mockUseQuery = vi.hoisted(() => vi.fn());
 const mockUseMutation = vi.hoisted(() => vi.fn());
+const mockInvalidateQueries = vi.hoisted(() => vi.fn());
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: mockUseQuery,
   useMutation: mockUseMutation,
   useQueryClient: vi.fn(() => ({
-    invalidateQueries: vi.fn(),
+    invalidateQueries: mockInvalidateQueries,
   })),
 }));
 
@@ -329,5 +330,41 @@ describe("FuelPage", () => {
     expect(screen.getByText("Couverture")).toBeInTheDocument();
     // Ratio fixé : brute ≡ filtré pour V1 (déplacement réel), valeur visible.
     expect(screen.getAllByText("0.33").length).toBeGreaterThan(0);
+  });
+
+  it("« Générer le rapport » invalide aussi la query gps-diagnostics (diagnostic GPS rafraîchi)", async () => {
+    const reportDate = new Date().toISOString().slice(0, 10);
+    // generateMutation est le PREMIER useMutation du composant (ligne 300). On capture
+    // son onSuccess au tout premier appel du hook, puis on l'exécute directement pour
+    // vérifier qu'il invalide bien les deux queryKeys (rapport + diagnostic GPS brut).
+    let firstOnSuccess: (() => void) | undefined;
+    let firstCall = true;
+    mockUseMutation.mockImplementation((options: { onSuccess?: () => void }) => {
+      if (firstCall) {
+        firstCall = false;
+        firstOnSuccess = options?.onSuccess;
+      }
+      return {
+        mutate: vi.fn(),
+        isPending: false,
+        isSuccess: false,
+        isError: false,
+      };
+    });
+
+    render(<FuelPage />);
+
+    expect(firstOnSuccess).toBeDefined();
+
+    // Exécute l'onSuccess de generateMutation (simule une génération réussie).
+    firstOnSuccess!();
+
+    // Les DEUX queries doivent être invalidées : le rapport ET le diagnostic GPS brut.
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["fuel-daily-reports", reportDate],
+    });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["gps-diagnostics", reportDate],
+    });
   });
 });

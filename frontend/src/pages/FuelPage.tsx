@@ -306,6 +306,13 @@ export default function FuelPage() {
       queryClient.invalidateQueries({
         queryKey: ["fuel-daily-reports", reportDate],
       });
+      // Le panneau « Diagnostic des positions GPS brutes » (onglet GPS) utilise une query
+      // SÉPARÉE ["gps-diagnostics", reportDate] : sans cette invalidation, React Query
+      // continue d'afficher l'ancien diagnostic en cache (staleTime 30s) alors que le
+      // backend a recalculé intégralement le rapport → écran figé sur l'ancienne distance.
+      queryClient.invalidateQueries({
+        queryKey: ["gps-diagnostics", reportDate],
+      });
     },
   });
 
