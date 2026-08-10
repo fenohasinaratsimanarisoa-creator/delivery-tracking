@@ -1,8 +1,13 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { BatteryWarning } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TrackingStatus } from '../../hooks/useDriverTracking';
 import styles from './BatteryExemptionBanner.module.css';
+
+// Anti-boucle : après une tentative d'ouverture des réglages, on attend ce délai avant
+// de permettre un nouvel appui. Si l'exemption n'est pas accordée au retour (surcouches
+// MIUI/Samsung), la bannière reste mais ne "boucle" pas sur un re-clic immédiat.
+const PROMPT_COOLDOWN_MS = 8000;
 
 // Bannière PERSISTANTE tant que l'exemption d'optimisation batterie n'est pas accordée
 // (Android). Montrée sur toutes les pages chauffeur via DriverTrackingWrapper : le
@@ -12,11 +17,16 @@ import styles from './BatteryExemptionBanner.module.css';
 export default function BatteryExemptionBanner({ status }: { status: TrackingStatus }) {
   const { t } = useTranslation();
   const [opening, setOpening] = useState(false);
+  const lastPromptRef = useRef(0);
 
   if (status.batteryOptimizationIgnored) return null;
 
   const handleOpen = async () => {
-    if (opening) return;
+    const now = Date.now();
+    // Anti-boucle : ignore un appui trop rapproché du précédent (l'utilisateur revient
+    // de l'écran système sans que l'exemption soit accordée → pas de re-ouverture en boucle).
+    if (opening || now - lastPromptRef.current < PROMPT_COOLDOWN_MS) return;
+    lastPromptRef.current = now;
     setOpening(true);
     try {
       await status.requestBatteryExemption();

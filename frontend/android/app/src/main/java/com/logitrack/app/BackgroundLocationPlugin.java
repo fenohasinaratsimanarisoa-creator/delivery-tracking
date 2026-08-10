@@ -338,13 +338,16 @@ public class BackgroundLocationPlugin extends Plugin {
     }
 
     /**
-     * Demande l'exemption d'optimisation batterie (Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).
+     * Demande l'exemption d'optimisation batterie.
      * Si déjà exempté, résout immédiatement avec batteryOptimizationIgnored=true. Sinon ouvre
-     * l'écran système dédié via startActivityForResult ; l'état réel n'est connu qu'au retour
-     * (l'utilisateur peut refuser) → on le relit et le renvoie dans le callback d'activité.
-     * ATTENTION : cette exemption ne couvre PAS les surcouches constructeur (MIUI/HyperOS « Autostart »,
-     * réglage batterie « Sans restriction ») — écrans propriétaires non standardisés, voir
-     * docs/android-battery-settings.md.
+     * un écran système ; l'état réel n'est connu qu'au retour → on le relit dans le callback.
+     *
+     * POURQUOI LA PAGE DE DÉTAILS DE L'APP (et pas ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS) :
+     * sur les surcouches (MIUI/HyperOS, Samsung One UI…), l'écran « dédié » n'existe pas ou ne
+     * permet pas d'accorder réellement l'exemption (l'utilisateur revient sans changement →
+     * la bannière reste → il reclique → impression de boucle). La page de détails de l'app
+     * (Paramètres → Applications → LogiTrack → Batterie → Sans restriction) est présente sur
+     * TOUTES les surcouches et contient le réglage réel. On la privilégie donc.
      */
     @PluginMethod
     public void requestBatteryOptimizationExemption(PluginCall call) {
@@ -356,15 +359,23 @@ public class BackgroundLocationPlugin extends Plugin {
             return;
         }
         Activity activity = getActivity();
+        // 1) Page de détails de l'app (Batterie / Sans restriction accessible partout).
         Intent intent = new Intent(
-            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             Uri.parse("package:" + getContext().getPackageName())
         );
-        // Écran dédié absent (MIUI/HyperOS, surcouches agressives) → on ouvre la page de
-        // réglages batterie génériques, présente sur toutes les surcouches. Priorité à un
-        // écran qui existe plutôt qu'à un clic silencieux.
+        // 2) Repli : écran de demande dédié, s'il existe réellement.
         if (activity != null && intent.resolveActivity(activity.getPackageManager()) == null) {
-            intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+            Intent dedicated = new Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:" + getContext().getPackageName())
+            );
+            if (dedicated.resolveActivity(activity.getPackageManager()) != null) {
+                intent = dedicated;
+            } else {
+                // 3) Dernier repli : l'écran batterie générique.
+                intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+            }
         }
         try {
             if (activity != null) {
