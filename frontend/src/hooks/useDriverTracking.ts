@@ -37,6 +37,12 @@ const STOPPED_DURATION_MS = 30_000;
 const INTERVAL_FAST = 3000;
 const INTERVAL_SLOW = 20000;
 const INTERVAL_DEFAULT = 5000;
+// Cadence minimale entre deux envois de position, cohérente avec la cadence native
+// définie côté LocationForegroundService.java (LOCATION_FASTEST_INTERVAL_MS = 3000).
+// Protège contre la sur-fréquence quand l'intervalle ET le callback natif envoient tous
+// les deux en premier plan : le throttling de Chromium ne s'applique qu'en arrière-plan,
+// en premier plan les deux sources peuvent cohabiter → on borne le débit d'envoi.
+const LOCATION_FASTEST_INTERVAL_MS = 3000;
 const DRAIN_INTERVAL_MS = 10000;
 const PROXIMITY_THRESHOLD_M = 300;
 const PROXIMITY_REMINDER_MS = 5 * 60 * 1000;
@@ -130,6 +136,9 @@ export function useDriverTracking() {
   const degradedAccuracyWhileMovingRef = useRef(0);
   const posRef = useRef(position);
   const isSendingRef = useRef(false);
+  // Horodatage du dernier envoi réellement initié (throttle minimal contre la
+  // sur-fréquence intervalle + callback natif en premier plan, voir LOCATION_FASTEST_INTERVAL_MS).
+  const lastSendTimeRef = useRef(0);
   const startedRef = useRef(false);
   const deliveryIdRef = useRef('');
   posRef.current = position;
@@ -343,19 +352,26 @@ export function useDriverTracking() {
 
   const sendPosition = useCallback(() => {
     if (isSendingRef.current) return;
-    isSendingRef.current = true;
     const p = posRef.current;
     const dId = deliveryIdRef.current;
     const vId = vehicleId;
-    if (!p) { isSendingRef.current = false; return; }
+    if (!p) return;
 
     const acc = p.accuracy ?? 50;
     if (acc >= ACCURACY_REJECT) {
       setPoorAccuracy(true);
-      isSendingRef.current = false;
       return;
     }
     setPoorAccuracy(acc > ACCURACY_MODERATE);
+
+    // Throttle minimal : ne pas initier un envoi si le dernier date de moins de
+    // LOCATION_FASTEST_INTERVAL_MS. En arrière-plan Chromium throttle déjà les timers,
+    // mais en PREMIER PLAN l'intervalle ET le callback natif peuvent tous deux appeler
+    // sendPosition → ce garde borne le débit (3s), cohérent avec la cadence native.
+    const nowTs = Date.now();
+    if (nowTs - lastSendTimeRef.current < LOCATION_FASTEST_INTERVAL_MS) return;
+    lastSendTimeRef.current = nowTs;
+    isSendingRef.current = true;
 
     const raw = rawPosRef.current;
     const sendLat = raw ? raw.lat : p.lat;
@@ -378,6 +394,10 @@ export function useDriverTracking() {
       socket.once('positionSaved', () => {
         clearTimeout(posTimeout);
         isSendingRef.current = false;
+        // Drainage immédiat en mode dégradé (file non vide) : le timer drainIntervalRef
+        // est throttlé par Chromium en arrière-plan comme setInterval ; un envoi direct
+        // réussi est l'occasion de purger la file sans attendre le prochain tick.
+        void drainQueue();
       });
       // Position rejetée par le serveur (ex. véhicule désactivé/mal configuré) :
       // on la remet en file d'attente locale (même mécanisme que le cas socket
@@ -390,7 +410,7 @@ export function useDriverTracking() {
     } else {
       enqueuePosition(payload).then(() => { refreshQueueCount(); isSendingRef.current = false; });
     }
-  }, [vehicleId, refreshQueueCount]);
+  }, [vehicleId, refreshQueueCount, drainQueue]);
 
   const recalcInterval = useCallback((speed: number | undefined, accuracy?: number, stationary?: boolean) => {
     const now = Date.now();
@@ -466,6 +486,11 @@ export function useDriverTracking() {
       accuracy: acc,
     };
     setPosition(p);
+    // Mise à jour SYNCHRONE de posRef : le callback natif appelle sendPosition()
+    // immédiatement après processCoords() — sans ceci, sendPosition lirait la position
+    // du RENDU précédent (posRef.current = position n'est rafraîchi qu'au re-render),
+    // donc une donnée périmée voire nulle au premier fix.
+    posRef.current = p;
     setConfidenceLevel(conf);
     setIsStationary(isActuallyStationary);
     recalcInterval(speed ?? undefined, acc, isActuallyStationary);
@@ -569,6 +594,13 @@ export function useDriverTracking() {
     // Kalman / checkProximity / sendPosition. Sur iOS/web le plugin est null et
     // subscribeToNativeLocations retourne null : watchPosition reste l'unique
     // source (repli conservé, aucune régression).
+    //
+    // Différence clé avec watchPosition : quand document.visibilityState === 'hidden'
+    // (écran verrouillé), Chromium THROTTLE les timers JS (setInterval(sendPosition, ni))
+    // indépendamment du foreground service natif, qui ne maintient que le PROCESS vivant.
+    // Les positions natives doivent donc déclencher leur propre envoi direct ici, sans
+    // attendre le prochain tick de l'intervalle. isSendingRef + lastSendTimeRef protègent
+    // contre la sur-fréquence quand intervalle et callback natif cohabitent en premier plan.
     subscribeToNativeLocations((nativePos) => {
       processCoords({
         latitude: nativePos.latitude,
@@ -578,6 +610,7 @@ export function useDriverTracking() {
         altitude: nativePos.altitude,
         accuracy: nativePos.accuracy,
       });
+      sendPosition(); // envoi immédiat, ne dépend plus du timer throttlé
     })
       .then((sub) => {
         nativeSubscriptionRef.current = sub;

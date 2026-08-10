@@ -23,7 +23,7 @@ vi.mock('../services/socket/socket', () => ({
     emit: (event: string, payload?: unknown) => { socketEmits.push({ event, payload }); },
     on: (event: string, handler: (data?: any) => void) => { socketHandlers[event] = handler; },
     off: vi.fn(),
-    once: vi.fn(),
+    once: (event: string, handler: (data?: any) => void) => { socketHandlers[event] = handler; },
   }),
 }));
 
@@ -49,11 +49,32 @@ vi.mock('../services/tracking/sensorFusion', () => ({
   simulateStationaryFromSpeed: vi.fn().mockReturnValue(false),
 }));
 
+// Capture du handler natif LocationForegroundService : le test l'invoque directement
+// pour vérifier que les positions natives déclenchent un envoi immédiat (sendPosition)
+// et non plus seulement le prochain tick de l'intervalle.
+const nativeLocationHandler: { current: ((pos: any) => void) | null } = { current: null };
+const nativeSubscriptions: Array<{ unsubscribe: () => void }> = [];
+
+vi.mock('../services/tracking/backgroundLocation', () => ({
+  getBackgroundLocationStatus: vi.fn().mockResolvedValue({ running: false }),
+  requestBackgroundLocationPermissions: vi.fn().mockResolvedValue(true),
+  startBackgroundLocation: vi.fn().mockResolvedValue(true),
+  stopBackgroundLocation: vi.fn().mockResolvedValue(true),
+  subscribeToNativeLocations: vi.fn((handler: (pos: any) => void) => {
+    nativeLocationHandler.current = handler;
+    const sub = { unsubscribe: vi.fn() };
+    nativeSubscriptions.push(sub);
+    return Promise.resolve(sub);
+  }),
+}));
+
 describe('useDriverTracking core logic', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     socketConnected = false;
     socketEmits.length = 0;
+    nativeLocationHandler.current = null;
+    nativeSubscriptions.length = 0;
     Object.keys(socketHandlers).forEach((k) => delete socketHandlers[k]);
     Object.defineProperty(globalThis, 'navigator', {
       value: {
@@ -189,6 +210,74 @@ describe('useDriverTracking core logic', () => {
     expect(setIntervalSpy).not.toHaveBeenCalledWith(expect.anything(), 20000);
 
     setIntervalSpy.mockRestore();
+  });
+
+  it('native location (subscribeToNativeLocations) triggers an immediate sendPosition — and the throttle caps duplicate sends', async () => {
+    vi.useRealTimers();
+    socketConnected = true;
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/drivers/profile') {
+        return Promise.resolve({
+          data: { id: 'd1', firstName: 'A', lastName: 'B', vehicle: { id: 'v1', brand: 'X', model: 'Y', licensePlate: 'Z', positionSource: 'phone' } },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 1600)); }); // startTracking → subscribeToNativeLocations
+
+    expect(nativeLocationHandler.current).not.toBeNull();
+
+    vi.useFakeTimers();
+    // Envoi direct : l'émission updatePosition doit se produire SANS attendre le tick
+    // de l'intervalle (le callback natif appelle sendPosition() après processCoords()).
+    act(() => {
+      nativeLocationHandler.current!({
+        latitude: -18.8792,
+        longitude: 47.5079,
+        speed: 10,
+        heading: 0,
+        altitude: 0,
+        accuracy: 10,
+      });
+    });
+    expect(socketEmits.filter((e) => e.event === 'updatePosition')).toHaveLength(1);
+
+    // Libère isSendingRef via positionSaved (comme le ferait le serveur) puis re-joue
+    // une position native immédiatement : le throttle LOCATION_FASTEST_INTERVAL_MS (3s)
+    // doit empêcher un second envoi dans la même fenêtre (sur-fréquence premier plan).
+    act(() => { socketHandlers['positionSaved']?.(); });
+    act(() => {
+      nativeLocationHandler.current!({
+        latitude: -18.8792,
+        longitude: 47.5079,
+        speed: 11,
+        heading: 0,
+        altitude: 0,
+        accuracy: 10,
+      });
+    });
+    expect(socketEmits.filter((e) => e.event === 'updatePosition')).toHaveLength(1);
+
+    // Après +3s, un nouvel envoi natif est à nouveau autorisé.
+    await act(async () => { vi.advanceTimersByTime(3100); });
+    act(() => {
+      nativeLocationHandler.current!({
+        latitude: -18.8792,
+        longitude: 47.5079,
+        speed: 12,
+        heading: 0,
+        altitude: 0,
+        accuracy: 10,
+      });
+    });
+    expect(socketEmits.filter((e) => e.event === 'updatePosition')).toHaveLength(2);
+
+    // drainQueue est déclenché après un envoi réussi (positionSaved) → flushQueue appelé.
+    const offlineQueue = await import('../services/offlineQueue');
+    expect((offlineQueue.flushQueue as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(1);
   });
 
   it('re-alerts (reminder) when the 2-min snooze expires after a dismiss at escalation 2 (phone)', async () => {
