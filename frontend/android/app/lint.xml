@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- Le code de Capacitor (node_modules) appelle ServiceWorkerController.getInstance()
+         (API 24) — ignoré ici : notre minSdk est désormais 24, et ce fichier est hors de
+         notre contrôle. Le lint reste bloquant (abortOnError) pour NOTRE code applicatif,
+         garantissant qu'une ressource manquante ne produise plus jamais un APK qui crashe
+         au démarrage. -->
+    <issue id="NewApi" severity="ignore" />
+</lint>

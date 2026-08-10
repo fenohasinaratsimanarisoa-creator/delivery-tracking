@@ -16,6 +16,15 @@ public class MainActivity extends BridgeActivity {
         // var(--color-bg) → #0B1220 dans src/styles/theme.ts). Évite qu'une zone non
         // repeinte pendant la transition clavier (adjustPan + resize JS) n'apparaisse
         // noire/blanche selon le thème.
-        getBridge().getWebView().setBackgroundColor(Color.rgb(11, 18, 32));
+        // getBridge() peut être null si le bridge n'est pas encore initialisé (ex. rotation
+        // rapide, config) : garde défensive pour ne JAMAIS crasher au démarrage.
+        try {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().setBackgroundColor(Color.rgb(11, 18, 32));
+            }
+        } catch (Exception e) {
+            // Non bloquant : la WebView garde son fond par défaut.
+            android.util.Log.w("MainActivity", "WebView background set skipped: " + e.getMessage());
+        }
     }
 }

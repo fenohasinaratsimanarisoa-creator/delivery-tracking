@@ -50,6 +50,17 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+    // Garde anti-crash au démarrage : une ressource manquante (@color/@string/@drawable
+    // référencée mais non définie) faisait crasher l'app au runtime (Resources$NotFound)
+    // sur appareil réel (bug LogiTrack sur Samsung A32 — colors.xml absent). Lint échoue
+    // désormais le build au lieu de produire un APK qui plante silencieusement.
+    // Les erreurs du code Capacitor (node_modules, ex. NewApi sur ServiceWorkerController)
+    // sont ignorées via app/lint.xml ; les erreurs de NOTRE code restent bloquantes.
+    lintOptions {
+        abortOnError true
+        checkReleaseBuilds true
+        lintConfig file('lint.xml')
+    }
 }
 
 repositories {

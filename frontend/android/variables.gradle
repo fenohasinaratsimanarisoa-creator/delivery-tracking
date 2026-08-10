@@ -1,5 +1,7 @@
 ext {
-    minSdkVersion = 23
+    // Capacitor 8 exige minSdk 24 (ServiceWorkerController.getInstance() → API 24).
+    // minSdk 23 générait une incompatibilité silencieuse.
+    minSdkVersion = 24
     compileSdkVersion = 36
     targetSdkVersion = 36
     androidxActivityVersion = '1.9.2'

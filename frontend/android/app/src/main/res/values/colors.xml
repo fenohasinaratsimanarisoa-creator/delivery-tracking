@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Couleurs de marque LogiTrack — référencées par styles.xml (AppTheme).
+         Auparavant ABSENTES : le thème pointait vers des ressources inexistantes
+         (@color/colorPrimary etc.), ce qui faisait crasher l'app au démarrage
+         (Resources$NotFoundException) sur appareil réel (Samsung A32). -->
+    <color name="colorPrimary">#0E7490</color>
+    <color name="colorPrimaryDark">#155E75</color>
+    <color name="colorAccent">#0E7490</color>
+</resources>
