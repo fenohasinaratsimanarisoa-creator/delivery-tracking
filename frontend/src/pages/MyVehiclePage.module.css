@@ -109,13 +109,13 @@
 .noVehicleCard {
   background: var(--color-surface, #121B2E);
   border-radius: var(--radius-xl, 12px);
-  padding: 48px 32px;
+  padding: var(--space-3xl) var(--space-2xl);
   text-align: center;
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
 }
 
 .noVehicleIcon {
-  margin-bottom: 14px;
+  margin-bottom: var(--space-lg);
   color: var(--color-text-tertiary, #7A8BA3);
 }
 
@@ -166,14 +166,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  /* Ombre légère (thème field : pas de glow/halo, ombres légères) — l'ancienne ombre
+     dure 0 8px 20px était un signal visuel lourd sur l'en-tête déjà coloré. */
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.05));
   flex-shrink: 0;
 }
 
 .vehicleIdentity {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-xs);
   min-width: 0;
 }
 
@@ -188,7 +190,7 @@
 .plateRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   flex-wrap: wrap;
 }
 
@@ -200,7 +202,7 @@
   color: var(--color-bg, #0B1220);
   background: rgba(255, 255, 255, 0.35);
   border: 1px solid rgba(11, 18, 32, 0.2);
-  padding: 2px 10px;
+  padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm, 6px);
 }
 
@@ -215,7 +217,7 @@
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
   padding: 6px 14px;
   border-radius: var(--radius-full, 9999px);
   background: rgba(11, 18, 32, 0.92);
