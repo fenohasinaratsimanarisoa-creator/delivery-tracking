@@ -204,6 +204,52 @@ Corrections : `1.15rem` → `var(--text-lg)`, couleurs hardcodées → CSS vars.
 
 ---
 
+## PHASE 7 — RE-CONNEXION DES COULEURS ORPHELINES (post-audit)
+
+### Contexte
+
+Des hex hardcodés ont été réintroduits dans des pages ajoutées/modifiées APRÈS l'audit
+initial de juillet. Correctif : remplacement par les tokens du thème (`var(--color-*)`),
+sans toucher à la structure/logique des pages.
+
+### Nouveau token : `--color-cyan`
+
+Ajouté pour distinguer des statuts voisins dans une même liste (carburant Électrique vs
+Hybride sur FleetPage, statut `assigned` vs `delivered` sur MyOrdersPage) sans perdre
+l'information par un remap vers `--color-teal`. Présent dans les trois modes :
+
+| Mode | `--color-cyan` | Contraste surface | Verdict |
+|------|----------------|-------------------|---------|
+| dark | `#06B6D4` | 7.08:1 sur #121B2E | AA ✅ |
+| light | `#0E7490` | 5.36:1 sur #FFFFFF | AA ✅ |
+| field | `#155E75` | 7.27:1 sur #FFFFFF | AA ✅ |
+
+### Mapping appliqué (hex en dur → token)
+
+| Hex | Token | Fichiers |
+|-----|-------|----------|
+| `#ef4444`, `#dc2626` | `var(--color-red)` | AlertsPage, UsersPage, DeliveryProofsPage, MyOrdersPage |
+| `#22c55e` | `var(--color-teal)` | AlertsPage, FleetPage, DriversPage, UsersPage, DeliveryProofsPage, MyOrdersPage |
+| `#f97316`, `#f59e0b` | `var(--color-orange)` / `var(--color-warning)` | AlertsPage (priorité haute → orange, avertissement générique → warning) |
+| `#eab308` | `var(--color-warning)` | AlertsPage, FleetPage |
+| `#3b82f6`, `#007bff` | `var(--color-blue)` | AlertsPage, MyOrdersPage, ClientTrackingPage |
+| `#8b5cf6`, `#a855f7` | `var(--color-purple)` | AlertsPage, FleetPage |
+| `#14b8a6`, `#17a2b8`, `#06b6d4` | `var(--color-cyan)` / `var(--color-teal)` | AlertsPage (geofence → cyan), FleetPage (Hybride → cyan), MyOrdersPage (assigned → cyan), ClientTrackingPage (assigned → teal) |
+| `#6b7280`, `#9BA6B9` | `var(--color-text-tertiary)` | AlertsPage, FleetPage, MyOrdersPage |
+| `#F2A93C`, `#3FA796` | `var(--color-accent)` / `var(--color-teal)` | FleetPage, TripReplayPage |
+
+### Composants nécessitant `color-mix()` ou `getComputedStyle()`
+
+- Les composants qui concaténaient un alpha hex (`${color}1a`, `${color}18`, `${color}33`)
+  ont été migrés vers `color-mix(in srgb, var(--color-x) N%, transparent)` — une var() CSS
+  ne peut pas être concaténée à un suffixe hex : AlertsPage (KpiCard, Badge), UsersPage
+  (RolePill), FleetPage (FuelCell), MyOrdersPage (StatusBadge).
+- Leaflet (`TripReplayPage` Polylines) ne lit pas les var() CSS dans l'attribut SVG
+  `stroke` : résolution via `getComputedStyle(...)` avec fallback hex — même pattern que
+  `DeliveryDetailPage.tsx`.
+
+---
+
 ## VALIDATION FINALE
 
 | Test | Statut |

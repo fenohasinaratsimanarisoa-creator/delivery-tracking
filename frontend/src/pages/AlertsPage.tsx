@@ -59,7 +59,12 @@ interface AlertStats {
   prevTotal: number | null;
 }
 
-const PRIORITY_COLORS: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' };
+const PRIORITY_COLORS: Record<string, string> = {
+  critical: 'var(--color-red)',
+  high: 'var(--color-orange)',
+  medium: 'var(--color-warning)',
+  low: 'var(--color-teal)',
+};
 const PERIOD_VALUES = ['today', '7d', '30d', 'all'] as const;
 
 export default function AlertsPage() {
@@ -166,13 +171,13 @@ export default function AlertsPage() {
     period !== '7d';
 
   const typeConfig = useMemo(() => ({
-    speed_alert: { icon: <Gauge size={17} />, color: '#f97316' },
-    prolonged_stop: { icon: <Clock size={17} />, color: '#eab308' },
-    delay_alert: { icon: <Timer size={17} />, color: '#3b82f6' },
-    device_offline: { icon: <WifiOff size={17} />, color: '#ef4444' },
-    geofence_event: { icon: <MapPin size={17} />, color: '#14b8a6' },
-    location_mismatch: { icon: <Crosshair size={17} />, color: '#8b5cf6' },
-    fuel_anomaly: { icon: <Fuel size={17} />, color: '#f59e0b' },
+    speed_alert: { icon: <Gauge size={17} />, color: 'var(--color-orange)' },
+    prolonged_stop: { icon: <Clock size={17} />, color: 'var(--color-warning)' },
+    delay_alert: { icon: <Timer size={17} />, color: 'var(--color-blue)' },
+    device_offline: { icon: <WifiOff size={17} />, color: 'var(--color-red)' },
+    geofence_event: { icon: <MapPin size={17} />, color: 'var(--color-cyan)' },
+    location_mismatch: { icon: <Crosshair size={17} />, color: 'var(--color-purple)' },
+    fuel_anomaly: { icon: <Fuel size={17} />, color: 'var(--color-warning)' },
   }), []);
 
   const PRIORITY_ICONS: Record<string, React.ReactNode> = {
@@ -229,7 +234,7 @@ export default function AlertsPage() {
             icon={<BellRing size={16} />}
             label={t('alerts.kpiUnresolved')}
             value={alertStats.total}
-            color="#ef4444"
+            color="var(--color-red)"
             trend={trendPercent}
           />
           {allPriorities.map((prio) => {
@@ -250,7 +255,7 @@ export default function AlertsPage() {
               icon={<Layers size={16} />}
               label={t('alerts.kpiTypes')}
               value={alertStats.byType.length}
-              color="#3b82f6"
+              color="var(--color-blue)"
             />
           )}
         </div>
@@ -310,8 +315,8 @@ export default function AlertsPage() {
           <div className={styles.filterLabel}>{t('alerts.filters.statusLabel')}</div>
           <div className={styles.filterChipsRow}>
             <FilterChip active={resolvedFilter === ''} onClick={() => { setResolvedFilter(''); setPage(1); }}>{t('alerts.filters.all')}</FilterChip>
-            <FilterChip active={resolvedFilter === 'false'} onClick={() => { setResolvedFilter('false'); setPage(1); }} color="#ef4444">{t('alerts.filters.unresolved')}</FilterChip>
-            <FilterChip active={resolvedFilter === 'true'} onClick={() => { setResolvedFilter('true'); setPage(1); }} color="#22c55e">{t('alerts.filters.resolved')}</FilterChip>
+            <FilterChip active={resolvedFilter === 'false'} onClick={() => { setResolvedFilter('false'); setPage(1); }} color="var(--color-red)">{t('alerts.filters.unresolved')}</FilterChip>
+            <FilterChip active={resolvedFilter === 'true'} onClick={() => { setResolvedFilter('true'); setPage(1); }} color="var(--color-teal)">{t('alerts.filters.resolved')}</FilterChip>
           </div>
         </div>
       </div>
@@ -334,9 +339,9 @@ export default function AlertsPage() {
       ) : (
         <div className={styles.alertList}>
           {alerts.map((r, i) => {
-            const cfg = typeConfig[r.type as keyof typeof typeConfig] || { icon: <Bell size={17} />, color: '#6b7280' };
-            const prio = PRIORITY_COLORS[r.priority] || '#6b7280';
-            const cardStyle = { '--prio': r.resolved ? '#22c55e' : prio, animationDelay: `${Math.min(i, 10) * 45}ms` } as CSSProperties;
+            const cfg = typeConfig[r.type as keyof typeof typeConfig] || { icon: <Bell size={17} />, color: 'var(--color-text-tertiary)' };
+            const prio = PRIORITY_COLORS[r.priority] || 'var(--color-text-tertiary)';
+            const cardStyle = { '--prio': r.resolved ? 'var(--color-teal)' : prio, animationDelay: `${Math.min(i, 10) * 45}ms` } as CSSProperties;
             return (
               <div
                 key={r.id}
@@ -422,7 +427,7 @@ export default function AlertsPage() {
 
             <div className={styles.badgeRow}>
               <Badge color={PRIORITY_COLORS[selectedAlert.priority]}>{PRIORITY_LABELS[selectedAlert.priority]}</Badge>
-              <Badge color={selectedAlert.resolved ? '#22c55e' : '#ef4444'}>{selectedAlert.resolved ? t('alerts.detail.resolved') : t('alerts.detail.active')}</Badge>
+              <Badge color={selectedAlert.resolved ? 'var(--color-teal)' : 'var(--color-red)'}>{selectedAlert.resolved ? t('alerts.detail.resolved') : t('alerts.detail.active')}</Badge>
             </div>
 
             <Section label={t('alerts.detail.message')}>{selectedAlert.message}</Section>
@@ -499,13 +504,14 @@ function useCountUp(target: number, duration = 650) {
 
 function KpiCard({ label, value, color, trend, icon }: { label: string; value: number; color: string; trend?: number | null; icon?: React.ReactNode }) {
   const animatedValue = useCountUp(value);
-  const cardStyle = { '--kpi': color, '--kpi-muted': `${color}1a` } as CSSProperties;
+  // --kpi-muted via color-mix() (et non `${color}1a`) pour fonctionner avec une var() CSS.
+  const cardStyle = { '--kpi': color, '--kpi-muted': `color-mix(in srgb, ${color} 10%, transparent)` } as CSSProperties;
   return (
     <div className={styles.kpiCard} style={cardStyle}>
       <div className={styles.kpiTop}>
         <div className={styles.kpiIcon}>{icon}</div>
         {trend !== null && trend !== undefined && (
-          <span className={styles.kpiTrend} style={{ color: trend > 0 ? '#ef4444' : trend < 0 ? '#22c55e' : 'var(--color-text-tertiary)' }}>
+          <span className={styles.kpiTrend} style={{ color: trend > 0 ? 'var(--color-red)' : trend < 0 ? 'var(--color-teal)' : 'var(--color-text-tertiary)' }}>
             {trend > 0 ? <ArrowUpRight size={12} /> : trend < 0 ? <ArrowDownRight size={12} /> : null}
             {trend > 0 ? `+${trend}%` : trend < 0 ? `${trend}%` : '='}
           </span>
@@ -527,8 +533,14 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 }
 
 function Badge({ color, children }: { color: string; children: React.ReactNode }) {
+  // color-mix() pour les fonds/bordures teintés : compatible avec une var() CSS
+  // (le `${color}1a` historique ne l'est pas).
   return (
-    <span className={styles.badge} style={{ background: `${color}1a`, color, boxShadow: `0 0 0 1px ${color}30, 0 0 14px ${color}22` }}>{children}</span>
+    <span className={styles.badge} style={{
+      background: `color-mix(in srgb, ${color} 10%, transparent)`,
+      color,
+      boxShadow: `0 0 0 1px color-mix(in srgb, ${color} 19%, transparent), 0 0 14px color-mix(in srgb, ${color} 13%, transparent)`,
+    }}>{children}</span>
   );
 }
 

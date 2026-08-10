@@ -33,8 +33,8 @@ interface DeliveryProof {
 }
 
 const STATUS_DOT_COLORS: Record<string, string> = {
-  delivered: '#22c55e',
-  failed: '#ef4444',
+  delivered: 'var(--color-teal)',
+  failed: 'var(--color-red)',
 };
 
 function useCountUp(target: number, duration = 650) {
@@ -185,8 +185,8 @@ export default function DeliveryProofsPage() {
 
       <div className={styles.kpiGrid}>
         <KpiCard icon={<FileCheck2 size={18} />} label={t('deliveryProofsPage.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" delay={0} />
-        <KpiCard icon={<CheckCircle2 size={18} />} label={t('deliveryProofsPage.kpis.delivered')} value={stats.delivered} color="#22c55e" delay={70} />
-        <KpiCard icon={<XCircle size={18} />} label={t('deliveryProofsPage.kpis.failed')} value={stats.failed} color="#ef4444" delay={140} />
+        <KpiCard icon={<CheckCircle2 size={18} />} label={t('deliveryProofsPage.kpis.delivered')} value={stats.delivered} color="var(--color-teal)" delay={70} />
+        <KpiCard icon={<XCircle size={18} />} label={t('deliveryProofsPage.kpis.failed')} value={stats.failed} color="var(--color-red)" delay={140} />
         <KpiCard icon={<MapPin size={18} />} label={t('deliveryProofsPage.kpis.mismatch')} value={stats.mismatch} color="var(--color-blue, #4A90E2)" delay={210} />
       </div>
 
@@ -210,8 +210,8 @@ export default function DeliveryProofsPage() {
               onClick={() => { setStatusFilter(chip.value); setPage(1); }}
               className={`${styles.filterChip} ${statusFilter === chip.value ? styles.filterChipActive : ''}`}
             >
-              {chip.value === 'delivered' && <span className={styles.chipDot} style={{ background: '#22c55e' }} />}
-              {chip.value === 'failed' && <span className={styles.chipDot} style={{ background: '#ef4444' }} />}
+              {chip.value === 'delivered' && <span className={styles.chipDot} style={{ background: 'var(--color-teal)' }} />}
+              {chip.value === 'failed' && <span className={styles.chipDot} style={{ background: 'var(--color-red)' }} />}
               {chip.label}
             </button>
           ))}

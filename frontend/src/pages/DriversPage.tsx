@@ -270,7 +270,7 @@ export default function DriversPage() {
 
       <div className={styles.kpiGrid}>
         <KpiCard icon={<Truck size={18} />} label={t('drivers.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" delay={0} />
-        <KpiCard icon={<UserCheck size={18} />} label={t('drivers.kpis.active')} value={stats.active} color="#22c55e" delay={70} />
+        <KpiCard icon={<UserCheck size={18} />} label={t('drivers.kpis.active')} value={stats.active} color="var(--color-teal)" delay={70} />
         <KpiCard icon={<UserX size={18} />} label={t('drivers.kpis.inactive')} value={stats.inactive} color="var(--color-text-tertiary, #7A8BA3)" delay={140} />
         <KpiCard icon={<Car size={18} />} label={t('drivers.kpis.unassigned')} value={stats.unassigned} color="var(--color-blue, #3b82f6)" delay={210} />
       </div>

@@ -78,7 +78,8 @@ function RolePill({ role }: { role: string }) {
   const { t } = useTranslation();
   const color = ROLE_COLORS[role] || 'var(--color-text-tertiary)';
   return (
-    <span className={styles.rolePill} style={{ background: `${color}18`, color }}>
+    // background via color-mix() (le `${color}18` historique ne fonctionne pas avec une var()).
+    <span className={styles.rolePill} style={{ background: `color-mix(in srgb, ${color} 9%, transparent)`, color }}>
       {ROLE_ICONS[role]}
       {t(`users.rolesShort.${role}`, { defaultValue: role })}
     </span>
@@ -330,8 +331,8 @@ export default function UsersPage() {
 
       <div className={styles.kpiGrid}>
         <KpiCard icon={<Users size={18} />} label={t('users.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" delay={0} />
-        <KpiCard icon={<UserCheck size={18} />} label={t('users.kpis.active')} value={stats.active} color="#22c55e" delay={70} />
-        <KpiCard icon={<UserX size={18} />} label={t('users.kpis.inactive')} value={stats.inactive} color="#ef4444" delay={140} />
+        <KpiCard icon={<UserCheck size={18} />} label={t('users.kpis.active')} value={stats.active} color="var(--color-teal)" delay={70} />
+        <KpiCard icon={<UserX size={18} />} label={t('users.kpis.inactive')} value={stats.inactive} color="var(--color-red)" delay={140} />
         <KpiCard icon={<Truck size={18} />} label={t('users.kpis.drivers')} value={stats.drivers} color="var(--color-teal, #3FA796)" delay={210} />
       </div>
 

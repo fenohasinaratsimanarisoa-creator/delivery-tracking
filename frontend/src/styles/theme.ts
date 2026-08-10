@@ -23,6 +23,11 @@ export const colors = {
     accentMuted: 'rgba(242, 169, 60, 0.15)',
     teal: palette.teal,
     tealMuted: 'rgba(63, 167, 150, 0.15)',
+    // Cyan distinct du teal (pour distinguer des statuts voisins dans une même liste,
+    // ex. carburant Électrique vs Hybride, statut assigned vs delivered). Contraste 7.08:1
+    // sur fond surface dark (#121B2E) — AA ✅.
+    cyan: '#06B6D4',
+    cyanMuted: 'rgba(6, 182, 212, 0.15)',
     red: palette.red,
     redMuted: 'rgba(232, 84, 76, 0.15)',
     overlay: 'rgba(11, 18, 32, 0.7)',
@@ -66,6 +71,9 @@ export const colors = {
     accentMuted: 'rgba(212, 139, 30, 0.1)',
     teal: '#2E8B7A',
     tealMuted: 'rgba(46, 139, 122, 0.1)',
+    // Cyan light : distinct du teal light (#2E8B7A). Contraste 5.36:1 sur fond blanc — AA ✅.
+    cyan: '#0E7490',
+    cyanMuted: 'rgba(14, 116, 144, 0.1)',
     red: '#CC3D36',
     redMuted: 'rgba(204, 61, 54, 0.1)',
     overlay: 'rgba(11, 18, 32, 0.3)',
@@ -114,6 +122,10 @@ export const colors = {
     accentMuted: 'rgba(14, 116, 144, 0.12)',
     teal: '#047857',
     tealMuted: 'rgba(4, 120, 87, 0.1)',
+    // Cyan field : distinct du teal field (#047857) et de l'accent field (#0E7490).
+    // Contraste 7.27:1 sur fond blanc — AA ✅.
+    cyan: '#155E75',
+    cyanMuted: 'rgba(21, 94, 117, 0.1)',
     red: '#B91C1C',
     redMuted: 'rgba(185, 28, 28, 0.1)',
     overlay: 'rgba(15, 23, 42, 0.4)',
@@ -251,6 +263,8 @@ function cssVarBody(
   --color-accent-muted: ${c.accentMuted};
   --color-teal: ${c.teal};
   --color-teal-muted: ${c.tealMuted};
+  --color-cyan: ${c.cyan};
+  --color-cyan-muted: ${c.cyanMuted};
   --color-red: ${c.red};
   --color-red-muted: ${c.redMuted};
   --color-overlay: ${c.overlay};

@@ -63,13 +63,16 @@ function KpiCard({ icon, label, value, color, delay }: {
   );
 }
 
+// Couleurs des carburants branchées sur les tokens du thème. Électrique → teal,
+// Hybride → cyan (token dédié, distinct du teal pour garder les deux distinguables
+// dans la même liste). Fond/bordure teintés via color-mix() (compatible var() CSS).
 const FUEL_TONES: Record<string, { color: string; bg: string; icon: React.ReactNode }> = {
-  'Essence': { color: '#F2A93C', bg: 'rgba(242,169,60,0.14)', icon: <Droplets size={13} /> },
-  'Diesel': { color: '#eab308', bg: 'rgba(234,179,8,0.14)', icon: <Fuel size={13} /> },
-  'Électrique': { color: '#22c55e', bg: 'rgba(34,197,94,0.14)', icon: <Zap size={13} /> },
-  'Hybride Essence': { color: '#06b6d4', bg: 'rgba(6,182,212,0.14)', icon: <Battery size={13} /> },
-  'Hybride Diesel': { color: '#06b6d4', bg: 'rgba(6,182,212,0.14)', icon: <Battery size={13} /> },
-  'GPL': { color: '#a855f7', bg: 'rgba(168,85,247,0.14)', icon: <Flame size={13} /> },
+  'Essence': { color: 'var(--color-accent)', bg: 'color-mix(in srgb, var(--color-accent) 14%, transparent)', icon: <Droplets size={13} /> },
+  'Diesel': { color: 'var(--color-warning)', bg: 'color-mix(in srgb, var(--color-warning) 14%, transparent)', icon: <Fuel size={13} /> },
+  'Électrique': { color: 'var(--color-teal)', bg: 'color-mix(in srgb, var(--color-teal) 14%, transparent)', icon: <Zap size={13} /> },
+  'Hybride Essence': { color: 'var(--color-cyan)', bg: 'color-mix(in srgb, var(--color-cyan) 14%, transparent)', icon: <Battery size={13} /> },
+  'Hybride Diesel': { color: 'var(--color-cyan)', bg: 'color-mix(in srgb, var(--color-cyan) 14%, transparent)', icon: <Battery size={13} /> },
+  'GPL': { color: 'var(--color-purple)', bg: 'color-mix(in srgb, var(--color-purple) 14%, transparent)', icon: <Flame size={13} /> },
 };
 
 function VehicleNameCell({ vehicle }: { vehicle: Vehicle }) {
@@ -96,9 +99,9 @@ function PlateCell({ plate }: { plate: string }) {
 }
 
 function FuelCell({ fuelType }: { fuelType: string }) {
-  const tone = FUEL_TONES[fuelType] ?? { color: '#9BA6B9', bg: 'rgba(155,166,185,0.14)', icon: <Fuel size={13} /> };
+  const tone = FUEL_TONES[fuelType] ?? { color: 'var(--color-text-tertiary)', bg: 'color-mix(in srgb, var(--color-text-tertiary) 14%, transparent)', icon: <Fuel size={13} /> };
   return (
-    <span className={styles.fuelPill} style={{ color: tone.color, background: tone.bg, borderColor: `${tone.color}33` }}>
+    <span className={styles.fuelPill} style={{ color: tone.color, background: tone.bg, borderColor: `color-mix(in srgb, ${tone.color} 20%, transparent)` }}>
       {tone.icon}
       {fuelType}
     </span>
@@ -362,7 +365,7 @@ export default function FleetPage() {
 
       <div className={styles.kpiGrid}>
         <KpiCard icon={<Truck size={18} />} label={t('fleet.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" delay={0} />
-        <KpiCard icon={<CheckCircle2 size={18} />} label={t('fleet.kpis.active')} value={stats.active} color="#22c55e" delay={70} />
+        <KpiCard icon={<CheckCircle2 size={18} />} label={t('fleet.kpis.active')} value={stats.active} color="var(--color-teal)" delay={70} />
         <KpiCard icon={<CircleOff size={18} />} label={t('fleet.kpis.inactive')} value={stats.inactive} color="var(--color-text-tertiary, #7A8BA3)" delay={140} />
         <KpiCard icon={<UserCheck size={18} />} label={t('fleet.kpis.withDriver')} value={stats.withDriver} color="var(--color-blue, #3b82f6)" delay={210} />
       </div>

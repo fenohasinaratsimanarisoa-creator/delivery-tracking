@@ -8,13 +8,13 @@ import { formatDate } from '../services/i18n/formatDate';
 import type { Delivery } from '../types';
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b', assigned: '#06b6d4', in_progress: '#3b82f6',
-  delivered: '#22c55e', failed: '#ef4444', cancelled: '#6b7280',
+  pending: 'var(--color-warning)', assigned: 'var(--color-cyan)', in_progress: 'var(--color-blue)',
+  delivered: 'var(--color-teal)', failed: 'var(--color-red)', cancelled: 'var(--color-text-tertiary)',
 };
 
 // Fallback 100vh → 100dvh (dynamic viewport height, WebView Android moderne) : avec le
-// clavier ouvert, 100vh dépasse la zone visible et un fond quasi-noir (#0B1220) sur un
-// conteneur mal dimensionné reproduit le rectangle noir décrit. (Deux déclarations
+// clavier ouvert, 100vh dépasse la zone visible et un fond quasi-noir (le bg du thème)
+// sur un conteneur mal dimensionné reproduit le rectangle noir décrit. (Deux déclarations
 // successives — la dernière écrase la première si dvh est supporté, sinon ignorée.)
 const PAGE_WRAPPER_STYLE: React.CSSProperties = {
   padding: 'var(--space-2xl, 32px)',
@@ -195,10 +195,10 @@ export default function MyOrdersPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const { t } = useTranslation();
-  const bg = STATUS_COLORS[status] || '#6b7280';
+  const bg = STATUS_COLORS[status] || 'var(--color-text-tertiary)';
   return (
     <span style={{
-      background: `${bg}20`,
+      background: `color-mix(in srgb, ${bg} 13%, transparent)`,
       color: bg,
       padding: '2px var(--space-sm, 8px)',
       borderRadius: 'var(--radius-sm, 4px)',

@@ -14,6 +14,17 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 
+// Leaflet applique la couleur de la polyligne via un attribut SVG ("stroke"), qui ne
+// supporte pas les var() CSS : on résout les tokens --color-accent/--color-teal à
+// l'exécution (même pattern que DeliveryDetailPage.tsx), fallback sur les anciens hex.
+function themeColor(varName: string, fallback: string): string {
+  try {
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 interface Position {
   latitude: number;
   longitude: number;
@@ -143,10 +154,10 @@ export default function TripReplayPage() {
               <MapLayerSwitcher />
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
               {path.length > 1 && (
-                <Polyline positions={path} color="#F2A93C" weight={3} opacity={0.6} />
+                <Polyline positions={path} color={themeColor('--color-accent', '#F2A93C')} weight={3} opacity={0.6} />
               )}
               {matchedPath && matchedPath.length > 1 && (
-                <Polyline positions={matchedPath} color="#3FA796" weight={4} opacity={0.8} />
+                <Polyline positions={matchedPath} color={themeColor('--color-teal', '#3FA796')} weight={4} opacity={0.8} />
               )}
               {currentPos && <ReplayMarker position={[currentPos.latitude, currentPos.longitude]} />}
             </MapContainer>

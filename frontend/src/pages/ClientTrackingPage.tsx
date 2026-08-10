@@ -115,7 +115,7 @@ export default function ClientTrackingPage() {
               >
                 <strong className={styles.orderTitle}>{o.title}</strong>
                 <span className={styles.orderStatusBadge} style={{
-                  background: o.status === 'in_progress' ? '#007bff' : '#17a2b8',
+                  background: o.status === 'in_progress' ? 'var(--color-blue)' : 'var(--color-teal)',
                 }}>
                   {o.status === 'in_progress' ? t('clientTracking.status.in_progress') : t('clientTracking.status.assigned')}
                 </span>
