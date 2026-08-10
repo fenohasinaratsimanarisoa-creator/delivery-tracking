@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
 
+import androidx.activity.result.ActivityResult;
 import androidx.core.content.ContextCompat;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.PeriodicWorkRequest;
@@ -376,10 +377,17 @@ public class BackgroundLocationPlugin extends Plugin {
     }
 
     @ActivityCallback
-    private void batteryOptimizationExemptionCallback(PluginCall call) {
+    private void batteryOptimizationExemptionCallback(PluginCall call, ActivityResult result) {
+        // Capacitor 8 appelle les callbacks d'activité avec DEUX arguments :
+        // (PluginCall, ActivityResult). Une signature à un seul argument provoquait
+        // "IllegalArgumentException: Wrong number of arguments; expected 1, got 2"
+        // → RuntimeException sur le main thread → l'app se fermait (crash systématique).
         JSObject ret = new JSObject();
         ret.put("batteryOptimizationIgnored", isBatteryOptimizationIgnored());
         ret.put("requested", true);
+        if (result != null) {
+            ret.put("resultCode", result.getResultCode());
+        }
         call.resolve(ret);
     }
 

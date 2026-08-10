@@ -9,6 +9,10 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Capture des crashs AVANT tout (MIUI/Samsung verrouillent le logcat : seul un
+        // fichier de crash est lisible). Le rapport est écrit dans
+        // /data/data/com.logitrack.app/files/crash_*.log (debug → via adb run-as).
+        CrashReportHandler.install(this);
         registerPlugin(BackgroundLocationPlugin.class);
         super.onCreate(savedInstanceState);
 

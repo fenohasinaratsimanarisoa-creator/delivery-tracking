@@ -597,10 +597,6 @@ export function useDriverTracking() {
       .then((status) => {
         if (!status.running) {
           return requestBackgroundLocationPermissions()
-            // Demande l'exemption d'optimisation batterie juste après les permissions :
-            // sans elle, Android Doze peut suspendre le service d'arrière-plan et les
-            // positions cessent d'être transmises écran verrouillé. No-op sur iOS/web.
-            .then(() => requestBatteryOptimizationExemption())
             .then(() => startBackgroundLocation())
             .catch((err) => {
               console.warn('[tracking] native background service start failed:', err);
