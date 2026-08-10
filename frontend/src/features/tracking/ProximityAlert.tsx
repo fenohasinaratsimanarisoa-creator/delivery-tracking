@@ -8,10 +8,15 @@ import {
 import type { TrackingStatus, DriverAlert } from '../../hooks/useDriverTracking';
 import styles from './ProximityAlert.module.css';
 
+// Couleurs issues des tokens du thème (var(--color-*)) : --color-accent, --color-orange
+// et --color-red ont TOUS un équivalent dans colors.field (theme.ts : field.accent =
+// #0E7490, field.orange = #C2410C, field.red = #B91C1C) et sont résolus dynamiquement
+// par html[data-context="field"]. Le fallback hex n'est utilisé que si la variable n'est
+// pas définie (jamais en contexte field) — il ne retombe pas sur le thème dark.
 const URGENCY_CONFIG: Record<string, { border: string; bg: string }> = {
-  normal: { border: 'var(--color-accent, #F2A93C)', bg: 'var(--color-surface, #121B2E)' },
-  high: { border: 'var(--color-orange, #E8753C)', bg: 'var(--color-surface, #1A1525)' },
-  critical: { border: 'var(--color-red, #E8544C)', bg: 'var(--color-surface, #201015)' },
+  normal: { border: 'var(--color-accent)', bg: 'var(--color-surface)' },
+  high: { border: 'var(--color-orange)', bg: 'var(--color-surface)' },
+  critical: { border: 'var(--color-red)', bg: 'var(--color-surface)' },
 };
 
 function alertIcon(type: string): React.ReactNode {
@@ -55,7 +60,10 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
       zIndex: 2000 + (urgency === 'critical' ? 10 : urgency === 'high' ? 5 : 0),
       background: colors.bg,
       border: `1px solid ${colors.border}`,
-      boxShadow: urgency === 'critical' ? '0 0 24px rgba(232,84,76,0.4)' : 'var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5))',
+      // Ombres LÉGÈRES uniquement (token --shadow-lg du thème field) : le glow rouge
+      // critique (halo) est retiré — "aucun glow/halo" est une intention documentée du
+      // thème field, pas seulement une préférence esthétique.
+      boxShadow: 'var(--shadow-lg, 0 4px 14px rgba(15,23,42,0.08))',
       '--alert-color': colors.border,
     } as React.CSSProperties}>
       <div className={styles.alertGlowLine} />

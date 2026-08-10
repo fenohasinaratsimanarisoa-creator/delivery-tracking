@@ -7,8 +7,15 @@ import {
 } from 'lucide-react';
 import { formatDate } from '../services/i18n/formatDate';
 import { useNotifications } from '../services/notifications/useNotifications';
+import { useAuth } from '../hooks/AuthContext';
 import type { Notification } from '../types';
 import styles from './NotificationBell.module.css';
+
+// Types réellement actionnables par un chauffeur/client (contexte field). Le backend
+// n'expose pas de filtre par rôle (notifications.service.findAll → compagnie + user),
+// on filtre donc côté affichage UNIQUEMENT en contexte field, sans supprimer les autres
+// types du système (les rôles admin/dispatcher continuent de tous les voir).
+const FIELD_VISIBLE_TYPES = new Set(['delivery_status', 'delay_alert', 'geofence_event', 'system']);
 
 // Couleurs des types de notification alignées sur les tokens du thème (--color-*).
 // Chaque type fournit couleur + fond teinté (token *-muted) : un hex + alpha "1a"
@@ -59,7 +66,15 @@ const MOBILE_BREAKPOINT = 480;
 export default function NotificationBell() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { notifications, unreadCount, markRead, markAllRead, remove, removeAll } = useNotifications({ limit: 20 });
+  // Contexte field (driver/client) : ne montrer que les types actionnables. Les autres
+  // notifications restent en base (le badge unreadCount est calculé par le backend sans
+  // distinction de type) mais ne sont pas listées dans le panneau pour ce rôle.
+  const isFieldContext = user?.role === 'driver' || user?.role === 'client';
+  const visibleNotifications = isFieldContext
+    ? notifications.filter((n) => FIELD_VISIBLE_TYPES.has(n.type))
+    : notifications;
   const [open, setOpen] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight);
   const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null);
@@ -121,7 +136,7 @@ export default function NotificationBell() {
 
   const groups = useRef(new Map<string, Notification[]>());
   groups.current = new Map();
-  for (const n of notifications) {
+  for (const n of visibleNotifications) {
     const label = groupLabel(t, n.createdAt);
     const arr = groups.current.get(label) ?? [];
     arr.push(n);
@@ -160,7 +175,7 @@ export default function NotificationBell() {
               )}
             </div>
             <div className={styles.panelHeaderActions}>
-              {notifications.length > 0 && (
+              {visibleNotifications.length > 0 && (
                 <button
                   onClick={(e) => { e.stopPropagation(); removeAll(); }}
                   className={styles.iconActionBtn}
@@ -184,7 +199,7 @@ export default function NotificationBell() {
           </div>
 
           <div className={styles.list}>
-            {notifications.length === 0 && (
+            {visibleNotifications.length === 0 && (
               <div className={styles.emptyState}>
                 <div className={styles.emptyIconWrap}>
                   <BellRing size={26} />
