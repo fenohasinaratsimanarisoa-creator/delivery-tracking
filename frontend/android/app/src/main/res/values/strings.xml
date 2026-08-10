@@ -8,4 +8,6 @@
     <string name="location_notification_channel_desc">Notification persistante indiquant que la localisation est active pendant la livraison.</string>
     <string name="location_notification_title">Livraison en cours</string>
     <string name="location_notification_text">Localisation active</string>
+    <string name="watchdog_alert_title">Suivi GPS perturbé</string>
+    <string name="watchdog_alert_text">Le suivi GPS a rencontré un problème, veuillez rouvrir l\'application.</string>
 </resources>
