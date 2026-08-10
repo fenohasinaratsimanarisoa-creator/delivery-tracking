@@ -113,6 +113,11 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
   );
 }
 
+// Nombre maximal de bannières affichées simultanément : au-delà, on plie dans un
+// badge "+N autres" pour ne jamais recouvrir tout l'écran d'un petit téléphone
+// (un empilement réaliste de mauvaises précisions/proximités dépasse rarement 2-3).
+const MAX_VISIBLE_ALERTS = 3;
+
 export default function ProximityAlert({ status }: { status: TrackingStatus }) {
   const shownAlerts = status.alerts.filter((a) =>
     a.type === 'proximity' || a.type === 'cascade' || a.type === 'geofence' ||
@@ -122,14 +127,25 @@ export default function ProximityAlert({ status }: { status: TrackingStatus }) {
 
   if (shownAlerts.length === 0) return null;
 
+  const visible = shownAlerts.slice(0, MAX_VISIBLE_ALERTS);
+  const hiddenCount = shownAlerts.length - visible.length;
+
+  // Un SEUL conteneur fixed : les bannières sont empilées verticalement par le flex
+  // du conteneur (gap: 8px). L'ordre du DOM suffit, plus besoin de zIndex décroissant.
   return (
-    <>
-      {shownAlerts.map((alert, i) => (
-        <div key={`${alert.type}:${alert.deliveryId || ''}`} className={styles.alertWrapper} style={{ zIndex: 2000 - i }}>
+    <div className={styles.alertStack}>
+      {visible.map((alert, i) => (
+        <div key={`${alert.type}:${alert.deliveryId || ''}`} style={{ zIndex: 2000 - i }}>
           <AlertBanner alert={alert} status={status} />
-          <div className={styles.alertSpacer} style={{ height: i < shownAlerts.length - 1 ? 8 : 0 }} />
         </div>
       ))}
-    </>
+      {hiddenCount > 0 && (
+        <button type="button" className={styles.moreBadge}>
+          {hiddenCount === 1
+            ? `+1 autre alerte`
+            : `+${hiddenCount} autres alertes`}
+        </button>
+      )}
+    </div>
   );
 }

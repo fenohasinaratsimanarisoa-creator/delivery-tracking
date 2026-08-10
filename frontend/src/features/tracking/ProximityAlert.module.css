@@ -4,17 +4,37 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .alertBanner { animation: none !important; }
+  .alertStack, .alertBanner { animation: none !important; }
+}
+
+/* Conteneur UNIQUE fixed en haut de l'écran : c'est lui qui est positionné, les
+ * bannières qu'il contient sont empilées verticalement via le flex (gap: 8px).
+ * Auparavant chaque AlertBanner était individuellement position: fixed → toutes se
+ * superposaient exactement à la même position quand plusieurs alertes étaient actives.
+ */
+.alertStack {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2000;
+  pointer-events: none;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+}
+
+.alertStack > * {
+  pointer-events: auto;
+  flex-shrink: 0;
 }
 
 .alertBanner {
-  position: fixed;
-  top: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2000;
-  max-width: 420px;
-  width: calc(100% - 32px);
+  position: static;
   border-radius: var(--radius-xl, 12px);
   padding: 16px 18px;
   display: flex;
@@ -22,7 +42,6 @@
   gap: 10px;
   backdrop-filter: blur(14px) saturate(1.1);
   animation: dt-alert-in 0.3s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
-  position: relative;
   overflow: hidden;
 }
 
@@ -163,10 +182,25 @@
   filter: brightness(0.9);
 }
 
-.alertWrapper {
-  position: relative;
+/* Limite de bannières visibles : au-delà, un bouton "+N autres" (voir composant).
+ * L'empilement realiste reste rarement > 2-3 ; on borne la hauteur utilisée. */
+.moreBadge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: var(--radius-lg, 10px);
+  background: var(--color-surface, #121B2E);
+  border: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.2));
+  color: var(--color-text-secondary, #9BA6B9);
+  font-size: 0.78rem;
+  font-weight: 600;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: background var(--duration-fast, 120ms) var(--ease-smooth, ease);
 }
 
-.alertSpacer {
-  height: 8px;
+.moreBadge:hover {
+  background: color-mix(in srgb, var(--color-text-secondary, #9BA6B9) 10%, transparent);
 }
