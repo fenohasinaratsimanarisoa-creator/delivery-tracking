@@ -160,6 +160,27 @@ Testé : `traccar-multitenant.spec.ts` + preuve DB réelle (`duplicate key value
 - La connexion entre Render et Traccar Cloud passe par HTTPS public.
 - Les mots de passe Traccar sont en `sync: false` dans `render.yaml`.
 
+### 6.3 Tests d'intégration Traccar — base de TEST dédiée
+
+`traccar-alert-chain.spec.ts` et `traccar-postgis.spec.ts` vérifient des propriétés réelles
+utiles (cohérence PostGIS `ST_MakePoint`/`ST_DWithin`, chaîne position Traccar → alerte).
+Ils font des **INSERT/DELETE réels** et doivent donc tourner contre une base Postgres de
+**test** avec PostGIS — jamais la production.
+
+- La chaîne de connexion est lue depuis `TRACCAR_TEST_DATABASE_URL` (jamais en dur).
+- Sans cette variable, les deux suites sont **SKIP proprement** (aucun échec CI, aucune
+  connexion accidentelle).
+- Un garde-fou refuse de s'exécuter si le nom de la base ne contient ni `test` ni `staging`.
+- Base de test locale : `postgis/postgis:16-3.4` (voir `docker-compose.yml` et le job
+  `backend-e2e-tests` de `.github/workflows/ci.yml`).
+
+```bash
+TRACCAR_TEST_DATABASE_URL="postgresql://test:test@localhost:5432/delivery_tracking_test" npx jest traccar-alert-chain traccar-postgis
+```
+
+> ⚠️ Ne jamais committer de chaîne de connexion (même de test) dans le code : uniquement
+> en variable d'environnement / secret CI. `.env.example` contient un placeholder vide.
+
 ---
 
 ## 7. Dépannage

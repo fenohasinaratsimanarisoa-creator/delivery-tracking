@@ -1,10 +1,14 @@
 const { Client } = require('pg');
 const nodeCrypto = require('crypto');
 
-const PROD_DB =
-  'postgresql://delivery_tracking_ghba_user:aRAlcrSvohQdwVZbVrmnAZx0afCxPbdq@dpg-d9hjlmbeo5us73eb5e8g-a.frankfurt-postgres.render.com/delivery_tracking_ghba';
+// Base de TEST dédiée (jamais de production) fournie via l'environnement.
+// Sans variable configurée, on SKIP proprement (ne pas échouer la CI, ne pas
+// retomber sur une valeur en dur).
+const POSTGIS_TEST_DB = process.env.TRACCAR_TEST_DATABASE_URL;
 
-describe('Traccar → PostGIS data coherence', () => {
+const postgisDescribeOrSkip = POSTGIS_TEST_DB ? describe : describe.skip;
+
+postgisDescribeOrSkip('Traccar → PostGIS data coherence', () => {
   let client: any;
 
   const LAT = -18.8792;
@@ -12,7 +16,20 @@ describe('Traccar → PostGIS data coherence', () => {
   const SPEED_MS = 2.57;
 
   beforeAll(async () => {
-    client = new Client({ connectionString: PROD_DB, ssl: { rejectUnauthorized: false } });
+    if (POSTGIS_TEST_DB && !/test|staging/i.test(POSTGIS_TEST_DB)) {
+      throw new Error(
+        "TRACCAR_TEST_DATABASE_URL ne semble pas pointer vers une base de test " +
+          '(le nom ne contient ni "test" ni "staging") — arrêt par sécurité pour ' +
+          "éviter d'écrire dans une base de production.",
+      );
+    }
+    // SSL uniquement pour les hôtes distants (Render) ; les bases locales/CI (docker)
+    // n'exposent pas SSL. La requête de connexion distingue les deux cas proprement.
+    const isRemote = !/localhost|127\.0\.0\.1|::1/.test(String(POSTGIS_TEST_DB));
+    client = new Client({
+      connectionString: POSTGIS_TEST_DB,
+      ...(isRemote ? { ssl: { rejectUnauthorized: false } } : {}),
+    });
     await client.connect();
   });
 

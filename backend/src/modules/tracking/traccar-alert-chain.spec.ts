@@ -1,11 +1,15 @@
 const PgClient = require('pg').Client;
 const alertCrypto = require('crypto');
 
-const ALERT_DB =
-  'postgresql://delivery_tracking_ghba_user:aRAlcrSvohQdwVZbVrmnAZx0afCxPbdq@dpg-d9hjlmbeo5us73eb5e8g-a.frankfurt-postgres.render.com/delivery_tracking_ghba';
+// Base de TEST dédiée (jamais de production) fournie via l'environnement.
+// Ce test fait des écritures réelles (INSERT/DELETE) : sans variable configurée,
+// on SKIP proprement plutôt que d'échouer ou de retomber sur une valeur en dur.
+const ALERT_TEST_DB = process.env.TRACCAR_TEST_DATABASE_URL;
 const alertUuid = () => alertCrypto.randomUUID();
 
-describe('Traccar → Alert chain (intégration réelle)', () => {
+const alertDescribeOrSkip = ALERT_TEST_DB ? describe : describe.skip;
+
+alertDescribeOrSkip('Traccar → Alert chain (intégration réelle)', () => {
   let client: any;
   let COMPANY_ID: string;
   let VEHICLE_ID: string;
@@ -13,7 +17,20 @@ describe('Traccar → Alert chain (intégration réelle)', () => {
   let DELIVERY_ID: string;
 
   beforeAll(async () => {
-    client = new PgClient({ connectionString: ALERT_DB, ssl: { rejectUnauthorized: false } });
+    if (ALERT_TEST_DB && !/test|staging/i.test(ALERT_TEST_DB)) {
+      throw new Error(
+        "TRACCAR_TEST_DATABASE_URL ne semble pas pointer vers une base de test " +
+          '(le nom ne contient ni "test" ni "staging") — arrêt par sécurité pour ' +
+          "éviter d'écrire dans une base de production.",
+      );
+    }
+    // SSL uniquement pour les hôtes distants (Render) ; les bases locales/CI (docker)
+    // n'exposent pas SSL. La requête de connexion distingue les deux cas proprement.
+    const isRemote = !/localhost|127\.0\.0\.1|::1/.test(String(ALERT_TEST_DB));
+    client = new PgClient({
+      connectionString: ALERT_TEST_DB,
+      ...(isRemote ? { ssl: { rejectUnauthorized: false } } : {}),
+    });
     await client.connect();
     COMPANY_ID = alertUuid();
     await client.query(
@@ -86,9 +103,9 @@ describe('Traccar → Alert chain (intégration réelle)', () => {
     await client.query(
       `INSERT INTO gps_positions
         (id, latitude, longitude, speed, heading, altitude, accuracy,
-         location, timestamp, vehicle_id, driver_id, delivery_id)
-       VALUES ($1, -18.8792, 47.5079, $2, 90, 100, 10, $3, NOW(), $4, $5, $6)`,
-      [posId, speedMs, locationStr, VEHICLE_ID, DRIVER_ID, DELIVERY_ID],
+         location, timestamp, vehicle_id, driver_id, delivery_id, company_id, source)
+       VALUES ($1, -18.8792, 47.5079, $2, 90, 100, 10, $3, NOW(), $4, $5, $6, $7, 'physical_tracker')`,
+      [posId, speedMs, locationStr, VEHICLE_ID, DRIVER_ID, DELIVERY_ID, COMPANY_ID],
     );
 
     const row = await client.query(
@@ -109,14 +126,14 @@ describe('Traccar → Alert chain (intégration réelle)', () => {
     const t2 = new Date(t1.getTime() + 3 * 60 * 1000);
 
     await client.query(
-      `INSERT INTO gps_positions (id, latitude, longitude, speed, location, timestamp, vehicle_id, driver_id, delivery_id)
-       VALUES ($1, -18.8792, 47.5079, 2.57, 'POINT(47.5079 -18.8792)', $2, $3, $4, $5)`,
-      [pos1Id, t1.toISOString(), VEHICLE_ID, DRIVER_ID, DELIVERY_ID],
+      `INSERT INTO gps_positions (id, latitude, longitude, speed, location, timestamp, vehicle_id, driver_id, delivery_id, company_id, source)
+       VALUES ($1, -18.8792, 47.5079, 2.57, 'POINT(47.5079 -18.8792)', $2, $3, $4, $5, $6, 'physical_tracker')`,
+      [pos1Id, t1.toISOString(), VEHICLE_ID, DRIVER_ID, DELIVERY_ID, COMPANY_ID],
     );
     await client.query(
-      `INSERT INTO gps_positions (id, latitude, longitude, speed, location, timestamp, vehicle_id, driver_id, delivery_id)
-       VALUES ($1, -18.8830, 47.5120, 2.57, 'POINT(47.5120 -18.8830)', $2, $3, $4, $5)`,
-      [pos2Id, t2.toISOString(), VEHICLE_ID, DRIVER_ID, DELIVERY_ID],
+      `INSERT INTO gps_positions (id, latitude, longitude, speed, location, timestamp, vehicle_id, driver_id, delivery_id, company_id, source)
+       VALUES ($1, -18.8830, 47.5120, 2.57, 'POINT(47.5120 -18.8830)', $2, $3, $4, $5, $6, 'physical_tracker')`,
+      [pos2Id, t2.toISOString(), VEHICLE_ID, DRIVER_ID, DELIVERY_ID, COMPANY_ID],
     );
 
     const dist = await client.query(
