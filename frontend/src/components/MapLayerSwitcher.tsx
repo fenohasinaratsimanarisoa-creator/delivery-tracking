@@ -20,6 +20,13 @@ const TILE_PROVIDERS = {
     name: 'Satellite',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    // Au-delà de maxNativeZoom, Esri n'a pas de tuile générée pour toutes les zones : elle
+    // renvoie quand même un HTTP 200 avec un placeholder « Map data not yet available »
+    // (pas une erreur réseau → `tileerror` ne se déclenche jamais). Avec maxNativeZoom +
+    // maxZoom, Leaflet agrandit automatiquement la dernière tuile valide au lieu d'afficher
+    // le placeholder gris.
+    maxNativeZoom: 17,
+    maxZoom: 20,
   },
 };
 
@@ -39,7 +46,11 @@ export default function MapLayerSwitcher() {
     const saved = getSavedLayer();
     const plan = L.tileLayer(TILE_PROVIDERS.plan.url, { attribution: TILE_PROVIDERS.plan.attribution });
     const planFallback = L.tileLayer(TILE_PROVIDERS.planFallback.url, { attribution: TILE_PROVIDERS.planFallback.attribution });
-    const satellite = L.tileLayer(TILE_PROVIDERS.satellite.url, { attribution: TILE_PROVIDERS.satellite.attribution });
+    const satellite = L.tileLayer(TILE_PROVIDERS.satellite.url, {
+      attribution: TILE_PROVIDERS.satellite.attribution,
+      maxNativeZoom: TILE_PROVIDERS.satellite.maxNativeZoom,
+      maxZoom: TILE_PROVIDERS.satellite.maxZoom,
+    });
 
     const baseLayers: Record<string, L.TileLayer> = {
       [TILE_PROVIDERS.plan.name]: plan,

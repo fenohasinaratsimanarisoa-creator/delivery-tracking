@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, Polyline, useMap } from 'react-leaflet';
 import MapLayerSwitcher from '../components/MapLayerSwitcher';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -152,7 +152,6 @@ export default function TripReplayPage() {
           <div className={styles.mapArea}>
             <MapContainer center={center} zoom={14} style={{ height: '100%', width: '100%' }}>
               <MapLayerSwitcher />
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
               {path.length > 1 && (
                 <Polyline positions={path} color={themeColor('--color-accent', '#F2A93C')} weight={3} opacity={0.6} />
               )}
