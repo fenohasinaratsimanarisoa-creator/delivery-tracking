@@ -119,16 +119,6 @@ html, body, #root {
   }
 }
 
-/* ─── Notifications panel on small screens ─── */
-@media (max-width: 480px) {
-  .notif-panel {
-    right: 4px !important;
-    left: 4px !important;
-    width: auto !important;
-    max-height: calc(100vh - 60px) !important;
-  }
-}
-
 /* ─── Touch targets: minimum 44px ─── */
 @media (pointer: coarse) {
   .touch-target {

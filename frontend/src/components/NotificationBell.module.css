@@ -411,9 +411,16 @@
   transform: translateY(-1px);
 }
 
+/* Filet de sécurité petit écran : le calcul JS (isMobile / panelWidth / panelStyle)
+ * gère le positionnement en temps normal ; cette media query garantit que le panneau
+ * reste dans la largeur de l'écran même si le style inline est dépassé (ex. changement
+ * d'orientation sans re-render). !important pour primer sur le style inline. */
 @media (max-width: 480px) {
   .panel {
-    right: 8px;
+    right: 8px !important;
+    left: 8px !important;
+    width: auto !important;
+    max-height: calc(100vh - 60px) !important;
   }
 }
 
