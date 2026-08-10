@@ -257,6 +257,12 @@ export default function FuelPage() {
         .get(`/fuel-consumption/daily-reports?date=${reportDate}`)
         .then((r) => r.data ?? r ?? []),
     enabled: tab === "gps",
+    // Le rapport est « temps réel » comme le diagnostic : le QueryClient global a
+    // refetchOnWindowFocus:false + staleTime 2 min, ce qui gardait le rapport figé
+    // même quand le véhicule roulait. On force un rafraîchissement ciblé.
+    staleTime: 10000,
+    refetchInterval: tab === "gps" ? 10000 : false,
+    refetchOnWindowFocus: true,
   });
 
   const {
