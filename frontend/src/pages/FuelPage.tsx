@@ -270,7 +270,12 @@ export default function FuelPage() {
         .get(`/fuel-consumption/gps-diagnostics?date=${reportDate}`)
         .then((r) => r.data as GpsDiagnostics),
     enabled: tab === "gps" && diagOpen,
-    staleTime: 30000,
+    staleTime: 10000,
+    // Le diagnostic GPS est un « temps réel » : on le rafraîchit en direct pendant que le
+    // panneau est ouvert, pour que la distance bouge dès que des positions arrivent (sans
+    // dépendre uniquement de l'invalidation manuelle après « Générer le rapport »).
+    refetchInterval: tab === "gps" && diagOpen ? 10000 : false,
+    refetchOnWindowFocus: true,
   });
 
   const { data: vehicles } = useQuery({
