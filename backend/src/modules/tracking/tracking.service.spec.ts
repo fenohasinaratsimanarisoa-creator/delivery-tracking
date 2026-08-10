@@ -1295,6 +1295,24 @@ describe('TrackingService', () => {
     });
   });
 
+  describe('findNearestVehicle', () => {
+    it('filters out suspect=true positions (a vehicle whose only recent position is suspect is never returned)', async () => {
+      mockPrisma.$queryRaw = jest.fn().mockResolvedValue([]);
+
+      const result = await service.findNearestVehicle(-18.87, 47.51, 'company-a');
+
+      expect(result).toBeNull();
+      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1);
+      const chunks: string[] = (mockPrisma.$queryRaw as jest.Mock).mock.calls[0][0];
+      const sql = chunks.join('');
+      expect(sql).toContain('gp.suspect = false');
+      // Le filtre suspect doit précéder la fenêtre temporelle de 15 minutes.
+      expect(sql.indexOf('gp.suspect = false')).toBeLessThan(
+        sql.indexOf("gp.timestamp >= NOW() - INTERVAL '15 minutes'"),
+      );
+    });
+  });
+
   describe('assertVehicleOwnership', () => {
     it('throws NotFoundException when vehicle not found or wrong company', async () => {
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);

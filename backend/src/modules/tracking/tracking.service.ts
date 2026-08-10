@@ -1101,7 +1101,8 @@ export class TrackingService {
         MIN(ST_DistanceSphere(ST_MakePoint(gp.longitude, gp.latitude), ST_MakePoint(${lng}, ${lat}))) AS distance_meters
       FROM gps_positions gp
       JOIN vehicles v ON v.id = gp.vehicle_id AND v.company_id = CAST(${companyId} AS uuid) AND v.deleted_at IS NULL AND v.is_active = true
-      WHERE gp.timestamp >= NOW() - INTERVAL '15 minutes'
+      WHERE gp.suspect = false
+        AND gp.timestamp >= NOW() - INTERVAL '15 minutes'
         AND gp.vehicle_id NOT IN (
           SELECT d2.vehicle_id FROM deliveries d2
           WHERE d2.company_id = CAST(${companyId} AS uuid)
