@@ -479,6 +479,48 @@ describe('TrackingService', () => {
       expect(result).not.toBeNull();
       expect(result!.suspect).toBe(false);
     });
+
+    it('Scenario 4 — référence = dernière position NON suspecte (une position suspecte en base ne masque plus une téléportation)', async () => {
+      const T = baseTs.getTime();
+      mockPrisma.vehicle.findFirst.mockResolvedValue({ companyId: 'company-1' });
+      mockPrisma.gpsPosition.findFirst
+        .mockReset()
+        // isDuplicateByTimestamp : dernière position (N, suspecte) il y a 2s → pas un doublon (>1s).
+        .mockResolvedValueOnce({ timestamp: new Date(T - 2000) })
+        // getLastPosition(excludeSuspect=true) : dernière position NON suspecte, LOIN du point.
+        .mockResolvedValueOnce({
+          latitude: 0,
+          longitude: 0,
+          timestamp: new Date(T - 10000),
+          speed: null,
+          source: 'phone',
+        });
+
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-vs-suspect', suspect: true });
+
+      // N+1 : au même endroit que N (suspecte, proche) mais à ~55 km de la dernière
+      // position NON suspecte. Sans le fix, la référence serait N (suspecte, proche) →
+      // N+1 ne serait PAS marqué suspect. Avec le fix, la référence est la dernière
+      // position fiable (loin) → N+1 est bien suspect.
+      const result = await service.savePosition(DRIVER, {
+        latitude: 0,
+        longitude: 0.5,
+        speed: 5,
+        timestamp: baseTs.toISOString(),
+        vehicleId: VID,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.suspect).toBe(true);
+
+      // La référence de téléportation a bien été cherchée en EXCLUANT les positions suspectes.
+      expect(mockPrisma.gpsPosition.findFirst).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: expect.objectContaining({ suspect: false }),
+        }),
+      );
+    });
   });
 
   describe('savePosition with alerts', () => {

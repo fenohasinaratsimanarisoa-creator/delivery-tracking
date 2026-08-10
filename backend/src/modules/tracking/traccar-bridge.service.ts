@@ -544,7 +544,10 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
         if (creationAgeMin < NEVER_CONNECTED_GRACE_PERIOD_MS / 60000) continue;
 
-        const lastPos = await this.trackingService.getLastPosition(vehicle.id);
+        // Une position suspecte prouve quand même que le traceur a été vu connecté :
+        // l'alerte "jamais connecté" ne doit PAS se déclencher pour un traceur dont les
+        // seules positions seraient suspectes.
+        const lastPos = await this.trackingService.getLastPosition(vehicle.id, false);
         if (lastPos) continue;
 
         const cooldownKey = `never_connected_alert:${vehicle.id}`;
@@ -599,7 +602,11 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     for (const vehicle of vehiclesWithTrackers) {
       if (!vehicle.driver?.userId) continue;
 
-      const lastPos = await this.trackingService.getLastPosition(vehicle.id);
+      // Une position suspecte prouve quand même que le traceur a transmis récemment :
+      // l'évaluation de la "silence" (device offline) doit s'appuyer sur la DERNIÈRE
+      // position reçue quelle qu'elle soit, sinon un traceur n'envoyant que des points
+      // suspects serait déclaré offline à tort.
+      const lastPos = await this.trackingService.getLastPosition(vehicle.id, false);
       if (!lastPos) continue;
 
       const settings = await this.trackingService.getCompanySettings(vehicle.companyId);
@@ -827,7 +834,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         }
 
         if (!lastTs) {
-          const lastPos = await this.trackingService.getLastPosition(vehicle.id);
+          // Borne "from" du backfill : doit refléter la DERNIÈRE position STOCKÉE (même
+          // suspecte), sinon on re-fetchrait des positions déjà en base (doublons).
+          const lastPos = await this.trackingService.getLastPosition(vehicle.id, false);
           if (lastPos) lastTs = lastPos.timestamp;
         }
 
@@ -887,6 +896,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           if (this.redis) {
             const stored = await this.redis.get(`traccar:last_position:${vehicle.traccarDeviceId}`);
             if (stored) {
+              // Référence de téléportation du backfill : dernier point FIABLE (exclut
+              // les positions suspectes), cohérent avec detectTeleportation — comparer
+              // contre un point déjà aberrant propagerait la fausse téléportation.
               const lastDbPos = await this.trackingService.getLastPosition(vehicle.id);
               if (lastDbPos) {
                 lastBackfillPos = {

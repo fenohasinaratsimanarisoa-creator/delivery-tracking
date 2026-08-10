@@ -120,9 +120,23 @@ export class TrackingService {
     }
   }
 
-  async getLastPosition(vehicleId: string) {
+  /**
+   * Dernière position GPS d'un véhicule.
+   *
+   * @param excludeSuspect exclut les positions suspectes (suspect=true — téléportation /
+   *                       bruit GPS) de la requête. Défaut TRUE : une position aberrante
+   *                       ne doit jamais servir de référence fiable (ex. référence de
+   *                       téléportation, inférence de vitesse). Passer false quand le
+   *                       contexte veut voir la DERNIÈRE position reçue quelle qu'elle
+   *                       soit (ex. détection de connectivité : un point suspect prouve
+   *                       quand même que le dispositif émet).
+   */
+  async getLastPosition(vehicleId: string, excludeSuspect = true) {
     return this.prisma.gpsPosition.findFirst({
-      where: { vehicleId },
+      where: {
+        vehicleId,
+        ...(excludeSuspect ? { suspect: false } : {}),
+      },
       orderBy: { timestamp: 'desc' },
       select: {
         id: true,
@@ -167,8 +181,11 @@ export class TrackingService {
     if (source && last.source !== undefined && last.source !== source) {
       const gapSec = (timestamp.getTime() - last.timestamp.getTime()) / 1000;
       if (gapSec > 0 && gapSec <= 300) {
+        // Cohérent avec le changement de référence ci-dessus : la recherche intra-source
+        // doit elle aussi ignorer les positions suspectes (un point aberrant ne peut pas
+        // servir de référence fiable pour qualifier — ou absoudre — une téléportation).
         const sameSourceLast = await this.prisma.gpsPosition.findFirst({
-          where: { vehicleId, source },
+          where: { vehicleId, source, suspect: false },
           orderBy: { timestamp: 'desc' },
           select: { latitude: true, longitude: true, timestamp: true },
         });
@@ -332,7 +349,10 @@ export class TrackingService {
       }
     }
 
-    const lastPos = await this.getLastPosition(dto.vehicleId);
+    // Un point suspect prouve quand même que le dispositif transmet : il ne doit PAS
+    // compter comme une perte de signal (sinon un véhicule dont les dernières positions
+    // sont suspectes serait déclaré "offline" à tort).
+    const lastPos = await this.getLastPosition(dto.vehicleId, false);
     if (lastPos && settings.offlineTimeoutMinutes) {
       const gapMs = new Date(dto.timestamp).getTime() - lastPos.timestamp.getTime();
       const gapMin = gapMs / 60000;
