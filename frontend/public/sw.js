@@ -51,16 +51,25 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.match(request).then((cached) => {
-      const network = fetch(request)
+      return fetch(request)
         .then((res) => {
           if (res && res.ok) {
             const copy = res.clone();
             caches.open(VERSION).then((cache) => cache.put(request, copy)).catch(() => {});
+            return res;
+          }
+          // Asset introuvable (404) : le déploiement a remplacé les chunks hashed (nouvel
+          // index.html). Un vieux chunk en cache ne doit plus être servi — on le purge pour
+          // que le prochain chargement du module échoue proprement et déclenche le reload.
+          if (res && res.status === 404) {
+            caches.delete(VERSION).catch(() => {});
           }
           return res;
         })
-        .catch(() => cached);
-      return cached || network;
+        .catch(() => {
+          // Hors-ligne : on sert le cache si dispo, sinon l'erreur réseau.
+          return cached || Response.error();
+        });
     })
   );
 });
