@@ -308,3 +308,53 @@ l'information par un remap vers `--color-teal`. Présent dans les trois modes :
 | Tracking chauffeur | ✅ Inchangé |
 | CRUD livraisons | ✅ Inchangé |
 | Mode navigation | ✅ Inchangé |
+---
+
+## Refonte mobile field — 10/08/2026
+
+### Contexte
+
+Le contexte `[data-context="field"]` (drivers/clients mobile) souffrait de **densité et
+de hiérarchie**, pas de logique : en-têtes lourds, signaux de statut redondants par carte,
+padding desktop hérité, effets verre/glow débordant sur des composants partagés, et trop
+de couleurs actives simultanément. Refonte **quasi exclusivement CSS** scopée au contexte
+field — aucune logique métier, aucun appel API, aucune clé i18n modifiée.
+
+### Pages/composants modifiés (un commit par fichier)
+
+| Fichier | Signaux réduits | Padding/font avant→après | Effets supprimés |
+|---------|----------------|--------------------------|------------------|
+| `BottomNav.module.css` | barre d'accent `itemGlow` supprimée | — | glow barre active, ombre dure nav, blur nav |
+| `MyDeliveriesPage.module.css` | accentBar latérale masquée (badge texte = seul signal), icônes route neutralisées, KPI valeur → texte neutre | page 32px→16px (<640px) ; title `text-xl`→`text-lg` ; chip 46→40px | glow résumé/barres, blur |
+| `MyVehiclePage.module.css` | icônes specTile neutralisées | page 32px→16px (<640px) ; title `text-2xl`→`text-lg` ; chip 46→40px | ombre dure icône véhicule |
+| `AlertsPage.module.css` | KPI/alertes sans ligne lumineuse `::before`, icône de type neutralisée | title `text-2xl`→`text-lg` ; chip 46→40px | glow KPI `::before`, shadow hover lourd |
+| `MyOrdersPage.tsx` | glow au survol de carte supprimé | padding 32px→16px ; title `text-2xl`→`text-lg` | box-shadow accent au survol |
+| `ClientTrackingPage.module.css` | hex hardcodés (`#fff`/`#eee`/`#555`/`#c00`) → tokens | page 20px→`--space-md` | — |
+| `Toast.module.css` | — | — | blur/verre en contexte field |
+| `NotificationBell.module.css` | — | — | blur/verre panel en contexte field |
+
+### Principes appliqués
+
+1. **Un seul signal de statut par élément** : le badge texte porte le statut, la barre
+   latérale d'accent est masquée (MyDeliveriesPage).
+2. **Hiérarchie resserrée** : `pageTitle` en `text-lg` en contexte field ; adresses jamais
+   en dessous de `--text-sm`.
+3. **En-tête essentiel** : titre seul conservé, sous-titre descriptif masqué (un seul
+   message de bienvenue "Bonjour X").
+4. **Espacement généreux** : padding mobile `--space-md`/`--space-lg` systématiquement
+   sous 640px sur les pages field.
+5. **Aucun effet décoratif en field** : pas de `backdrop-filter`, pas de glow, ombres
+   via les tokens `field.shadow*` (le glow des boutons `Button` était déjà neutralisé par
+   `buildFieldVars` → `--shadow-glow: none`).
+6. **Budget couleur strict** : accent (action/statut), teal (succès), red (alerte), texte
+   neutre. `blue`/`purple`/`orange` retirés des vues field où ils étaient décoratifs.
+
+### Validation
+
+| Test | Statut |
+|------|--------|
+| `npx vitest run` | ✅ 73/73 |
+| `npx tsc --noEmit` | ✅ 0 erreurs |
+| `npm run build` | ✅ succès |
+| Tests existants (DeliveriesPage, LoginPage) | ✅ inchangés |
+| Dashboard admin (desktop, contexte non-field) | ✅ inchangé (scoping `[data-context="field"]` uniquement) |

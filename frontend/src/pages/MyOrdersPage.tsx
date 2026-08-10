@@ -16,8 +16,9 @@ const STATUS_COLORS: Record<string, string> = {
 // clavier ouvert, 100vh dépasse la zone visible et un fond quasi-noir (le bg du thème)
 // sur un conteneur mal dimensionné reproduit le rectangle noir décrit. (Deux déclarations
 // successives — la dernière écrase la première si dvh est supporté, sinon ignorée.)
+// Page client (contexte field) : padding resserré pour un usage mobile.
 const PAGE_WRAPPER_STYLE: React.CSSProperties = {
-  padding: 'var(--space-2xl, 32px)',
+  padding: 'var(--space-lg, 16px)',
   background: 'var(--color-bg, #0B1220)',
   ...({ minHeight: '100vh' } as React.CSSProperties),
   ...({ minHeight: '100dvh' } as React.CSSProperties),
@@ -45,7 +46,7 @@ export default function MyOrdersPage() {
         <h1 style={{
           color: 'var(--color-text, #E8ECF3)',
           fontFamily: 'var(--font-display, Space Grotesk, sans-serif)',
-          fontSize: 'var(--text-2xl, 1.5rem)', fontWeight: 700,
+          fontSize: 'var(--text-lg, 1.125rem)', fontWeight: 700,
           marginBottom: 'var(--space-xl, 20px)',
         }}>
           {t('myOrders.title')}
@@ -71,7 +72,7 @@ export default function MyOrdersPage() {
       <h1 style={{
         color: 'var(--color-text, #E8ECF3)',
         fontFamily: 'var(--font-display, Space Grotesk, sans-serif)',
-        fontSize: 'var(--text-2xl, 1.5rem)', fontWeight: 700,
+        fontSize: 'var(--text-lg, 1.125rem)', fontWeight: 700,
         marginBottom: 'var(--space-lg, 16px)',
       }}>
         {t('myOrders.title')}
@@ -131,7 +132,7 @@ export default function MyOrdersPage() {
             onMouseEnter={(e) => {
               if (d.status === 'in_progress' || d.status === 'assigned') {
                 e.currentTarget.style.borderColor = 'var(--color-accent, #F2A93C)';
-                e.currentTarget.style.boxShadow = '0 0 0 1px var(--color-accent, #F2A93C)';
+                e.currentTarget.style.boxShadow = 'none';
               }
             }}
             onMouseLeave={(e) => {

@@ -860,3 +860,71 @@
     border-radius: var(--radius-2xl, 16px) var(--radius-2xl, 16px) 0 0;
   }
 }
+
+/* ─── Refonte mobile field (vue driver) — lisibilité / sobriété / hiérarchie ───
+   Scopée à [data-context="field"] : la vue admin/dispatcher (control room) n'est
+   pas affectée. */
+
+/* En-tête compact : titre seul, sous-titre masqué, chip réduit. */
+:global([data-context="field"]) .titleIconChip {
+  width: 40px;
+  height: 40px;
+  border: none;
+}
+
+:global([data-context="field"]) .pageTitle {
+  font-size: var(--text-lg);
+  letter-spacing: -0.01em;
+}
+
+:global([data-context="field"]) .pageSubtitle {
+  display: none;
+}
+
+/* KPI cards : pas de ligne d'accent lumineuse (glow) ni d'ombre lourde au survol. */
+:global([data-context="field"]) .kpiCard::before {
+  display: none;
+}
+
+:global([data-context="field"]) .kpiCard:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--color-border, rgba(15, 23, 42, 0.14));
+}
+
+:global([data-context="field"]) .kpiIcon {
+  background: var(--color-accent-muted, rgba(14, 116, 144, 0.12));
+  color: var(--color-accent, #0E7490);
+}
+
+:global([data-context="field"]) .kpiValue {
+  color: var(--color-text, #0F172A);
+}
+
+/* Alertes : une seule barre de priorité (gauche), pas de glow au survol ; icône
+   de type neutralisée (le libellé porte le sens). */
+:global([data-context="field"]) .alertCard {
+  gap: var(--space-sm, 8px);
+  padding: var(--space-md, 12px) var(--space-lg, 16px);
+}
+
+:global([data-context="field"]) .alertCard:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--color-border, rgba(15, 23, 42, 0.14));
+}
+
+:global([data-context="field"]) .alertCard:hover::before {
+  width: 3px;
+}
+
+:global([data-context="field"]) .alertIconChip {
+  width: 36px;
+  height: 36px;
+  background: var(--color-surface-alt, #F6F8FA);
+  color: var(--color-text-tertiary, #64748B);
+}
+
+:global([data-context="field"]) .alertList {
+  gap: var(--space-sm, 8px);
+}

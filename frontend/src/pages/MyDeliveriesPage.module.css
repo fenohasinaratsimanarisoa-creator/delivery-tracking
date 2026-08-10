@@ -646,3 +646,101 @@
     gap: var(--space-lg);
   }
 }
+
+/* ─── Refonte mobile field — lisibilité / sobriété / hiérarchie ───
+   Scopée à [data-context="field"] (drivers/clients) : le control room admin n'est
+   pas affecté. Objectif : réduire le nombre de signaux visuels simultanés, élargir
+   l'espace de respiration, resserrer la hiérarchie typographique. */
+
+/* En-tête compact : le titre seul suffit — le sous-titre descriptif est masqué
+   (un seul message de bienvenue, le "Bonjour X", est conservé). */
+:global([data-context="field"]) .pageHeader {
+  gap: var(--space-md);
+}
+
+:global([data-context="field"]) .titleIconChip {
+  width: 40px;
+  height: 40px;
+  border: none;
+}
+
+:global([data-context="field"]) .pageTitle {
+  font-size: var(--text-lg);
+  letter-spacing: -0.01em;
+}
+
+:global([data-context="field"]) .pageSubtitle {
+  display: none;
+}
+
+:global([data-context="field"]) .hello {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* Pill LIVE : padding réduit, pas de redondance. */
+:global([data-context="field"]) .livePill {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-xs);
+}
+
+/* Carte de livraison : UN SEUL signal de statut = le badge texte (statusBadge).
+   La barre d'accent latérale (accentBar) est décorative redondante → masquée. */
+:global([data-context="field"]) .deliveryCard .accentBar {
+  display: none;
+}
+
+:global([data-context="field"]) .deliveryCard {
+  border-color: var(--color-border-subtle, rgba(15, 23, 42, 0.07));
+}
+
+/* Icônes de route pickup/dropoff : le libellé texte (Pickup/Dropoff) porte déjà la
+   distinction — les icônes colorées sont neutralisées (budget couleur réduit). */
+:global([data-context="field"]) .addressIcon {
+  background: var(--color-surface-alt, #F6F8FA);
+  color: var(--color-text-tertiary, #64748B);
+  box-shadow: none;
+}
+
+:global([data-context="field"]) .addressIconPickup,
+:global([data-context="field"]) .addressIconDrop {
+  color: var(--color-text-tertiary, #64748B);
+  background: var(--color-surface-alt, #F6F8FA);
+  box-shadow: none;
+}
+
+/* Résumé KPI : un seul accent — l'icône est teintée accent, la valeur repasse en
+   texte neutre (le nombre est l'information, pas sa teinte). */
+:global([data-context="field"]) .summaryCard {
+  gap: var(--space-xs);
+}
+
+:global([data-context="field"]) .summaryIcon {
+  background: var(--color-accent-muted, rgba(14, 116, 144, 0.12));
+  color: var(--color-accent, #0E7490);
+}
+
+:global([data-context="field"]) .summaryValue {
+  color: var(--color-text, #0F172A);
+}
+
+/* Texte informatif primaire (adresses) : jamais en dessous de --text-sm. */
+:global([data-context="field"]) .addressText {
+  font-size: var(--text-sm);
+  color: var(--color-text, #0F172A);
+}
+
+:global([data-context="field"]) .addressLabel {
+  color: var(--color-text-tertiary, #64748B);
+}
+
+/* Espacement mobile généreux sous 640px. */
+@media (max-width: 640px) {
+  :global([data-context="field"]) .pageContainer {
+    padding: var(--space-md);
+    gap: var(--space-md);
+  }
+  :global([data-context="field"]) .list {
+    gap: var(--space-lg);
+  }
+}

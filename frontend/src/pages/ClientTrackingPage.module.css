@@ -1,36 +1,37 @@
 .page {
-  padding: 20px;
+  padding: var(--space-md);
 }
 
 .pageCentered {
-  padding: 20px;
+  padding: var(--space-md);
   text-align: center;
-  color: #c00;
+  color: var(--color-red, #B91C1C);
 }
 
 .emptyState {
   text-align: center;
-  padding: 40px;
-  color: #888;
+  padding: var(--space-3xl) var(--space-lg);
+  color: var(--color-text-tertiary, #64748B);
 }
 
 .orderList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .orderCard {
-  background: #fff;
-  border-radius: 8px;
-  padding: 16px;
+  background: var(--color-surface, #FFFFFF);
+  border-radius: var(--radius-lg, 8px);
+  padding: var(--space-lg);
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  border: 1px solid #eee;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.05));
+  border: 1px solid var(--color-border-subtle, rgba(15, 23, 42, 0.07));
 }
 
 .orderTitle {
   font-weight: bold;
+  color: var(--color-text, #0F172A);
 }
 
 .orderStatusBadge {
@@ -38,13 +39,13 @@
   color: #fff;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: var(--text-xs, 0.75rem);
 }
 
 .orderAddress {
-  font-size: 0.85rem;
-  color: #555;
-  margin-top: 4px;
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-text-secondary, #334155);
+  margin-top: var(--space-xs);
 }
 
 .mapContainer {
@@ -54,18 +55,19 @@
 }
 
 .deliveryInfo {
-  padding: 16px 20px;
-  background: #fff;
-  border-bottom: 1px solid #ddd;
+  padding: var(--space-lg) var(--space-md);
+  background: var(--color-surface, #FFFFFF);
+  border-bottom: 1px solid var(--color-border-subtle, rgba(15, 23, 42, 0.07));
 }
 
 .deliveryTitle {
   margin: 0 0 8px;
+  color: var(--color-text, #0F172A);
 }
 
 .deliveryDetails {
-  font-size: 0.85rem;
-  color: #555;
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-text-secondary, #334155);
 }
 
 .mapArea {
