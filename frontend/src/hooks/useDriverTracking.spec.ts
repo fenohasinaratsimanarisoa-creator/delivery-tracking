@@ -152,6 +152,45 @@ describe('useDriverTracking core logic', () => {
     expect(result.current.activeDeliveryId).toBe('');
   });
 
+  it('recalcInterval keeps INTERVAL_FAST when moving, regardless of accuracy, and only traces degraded accuracy while moving', async () => {
+    vi.useRealTimers();
+    socketConnected = false;
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/drivers/profile') {
+        return Promise.resolve({
+          data: { id: 'd1', firstName: 'A', lastName: 'B', vehicle: { id: 'v1', brand: 'X', model: 'Y', licensePlate: 'Z', positionSource: 'phone' } },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    const { result } = renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 1600)); }); // startTracking → watchPosition
+
+    vi.useFakeTimers();
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+    const watchCb = (navigator.geolocation.watchPosition as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
+
+    // Véhicule EN MOUVEMENT avec une précision DÉGRADÉE (40m) : la fréquence d'envoi
+    // ne doit PAS baisser (reste INTERVAL_FAST = 3000ms) mais le compteur trace le cas.
+    act(() => { watchCb({ coords: { latitude: -18.8792, longitude: 47.5079, speed: 10, heading: 0, altitude: 0, accuracy: 40 } }); });
+    expect(result.current.degradedAccuracyWhileMoving).toBe(1);
+    expect(setIntervalSpy).toHaveBeenCalledWith(expect.anything(), 3000);
+
+    // Puis avec une précision BONNE (10m) : même fréquence (3000ms), compteur inchangé.
+    act(() => { watchCb({ coords: { latitude: -18.8792, longitude: 47.5079, speed: 10, heading: 0, altitude: 0, accuracy: 10 } }); });
+    expect(result.current.degradedAccuracyWhileMoving).toBe(1);
+    expect(setIntervalSpy).toHaveBeenCalledWith(expect.anything(), 3000);
+
+    // Véhicule EN MOUVEMENT avec une précision dégradée NE doit PAS déclencher de
+    // changement d'intervalle vers INTERVAL_SLOW (20000ms) — le compteur est le seul
+    // effet de bord sur la précision dégradée.
+    expect(setIntervalSpy).not.toHaveBeenCalledWith(expect.anything(), 20000);
+
+    setIntervalSpy.mockRestore();
+  });
+
   it('re-alerts (reminder) when the 2-min snooze expires after a dismiss at escalation 2 (phone)', async () => {
     vi.useRealTimers();
     socketConnected = false;

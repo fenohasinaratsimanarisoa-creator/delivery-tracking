@@ -7,6 +7,7 @@ export const TrackingContext = createContext<TrackingStatus>({
   positionSource: 'phone',
   confidence: 1,
   poorAccuracy: false,
+  degradedAccuracyWhileMoving: 0,
   isStationary: false,
   queueCount: 0,
   statusMsg: '',

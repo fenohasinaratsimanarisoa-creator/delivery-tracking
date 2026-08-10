@@ -81,6 +81,7 @@ export interface TrackingStatus {
   positionSource: string;
   confidence: number;
   poorAccuracy: boolean;
+  degradedAccuracyWhileMoving: number;
   isStationary: boolean;
   queueCount: number;
   statusMsg: string;
@@ -122,6 +123,11 @@ export function useDriverTracking() {
   const drainIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMovingRef = useRef<number>(Date.now());
   const intervalDurationRef = useRef<number>(INTERVAL_DEFAULT);
+  // Compteur de cas où un véhicule EN MOUVEMENT émet avec une précision dégradée
+  // (ACCURACY_MODERATE < acc < ACCURACY_REJECT) : la fréquence d'envoi reste
+  // INTERVAL_FAST (choix documenté dans recalcInterval), on trace simplement ces cas
+  // pour le débogage terrain. Exposé en lecture dans trackingStatus.
+  const degradedAccuracyWhileMovingRef = useRef(0);
   const posRef = useRef(position);
   const isSendingRef = useRef(false);
   const startedRef = useRef(false);
@@ -392,8 +398,20 @@ export function useDriverTracking() {
     let ni: number;
     const isStationaryNow = stationary === true || (speed !== undefined && speed < 0.1);
     if (speed !== undefined && speed > SPEED_MOVING_THRESHOLD_MS) {
-      ni = accuracy !== undefined && accuracy > ACCURACY_MODERATE && accuracy < ACCURACY_REJECT
-        ? INTERVAL_FAST : INTERVAL_FAST;
+      // Choix retenu — l'ancien ternaire (`accuracy ... ? INTERVAL_FAST : INTERVAL_FAST`)
+      // était du code mort : les deux branches valaient INTERVAL_FAST. On ne ralentit
+      // PAS l'envoi d'un véhicule en mouvement, quelle que soit sa précision : tant
+      // qu'une position est envoyable (acc < ACCURACY_REJECT, garanti par sendPosition
+      // qui rejette acc >= ACCURACY_REJECT), un véhicule prioritaire doit rester en
+      // INTERVAL_FAST (3s) pour ne pas dégrader le suivi temps réel du dispatcher.
+      // Une précision moyenne (ACCURACY_MODERATE < acc < ACCURACY_REJECT) n'est PAS un
+      // motif de réduction de fréquence — on la trace simplement via le compteur
+      // degradedAccuracyWhileMoving. Le signal d'alerte `poorAccuracy` reste géré
+      // exclusivement par processCoords (aucun doublon de logique ici).
+      if (accuracy !== undefined && accuracy > ACCURACY_MODERATE && accuracy < ACCURACY_REJECT) {
+        degradedAccuracyWhileMovingRef.current++;
+      }
+      ni = INTERVAL_FAST;
     } else if (isStationaryNow && (now - lastMovingRef.current > STOPPED_DURATION_MS)) {
       ni = INTERVAL_SLOW;
     } else {
@@ -702,6 +720,7 @@ export function useDriverTracking() {
     positionSource,
     confidence: confidenceLevel,
     poorAccuracy,
+    degradedAccuracyWhileMoving: degradedAccuracyWhileMovingRef.current,
     isStationary,
     queueCount,
     statusMsg,
