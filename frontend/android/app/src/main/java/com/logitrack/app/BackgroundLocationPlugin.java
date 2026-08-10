@@ -1,12 +1,16 @@
 package com.logitrack.app;
 
 import android.Manifest;
+import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
+import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
+import android.provider.Settings;
 
 import androidx.core.content.ContextCompat;
 import androidx.work.ExistingPeriodicWorkPolicy;
@@ -17,6 +21,7 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
@@ -59,6 +64,7 @@ public class BackgroundLocationPlugin extends Plugin {
 
     private static final String CALLBACK_LOCATION = "locationPermissionCallback";
     private static final String CALLBACK_BACKGROUND = "backgroundPermissionCallback";
+    private static final String CALLBACK_BATTERY_EXEMPTION = "batteryOptimizationExemptionCallback";
     private static final String LOCATION_UPDATE_EVENT = "locationUpdate";
 
     /** Sink enregistré auprès du service pour recevoir les positions natives. */
@@ -297,12 +303,84 @@ public class BackgroundLocationPlugin extends Plugin {
                 && (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
                     || hasAndroidPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
         );
+        // État persistant de l'exemption d'optimisation batterie : exposé à chaque
+        // getStatus()/start()/stop() pour que le JS puisse afficher une bannière tant
+        // que batteryOptimizationIgnored === false (pas juste au démarrage du tracking).
+        perms.put("batteryOptimizationIgnored", isBatteryOptimizationIgnored());
         return perms;
     }
 
     private boolean hasAndroidPermission(String permission) {
         return ContextCompat.checkSelfPermission(getContext(), permission)
             == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** true si l'app est exemptée de l'optimisation batterie Android (Doze / standby). */
+    private boolean isBatteryOptimizationIgnored() {
+        PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+        if (pm == null) {
+            return false;
+        }
+        return pm.isIgnoringBatteryOptimizations(getContext().getPackageName());
+    }
+
+    /**
+     * État courant de l'exemption d'optimisation batterie (batteryOptimizationIgnored).
+     * Sert à l'UI pour afficher une bannière persistante tant que l'exemption n'est pas
+     * accordée (et à la rafraîchir quand le chauffeur revient de Paramètres > Batterie).
+     */
+    @PluginMethod
+    public void getBatteryOptimizationStatus(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("batteryOptimizationIgnored", isBatteryOptimizationIgnored());
+        call.resolve(ret);
+    }
+
+    /**
+     * Demande l'exemption d'optimisation batterie (Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).
+     * Si déjà exempté, résout immédiatement avec batteryOptimizationIgnored=true. Sinon ouvre
+     * l'écran système dédié via startActivityForResult ; l'état réel n'est connu qu'au retour
+     * (l'utilisateur peut refuser) → on le relit et le renvoie dans le callback d'activité.
+     * ATTENTION : cette exemption ne couvre PAS les surcouches constructeur (MIUI/HyperOS « Autostart »,
+     * réglage batterie « Sans restriction ») — écrans propriétaires non standardisés, voir
+     * docs/android-battery-settings.md.
+     */
+    @PluginMethod
+    public void requestBatteryOptimizationExemption(PluginCall call) {
+        if (isBatteryOptimizationIgnored()) {
+            JSObject ret = new JSObject();
+            ret.put("batteryOptimizationIgnored", true);
+            ret.put("requested", false);
+            call.resolve(ret);
+            return;
+        }
+        Activity activity = getActivity();
+        if (activity == null) {
+            call.reject("NO_ACTIVITY", "no_activity");
+            return;
+        }
+        Intent intent = new Intent(
+            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            Uri.parse("package:" + getContext().getPackageName())
+        );
+        if (intent.resolveActivity(activity.getPackageManager()) == null) {
+            // Écran système absent (surcouches agressives) : on bascule vers les réglages
+            // batterie génériques pour au moins y conduire le chauffeur manuellement.
+            intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+        }
+        try {
+            startActivityForResult(call, intent, CALLBACK_BATTERY_EXEMPTION);
+        } catch (Exception ex) {
+            call.reject("INTENT_FAILED", "intent_failed", ex);
+        }
+    }
+
+    @ActivityCallback
+    private void batteryOptimizationExemptionCallback(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("batteryOptimizationIgnored", isBatteryOptimizationIgnored());
+        ret.put("requested", true);
+        call.resolve(ret);
     }
 
     @SuppressWarnings("deprecation")

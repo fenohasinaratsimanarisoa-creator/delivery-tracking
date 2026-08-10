@@ -15,6 +15,8 @@ export const TrackingContext = createContext<TrackingStatus>({
   activeDeliveryId: '',
   alerts: [],
   dismissAlert: () => {},
+  batteryOptimizationIgnored: true,
+  requestBatteryExemption: () => Promise.resolve(),
 });
 
 export function useTrackingStatus() {

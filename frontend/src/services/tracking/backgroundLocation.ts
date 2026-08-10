@@ -20,6 +20,12 @@ export interface BackgroundLocationPermissions {
   backgroundGranted: boolean;
   notificationsGranted: boolean;
   allGranted: boolean;
+  batteryOptimizationIgnored: boolean;
+}
+
+export interface BatteryOptimizationStatus {
+  batteryOptimizationIgnored: boolean;
+  requested?: boolean;
 }
 
 export interface BackgroundLocationStatus {
@@ -32,6 +38,8 @@ interface BackgroundLocationNative {
   stop(): Promise<BackgroundLocationStatus>;
   getStatus(): Promise<BackgroundLocationStatus>;
   requestPermissions(): Promise<BackgroundLocationStatus>;
+  getBatteryOptimizationStatus(): Promise<BatteryOptimizationStatus>;
+  requestBatteryOptimizationExemption(): Promise<BatteryOptimizationStatus>;
   addListener(
     eventName: 'locationUpdate',
     listenerFunc: (data: NativeLocationUpdate) => void,
@@ -46,6 +54,7 @@ const GRANTED_DEFAULTS: BackgroundLocationStatus = {
     backgroundGranted: true,
     notificationsGranted: true,
     allGranted: true,
+    batteryOptimizationIgnored: true,
   },
 };
 
@@ -88,6 +97,33 @@ export async function requestBackgroundLocationPermissions(): Promise<Background
   const p = resolvePlugin();
   if (!p) return GRANTED_DEFAULTS;
   return p.requestPermissions();
+}
+
+/** État persistant de l'exemption batterie (true = l'app ne sera pas Doze'd). */
+export async function getBatteryOptimizationStatus(): Promise<BatteryOptimizationStatus> {
+  const p = resolvePlugin();
+  if (!p) return { batteryOptimizationIgnored: true };
+  try {
+    return await p.getBatteryOptimizationStatus();
+  } catch {
+    return { batteryOptimizationIgnored: true };
+  }
+}
+
+/**
+ * Ouvre l'écran système de demande d'exemption batterie (Android). No-op sur
+ * iOS/web (resolvePlugin() → null, retourne ignoré=true). Le résultat réel n'est
+ * connu qu'au retour du dialog (l'utilisateur peut refuser) → relire l'état via
+ * getBatteryOptimizationStatus().
+ */
+export async function requestBatteryOptimizationExemption(): Promise<BatteryOptimizationStatus> {
+  const p = resolvePlugin();
+  if (!p) return { batteryOptimizationIgnored: true };
+  try {
+    return await p.requestBatteryOptimizationExemption();
+  } catch {
+    return { batteryOptimizationIgnored: true };
+  }
 }
 
 /**

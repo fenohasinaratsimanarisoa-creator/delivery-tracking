@@ -7,7 +7,9 @@ import { KalmanFilter } from '../services/tracking/KalmanFilter';
 import { sensorFusion, simulateStationaryFromSpeed } from '../services/tracking/sensorFusion';
 import {
   getBackgroundLocationStatus,
+  getBatteryOptimizationStatus,
   requestBackgroundLocationPermissions,
+  requestBatteryOptimizationExemption,
   startBackgroundLocation,
   stopBackgroundLocation,
   subscribeToNativeLocations,
@@ -95,6 +97,8 @@ export interface TrackingStatus {
   activeDeliveryId: string;
   alerts: DriverAlert[];
   dismissAlert: (type: string, deliveryId?: string) => void;
+  batteryOptimizationIgnored: boolean;
+  requestBatteryExemption: () => Promise<void>;
 }
 
 export function useDriverTracking() {
@@ -105,6 +109,10 @@ export function useDriverTracking() {
   const [queueCount, setQueueCount] = useState(0);
   const [statusMsg, setStatusMsg] = useState('');
   const [geolocationDenied, setGeolocationDenied] = useState(false);
+  // État persistant de l'exemption d'optimisation batterie (Android). Défaut true sur
+  // iOS/web (pas de Doze) ; relu au démarrage du tracking puis à chaque retour au premier
+  // plan pour masquer la bannière dès que le chauffeur accorde l'exemption.
+  const [batteryOptimizationIgnored, setBatteryOptimizationIgnored] = useState(true);
   const [activeDeliveryId, setActiveDeliveryId] = useState('');
   const [alerts, setAlerts] = useState<DriverAlert[]>([]);
   const alertsRef = useRef<DriverAlert[]>([]);
@@ -314,6 +322,25 @@ export function useDriverTracking() {
     const count = await queueSize();
     setQueueCount(count);
   }, []);
+
+  const refreshBatteryOptimizationStatus = useCallback(async () => {
+    try {
+      const { batteryOptimizationIgnored: ignored } = await getBatteryOptimizationStatus();
+      setBatteryOptimizationIgnored(ignored);
+    } catch {
+      // Neutral : sur iOS/web ou plugin indisponible, on garde l'état précédent.
+    }
+  }, []);
+
+  const requestBatteryExemption = useCallback(async () => {
+    try {
+      await requestBatteryOptimizationExemption();
+      await refreshBatteryOptimizationStatus();
+    } catch {
+      // L'utilisateur a pu fermer l'écran système sans réponse exploitable → on
+      // relit l'état réel au retour (voir refreshBatteryOptimizationStatus via visibilitychange).
+    }
+  }, [refreshBatteryOptimizationStatus]);
 
   const drainQueue = useCallback(async () => {
     const socket = getSocket();
@@ -554,6 +581,10 @@ export function useDriverTracking() {
 
     sensorFusion.init().then(() => {}).catch(() => {});
 
+    // État batterie lu au démarrage pour afficher la bannière d'exemption persistante
+    // tant que batteryOptimizationIgnored === false (rafraîchi aussi au retour premier plan).
+    refreshBatteryOptimizationStatus();
+
     // (Wake lock 'screen' retiré : illusoire en arrière-plan — voir en-tête du
     // fichier. La continuité derrière l'écran verrouillé est assurée par le
     // foreground service natif LocationForegroundService, démarré ci-dessous.)
@@ -566,6 +597,10 @@ export function useDriverTracking() {
       .then((status) => {
         if (!status.running) {
           return requestBackgroundLocationPermissions()
+            // Demande l'exemption d'optimisation batterie juste après les permissions :
+            // sans elle, Android Doze peut suspendre le service d'arrière-plan et les
+            // positions cessent d'être transmises écran verrouillé. No-op sur iOS/web.
+            .then(() => requestBatteryOptimizationExemption())
             .then(() => startBackgroundLocation())
             .catch((err) => {
               console.warn('[tracking] native background service start failed:', err);
@@ -621,36 +656,42 @@ export function useDriverTracking() {
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
         hiddenSinceRef.current = Date.now();
-      } else if (document.visibilityState === 'visible' && hiddenSinceRef.current > 0) {
-        const gapSec = Math.round((Date.now() - hiddenSinceRef.current) / 1000);
-        if (gapSec > 15) {
-          // Depuis le passage en arrière-plan natif (foreground service location),
-          // le tracking continue pendant l'écran verrouillé. Cette alerte ne signale
-          // plus un tracking cassé : elle confirme que le suivi est resté actif.
-          getBackgroundLocationStatus()
-            .then((status) => {
-              if (status.running) {
-                const gapMin = Math.round(gapSec / 60);
-                addAlert({
-                  type: 'background_continued',
-                  title: 'Tracking maintenu en arrière-plan',
-                  message: `Le suivi est resté actif pendant ${gapMin} min derrière l'écran verrouillé. Les positions continuent d'être envoyées au dispatcher.`,
-                  urgency: 'normal',
-                });
-              }
-            })
-            .catch(() => {});
+      } else if (document.visibilityState === 'visible') {
+        // Au retour au premier plan (après l'écran système de demande d'exemption batterie,
+        // ou les Paramètres constructeur type MIUI), relit l'état réel pour masquer la
+        // bannière dès que l'utilisateur a accordé l'exemption.
+        refreshBatteryOptimizationStatus();
+        if (hiddenSinceRef.current > 0) {
+          const gapSec = Math.round((Date.now() - hiddenSinceRef.current) / 1000);
+          if (gapSec > 15) {
+            // Depuis le passage en arrière-plan natif (foreground service location),
+            // le tracking continue pendant l'écran verrouillé. Cette alerte ne signale
+            // plus un tracking cassé : elle confirme que le suivi est resté actif.
+            getBackgroundLocationStatus()
+              .then((status) => {
+                if (status.running) {
+                  const gapMin = Math.round(gapSec / 60);
+                  addAlert({
+                    type: 'background_continued',
+                    title: 'Tracking maintenu en arrière-plan',
+                    message: `Le suivi est resté actif pendant ${gapMin} min derrière l'écran verrouillé. Les positions continuent d'être envoyées au dispatcher.`,
+                    urgency: 'normal',
+                  });
+                }
+              })
+              .catch(() => {});
+          }
+          // (Wake lock 'screen' retiré ici aussi : le navigateur le relâche dès que
+          // la page passe en 'hidden', donc inutile au retour depuis l'écran
+          // verrouillé. La continuité en arrière-plan est le rôle du foreground
+          // service natif LocationForegroundService.)
+          hiddenSinceRef.current = 0;
         }
-        // (Wake lock 'screen' retiré ici aussi : le navigateur le relâche dès que
-        // la page passe en 'hidden', donc inutile au retour depuis l'écran
-        // verrouillé. La continuité en arrière-plan est le rôle du foreground
-        // service natif LocationForegroundService.)
-        hiddenSinceRef.current = 0;
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
     visibilityHandlerRef.current = () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [vehicleId, tryWatch, sendPosition, drainQueue, addAlert, processCoords]);
+  }, [vehicleId, tryWatch, sendPosition, drainQueue, addAlert, processCoords, refreshBatteryOptimizationStatus]);
 
   const stopTracking = useCallback(() => {
     if (watchRef.current !== null) {
@@ -761,6 +802,8 @@ export function useDriverTracking() {
     activeDeliveryId,
     alerts,
     dismissAlert,
+    batteryOptimizationIgnored,
+    requestBatteryExemption,
   };
 
   return trackingStatus;

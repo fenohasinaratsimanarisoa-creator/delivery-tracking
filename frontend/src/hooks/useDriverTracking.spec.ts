@@ -58,6 +58,8 @@ const nativeSubscriptions: Array<{ unsubscribe: () => void }> = [];
 vi.mock('../services/tracking/backgroundLocation', () => ({
   getBackgroundLocationStatus: vi.fn().mockResolvedValue({ running: false }),
   requestBackgroundLocationPermissions: vi.fn().mockResolvedValue(true),
+  getBatteryOptimizationStatus: vi.fn().mockResolvedValue({ batteryOptimizationIgnored: true }),
+  requestBatteryOptimizationExemption: vi.fn().mockResolvedValue({ batteryOptimizationIgnored: true }),
   startBackgroundLocation: vi.fn().mockResolvedValue(true),
   stopBackgroundLocation: vi.fn().mockResolvedValue(true),
   subscribeToNativeLocations: vi.fn((handler: (pos: any) => void) => {
