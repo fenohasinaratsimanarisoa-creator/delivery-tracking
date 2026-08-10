@@ -388,6 +388,30 @@ describe('TrackingGateway — cross-tenant security', () => {
 
       expect(trackingService.getLastPosition).not.toHaveBeenCalled();
     });
+
+    it('persists the recalculated fallback speed when dto.speed is missing', async () => {
+      trackingService.getLastPosition.mockResolvedValue({
+        latitude: -18.8792,
+        longitude: 47.5079,
+        timestamp: new Date('2026-08-10T10:00:00.000Z'),
+      });
+      const client = mockSocket();
+      client.data.user = { id: 'u1', companyId: 'c1', role: 'driver', firstName: 'A', lastName: 'B' };
+      trackingService.findDriverByUserId.mockResolvedValue({ id: 'd1' });
+      trackingService.assertVehicleOwnership.mockResolvedValue(undefined);
+
+      await gateway.handlePosition(client, {
+        latitude: -18.88,
+        longitude: 47.5085, // ~100m
+        speed: undefined,
+        timestamp: '2026-08-10T10:00:10.000Z', // +10s
+        vehicleId: '11111111-1111-4111-8111-111111111111',
+      } as any);
+
+      const savedDto = trackingService.savePosition.mock.calls[0][1];
+      expect(savedDto.speed).toBeGreaterThan(5);
+      expect(savedDto.speed).toBeLessThan(15);
+    });
   });
 
   describe('handleSnoozeProximityAlert', () => {

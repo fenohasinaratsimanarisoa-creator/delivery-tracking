@@ -872,6 +872,34 @@ describe('TrackingService', () => {
       expect(mockPrisma.gpsPosition.createMany).toHaveBeenCalledTimes(1);
     });
 
+    it('computes fallback speed in saveBatch when device speed is missing (offline queue flush scenario)', async () => {
+      const VID = VID1;
+      const positions = [
+        { vehicleId: VID, latitude: -18.8792, longitude: 47.5079, timestamp: '2026-08-10T10:00:00.000Z', speed: undefined, accuracy: 8 },
+        { vehicleId: VID, latitude: -18.8797, longitude: 47.5079, timestamp: '2026-08-10T10:00:05.000Z', speed: undefined, accuracy: 8 }, // ~55m/5s ≈ 11 m/s
+      ];
+
+      mockPrisma.delivery.findMany.mockResolvedValue([]);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VID }]);
+      // lastPositions : aucune position en base (flush d'une file offline vide côté DB)
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
+      let inserted: any[] = [];
+      mockPrisma.gpsPosition.createMany.mockImplementation(async ({ data }: any) => {
+        inserted = data;
+        return { count: data.length };
+      });
+      // Lecture des positions insérées (pour le broadcast) → aucune
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
+
+      await service.saveBatch('user-1', 'driver-1', positions as any, 'company-1');
+
+      const second = inserted[inserted.length - 1];
+      expect(second).toBeDefined();
+      expect(second.speed).not.toBeNull();
+      expect(second.speed).toBeGreaterThan(5);
+      expect(second.speed).toBeLessThan(20);
+    });
+
     it('skips positions whose vehicle is inactive or soft-deleted (no insert)', async () => {
       const positions = [
         {

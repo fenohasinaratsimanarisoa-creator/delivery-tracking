@@ -172,9 +172,15 @@ export class TrackingGateway
       }
 
       // Le WebSocket de l'app mobile est toujours une source 'phone'.
+      // Persiste la vitesse RÉSOLUE (y compris le fallback haversine/Δt) et non le DTO
+      // brut : sans cela, la RÈGLE VITESSE du rapport carburant (computeFilteredDistance
+      // → MOVEMENT_SPEED_THRESHOLD_MS) retombait sur le filtre accuracy quand speed
+      // restait null/undefined en base, sous-comptant la distance (bug 50km→10km).
+      // Le DTO original reste intact (validation, logs, broadcast utilisent dto).
+      const effectiveDto: UpdatePositionDto = { ...dto, speed };
       const position = await this.trackingService.savePosition(
         driver.id,
-        dto,
+        effectiveDto,
         user.companyId,
         'phone',
       );

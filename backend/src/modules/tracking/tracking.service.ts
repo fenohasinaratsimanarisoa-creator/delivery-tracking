@@ -704,6 +704,20 @@ export class TrackingService {
         continue;
       }
 
+      // NOUVEAU : vitesse de secours si le device n'a pas fourni pos.speed (cas de la
+      // file offline flushée après une coupure réseau / passage en arrière-plan). Même
+      // fallback que le chemin temps réel (tracking.gateway) : haversine(distance)/Δt
+      // contre la dernière position (lastPositions, maintenue ci-dessous). Sans cela, la
+      // RÈGLE VITESSE du rapport carburant (computeFilteredDistance) retombait sur le
+      // filtre accuracy quand speed restait null en base → sous-comptage de la distance.
+      // Calculé APRÈS le dédoublonnage (timeDiffSec > 1s garanti ici), avant/indépendamment
+      // d'evaluateTeleportation qui ne doit PAS être modifié.
+      let resolvedSpeed = pos.speed;
+      if ((!resolvedSpeed || resolvedSpeed <= 0) && last && timeDiffSec > 0 && Number.isFinite(timeDiffSec)) {
+        const distance = haversineDistance(last.latitude, last.longitude, pos.latitude, pos.longitude);
+        resolvedSpeed = distance / timeDiffSec;
+      }
+
       let suspect = false;
       if (last && timeDiffSec > 0) {
         // Même décision de téléportation que le chemin temps réel (evaluateTeleportation,
@@ -725,13 +739,13 @@ export class TrackingService {
         latitude: pos.latitude,
         longitude: pos.longitude,
         timestamp: ts,
-        speed: pos.speed ?? null,
+        speed: resolvedSpeed ?? null,
       });
 
       toInsert.push({
         latitude: pos.latitude,
         longitude: pos.longitude,
-        speed: pos.speed,
+        speed: resolvedSpeed,
         heading: pos.heading,
         altitude: pos.altitude,
         accuracy: pos.accuracy,
