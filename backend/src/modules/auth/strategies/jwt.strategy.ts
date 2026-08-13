@@ -85,6 +85,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ...user,
       type: 'user' as const,
       impersonatedBy: payload.impersonatedBy,
+      sessionId: payload.sessionId,
     };
   }
 }

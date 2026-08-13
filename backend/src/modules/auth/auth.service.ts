@@ -109,7 +109,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    await this.prisma.userSession.create({
+    const session = await this.prisma.userSession.create({
       data: {
         userId: user.id,
         device: userAgent,
@@ -145,7 +145,7 @@ export class AuthService {
       };
     }
 
-    return this.generateTokens(user.id, user.email, user.role, user.companyId);
+    return this.generateTokens(user.id, user.email, user.role, user.companyId, session.id);
   }
 
   async verify2faToken(dto: Verify2faDto): Promise<TokenResponse> {
@@ -190,46 +190,89 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
+    // Le refresh token est rattaché à UNE session UserSession précise (sessionId
+    // dans le payload JWT), jamais au champ legacy User.refreshTokenHash. Un JWT
+    // émis avant la migration session_scoped_refresh_token ne porte pas de
+    // sessionId : échec PROPRE (401, pas de crash 500) — l'utilisateur se
+    // reconnecte, son ancien hash User a été invalidé par la migration.
+    const sessionId = payload.sessionId;
+    if (!sessionId) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
     const result = await this.prisma.$transaction(
       async (tx) => {
-        const user = await tx.user.findUnique({
-          where: { id: payload.sub },
-          select: {
-            id: true,
-            email: true,
-            role: true,
-            companyId: true,
-            firstName: true,
-            lastName: true,
-            isActive: true,
-            refreshTokenHash: true,
-            totpEnabled: true,
+        const session = await tx.userSession.findUnique({
+          where: { id: sessionId },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                role: true,
+                companyId: true,
+                firstName: true,
+                lastName: true,
+                isActive: true,
+                totpEnabled: true,
+              },
+            },
           },
         });
 
-        if (!user || !user.isActive || !user.refreshTokenHash) {
+        if (!session || !session.user || !session.user.isActive) {
+          throw new UnauthorizedException('Invalid refresh token');
+        }
+        if (!session.refreshTokenHash) {
+          throw new UnauthorizedException('Invalid refresh token');
+        }
+        if (session.expiresAt.getTime() < Date.now()) {
           throw new UnauthorizedException('Invalid refresh token');
         }
 
-        const isTokenValid = await bcrypt.compare(refreshToken, user.refreshTokenHash);
+        const isTokenValid = await bcrypt.compare(refreshToken, session.refreshTokenHash);
         if (!isTokenValid) {
-          await tx.userSession.deleteMany({ where: { userId: user.id } });
-          await tx.user.update({
-            where: { id: user.id },
+          // Reuse détecté : le token a été remplacé par la rotation précédente et
+          // rejoué après coup. On ne révoque QUE CETTE session (avant : deleteMany
+          // sur userId, qui révoquait TOUTES les sessions — y compris un appareil
+          // qui venait de se connecter légitimement). Une IP très différente de
+          // celle de la session est signalée pour investigation (replay suspect).
+          if (session.ip && ip && session.ip !== ip) {
+            this.logger.warn(
+              `[auth] refresh reuse suspect: session=${sessionId} user=${session.user.id} ` +
+                `ip=${ip} sessionIp=${session.ip}`,
+            );
+          }
+          await tx.userSession.update({
+            where: { id: sessionId },
             data: { refreshTokenHash: null },
           });
-          throw new UnauthorizedException('Refresh token reuse detected — all sessions revoked');
+          await tx.userSession.delete({ where: { id: sessionId } });
+          throw new UnauthorizedException('Refresh token reuse detected — session revoked');
         }
 
-        return user;
+        return session.user;
       },
       { timeout: 15000 },
     );
 
-    return this.generateTokens(result.id, result.email, result.role, result.companyId);
+    return this.generateTokens(result.id, result.email, result.role, result.companyId, sessionId);
   }
 
-  async logout(userId: string): Promise<void> {
+  async logout(userId: string, sessionId?: string): Promise<void> {
+    if (sessionId) {
+      // Déconnexion de CETTE session : purge son refresh token (le hash vit sur la
+      // ligne UserSession) puis supprime la ligne. Les autres appareils connectés
+      // gardent leur propre session/refresh token intacts.
+      await this.prisma.userSession.updateMany({
+        where: { id: sessionId, userId },
+        data: { refreshTokenHash: null },
+      });
+      await this.prisma.userSession.deleteMany({ where: { id: sessionId, userId } });
+      return;
+    }
+    // Repli legacy (access token émis avant la propagation du sessionId) :
+    // invalide le hash historique sur User — plus utilisé par la nouvelle logique.
     await this.prisma.user.update({
       where: { id: userId },
       data: { refreshTokenHash: null },
@@ -397,6 +440,7 @@ export class AuthService {
     email: string,
     role: string,
     companyId: string,
+    sessionId?: string,
   ): Promise<TokenResponse> {
     const userRecord = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -413,6 +457,11 @@ export class AuthService {
       firstName: userRecord?.firstName || '',
       lastName: userRecord?.lastName || '',
     };
+    // Le refresh token embarque l'identifiant de la UserSession de CETTE connexion :
+    // au refresh, on retrouve la session SANS ambiguïté (et non plus via userId seul,
+    // qui confondait tous les appareils). Exposé aussi sur l'access token pour que
+    // JwtStrategy le propage vers request.user (ex. marquage "session courante").
+    if (sessionId) payload.sessionId = sessionId;
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
@@ -425,10 +474,26 @@ export class AuthService {
     });
 
     const refreshTokenHash = await bcrypt.hash(refreshToken, 12);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { refreshTokenHash },
-    });
+    if (sessionId) {
+      // Rotation du refresh token SUR CETTE session précise : les autres sessions
+      // de l'utilisateur gardent leur hash (et donc leur refresh token) intacts.
+      // Le champ legacy User.refreshTokenHash n'est plus écrit ni lu.
+      await this.prisma.userSession.update({
+        where: { id: sessionId },
+        data: { refreshTokenHash, lastActivity: new Date() },
+      });
+    } else {
+      // Appelant sans session existante (register / OAuth / création de session) :
+      // on matérialise la UserSession ici pour que le refresh token soit TOUJOURS
+      // rattaché à une ligne durable, jamais au champ legacy.
+      await this.prisma.userSession.create({
+        data: {
+          userId,
+          refreshTokenHash,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+    }
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

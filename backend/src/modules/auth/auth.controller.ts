@@ -163,8 +163,12 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async logout(@CurrentUser('id') userId: string, @Res({ passthrough: true }) res: Response) {
-    await this.authService.logout(userId);
+  async logout(
+    @CurrentUser('id') userId: string,
+    @Res({ passthrough: true }) res: Response,
+    @CurrentUser('sessionId') sessionId: string | undefined = undefined,
+  ) {
+    await this.authService.logout(userId, sessionId);
     res.clearCookie('refreshToken', { path: '/' });
     res.clearCookie('csrf-token', { path: '/' });
   }

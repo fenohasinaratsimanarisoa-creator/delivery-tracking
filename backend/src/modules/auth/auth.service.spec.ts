@@ -21,7 +21,13 @@ jest.mock('bcrypt', () => ({
 const mockTx = {
   company: { create: jest.fn() },
   user: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
-  userSession: { deleteMany: jest.fn() },
+  userSession: {
+    findUnique: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+    delete: jest.fn(),
+    deleteMany: jest.fn(),
+  },
   invitation: { update: jest.fn() },
 };
 
@@ -39,6 +45,10 @@ const mockPrisma = {
   },
   userSession: {
     create: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+    findUnique: jest.fn(),
+    delete: jest.fn(),
     deleteMany: jest.fn(),
   },
   invitation: {
@@ -411,17 +421,24 @@ describe('AuthService', () => {
   describe('refresh', () => {
     const refreshToken = 'valid_refresh_token';
 
-    it('should return new tokens when refresh token is valid', async () => {
-      mockJwtService.verify.mockReturnValueOnce({ sub: 'user-1' });
-      mockTx.user.findUnique.mockResolvedValueOnce({
-        id: 'user-1',
-        email: 'test@test.com',
-        role: 'admin',
-        companyId: 'comp-1',
-        firstName: 'John',
-        lastName: 'Doe',
-        isActive: true,
+    it('should return new tokens when refresh token is valid (session-scoped)', async () => {
+      mockJwtService.verify.mockReturnValueOnce({ sub: 'user-1', sessionId: 'session-1' });
+      mockTx.userSession.findUnique.mockResolvedValueOnce({
+        id: 'session-1',
         refreshTokenHash: 'stored_hash',
+        expiresAt: new Date(Date.now() + 3600_000),
+        ip: '10.0.0.1',
+        userId: 'user-1',
+        user: {
+          id: 'user-1',
+          email: 'test@test.com',
+          role: 'admin',
+          companyId: 'comp-1',
+          firstName: 'John',
+          lastName: 'Doe',
+          isActive: true,
+          totpEnabled: false,
+        },
       });
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
       mockPrisma.user.findUnique
@@ -445,22 +462,19 @@ describe('AuthService', () => {
         secret: 'refresh-secret',
         algorithms: ['HS256'],
       });
-      expect(mockPrisma.$transaction).toHaveBeenCalled();
-      expect(mockTx.user.findUnique).toHaveBeenCalledWith({
-        where: { id: 'user-1' },
-        select: {
-          id: true,
-          email: true,
-          role: true,
-          companyId: true,
-          firstName: true,
-          lastName: true,
-          isActive: true,
-          refreshTokenHash: true,
-          totpEnabled: true,
-        },
+      // La session est retrouvée PAR SON ID (payload JWT), jamais via userId seul.
+      expect(mockTx.userSession.findUnique).toHaveBeenCalledWith({
+        where: { id: 'session-1' },
+        include: expect.objectContaining({ user: expect.objectContaining({ select: expect.anything() }) }),
       });
       expect(bcrypt.compare).toHaveBeenCalledWith(refreshToken, 'stored_hash');
+      // Le hash est vérifié sur CETTE session ; les autres sessions sont intactes.
+      expect(mockTx.userSession.deleteMany).not.toHaveBeenCalled();
+      // Rotation : le nouveau hash est écrit sur la MÊME session.
+      expect(mockPrisma.userSession.update).toHaveBeenCalledWith({
+        where: { id: 'session-1' },
+        data: expect.objectContaining({ refreshTokenHash: 'new_hashed_refresh' }),
+      });
       expect(result).toEqual({
         accessToken: 'new_access_token',
         refreshToken: 'new_refresh_token',
@@ -483,36 +497,101 @@ describe('AuthService', () => {
       await expect(service.refresh(refreshToken)).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should throw UnauthorizedException when user is not found in transaction', async () => {
+    it('Test D (migration) : un refresh avec un JWT pré-migration (sans sessionId) échoue proprement en 401, pas de 500', async () => {
       mockJwtService.verify.mockReturnValueOnce({ sub: 'user-1' });
-      mockTx.user.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.refresh(refreshToken)).rejects.toThrow(UnauthorizedException);
+      // Échec PROPRE (401, pas de crash) : aucune lecture legacy User ni aucune
+      // écriture de session — l'utilisateur est invité à se reconnecter.
+      expect(mockTx.userSession.findUnique).not.toHaveBeenCalled();
+      expect(mockTx.user.findUnique).not.toHaveBeenCalled();
+      expect(mockTx.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw UnauthorizedException when session is not found in transaction', async () => {
+      mockJwtService.verify.mockReturnValueOnce({ sub: 'user-1', sessionId: 'session-1' });
+      mockTx.userSession.findUnique.mockResolvedValueOnce(null);
 
       await expect(service.refresh(refreshToken)).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should throw UnauthorizedException on reuse and revoke sessions', async () => {
-      mockJwtService.verify.mockReturnValueOnce({ sub: 'user-1' });
-      mockTx.user.findUnique.mockResolvedValueOnce({
-        id: 'user-1',
-        isActive: true,
+    it('should throw UnauthorizedException when the session has no refreshTokenHash', async () => {
+      mockJwtService.verify.mockReturnValueOnce({ sub: 'user-1', sessionId: 'session-1' });
+      mockTx.userSession.findUnique.mockResolvedValueOnce({
+        id: 'session-1',
+        refreshTokenHash: null,
+        expiresAt: new Date(Date.now() + 3600_000),
+        userId: 'user-1',
+        user: {
+          id: 'user-1',
+          email: 'test@test.com',
+          role: 'admin',
+          companyId: 'comp-1',
+          firstName: 'John',
+          lastName: 'Doe',
+          isActive: true,
+          totpEnabled: false,
+        },
+      });
+
+      await expect(service.refresh(refreshToken)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException on reuse and revoke ONLY the offending session', async () => {
+      mockJwtService.verify.mockReturnValueOnce({ sub: 'user-1', sessionId: 'session-1' });
+      mockTx.userSession.findUnique.mockResolvedValueOnce({
+        id: 'session-1',
         refreshTokenHash: 'stored_hash',
+        expiresAt: new Date(Date.now() + 3600_000),
+        userId: 'user-1',
+        user: {
+          id: 'user-1',
+          email: 'test@test.com',
+          role: 'admin',
+          companyId: 'comp-1',
+          firstName: 'John',
+          lastName: 'Doe',
+          isActive: true,
+          totpEnabled: false,
+        },
       });
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
 
-      await expect(service.refresh(refreshToken)).rejects.toThrow(UnauthorizedException);
+      await expect(service.refresh(refreshToken)).rejects.toThrow('Refresh token reuse detected');
 
-      expect(mockTx.userSession.deleteMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1' },
-      });
-      expect(mockTx.user.update).toHaveBeenCalledWith({
-        where: { id: 'user-1' },
+      // Le hash de CETTE session est purgé puis la ligne supprimée...
+      expect(mockTx.userSession.update).toHaveBeenCalledWith({
+        where: { id: 'session-1' },
         data: { refreshTokenHash: null },
       });
+      expect(mockTx.userSession.delete).toHaveBeenCalledWith({ where: { id: 'session-1' } });
+      // ...mais JAMAIS toutes les sessions de l'utilisateur (l'ancien deleteMany
+      // sur userId révoquait les autres appareils légitimes).
+      expect(mockTx.userSession.deleteMany).not.toHaveBeenCalled();
+      expect(mockTx.user.update).not.toHaveBeenCalled();
     });
   });
 
   describe('logout', () => {
-    it('should clear refreshTokenHash for the user', async () => {
+    it('should purge the refresh token of the CURRENT session and delete its UserSession row', async () => {
+      mockPrisma.userSession.updateMany.mockResolvedValueOnce({ count: 1 });
+      mockPrisma.userSession.deleteMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.logout('user-1', 'session-1');
+
+      expect(mockPrisma.userSession.updateMany).toHaveBeenCalledWith({
+        where: { id: 'session-1', userId: 'user-1' },
+        data: { refreshTokenHash: null },
+      });
+      expect(mockPrisma.userSession.deleteMany).toHaveBeenCalledWith({
+        where: { id: 'session-1', userId: 'user-1' },
+      });
+      // Les autres sessions ne sont jamais touchées.
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+      expect(mockPrisma.userSession.deleteMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('should fall back to the legacy User hash when no sessionId is available', async () => {
       mockPrisma.user.update.mockResolvedValueOnce({
         id: 'user-1',
         refreshTokenHash: null,
@@ -524,6 +603,7 @@ describe('AuthService', () => {
         where: { id: 'user-1' },
         data: { refreshTokenHash: null },
       });
+      expect(mockPrisma.userSession.deleteMany).not.toHaveBeenCalled();
     });
   });
 
@@ -867,6 +947,245 @@ describe('AuthService', () => {
         data: { status: 'accepted', acceptedAt: expect.any(Date) },
       });
       expect(result.user.companyId).toBe('comp-a');
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // SESSIONS MULTI-APPAREILS — refresh token scopé par UserSession (sessionId
+  // dans le payload JWT) au lieu du champ legacy unique sur User.
+  // ----------------------------------------------------------------
+  describe('multi-device sessions (session-scoped refresh)', () => {
+    const dto: LoginDto = {
+      email: 'test@test.com',
+      password: 'ValidPass123!',
+    };
+    const baseUser = {
+      id: 'user-1',
+      email: 'test@test.com',
+      passwordHash: 'hashed_password',
+      firstName: 'John',
+      lastName: 'Doe',
+      role: 'admin',
+      companyId: 'comp-1',
+      isActive: true,
+      totpEnabled: false,
+      totpSecret: null,
+    };
+    const sessionUser = {
+      id: 'user-1',
+      email: 'test@test.com',
+      role: 'admin',
+      companyId: 'comp-1',
+      firstName: 'John',
+      lastName: 'Doe',
+      isActive: true,
+      totpEnabled: false,
+    };
+    const fullUser = {
+      id: 'user-1',
+      email: 'test@test.com',
+      firstName: 'John',
+      lastName: 'Doe',
+      role: 'admin',
+      companyId: 'comp-1',
+    };
+    const namesUser = { firstName: 'John', lastName: 'Doe' };
+
+    // Simule le login d'un appareil : create d'une UserSession (sessionId)
+    // puis generateTokens qui écrit le hash du refresh SUR CETTE session.
+    const mockDeviceLogin = (sessionId: string, hash: string) => {
+      mockPrisma.user.findFirst.mockResolvedValueOnce(baseUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // timing dummy
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // vérification réelle
+      mockPrisma.userSession.create.mockResolvedValueOnce({ id: sessionId });
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce(namesUser)
+        .mockResolvedValueOnce(fullUser);
+      mockJwtService.sign.mockReturnValueOnce(`at_${sessionId}`).mockReturnValueOnce(`rt_${sessionId}`);
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce(hash);
+    };
+
+    it('Test A : login appareil 1 puis login appareil 2 → le refresh token de l\'appareil 1 RESTE valide (pas de 401)', async () => {
+      // Appareil 1
+      mockDeviceLogin('session-1', 'hash-1');
+      const res1 = await service.login(dto, '10.0.0.1', 'Chrome');
+      expect(res1.refreshToken).toBe('rt_session-1');
+
+      // Appareil 2 : nouvelle connexion du MÊME utilisateur → NOUVELLE session.
+      mockDeviceLogin('session-2', 'hash-2');
+      const res2 = await service.login(dto, '10.0.0.2', 'Firefox');
+      expect(res2.refreshToken).toBe('rt_session-2');
+
+      // Le login de l'appareil 2 a bien écrit le hash de l'appareil 2 sur SA
+      // session, sans toucher à celle de l'appareil 1 : les deux lignes ont
+      // chacune leur propre refreshTokenHash (plus d'écrasement du hash unique).
+      expect(mockPrisma.userSession.update).toHaveBeenNthCalledWith(1, {
+        where: { id: 'session-1' },
+        data: expect.objectContaining({ refreshTokenHash: 'hash-1' }),
+      });
+      expect(mockPrisma.userSession.update).toHaveBeenNthCalledWith(2, {
+        where: { id: 'session-2' },
+        data: expect.objectContaining({ refreshTokenHash: 'hash-2' }),
+      });
+
+      // AVANT le correctif : le login de l'appareil 2 écrasait le hash User →
+      // refresh de l'appareil 1 = 401 (voire "reuse détecté" → révocation TOTALE).
+      // APRÈS : le refresh de l'appareil 1 retrouve SA session et réussit.
+      mockJwtService.verify.mockReturnValueOnce({
+        sub: 'user-1',
+        sessionId: 'session-1',
+      });
+      mockTx.userSession.findUnique.mockResolvedValueOnce({
+        id: 'session-1',
+        refreshTokenHash: 'hash-1',
+        expiresAt: new Date(Date.now() + 3600_000),
+        ip: '10.0.0.1',
+        userId: 'user-1',
+        user: sessionUser,
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce(namesUser)
+        .mockResolvedValueOnce(fullUser);
+      mockJwtService.sign
+        .mockReturnValueOnce('at_1_rotated')
+        .mockReturnValueOnce('rt_1_rotated');
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hash-1-rotated');
+
+      await expect(service.refresh('rt_session-1', '10.0.0.1', 'Chrome')).resolves.toEqual(
+        expect.objectContaining({
+          accessToken: 'at_1_rotated',
+          refreshToken: 'rt_1_rotated',
+        }),
+      );
+
+      // La rotation de l'appareil 1 reste scopée à SA session.
+      expect(mockPrisma.userSession.update).toHaveBeenNthCalledWith(3, {
+        where: { id: 'session-1' },
+        data: expect.objectContaining({ refreshTokenHash: 'hash-1-rotated' }),
+      });
+      // Aucune révocation (deleteMany/update broad) déclenchée par le login n°2.
+      expect(mockPrisma.userSession.deleteMany).not.toHaveBeenCalled();
+      expect(mockTx.userSession.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('Test B : révocation explicite de la session de l\'appareil 1 (revokeSession) → l\'appareil 2 n\'est PAS affecté, son refresh continue de fonctionner', async () => {
+      mockDeviceLogin('session-1', 'hash-1');
+      await service.login(dto, '10.0.0.1', 'Chrome');
+      mockDeviceLogin('session-2', 'hash-2');
+      await service.login(dto, '10.0.0.2', 'Firefox');
+
+      // Révocation EXPLICITE de l'appareil 1 (exactement les opérations
+      // effectuées par SessionsService.revokeSession) : purge du hash puis
+      // suppression de la ligne session-1, SCRUPULEUSEMENT scopées.
+      mockPrisma.userSession.updateMany.mockResolvedValueOnce({ count: 1 });
+      mockPrisma.userSession.delete.mockResolvedValueOnce({ id: 'session-1' });
+      await mockPrisma.userSession.updateMany({
+        where: { id: 'session-1' },
+        data: { refreshTokenHash: null },
+      });
+      await mockPrisma.userSession.delete({ where: { id: 'session-1' } });
+
+      expect(mockPrisma.userSession.updateMany).toHaveBeenCalledWith({
+        where: { id: 'session-1' },
+        data: { refreshTokenHash: null },
+      });
+      // La ligne de l'appareil 2 n'a JAMAIS été touchée.
+      expect(mockPrisma.userSession.updateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: 'session-2' }) }),
+      );
+
+      // L'appareil 2 rafraîchit : SA session existe toujours avec SON hash →
+      // refresh réussi, aucun 401.
+      mockJwtService.verify.mockReturnValueOnce({
+        sub: 'user-1',
+        sessionId: 'session-2',
+      });
+      mockTx.userSession.findUnique.mockResolvedValueOnce({
+        id: 'session-2',
+        refreshTokenHash: 'hash-2',
+        expiresAt: new Date(Date.now() + 3600_000),
+        ip: '10.0.0.2',
+        userId: 'user-1',
+        user: sessionUser,
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce(namesUser)
+        .mockResolvedValueOnce(fullUser);
+      mockJwtService.sign
+        .mockReturnValueOnce('at_2_rotated')
+        .mockReturnValueOnce('rt_2_rotated');
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hash-2-rotated');
+
+      await expect(service.refresh('rt_session-2', '10.0.0.2', 'Firefox')).resolves.toEqual(
+        expect.objectContaining({ accessToken: 'at_2_rotated' }),
+      );
+      expect(mockPrisma.userSession.update).toHaveBeenLastCalledWith({
+        where: { id: 'session-2' },
+        data: expect.objectContaining({ refreshTokenHash: 'hash-2-rotated' }),
+      });
+    });
+
+    it('Test C (sécurité) : refresh token volé rejoué APRÈS rotation → seule la session concernée est révoquée', async () => {
+      mockDeviceLogin('session-1', 'hash-1');
+      await service.login(dto, '10.0.0.1', 'Chrome');
+
+      // 1) La session légitime rafraîchit UNE fois : le hash de session-1 passe
+      // de hash-1 à hash-1-rotated (rotation).
+      mockJwtService.verify.mockReturnValueOnce({ sub: 'user-1', sessionId: 'session-1' });
+      mockTx.userSession.findUnique.mockResolvedValueOnce({
+        id: 'session-1',
+        refreshTokenHash: 'hash-1',
+        expiresAt: new Date(Date.now() + 3600_000),
+        ip: '10.0.0.1',
+        userId: 'user-1',
+        user: sessionUser,
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // token légitime OK
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce(namesUser)
+        .mockResolvedValueOnce(fullUser);
+      mockJwtService.sign
+        .mockReturnValueOnce('at_rotated')
+        .mockReturnValueOnce('rt_rotated');
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hash-1-rotated');
+      await service.refresh('rt_session-1', '10.0.0.1', 'Chrome');
+      expect(mockPrisma.userSession.update).toHaveBeenLastCalledWith({
+        where: { id: 'session-1' },
+        data: expect.objectContaining({ refreshTokenHash: 'hash-1-rotated' }),
+      });
+
+      // 2) Le voleur rejoue l'ANCIEN token (rt_session-1) contre la session qui
+      // a déjà roté : le hash stocké (hash-1-rotated) ne correspond plus →
+      // chiffre invalide → reuse détecté.
+      mockJwtService.verify.mockReturnValueOnce({ sub: 'user-1', sessionId: 'session-1' });
+      mockTx.userSession.findUnique.mockResolvedValueOnce({
+        id: 'session-1',
+        refreshTokenHash: 'hash-1-rotated',
+        expiresAt: new Date(Date.now() + 3600_000),
+        ip: '10.0.0.1',
+        userId: 'user-1',
+        user: sessionUser,
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false); // replay → mismatch
+
+      await expect(service.refresh('rt_session-1', '10.0.0.1', 'Chrome')).rejects.toThrow(
+        'Refresh token reuse detected',
+      );
+
+      // Seule session-1 est purgée puis supprimée...
+      expect(mockTx.userSession.update).toHaveBeenCalledWith({
+        where: { id: 'session-1' },
+        data: { refreshTokenHash: null },
+      });
+      expect(mockTx.userSession.delete).toHaveBeenCalledWith({
+        where: { id: 'session-1' },
+      });
+      // ...et AUCUNE autre session de l'utilisateur n'est révoquée (l'ancien
+      // deleteMany(userId) tuait tous les appareils lors d'un vol de token).
+      expect(mockTx.userSession.deleteMany).not.toHaveBeenCalled();
+      expect(mockTx.user.update).not.toHaveBeenCalled();
     });
   });
 });

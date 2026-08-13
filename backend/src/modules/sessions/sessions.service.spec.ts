@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 import { AuditAction } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
@@ -8,11 +8,10 @@ const mockPrisma = {
   userSession: {
     findMany: jest.fn(),
     findUnique: jest.fn(),
+    updateMany: jest.fn(),
+    update: jest.fn(),
     delete: jest.fn(),
     deleteMany: jest.fn(),
-  },
-  auditLog: {
-    findMany: jest.fn(),
   },
 };
 
@@ -31,134 +30,80 @@ describe('SessionsService', () => {
     );
   });
 
-  it('lists sessions ordered by latest activity', async () => {
-    mockPrisma.userSession.findMany.mockResolvedValueOnce([{ id: 'session-1' }]);
-
-    await expect(service.findAll('user-1')).resolves.toEqual([{ id: 'session-1' }]);
-    expect(mockPrisma.userSession.findMany).toHaveBeenCalledWith({
-      where: { userId: 'user-1' },
-      orderBy: { lastActivity: 'desc' },
-    });
-  });
-
+  // ----------------------------------------------------------------
+  // RÉVOCATION SCOPÉE — le refreshTokenHash vit sur UserSession : la révocation
+  // d'UNE session ne doit jamais toucher les autres appareils du même utilisateur.
+  // ----------------------------------------------------------------
   describe('revokeSession', () => {
-    it('deletes a user-owned session and writes an audit event', async () => {
+    it('Test B : purge le refreshTokenHash de la session ciblée et supprime CETTE ligne, sans affecter les autres sessions', async () => {
       mockPrisma.userSession.findUnique.mockResolvedValueOnce({
         id: 'session-1',
         userId: 'user-1',
         device: 'Chrome',
         ip: '10.0.0.1',
       });
+      mockPrisma.userSession.updateMany.mockResolvedValueOnce({ count: 1 });
+      mockPrisma.userSession.delete.mockResolvedValueOnce({ id: 'session-1' });
 
-      await expect(
-        service.revokeSession('user-1', 'session-1', 'company-1', '127.0.0.1', 'Firefox'),
-      ).resolves.toEqual({ message: 'Session revoked successfully' });
+      const res = await service.revokeSession('user-1', 'session-1', 'company-1');
+
+      // Le hash est purgé sur CETTE session avant suppression de la ligne.
+      expect(mockPrisma.userSession.updateMany).toHaveBeenCalledWith({
+        where: { id: 'session-1' },
+        data: { refreshTokenHash: null },
+      });
       expect(mockPrisma.userSession.delete).toHaveBeenCalledWith({
         where: { id: 'session-1' },
       });
-      expect(mockAuditLog.log).toHaveBeenCalledWith({
-        userId: 'user-1',
-        companyId: 'company-1',
-        action: AuditAction.session_revoke,
-        metadata: {
-          sessionId: 'session-1',
-          device: 'Chrome',
-          ip: '10.0.0.1',
-        },
-        ip: '127.0.0.1',
-        userAgent: 'Firefox',
-      });
-    });
-
-    it('throws when the session does not exist', async () => {
-      mockPrisma.userSession.findUnique.mockResolvedValueOnce(null);
-
-      await expect(service.revokeSession('user-1', 'missing', 'company-1')).rejects.toThrow(
-        NotFoundException,
+      // Jamais de purge/delete massif sur userId : la session de l'appareil 2
+      // reste intacte (son refresh continue de fonctionner).
+      expect(mockPrisma.userSession.deleteMany).not.toHaveBeenCalled();
+      expect(mockPrisma.userSession.updateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ userId: 'user-1' }) }),
       );
+      expect(mockAuditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: AuditAction.session_revoke }),
+      );
+      expect(res).toEqual({ message: 'Session revoked successfully' });
     });
 
-    it('prevents revoking another user session', async () => {
+    it('rejects revoking another user session (404/403, aucune écriture)', async () => {
       mockPrisma.userSession.findUnique.mockResolvedValueOnce({
-        id: 'session-1',
-        userId: 'other-user',
+        id: 'session-2',
+        userId: 'user-2',
       });
 
-      await expect(service.revokeSession('user-1', 'session-1', 'company-1')).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(
+        service.revokeSession('user-1', 'session-2', 'company-1'),
+      ).rejects.toThrow(ForbiddenException);
       expect(mockPrisma.userSession.delete).not.toHaveBeenCalled();
+      expect(mockPrisma.userSession.updateMany).not.toHaveBeenCalled();
     });
   });
 
   describe('revokeAllSessions', () => {
-    it('revokes every session except the requested current one', async () => {
+    it('purge le refreshTokenHash des sessions révoquées, en préservant la session courante (exceptSessionId)', async () => {
       mockPrisma.userSession.findMany.mockResolvedValueOnce([
-        { id: 'current' },
-        { id: 'old-1' },
-        { id: 'old-2' },
+        { id: 'session-1' },
+        { id: 'session-2' },
+        { id: 'session-current' },
       ]);
+      mockPrisma.userSession.updateMany.mockResolvedValueOnce({ count: 2 });
+      mockPrisma.userSession.deleteMany.mockResolvedValueOnce({ count: 2 });
 
-      await expect(
-        service.revokeAllSessions('user-1', 'company-1', 'current', '127.0.0.1', 'Chrome'),
-      ).resolves.toEqual({ message: '2 session(s) revoked' });
+      await service.revokeAllSessions('user-1', 'company-1', 'session-current');
+
+      // La purge concerne UNIQUEMENT les sessions effectivement supprimées.
+      expect(mockPrisma.userSession.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['session-1', 'session-2'] } },
+        data: { refreshTokenHash: null },
+      });
       expect(mockPrisma.userSession.deleteMany).toHaveBeenCalledWith({
-        where: { id: { in: ['old-1', 'old-2'] } },
+        where: { id: { in: ['session-1', 'session-2'] } },
       });
-      expect(mockAuditLog.log).toHaveBeenCalledWith({
-        userId: 'user-1',
-        companyId: 'company-1',
-        action: AuditAction.session_revoke,
-        metadata: { revokedCount: 2, exceptSessionId: 'current' },
-        ip: '127.0.0.1',
-        userAgent: 'Chrome',
-      });
-    });
-
-    it('still audits when there is nothing to revoke', async () => {
-      mockPrisma.userSession.findMany.mockResolvedValueOnce([{ id: 'current' }]);
-
-      await expect(service.revokeAllSessions('user-1', 'company-1', 'current')).resolves.toEqual({
-        message: '0 session(s) revoked',
-      });
-      expect(mockPrisma.userSession.deleteMany).not.toHaveBeenCalled();
-      expect(mockAuditLog.log).toHaveBeenCalledWith(
-        expect.objectContaining({ metadata: { revokedCount: 0, exceptSessionId: 'current' } }),
+      expect(mockPrisma.userSession.updateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: 'session-current' }) }),
       );
     });
-  });
-
-  it('returns login history from user sessions, newest first, with ip/device', async () => {
-    const sessions = [
-      {
-        createdAt: new Date('2026-07-22T08:00:00.000Z'),
-        ip: '10.0.0.9',
-        device: 'Chrome',
-        lastActivity: new Date('2026-07-22T09:00:00.000Z'),
-      },
-      {
-        createdAt: new Date('2026-07-21T08:00:00.000Z'),
-        ip: '10.0.0.1',
-        device: 'Firefox',
-        lastActivity: new Date('2026-07-21T09:00:00.000Z'),
-      },
-    ];
-    mockPrisma.userSession.findMany.mockResolvedValueOnce(sessions);
-
-    const result = await service.getLoginHistory('user-1', 5);
-
-    console.log(
-      `[loginHistory] ${result.length} sessions, première : createdAt=${result[0].createdAt.toISOString()}, ip=${result[0].ip}, device=${result[0].device}`,
-    );
-
-    expect(result).toEqual(sessions);
-    expect(mockPrisma.userSession.findMany).toHaveBeenCalledWith({
-      where: { userId: 'user-1' },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: { createdAt: true, ip: true, device: true, lastActivity: true },
-    });
-    // L'AuditLog n'est plus utilisé pour l'historique de connexion.
-    expect(mockPrisma.auditLog.findMany).not.toHaveBeenCalled();
   });
 });

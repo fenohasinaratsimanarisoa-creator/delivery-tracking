@@ -286,15 +286,20 @@ model UserPreferences {
 }
 
 model UserSession {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @map("user_id") @db.Uuid
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  device       String? // user agent / device info
-  ip           String? // IP address
-  location     String? // approximate location from IP
-  lastActivity DateTime @default(now()) @map("last_activity")
-  createdAt    DateTime @default(now()) @map("created_at")
-  expiresAt    DateTime @map("expires_at")
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device           String? // user agent / device info
+  ip               String? // IP address
+  location         String? // approximate location from IP
+  lastActivity     DateTime  @default(now()) @map("last_activity")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  expiresAt        DateTime  @map("expires_at")
+  // Hash bcrypt du refresh token PROPRE À CETTE session : chaque appareil
+  // connecté détient sa propre ligne UserSession et son propre refresh token,
+  // sans écraser les autres sessions (le champ éponyme sur User est conservé
+  // pour compatibilité descendante mais n'est plus utilisé par la logique).
+  refreshTokenHash String?   @map("refresh_token_hash")
 
   @@index([userId])
   @@map("user_sessions")

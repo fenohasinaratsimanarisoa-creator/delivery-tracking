@@ -36,6 +36,12 @@ export class SessionsService {
       throw new ForbiddenException("Cannot revoke another user's session");
     }
 
+    // Purge d'abord le refreshTokenHash de CETTE session (les autres appareils
+    // connectés gardent le leur) puis supprime la ligne UserSession.
+    await this.prisma.userSession.updateMany({
+      where: { id: sessionId },
+      data: { refreshTokenHash: null },
+    });
     await this.prisma.userSession.delete({
       where: { id: sessionId },
     });
@@ -66,6 +72,13 @@ export class SessionsService {
     const toDelete = sessions.filter((s) => s.id !== exceptSessionId);
 
     if (toDelete.length > 0) {
+      // Purge le refreshTokenHash des sessions ciblées AVANT suppression : même si
+      // la ligne est effacée juste après, aucune session survivante (celle exclue)
+      // n'est touchée.
+      await this.prisma.userSession.updateMany({
+        where: { id: { in: toDelete.map((s) => s.id) } },
+        data: { refreshTokenHash: null },
+      });
       await this.prisma.userSession.deleteMany({
         where: { id: { in: toDelete.map((s) => s.id) } },
       });
