@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -133,7 +133,9 @@ export class CompaniesService {
     }
 
     if (company.name !== confirmationName) {
-      throw new Error('Company name confirmation does not match');
+      // BadRequestException (400) et non Error brut : le filtre global convertit
+      // un Error en 500 + Sentry/alerte alors que c'est une erreur client.
+      throw new BadRequestException('Company name confirmation does not match');
     }
 
     // Soft delete - cascade will handle related entities

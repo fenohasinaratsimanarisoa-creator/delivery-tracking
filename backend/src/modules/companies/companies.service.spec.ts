@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
+import { BadRequestException } from '@nestjs/common';
 import { CompaniesService } from './companies.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
@@ -50,11 +51,12 @@ describe('CompaniesService', () => {
     expect(result).toEqual({ message: 'Company deleted successfully' });
   });
 
-  it('should reject delete when company name does not match', async () => {
+  it('should reject delete when company name does not match (400, jamais de soft-delete)', async () => {
     mockPrisma.company.findUnique.mockResolvedValueOnce({ id: 'comp-1', name: 'Acme Inc' });
 
-    await expect(service.deleteCompany('comp-1', 'Wrong Name')).rejects.toThrow(
-      'Company name confirmation does not match',
-    );
+    const promise = service.deleteCompany('comp-1', 'Wrong Name');
+    await expect(promise).rejects.toThrow(BadRequestException);
+    await expect(promise).rejects.toThrow('Company name confirmation does not match');
+    expect(mockPrisma.company.update).not.toHaveBeenCalled();
   });
 });
