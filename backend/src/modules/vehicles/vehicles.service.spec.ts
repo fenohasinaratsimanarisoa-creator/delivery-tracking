@@ -198,6 +198,78 @@ describe('VehiclesService', () => {
     });
   });
 
+  // ----------------------------------------------------------------
+  // DEVICES TRACCAR — isolement multi-entreprises : l'entreprise A ne doit
+  // JAMAIS voir les devices de l'entreprise B (ni liés, ni non-liés).
+  // ----------------------------------------------------------------
+  describe('getAvailableTraccarDevices (cross-tenant isolation)', () => {
+    const companyA = 'aaaaaaaa-1111-0000-0000-000000000001';
+    const companyB = 'bbbbbbbb-2222-0000-0000-000000000002';
+    const traccarDevices = [
+      { id: 101, name: 'Tracker A-1', uniqueId: 'aaaaaaaa-TRK-A1' },
+      { id: 102, name: 'Tracker B-1', uniqueId: 'bbbbbbbb-TRK-B1' },
+      { id: 103, name: 'Tracker A-2', uniqueId: 'aaaaaaaa-TRK-A2' },
+      { id: 104, name: 'Tracker B-2', uniqueId: 'bbbbbbbb-TRK-B2' },
+    ];
+
+    const enableTraccar = () => {
+      (mockConfigService.get as jest.Mock).mockImplementation((key: string, def?: any) => {
+        if (key === 'TRACCAR_URL') return 'http://localhost:8082';
+        if (key === 'TRACCAR_USER') return 'admin';
+        if (key === 'TRACCAR_PASSWORD') return 'admin';
+        return def;
+      });
+    };
+
+    const mockTraccarDevicesResponse = () => {
+      jest.spyOn(service as any, 'authenticateTraccar').mockResolvedValue('cookie=abc');
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => traccarDevices,
+      } as Response);
+    };
+
+    it('l\'entreprise A ne voit jamais les devices déjà liés à l\'entreprise B dans la liste "disponibles"', async () => {
+      enableTraccar();
+      mockTraccarDevicesResponse();
+
+      // L'entreprise B a DÉJÀ lié le device 104 à un de ses véhicules actifs.
+      // La requête `linked` ne doit PAS être scopée à l'entreprise courante
+      // (A) : le device de B doit être exclu même si A n'a aucun véhicule.
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([
+        { traccarDeviceId: '103' }, // device lié par l'entreprise A (exclu)
+        { traccarDeviceId: '104' }, // device lié par l'entreprise B (exclu AUSSI)
+      ]);
+
+      const available = await service.getAvailableTraccarDevices(companyA);
+
+      // La requête `linked` a été passée SANS companyId (contexte tenant
+      // désactivé) : sans ce fix, le middleware tenant l'aurait scopée à A et
+      // le device 104 de B serait apparu comme "disponible" pour A.
+      expect(mockPrisma.vehicle.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.not.objectContaining({ companyId: expect.anything() }),
+        }),
+      );
+
+      // Seuls les devices portant le préfixe de l'entreprise A sont proposés,
+      // et uniquement ceux qui ne sont liés à AUCUN véhicule (toute la base).
+      expect(available.map((d) => d.id)).toEqual([101]);
+      expect(available.map((d) => d.uniqueId)).toEqual(['aaaaaaaa-TRK-A1']);
+    });
+
+    it('filtre par préfixe : un device non-lié de l\'entreprise B n\'est jamais proposé à A', async () => {
+      enableTraccar();
+      mockTraccarDevicesResponse();
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([]);
+
+      const available = await service.getAvailableTraccarDevices(companyA);
+
+      // 102 (prefix bbbbbbbb) et 104 (prefix bbbbbbbb) exclus par préfixe.
+      expect(available.map((d) => d.id)).toEqual([101, 103]);
+    });
+  });
+
   describe('remove', () => {
     it('soft deletes an unused vehicle', async () => {
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1' });

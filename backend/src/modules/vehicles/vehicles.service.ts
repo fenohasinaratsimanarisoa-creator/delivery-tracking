@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { VehicleFilterDto } from './dto/vehicle-filter.dto';
@@ -180,6 +181,11 @@ export class VehiclesService {
       this.configService.get<string>('TRACCAR_PASSWORD', 'admin')!,
     );
 
+    // Préfixe unique par entreprise dans l'identifiant Traccar : les devices
+    // d'une entreprise ne sont jamais exposés comme "disponibles" à une autre.
+    const companyId = CompanyScopedContext.get();
+    const scopedUniqueId = companyId ? `${companyId.slice(0, 8)}-${uniqueId}` : uniqueId;
+
     const response = await fetch(`${traccarUrl}/api/devices`, {
       method: 'POST',
       headers: {
@@ -188,7 +194,7 @@ export class VehiclesService {
       },
       body: JSON.stringify({
         name,
-        uniqueId,
+        uniqueId: scopedUniqueId,
       }),
     });
 
@@ -218,22 +224,33 @@ export class VehiclesService {
       if (!response.ok) {
         throw new Error(`Traccar API returned ${response.status}`);
       }
-      const devices: Array<{ id: number; name: string; uniqueId: string }> = await response.json();
+            const devices: Array<{ id: number; name: string; uniqueId: string }> = await response.json();
+
+      // Filtre par entreprise : on ne garde que les devices dont le uniqueId
+      // porte le préfixe de CETTE entreprise (defense en profondeur, même si un
+      // device d'une autre entreprise n'a pas été lié à un véhicule).
+      const prefix = companyId ? `${companyId.slice(0, 8)}-` : null;
 
       const alreadyLinkedDeviceIds = new Set<string>();
-      const linked = await this.prisma.vehicle.findMany({
-        where: {
-          traccarDeviceId: { not: null },
-          isActive: true,
-          deletedAt: null,
-        },
-        select: { traccarDeviceId: true },
-      });
+      // Contexte tenant DÉSACTIVÉ pour cette requête précise : un device déjà
+      // lié par une AUTRE entreprise doit aussi être exclu de la liste, sinon il
+      // reste proposé comme "disponible".
+      const linked = await CompanyScopedContext.run(null, () =>
+        this.prisma.vehicle.findMany({
+          where: {
+            traccarDeviceId: { not: null },
+            isActive: true,
+            deletedAt: null,
+          },
+          select: { traccarDeviceId: true },
+        }),
+      );
       for (const v of linked) {
         if (v.traccarDeviceId) alreadyLinkedDeviceIds.add(v.traccarDeviceId);
       }
 
       return devices
+        .filter((d) => (prefix ? d.uniqueId.startsWith(prefix) : true))
         .filter((d) => !alreadyLinkedDeviceIds.has(String(d.id)))
         .map((d) => ({
           id: d.id,
