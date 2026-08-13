@@ -192,9 +192,27 @@ export class DriversService {
       throw new BadRequestException('Cannot delete driver assigned to an in-progress delivery');
     }
 
-    const driver = await this.prisma.driver.update({
-      where: { id },
-      data: { deletedAt: new Date() },
+    const driver = await this.prisma.$transaction(async (tx) => {
+      // Libère la contrainte unique driver.vehicle_id AVANT le soft-delete : un
+      // driver soft-deleted qui garde son vehicleId empêche l'assignation de ce
+      // véhicule à un NOUVEAU driver (index unique en base).
+      const existing = await tx.driver.findFirst({
+        where: { id, companyId, deletedAt: null },
+        select: { vehicleId: true },
+      });
+
+      const updated = await tx.driver.update({
+        where: { id },
+        data: {
+          deletedAt: new Date(),
+          ...(existing?.vehicleId ? { vehicleId: null } : {}),
+        },
+      });
+
+      if (existing?.vehicleId) {
+        await this.assignmentHistory.unassign(tx, { driverId: id });
+      }
+      return updated;
     });
     this.dataUpdateBus.emitUpdate({
       companyId,

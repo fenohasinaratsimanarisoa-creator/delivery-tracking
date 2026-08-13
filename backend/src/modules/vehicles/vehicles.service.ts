@@ -162,9 +162,18 @@ export class VehiclesService {
       throw new BadRequestException('Cannot delete vehicle assigned to an in-progress delivery');
     }
 
-    return this.prisma.vehicle.update({
-      where: { id },
-      data: { deletedAt: new Date() },
+    // Désassigne les drivers qui pointent vers ce véhicule dans la MÊME
+    // transaction que le soft-delete : un driver gardant vehicleId empêcherait
+    // la réassignation de ce véhicule (index unique driver.vehicle_id).
+    return this.prisma.$transaction(async (tx) => {
+      await tx.driver.updateMany({
+        where: { vehicleId: id, deletedAt: null },
+        data: { vehicleId: null },
+      });
+      return tx.vehicle.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
     });
   }
 

@@ -202,5 +202,74 @@ describe('DriversService', () => {
       await expect(service.remove('company-1', 'driver-1')).rejects.toThrow(BadRequestException);
       expect(mockPrisma.driver.update).not.toHaveBeenCalled();
     });
+
+    it('libère le vehicleId au soft-delete : un NOUVEAU driver peut ensuite être assigné au même véhicule', async () => {
+      const dto = {
+        firstName: 'Alice',
+        lastName: 'Driver',
+        licenseNumber: 'LIC-001',
+        vehicleId: 'vehicle-1',
+      };
+
+      // 1) Création d'un driver assigné au véhicule vehicle-1
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(null); // license unique
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        id: 'vehicle-1',
+        companyId: 'company-1',
+      });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(null); // véhicule libre
+      mockPrisma.driver.create.mockResolvedValueOnce({
+        id: 'driver-1',
+        ...dto,
+        companyId: 'company-1',
+      });
+      mockPrisma.vehicleAssignmentHistory.findFirst.mockResolvedValue(null); // pas de ligne ouverte
+      await service.create('company-1', dto);
+
+      // 2) Suppression du driver → le soft-delete null le vehicleId et ferme
+      //    la ligne d'historique d'assignation dans la MÊME transaction
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ id: 'driver-1', vehicleId: 'vehicle-1' }); // findOne
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({ vehicleId: 'vehicle-1' }); // lecture tx
+      mockPrisma.driver.update.mockResolvedValueOnce({
+        id: 'driver-1',
+        deletedAt: new Date(),
+        vehicleId: null,
+      });
+      mockPrisma.vehicleAssignmentHistory.updateMany.mockResolvedValue({ count: 1 }); // unassign
+      await service.remove('company-1', 'driver-1');
+
+      expect(mockPrisma.driver.update).toHaveBeenCalledWith({
+        where: { id: 'driver-1' },
+        data: expect.objectContaining({
+          deletedAt: expect.any(Date),
+          vehicleId: null,
+        }),
+      });
+      expect(mockPrisma.vehicleAssignmentHistory.updateMany).toHaveBeenCalledWith({
+        where: { driverId: 'driver-1', unassignedAt: null },
+        data: { unassignedAt: expect.any(Date) },
+      });
+
+      // 3) Le driver soft-deleted n'occupe plus la contrainte unique
+      //    driver.vehicle_id → un NOUVEAU driver peut être créé/assigné sur le
+      //    même vehicleId sans erreur de contrainte unique.
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(null); // license unique
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        id: 'vehicle-1',
+        companyId: 'company-1',
+      });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(null); // véhicule libre
+      mockPrisma.driver.create.mockResolvedValueOnce({
+        id: 'driver-2',
+        ...dto,
+        companyId: 'company-1',
+      });
+
+      await expect(service.create('company-1', dto)).resolves.toMatchObject({
+        id: 'driver-2',
+        vehicleId: 'vehicle-1',
+      });
+    });
   });
 });

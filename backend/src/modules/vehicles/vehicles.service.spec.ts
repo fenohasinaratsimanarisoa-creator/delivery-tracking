@@ -12,9 +12,18 @@ const mockPrisma = {
     create: jest.fn(),
     update: jest.fn(),
   },
+  driver: {
+    findFirst: jest.fn(),
+    updateMany: jest.fn(),
+  },
   delivery: {
     findFirst: jest.fn(),
   },
+  $transaction: jest.fn().mockImplementation((arg: any) => {
+    if (typeof arg === 'function') return arg(mockPrisma);
+    if (Array.isArray(arg)) return Promise.all(arg);
+    return Promise.resolve(arg);
+  }),
 };
 
 const mockConfigService = {
@@ -289,6 +298,49 @@ describe('VehiclesService', () => {
 
       await expect(service.remove('company-1', 'vehicle-1')).rejects.toThrow(BadRequestException);
       expect(mockPrisma.vehicle.update).not.toHaveBeenCalled();
+    });
+
+    it('libère la FK driver.vehicleId : un NOUVEAU driver peut ensuite être assigné au même véhicule', async () => {
+      // 1) État initial : un driver D-2 est assigné au véhicule vehicle-1 →
+      //    la contrainte unique driver.vehicle_id est occupée.
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({
+        id: 'driver-2',
+        vehicleId: 'vehicle-1',
+      });
+      const occupied = await mockPrisma.driver.findFirst({
+        where: { vehicleId: 'vehicle-1', deletedAt: null },
+      });
+      expect(occupied).not.toBeNull();
+
+      // 2) Suppression du véhicule → le driver est désassigné (vehicleId null)
+      //    dans la MÊME transaction que le soft-delete du véhicule.
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1', companyId: 'company-1' });
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.driver.updateMany.mockResolvedValueOnce({ count: 1 });
+      mockPrisma.vehicle.update.mockResolvedValueOnce({
+        id: 'vehicle-1',
+        deletedAt: new Date(),
+      });
+
+      await service.remove('company-1', 'vehicle-1');
+
+      expect(mockPrisma.driver.updateMany).toHaveBeenCalledWith({
+        where: { vehicleId: 'vehicle-1', deletedAt: null },
+        data: { vehicleId: null },
+      });
+      expect(mockPrisma.vehicle.update).toHaveBeenCalledWith({
+        where: { id: 'vehicle-1' },
+        data: { deletedAt: expect.any(Date) },
+      });
+
+      // 3) La contrainte unique est libérée → le contrôle d'assignation (même
+      //    logique que DriversService.create) ne trouve plus de driver sur
+      //    vehicle-1 : un NOUVEAU driver peut être assigné sans erreur.
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(null);
+      const stillAssigned = await mockPrisma.driver.findFirst({
+        where: { vehicleId: 'vehicle-1', deletedAt: null },
+      });
+      expect(stillAssigned).toBeNull();
     });
   });
 });
