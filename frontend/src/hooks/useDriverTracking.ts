@@ -359,7 +359,12 @@ export function useDriverTracking() {
             // suivant) ne doit pas résoudre une promesse déjà rejetée, ni fuiter.
             socket.off('positionsSaved', onPositionsSaved);
             reject(new Error('flush timeout'));
-          }, 15000);
+            // Le backend émet désormais positionsSaved EXPLICITEMENT (acquittement
+            // réel, sans callback ack côté client) : le timeout n'est plus qu'un filet
+            // de sécurité réseau, réduit de 15s à 5s. L'échec réel (timeout) ne
+            // supprime PAS les positions de la file IndexedDB : flushQueue ne les
+            // efface que si sendFn résout.
+          }, 5000);
           socket.once('positionsSaved', onPositionsSaved);
         });
       });
@@ -377,12 +382,44 @@ export function useDriverTracking() {
     }
   }, [queueCount, addAlert, removeAlert]);
 
-  const sendPosition = useCallback(() => {
-    if (isSendingRef.current) return;
-    const p = posRef.current;
+    // Construit le payload d'une position à partir de la position courante : les
+  // coordonnées BRUTES (rawPosRef, fournies par processCoords) partent au backend
+  // (le filtre Kalman ne sert qu'à l'affichage), avec vehicleId/deliveryId du
+  // contexte courant. Partagé par le chemin d'envoi direct et le chemin de mise
+  // en file (garde isSendingRef) pour que les deux produisent des données
+  // strictement identiques.
+  const buildPositionPayload = useCallback((p: DriverPosition): Record<string, unknown> => {
     const dId = deliveryIdRef.current;
     const vId = vehicleId;
+    const raw = rawPosRef.current;
+    const sendLat = raw ? raw.lat : p.lat;
+    const sendLng = raw ? raw.lng : p.lng;
+
+    const payload: Record<string, unknown> = {
+      event: 'updatePosition',
+      latitude: sendLat, longitude: sendLng,
+      speed: p.speed ?? undefined, heading: p.heading,
+      altitude: p.altitude, accuracy: p.accuracy ?? 50,
+      timestamp: new Date().toISOString(),
+    };
+    if (vId) payload.vehicleId = vId;
+    if (dId) payload.deliveryId = dId;
+    return payload;
+  }, [vehicleId]);
+
+  const sendPosition = useCallback(() => {
+    const p = posRef.current;
     if (!p) return;
+
+    if (isSendingRef.current) {
+      // Une position est acquise alors qu'un envoi est déjà en cours : on NE la
+      // jette PAS (le return silencieux d'avant perdait silencieusement les
+      // positions arrivées en rafale pendant l'envoi — sous-comptage de distance
+      // jusqu'à 80-90% quand l'ACK n'arrivait jamais). Elle est mise en file
+      // locale (IndexedDB) et sera retentée par drainQueue.
+      enqueuePosition(buildPositionPayload(p)).then(() => { refreshQueueCount(); });
+      return;
+    }
 
     const acc = p.accuracy ?? 50;
     if (acc >= ACCURACY_REJECT) {
@@ -400,24 +437,14 @@ export function useDriverTracking() {
     lastSendTimeRef.current = nowTs;
     isSendingRef.current = true;
 
-    const raw = rawPosRef.current;
-    const sendLat = raw ? raw.lat : p.lat;
-    const sendLng = raw ? raw.lng : p.lng;
-
-    const now = new Date().toISOString();
-    const payload: Record<string, unknown> = {
-      event: 'updatePosition',
-      latitude: sendLat, longitude: sendLng,
-      speed: p.speed ?? undefined, heading: p.heading,
-      altitude: p.altitude, accuracy: acc,
-      timestamp: now,
-    };
-    if (vId) payload.vehicleId = vId;
-    if (dId) payload.deliveryId = dId;
+    const payload = buildPositionPayload(p);
     const socket = getSocket();
     if (socket.connected) {
       socket.emit('updatePosition', payload);
-      const posTimeout = setTimeout(() => { isSendingRef.current = false; }, 3000);
+      // Le backend émet positionSaved/positionRejected EXPLICITEMENT (le client
+      // n'utilise pas de callback ack socket.io) : le timeout n'est plus qu'un
+      // filet de sécurité réseau, réduit de 3000ms à 2000ms.
+      const posTimeout = setTimeout(() => { isSendingRef.current = false; }, 2000);
       socket.once('positionSaved', () => {
         clearTimeout(posTimeout);
         isSendingRef.current = false;
@@ -437,7 +464,7 @@ export function useDriverTracking() {
     } else {
       enqueuePosition(payload).then(() => { refreshQueueCount(); isSendingRef.current = false; });
     }
-  }, [vehicleId, refreshQueueCount, drainQueue]);
+  }, [vehicleId, refreshQueueCount, drainQueue, buildPositionPayload]);
 
   const recalcInterval = useCallback((speed: number | undefined, accuracy?: number, stationary?: boolean) => {
     const now = Date.now();

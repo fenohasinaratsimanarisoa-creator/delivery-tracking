@@ -17,6 +17,10 @@ const socketEmits: Array<{ event: string; payload?: unknown }> = [];
 const socketHandlers: Record<string, (data?: any) => void> = {};
 let socketConnected = false;
 
+// Fausse file IndexedDB observable : les tests B/C vérifient qu'aucune position
+// n'est perdue via queueSize() (positions mise en file pendant un envoi en cours).
+const { fakeQueue } = vi.hoisted(() => ({ fakeQueue: [] as unknown[] }));
+
 vi.mock('../services/socket/socket', () => ({
   getSocket: () => ({
     get connected() { return socketConnected; },
@@ -34,10 +38,10 @@ vi.mock('../services/api/client', () => ({
 }));
 
 vi.mock('../services/offlineQueue', () => ({
-  enqueuePosition: vi.fn().mockResolvedValue(undefined),
-  queueSize: vi.fn().mockResolvedValue(0),
-  flushQueue: vi.fn().mockResolvedValue(undefined),
-  clearQueue: vi.fn().mockResolvedValue(undefined),
+  enqueuePosition: vi.fn(async (pos: unknown) => { fakeQueue.push(pos); }),
+  queueSize: vi.fn(async () => fakeQueue.length),
+  flushQueue: vi.fn(async () => { fakeQueue.length = 0; }),
+  clearQueue: vi.fn(async () => { fakeQueue.length = 0; }),
 }));
 
 vi.mock('../services/tracking/sensorFusion', () => ({
@@ -73,8 +77,10 @@ vi.mock('../services/tracking/backgroundLocation', () => ({
 describe('useDriverTracking core logic', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.clearAllMocks(); // réinitialise les compteurs d'appels (implémentations conservées)
     socketConnected = false;
     socketEmits.length = 0;
+    fakeQueue.length = 0;
     nativeLocationHandler.current = null;
     nativeSubscriptions.length = 0;
     Object.keys(socketHandlers).forEach((k) => delete socketHandlers[k]);
@@ -327,5 +333,97 @@ describe('useDriverTracking core logic', () => {
     await act(async () => { vi.advanceTimersByTime(2 * 60 * 1000 + 1000); });
     act(() => { watchCb(pos); });
     expect(result.current.alerts.filter((a) => a.type === 'proximity')).toHaveLength(1);
+  });
+
+  it('Test B : un ACK positionSaved reçu < 500ms libère isSendingRef sans attendre le timeout', async () => {
+    vi.useRealTimers();
+    socketConnected = true;
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/drivers/profile') {
+        return Promise.resolve({
+          data: { id: 'd1', firstName: 'A', lastName: 'B', vehicle: { id: 'v1', brand: 'X', model: 'Y', licensePlate: 'Z', positionSource: 'phone' } },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 1600)); }); // startTracking
+
+    vi.useFakeTimers();
+    const nativeHandler = nativeLocationHandler.current!;
+
+    // Envoi n°1 (t=0) : emit updatePosition, isSendingRef=true.
+    act(() => {
+      nativeHandler({ latitude: -18.8792, longitude: 47.5079, speed: 10, heading: 0, altitude: 0, accuracy: 10 });
+    });
+    expect(socketEmits.filter((e) => e.event === 'updatePosition')).toHaveLength(1);
+
+    // ACK réel du serveur (positionSaved explicite) reçu 100ms après l'emit —
+    // bien avant le filet de sécurité de 2000ms : isSendingRef doit être libéré
+    // par l'ACK, PAS par le timeout.
+    act(() => { vi.advanceTimersByTime(100); });
+    act(() => { socketHandlers['positionSaved']?.({ id: 'pos-1', suspect: false }); });
+
+    // Saut de Date.now() au-delà du throttle (3s) SANS laisser tourner les timers :
+    // si isSendingRef avait seulement été libéré par le timeout (2000ms), il serait
+    // ENCORE true à cet instant → la position serait mise en file au lieu d'être
+    // émise. Seul l'ACK précoce rend ce second envoi direct possible.
+    act(() => { vi.setSystemTime(new Date(Date.now() + 3100)); });
+    act(() => {
+      nativeHandler({ latitude: -18.8793, longitude: 47.508, speed: 11, heading: 0, altitude: 0, accuracy: 10 });
+    });
+
+    expect(socketEmits.filter((e) => e.event === 'updatePosition')).toHaveLength(2);
+    const offlineQueue = await import('../services/offlineQueue');
+    expect(offlineQueue.enqueuePosition).not.toHaveBeenCalled();
+  });
+
+  it('Test C : rafale de 3 positions natives pendant un envoi en cours → AUCUNE perdue (toutes en file, purgées au drain)', async () => {
+    vi.useRealTimers();
+    socketConnected = true;
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/drivers/profile') {
+        return Promise.resolve({
+          data: { id: 'd1', firstName: 'A', lastName: 'B', vehicle: { id: 'v1', brand: 'X', model: 'Y', licensePlate: 'Z', positionSource: 'phone' } },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 1600)); }); // startTracking
+
+    vi.useFakeTimers();
+    const nativeHandler = nativeLocationHandler.current!;
+    const posAt = (i: number) => ({ latitude: -18.8792 + i * 0.0001, longitude: 47.5079 + i * 0.0001, speed: 12, heading: 0, altitude: 0, accuracy: 10 });
+
+    // t=0 : envoi direct (isSendingRef=true, ACK jamais émis dans ce scénario).
+    act(() => { nativeHandler(posAt(0)); });
+    expect(socketEmits.filter((e) => e.event === 'updatePosition')).toHaveLength(1);
+
+    // Rafale : 3 positions natives à moins de 200ms d'écart pendant l'envoi en cours.
+    act(() => { vi.advanceTimersByTime(50); });
+    act(() => { nativeHandler(posAt(1)); });
+    act(() => { vi.advanceTimersByTime(50); });
+    act(() => { nativeHandler(posAt(2)); });
+    act(() => { vi.advanceTimersByTime(50); });
+    act(() => { nativeHandler(posAt(3)); });
+
+    // AUCUNE des 3 positions de la rafale n'est perdue : toutes mises en file locale
+    // (le return silencieux d'avant les jeterait — sous-comptage de distance).
+    const offlineQueue = await import('../services/offlineQueue');
+    expect(await offlineQueue.queueSize()).toBe(3);
+    expect(offlineQueue.enqueuePosition).toHaveBeenCalledTimes(3);
+
+    // Le drain (déclenché par le hook sur l'événement 'connect' du socket, comme au
+    // retour réseau) vide la file via batchPosition → flushQueue : les positions
+    // sont récupérées, pas abandonnées.
+    act(() => { socketHandlers['connect']?.(); });
+    await act(async () => {}); // microtasks (drainQueue async → flushQueue → queueSize)
+    expect(offlineQueue.flushQueue).toHaveBeenCalled();
+    expect(await offlineQueue.queueSize()).toBe(0);
   });
 });

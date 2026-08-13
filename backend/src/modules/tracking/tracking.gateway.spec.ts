@@ -233,6 +233,8 @@ describe('TrackingGateway — cross-tenant security', () => {
 
       expect(mockServer.to).toHaveBeenCalledWith('delivery:delivery-1');
       expect(mockServer.to).toHaveBeenCalledWith('company:company-a');
+      // ACK explicite du batch reçu par le client (sans callback ack socket.io).
+      expect(client.emit).toHaveBeenCalledWith('positionsSaved', { count: 1 });
     });
 
     it('handles positions without deliveryId (no delivery room)', async () => {
@@ -278,6 +280,8 @@ describe('TrackingGateway — cross-tenant security', () => {
       // Should broadcast to company room, NOT to delivery:undefined
       expect(mockServer.to).not.toHaveBeenCalledWith('delivery:undefined');
       expect(mockServer.to).toHaveBeenCalledWith('company:company-a');
+      // ACK explicite : le client apprend que 1 position a bien été persistée.
+      expect(client.emit).toHaveBeenCalledWith('positionsSaved', { count: 1 });
     });
   });
 
@@ -309,6 +313,8 @@ describe('TrackingGateway — cross-tenant security', () => {
 
       await gateway.handlePosition(client, positionDto());
 
+      // Rejet EXPLICITE (jamais de return silencieux qui bloquerait le client).
+      expect(client.emit).toHaveBeenCalledWith('positionRejected', { reason: 'vehicle_mismatch' });
       // getLastPosition should NOT be called (ownership check happens first)
       expect(trackingService.getLastPosition).not.toHaveBeenCalled();
       // savePosition should NOT be called either
@@ -318,6 +324,21 @@ describe('TrackingGateway — cross-tenant security', () => {
         'vehicle-b-1',
         'company-a',
       );
+    });
+
+    it('rejects position when the driver is NOT assigned to the delivery', async () => {
+      const client = setupDriverClient('company-a');
+      trackingService.verifyDriverAssignment.mockRejectedValueOnce(
+        new NotFoundException('Driver is not assigned to this delivery'),
+      );
+
+      await gateway.handlePosition(client, positionDto({ deliveryId: 'delivery-b-1' }));
+
+      // Rejet EXPLICITE avec le motif not_assigned : le client débloque isSendingRef
+      // immédiatement au lieu d'attendre son timeout de secours.
+      expect(client.emit).toHaveBeenCalledWith('positionRejected', { reason: 'not_assigned' });
+      expect(trackingService.assertVehicleOwnership).not.toHaveBeenCalled();
+      expect(trackingService.savePosition).not.toHaveBeenCalled();
     });
 
     it('allows position when vehicle belongs to the SAME company', async () => {
@@ -344,18 +365,23 @@ describe('TrackingGateway — cross-tenant security', () => {
         'company-a',
       );
       expect(trackingService.savePosition).toHaveBeenCalled();
+      // ACK EXPLICITE de succès : c'est lui qui libère isSendingRef côté téléphone.
+      expect(client.emit).toHaveBeenCalledWith('positionSaved', {
+        id: 'pos-ok',
+        suspect: false,
+      });
     });
 
     it('emits positionRejected with reason rate_limited when the send is rate limited', async () => {
       const client = setupDriverClient('company-a');
       trackingService.isRateLimited.mockResolvedValueOnce(true);
 
-      const result = await gateway.handlePosition(client, positionDto());
+      await gateway.handlePosition(client, positionDto());
 
-      expect(result).toEqual({
-        event: 'positionRejected',
-        data: { reason: 'rate_limited' },
-      });
+      // Émission EXPLICITE (client.emit) : une valeur retournée par un handler
+      // @SubscribeMessage ne remonte au client QUE s'il a fourni un callback ack
+      // — l'app mobile ne le fait pas.
+      expect(client.emit).toHaveBeenCalledWith('positionRejected', { reason: 'rate_limited' });
       // Rien d'autre n'est exécuté (ni ownership ni savePosition).
       expect(trackingService.assertVehicleOwnership).not.toHaveBeenCalled();
       expect(trackingService.savePosition).not.toHaveBeenCalled();
@@ -368,11 +394,11 @@ describe('TrackingGateway — cross-tenant security', () => {
       // Véhicule désactivé / mal configuré → savePosition refuse la position.
       trackingService.savePosition.mockResolvedValueOnce(null);
 
-      const result = await gateway.handlePosition(client, positionDto());
+      await gateway.handlePosition(client, positionDto());
 
       // Le client reçoit un échec EXPLICITE (motif générique, sans fuite interne),
       // pour qu'il puisse remettre la position en file au lieu de la perdre.
-      expect(result).toEqual({ event: 'positionRejected', data: { reason: 'rejected' } });
+      expect(client.emit).toHaveBeenCalledWith('positionRejected', { reason: 'rejected' });
       // Aucun broadcast de la position rejetée.
       expect(mockServer.to).not.toHaveBeenCalled();
     });
@@ -387,6 +413,8 @@ describe('TrackingGateway — cross-tenant security', () => {
       await gateway.handlePosition(client, positionDto({ vehicleId: 'vehicle-b-1' }));
 
       expect(trackingService.getLastPosition).not.toHaveBeenCalled();
+      // Le client est débloqué explicitement (jamais de retour silencieux).
+      expect(client.emit).toHaveBeenCalledWith('positionRejected', { reason: 'vehicle_mismatch' });
     });
 
     it('persists the recalculated fallback speed when dto.speed is missing', async () => {

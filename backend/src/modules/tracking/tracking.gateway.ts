@@ -125,9 +125,13 @@ export class TrackingGateway
         // Rate limiting : on rejette l'envoi, mais PAS silencieusement. Sans signal,
         // le client croirait sa position acceptée et la perdrait définitivement (elle
         // n'est ni sauvée ni mise en file). On réutilise l'événement positionRejected
-        // du Bug n°10 avec un motif dédié, pour que sendPosition remette la position
-        // en file d'attente locale (retentative via drainQueue).
-        return { event: 'positionRejected', data: { reason: 'rate_limited' } };
+        // avec un motif dédié, pour que sendPosition remette la position en file
+        // d'attente locale (retentative via drainQueue).
+        // IMPORTANT : le client n'attend AUCUN ack socket.io (emit sans callback) —
+        // l'acquittement ne remonte QUE par client.emit() explicite. Un "return
+        // { event, data }" ne lui serait jamais transmis (perte GPS silencieuse).
+        client.emit('positionRejected', { reason: 'rate_limited' });
+        return;
       }
 
       if (dto.deliveryId) {
@@ -137,6 +141,10 @@ export class TrackingGateway
           this.logger.warn(
             `Position rejected: driver ${user.id} not assigned to delivery ${dto.deliveryId}`,
           );
+          // Échec d'assignation : émission EXPLICITE du rejet, sinon le client
+          // resterait bloqué sur isSendingRef jusqu'au timeout de secours (2s côté
+          // app) pour une position qui ne sera jamais ni confirmée ni rejetée.
+          client.emit('positionRejected', { reason: 'not_assigned' });
           return;
         }
       }
@@ -151,6 +159,9 @@ export class TrackingGateway
         this.logger.warn(
           `Position rejected: vehicle ${dto.vehicleId} not owned by company ${user.companyId}`,
         );
+        // Cross-tenant : émission EXPLICITE du rejet (même logique que not_assigned
+        // ci-dessus — jamais de retour silencieux qui bloque le client 2-3s).
+        client.emit('positionRejected', { reason: 'vehicle_mismatch' });
         return;
       }
 
@@ -192,7 +203,9 @@ export class TrackingGateway
         // d'échec explicite, même forme que le succès (positionSaved), avec un motif
         // générique : aucun détail interne ni cross-tenant ne fuite côté client
         // (la source de vérité détaillée reste les logs de savePosition côté serveur).
-        return { event: 'positionRejected', data: { reason: 'rejected' } };
+        // Émission explicite client.emit — jamais de valeur retournée (voir plus haut).
+        client.emit('positionRejected', { reason: 'rejected' });
+        return;
       }
 
       this.logger.log(
@@ -225,7 +238,12 @@ export class TrackingGateway
       }
       this.server.to(`company:${user.companyId}`).emit('positionUpdate', broadcast);
 
-      return { event: 'positionSaved', data: { id: position.id, suspect: position.suspect } };
+      // Acquittement EXPLICITE via client.emit : le téléphone écoute
+      // socket.once('positionSaved') pour libérer isSendingRef. Sans cette
+      // émission, il reste bloqué jusqu'à son timeout de secours et ne peut plus
+      // envoyer de positions (sous-comptage de distance jusqu'à 80-90%).
+      client.emit('positionSaved', { id: position.id, suspect: position.suspect });
+      return;
     });
   }
 
@@ -279,7 +297,11 @@ export class TrackingGateway
         this.server.to(room).emit('batchPositionUpdate', broadcasts);
       }
 
-      return { event: 'positionsSaved', data: { count: saved.length } };
+      // Acquittement EXPLICITE du batch (même mécanisme que positionSaved) : le
+      // client n'utilise pas de callback ack socket.io, seule une émission explicite
+      // est reçue par son socket.once('positionsSaved').
+      client.emit('positionsSaved', { count: saved.length });
+      return;
     });
   }
 
