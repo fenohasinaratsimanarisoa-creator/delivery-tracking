@@ -491,9 +491,9 @@ export function useDriverTracking() {
 
     if (!kalmanRef.current) {
       kalmanRef.current = new KalmanFilter(latitude, longitude, acc);
+    } else {
       kalmanRef.current.predict();
     }
-    kalmanRef.current.predict();
     const filtered = kalmanRef.current.update(latitude, longitude, acc);
     const conf = kalmanRef.current.getConfidence();
 
