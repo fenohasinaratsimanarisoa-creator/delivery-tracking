@@ -1971,4 +1971,205 @@ describe('FuelConsumptionService', () => {
       warnSpy.mockRestore();
     });
   });
+
+    // ----------------------------------------------------------------
+  // DOUBLE COMPTAGE DE DISTANCE — multi-chauffeurs sur un même véhicule/jour +
+  // positions null-driver : la 3e passe de generateDailyReportForVehicle ne doit
+  // PAS recalculer la distance du véhicule tous chauffeurs confondus (elle
+  // écraserait le rapport de B avec la journée ENTIÈRE) — elle rattache
+  // UNIQUEMENT les positions null-driver au chauffeur le plus proche (reportDriverId).
+  // ----------------------------------------------------------------
+  describe('generateDailyReportForCompany — anti double-comptage multi-chauffeurs + positions null-driver', () => {
+    const COMPANY = 'company-1';
+    const DRIVER_A = '00000000-0000-4000-0000-0000000000aa';
+    const DRIVER_B = '00000000-0000-4000-0000-0000000000bb';
+    const VEHICLE = '00000000-0000-4000-0000-0000000000cc';
+    const TARGET_DATE_STR = '2026-08-13T12:00:00.000Z';
+
+    // Jour malgache (UTC+3) pour targetDate 2026-08-13T12:00Z :
+    // [2026-08-12T21:00Z → 2026-08-13T20:59:59.999Z] — tous les timestamps ci-dessous
+    // tombent dans la fenêtre. Positions à l'équateur (lat 0) avec speed=15 :
+    // 0.001° de longitude ≈ 1111.95 m, chaque segment est compté intégralement
+    // (règle vitesse) → les distances attendues sont déterministes.
+    const pos = (driverId: string | null, lon: number, ts: string) => ({
+      latitude: 0,
+      longitude: lon,
+      driverId,
+      accuracy: 5,
+      speed: 15,
+      timestamp: new Date(ts),
+    });
+
+    // Chemin CONTINU du véhicule ce jour : A (8h-12h) 0.000→0.010→0.020,
+    // 5 positions null-driver (13h) 0.020→0.026→0.032→0.038→0.044, B (14h-18h)
+    // 0.044→0.060→0.070→0.080. Le dernier point de chaque groupe est le premier du
+    // suivant (waypoint partagé) : la somme des rapports doit être EXACTEMENT la
+    // distance réelle de la journée, ni plus, ni moins.
+    const positionsA = [
+      pos(DRIVER_A, 0.000, '2026-08-13T05:00:00.000Z'),
+      pos(DRIVER_A, 0.010, '2026-08-13T06:00:00.000Z'),
+      pos(DRIVER_A, 0.020, '2026-08-13T07:00:00.000Z'),
+    ];
+    const positionsNull = [
+      pos(null, 0.020, '2026-08-13T10:00:00.000Z'),
+      pos(null, 0.026, '2026-08-13T10:10:00.000Z'),
+      pos(null, 0.032, '2026-08-13T10:20:00.000Z'),
+      pos(null, 0.038, '2026-08-13T10:30:00.000Z'),
+      pos(null, 0.044, '2026-08-13T10:40:00.000Z'),
+    ];
+    const positionsB = [
+      pos(DRIVER_B, 0.044, '2026-08-13T11:00:00.000Z'),
+      pos(DRIVER_B, 0.060, '2026-08-13T11:30:00.000Z'),
+      pos(DRIVER_B, 0.070, '2026-08-13T12:00:00.000Z'),
+      pos(DRIVER_B, 0.080, '2026-08-13T12:30:00.000Z'),
+    ];
+    const allPositions = [...positionsA, ...positionsNull, ...positionsB];
+
+    const VEHICLE_RECORD = {
+      id: VEHICLE,
+      licensePlate: 'TRK-ABC',
+      fuelType: 'Diesel',
+      theoreticalConsumption: 10,
+    };
+
+    const realTotalKm = (positions: Array<{ latitude: number; longitude: number }>) =>
+      positions
+        .slice(1)
+        .reduce(
+          (acc, p, i) =>
+            acc +
+            haversineDistance(
+              positions[i].latitude,
+              positions[i].longitude,
+              p.latitude,
+              p.longitude,
+            ),
+          0,
+        ) / 1000;
+
+    it('Test A : A (8h-12h) + B (14h-18h) + 5 positions null (13h) → A = sa matinée SEULE, B = sa distance + les nulls, SOMME == distance réelle du véhicule (pas de double comptage)', async () => {
+      mockPrisma.driver.findMany.mockResolvedValueOnce([
+        { id: DRIVER_A, firstName: 'A', lastName: 'Un' },
+        { id: DRIVER_B, firstName: 'B', lastName: 'Deux' },
+      ]);
+      // Passe 1 (par chauffeur) : A puis B, chacun SES positions uniquement.
+      mockPrisma.gpsPosition.findMany
+        .mockResolvedValueOnce(positionsA)
+        .mockResolvedValueOnce(positionsB);
+      // Passe 2 (véhicules SANS chauffeur) : aucun.
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([]);
+      // Passe 3 : le véhicule a un chauffeur assigné (B) ET des positions null-driver.
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([
+        { id: VEHICLE, driver: { id: DRIVER_B } },
+      ]);
+      mockPrisma.gpsPosition.findMany
+        // Détection des positions null-driver du jour (non vides → 3e passe active).
+        .mockResolvedValueOnce(positionsNull)
+        // generateDailyReportForVehicle : TOUTES les positions du jour (A + nulls + B).
+        .mockResolvedValueOnce(allPositions);
+      mockPrisma.driver.findUnique.mockResolvedValue({
+        id: DRIVER_B,
+        firstName: 'B',
+        lastName: 'Deux',
+      });
+      mockPrisma.vehicle.findUnique.mockResolvedValue(VEHICLE_RECORD);
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 4900 });
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (args: any) => args);
+
+      await service.generateDailyReportForCompanyOnDemand(COMPANY, TARGET_DATE_STR);
+
+      // 3 écritures : (A) par la passe 1, (B) par la passe 1, (B) ÉCRASÉ par la passe 3.
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(3);
+      const upserts = mockPrisma.dailyFuelReport.upsert.mock.calls.map((c: any) => c[0]);
+      const reportByDriver = new Map<string, any>();
+      for (const u of upserts) reportByDriver.set(u.create.driverId, u); // dernière = état final
+      const reportA = reportByDriver.get(DRIVER_A);
+      const reportB = reportByDriver.get(DRIVER_B);
+      expect(reportA).toBeDefined();
+      expect(reportB).toBeDefined();
+
+      const totalKm = realTotalKm(allPositions);
+
+      // Rapport de A : QUE sa matinée (~2.22 km), jamais la journée entière.
+      expect(reportA.create.driverId).toBe(DRIVER_A);
+      expect(reportA.create.distanceKm).toBe(2.22);
+      // Rapport de B : SA distance (14h-18h) PLUS les nulls de 13h (~6.67 km),
+      // PAS la journée entière (~8.90 km, le comportement bugué qui recalculait
+      // tout le véhicule et doublait la matinée de A).
+      expect(reportB.create.driverId).toBe(DRIVER_B);
+      expect(reportB.create.distanceKm).toBe(6.67);
+      expect(reportB.create.distanceKm).not.toBeCloseTo(totalKm, 1);
+
+      // SOMME des deux rapports == distance totale réelle du véhicule ce jour
+      // (le trajet de A n'est PAS compté deux fois).
+      const sumKm = reportA.create.distanceKm + reportB.create.distanceKm;
+      // eslint-disable-next-line no-console
+      console.log(
+        `[Test A] rapport A (8h-12h) = ${reportA.create.distanceKm} km | ` +
+          `rapport B (14h-18h + nulls 13h) = ${reportB.create.distanceKm} km | ` +
+          `SOMME = ${sumKm.toFixed(2)} km | total réel véhicule = ${totalKm.toFixed(2)} km`,
+      );
+      expect(sumKm).toBeCloseTo(totalKm, 1);
+
+      // Le rapport de B inclut bien les km des positions null-driver de 13h
+      // (rattachées au chauffeur chronologiquement le plus proche = B) :
+      // 6.67 km > les 4.00 km qui ne seraient que les siens.
+      expect(reportB.create.distanceKm).toBeGreaterThan(
+        positionsB.reduce((acc, p, i) => i === 0 ? acc : acc + haversineDistance(positionsB[i - 1].latitude, positionsB[i - 1].longitude, p.latitude, p.longitude), 0) / 1000,
+      );
+    });
+
+    it('Test B (non-régression) : un SEUL chauffeur + positions null-driver ce jour → comportement du fix 29a5ca1 inchangé et correct', async () => {
+      // Même scénario que le fix précédent : toutes les positions (driver + nulls)
+      // finissent dans LE rapport du chauffeur, sans duplication.
+      const positionsDriver = [
+        pos(DRIVER_A, 0.000, '2026-08-13T05:00:00.000Z'),
+        pos(DRIVER_A, 0.010, '2026-08-13T06:00:00.000Z'),
+      ];
+      const positionsNullB = [
+        pos(null, 0.010, '2026-08-13T10:00:00.000Z'),
+        pos(null, 0.016, '2026-08-13T10:10:00.000Z'),
+      ];
+      const all = [...positionsDriver, ...positionsNullB];
+
+      mockPrisma.driver.findMany.mockResolvedValueOnce([
+        { id: DRIVER_A, firstName: 'A', lastName: 'Un' },
+      ]);
+      mockPrisma.gpsPosition.findMany
+        .mockResolvedValueOnce(positionsDriver) // passe 1 (driver A)
+        .mockResolvedValueOnce(positionsNullB) // passe 3 (détection null)
+        .mockResolvedValueOnce(all); // generateDailyReportForVehicle (tout le jour)
+      mockPrisma.vehicle.findMany
+        .mockResolvedValueOnce([]) // passe 2 : aucun véhicule sans chauffeur
+        .mockResolvedValueOnce([{ id: VEHICLE, driver: { id: DRIVER_A } }]); // passe 3
+      mockPrisma.driver.findUnique.mockResolvedValue({
+        id: DRIVER_A,
+        firstName: 'A',
+        lastName: 'Un',
+      });
+      mockPrisma.vehicle.findUnique.mockResolvedValue(VEHICLE_RECORD);
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 4900 });
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (args: any) => args);
+
+      await service.generateDailyReportForCompanyOnDemand(COMPANY, TARGET_DATE_STR);
+
+      // 2 upserts : passe 1 (A) puis passe 3 qui ÉCRASE (A) avec A + nulls.
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(2);
+      const upserts = mockPrisma.dailyFuelReport.upsert.mock.calls.map((c: any) => c[0]);
+      const reportFinal = upserts[upserts.length - 1];
+      expect(reportFinal.create.driverId).toBe(DRIVER_A);
+
+      // A + nulls : 0.000→0.010 (1111.95m) + 0.010→0.010 (0) + 0.010→0.016 (667.17m)
+      // = 1779.1m → 1.78 km. Le rapport garde LES DEUX groupes (driver ET nulls)
+      // comme avant le correctif d'aujourd'hui.
+      const totalKm = realTotalKm(all);
+      expect(reportFinal.create.distanceKm).toBe(1.78);
+      // eslint-disable-next-line no-console
+      console.log(
+        `[Test B] rapport final driver A (positions A + nulls) = ${reportFinal.create.distanceKm} km | ` +
+          `total réel = ${totalKm.toFixed(2)} km`,
+      );
+      expect(reportFinal.create.distanceKm).toBeCloseTo(totalKm, 1);
+    });
+  });
 });

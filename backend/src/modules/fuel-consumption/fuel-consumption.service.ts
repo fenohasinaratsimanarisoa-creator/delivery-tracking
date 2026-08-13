@@ -963,6 +963,32 @@ export class FuelConsumptionService {
       return;
     }
 
+    // ------------------------------------------------------------------
+    // FILTRE PAR CHAUFFEUR (anti double-comptage) : cette passe ne doit PAS
+    // recalculer la distance totale du véhicule tous chauffeurs confondus — ce
+    // découpage par chauffeur est déjà produit, correctement, par
+    // generateDailyReportForDriver (une passe par chauffeur actif, qui ne
+    // récupère que les positions driverId=<ce chauffeur> et en produit un
+    // rapport par véhicule). Son rôle est UNIQUEMENT de rattacher au chauffeur
+    // le plus proche (reportDriverId) les positions null-driver orphelines
+    // (aucune VehicleAssignmentHistory couvrante ce jour).
+    //
+    // AVANT ce filtre : un véhicule avec DEUX chauffeurs le même jour (A le
+    // matin, B l'après-midi) ET des positions null-driver intermédiaires
+    // produisait pour B (reportDriverId = dernier driverId non-null = B) un
+    // rapport sur la journée ENTIÈRE (A+B+nulles) — le trajet de A était donc
+    // compté DEUX fois (dans son propre rapport généré par la passe driver, ET
+    // inclus dans celui de B). Les positions d'un AUTRE chauffeur (driverId non
+    // nul ≠ reportDriverId) sont ici EXCLUES du groupe : elles restent comptées
+    // uniquement dans le rapport déjà généré pour leur propre chauffeur.
+    //
+    // Si le véhicule n'a QUE des positions null-driver ce jour (aucune position
+    // propre à reportDriverId), le filtre garde tout : l'upsert sous
+    // reportDriverId (fallback currentDriverId) reste inchangé.
+    const scopedPositions = positions.filter(
+      (p) => p.driverId === null || p.driverId === reportDriverId,
+    );
+
     const lastDriver = await this.prisma.driver.findUnique({
       where: { id: reportDriverId },
       select: { firstName: true, lastName: true },
@@ -977,7 +1003,7 @@ export class FuelConsumptionService {
       companyId,
       targetDate,
       vehicleId,
-      positions.map((p) => ({
+      scopedPositions.map((p) => ({
         latitude: p.latitude,
         longitude: p.longitude,
         accuracy: p.accuracy,
