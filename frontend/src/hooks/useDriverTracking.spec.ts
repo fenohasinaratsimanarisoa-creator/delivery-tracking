@@ -434,6 +434,62 @@ describe('useDriverTracking core logic', () => {
     expect(await offlineQueue.queueSize()).toBe(0);
   });
 
+  it('Test D : position pendant la fenêtre de throttle (LOCATION_FASTEST_INTERVAL_MS) → mise en file, PAS perdue', async () => {
+    vi.useRealTimers();
+    socketConnected = true;
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/drivers/profile') {
+        return Promise.resolve({
+          data: { id: 'd1', firstName: 'A', lastName: 'B', vehicle: { id: 'v1', brand: 'X', model: 'Y', licensePlate: 'Z', positionSource: 'phone' } },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 1600)); }); // startTracking
+
+    // vi.useFakeTimers simule Date.now() : l'horloge fake est l'unique source de
+    // temps pour le garde de throttle (nowTs - lastSendTimeRef.current).
+    vi.useFakeTimers();
+    const nativeHandler = nativeLocationHandler.current!;
+
+    // t=0 : processCoords() puis sendPosition() n°1 → envoi direct émis.
+    act(() => {
+      nativeHandler({ latitude: -18.8792, longitude: 47.5079, speed: 12, heading: 0, altitude: 0, accuracy: 10 });
+    });
+    expect(socketEmits.filter((e) => e.event === 'updatePosition')).toHaveLength(1);
+
+    // ACK serveur : isSendingRef libéré, mais lastSendTimeRef garde la trace du
+    // tout dernier envoi (t=0).
+    act(() => { socketHandlers['positionSaved']?.({ id: 'pos-1', suspect: false }); });
+
+    // t+500ms (bien SOUS LOCATION_FASTEST_INTERVAL_MS=2000ms) : second
+    // processCoords() puis sendPosition() → le garde de throttle (isSendingRef
+    // libre, fenêtre non écoulée) doit METTRE EN FILE la position, pas la
+    // perdre silencieusement.
+    act(() => { vi.advanceTimersByTime(500); });
+    act(() => {
+      nativeHandler({ latitude: -18.8793, longitude: 47.508, speed: 12, heading: 0, altitude: 0, accuracy: 10 });
+    });
+
+    // Le throttle est préservé : aucun second emit direct dans la fenêtre.
+    expect(socketEmits.filter((e) => e.event === 'updatePosition')).toHaveLength(1);
+    // Mais la DEUXIÈME position n'est PAS silencieusement perdue : elle est dans
+    // la file IndexedDB (retentée par drainQueue).
+    const offlineQueue = await import('../services/offlineQueue');
+    expect(await offlineQueue.queueSize()).toBe(1);
+    expect(offlineQueue.enqueuePosition).toHaveBeenCalledTimes(1);
+
+    // Après la fenêtre de throttle, la position en file est purgée par un drain
+    // (ex. retour du réseau) : elle part bien au backend.
+    act(() => { socketHandlers['connect']?.(); });
+    await act(async () => {});
+    expect(offlineQueue.flushQueue).toHaveBeenCalled();
+    expect(await offlineQueue.queueSize()).toBe(0);
+  });
+
   it('Test cadence : 5 min simulées de positions natives (2s) → intervalle moyen entre positions émises ≤ 3s', async () => {
     vi.useRealTimers();
     socketConnected = true;

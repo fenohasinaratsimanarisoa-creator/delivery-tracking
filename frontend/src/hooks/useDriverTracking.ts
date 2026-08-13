@@ -415,13 +415,17 @@ export function useDriverTracking() {
     const p = posRef.current;
     if (!p) return;
 
+    // Position acquise alors qu'on ne PEUT PAS l'envoyer immédiatement (envoi
+    // déjà en cours, ou fenêtre de throttle non écoulée) : on NE la jette PAS
+    // (les return silencieux d'avant perdaient des positions — sous-comptage de
+    // distance jusqu'à 80-90% quand l'ACK n'arrivait jamais). Elle est mise en
+    // file locale (IndexedDB) et sera retentée par drainQueue.
+    const queueAndSkip = (pos: DriverPosition) => {
+      enqueuePosition(buildPositionPayload(pos)).then(() => { refreshQueueCount(); });
+    };
+
     if (isSendingRef.current) {
-      // Une position est acquise alors qu'un envoi est déjà en cours : on NE la
-      // jette PAS (le return silencieux d'avant perdait silencieusement les
-      // positions arrivées en rafale pendant l'envoi — sous-comptage de distance
-      // jusqu'à 80-90% quand l'ACK n'arrivait jamais). Elle est mise en file
-      // locale (IndexedDB) et sera retentée par drainQueue.
-      enqueuePosition(buildPositionPayload(p)).then(() => { refreshQueueCount(); });
+      queueAndSkip(p);
       return;
     }
 
@@ -437,7 +441,14 @@ export function useDriverTracking() {
     // mais en PREMIER PLAN l'intervalle ET le callback natif peuvent tous deux appeler
     // sendPosition → ce garde borne le débit (3s), cohérent avec la cadence native.
     const nowTs = Date.now();
-    if (nowTs - lastSendTimeRef.current < LOCATION_FASTEST_INTERVAL_MS) return;
+    if (nowTs - lastSendTimeRef.current < LOCATION_FASTEST_INTERVAL_MS) {
+      // Même traitement que le garde isSendingRef : la position n'est pas
+      // silencieusement perdue, elle est mise en file (IndexedDB) et retentée par
+      // drainQueue. On ne met PAS à jour lastSendTimeRef : seule l'initiation
+      // réelle d'un envoi renouvelle la fenêtre de throttle.
+      queueAndSkip(p);
+      return;
+    }
     lastSendTimeRef.current = nowTs;
     isSendingRef.current = true;
 
