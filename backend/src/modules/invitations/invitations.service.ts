@@ -8,6 +8,7 @@ import {
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
 import { EmailService } from '../email/email.service';
 import { CreateInvitationDto } from './dto/invitation.dto';
 
@@ -22,12 +23,18 @@ export class InvitationsService {
 
   async create(companyId: string, invitedById: string, dto: CreateInvitationDto) {
     dto.email = dto.email.toLowerCase().trim();
-    // Check if user already exists in this company
-    const existingUser = await this.prisma.user.findFirst({
-      where: { email: dto.email, companyId, deletedAt: null },
-    });
+    // Unicité GLOBALE de l'email, comme dans auth.service.ts register() : un
+    // compte existe déjà sur la plateforme pour cette adresse, quelle que soit
+    // l'entreprise — l'invitation serait sinon refusée à l'acceptation.
+    // Le contexte tenant est désactivé pour cette requête PRÉCISE (autrement
+    // le middleware injecterait companyId dans le where d'un findUnique).
+    const existingUser = await CompanyScopedContext.run(null, () =>
+      this.prisma.user.findUnique({ where: { email: dto.email } }),
+    );
     if (existingUser) {
-      throw new ConflictException('User with this email already exists in your company');
+      throw new ConflictException(
+        'Cette adresse email est déjà associée à un compte sur la plateforme',
+      );
     }
 
     // Check for existing pending invitation

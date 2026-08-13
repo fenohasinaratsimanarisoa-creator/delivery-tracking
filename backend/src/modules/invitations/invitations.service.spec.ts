@@ -12,6 +12,7 @@ const mockPrisma = {
   $transaction: jest.fn().mockImplementation((fn: any) => fn(mockPrisma)),
   user: {
     findFirst: jest.fn(),
+    findUnique: jest.fn(),
     create: jest.fn(),
   },
   driver: {
@@ -51,7 +52,7 @@ describe('InvitationsService', () => {
 
     it('creates a pending invitation and sends an invite email', async () => {
       const invitation = { id: 'inv-1', ...dto, token: 'token' };
-      mockPrisma.user.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
       mockPrisma.invitation.findFirst.mockResolvedValueOnce(null);
       mockPrisma.invitation.create.mockResolvedValueOnce(invitation);
 
@@ -74,14 +75,37 @@ describe('InvitationsService', () => {
     });
 
     it('rejects an invitation for an existing active company user', async () => {
-      mockPrisma.user.findFirst.mockResolvedValueOnce({ id: 'user-1' });
+      mockPrisma.user.findUnique.mockResolvedValueOnce({ id: 'user-1' });
 
-      await expect(service.create('company-1', 'admin-1', dto)).rejects.toThrow(ConflictException);
+      await expect(service.create('company-1', 'admin-1', dto)).rejects.toThrow(
+        'Cette adresse email est déjà associée à un compte sur la plateforme',
+      );
       expect(mockPrisma.invitation.create).not.toHaveBeenCalled();
     });
 
+    it('rejette l\'invitation d\'un email déjà utilisé par une AUTRE entreprise, DÈS la création (unicité globale)', async () => {
+      // Le compte existe sur la plateforme, mais dans une AUTRE entreprise
+      // (company-2) : la vérification GLOBALE par email doit quand même le
+      // trouver — avant ce correctif, le check scopé à company-1 laissait
+      // l'invitation passer et le rejet n'avait lieu qu'à l'acceptation.
+      mockPrisma.user.findUnique.mockResolvedValueOnce({
+        id: 'user-2',
+        email: 'driver@test.com',
+        companyId: 'company-2',
+      });
+
+      const promise = service.create('company-1', 'admin-1', dto);
+      await expect(promise).rejects.toThrow(ConflictException);
+      await expect(promise).rejects.toThrow(
+        'Cette adresse email est déjà associée à un compte sur la plateforme',
+      );
+      expect(mockPrisma.invitation.findFirst).not.toHaveBeenCalled();
+      expect(mockPrisma.invitation.create).not.toHaveBeenCalled();
+      expect(mockEmailService.sendInvitation).not.toHaveBeenCalled();
+    });
+
     it('rejects duplicate pending invitations', async () => {
-      mockPrisma.user.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
       mockPrisma.invitation.findFirst.mockResolvedValueOnce({ id: 'inv-1' });
 
       await expect(service.create('company-1', 'admin-1', dto)).rejects.toThrow(ConflictException);
