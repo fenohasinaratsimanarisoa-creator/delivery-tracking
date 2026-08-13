@@ -14,6 +14,9 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 );
 
 const socketEmits: Array<{ event: string; payload?: unknown }> = [];
+// Epoch ms (horloge fake) de CHAQUE émission réelle d'updatePosition : sert au
+// test de cadence à produire le log des timestamps consécutifs reçus côté carte.
+const emittedAt: number[] = [];
 const socketHandlers: Record<string, (data?: any) => void> = {};
 let socketConnected = false;
 
@@ -24,7 +27,10 @@ const { fakeQueue } = vi.hoisted(() => ({ fakeQueue: [] as unknown[] }));
 vi.mock('../services/socket/socket', () => ({
   getSocket: () => ({
     get connected() { return socketConnected; },
-    emit: (event: string, payload?: unknown) => { socketEmits.push({ event, payload }); },
+    emit: (event: string, payload?: unknown) => {
+      socketEmits.push({ event, payload });
+      if (event === 'updatePosition') emittedAt.push(Date.now());
+    },
     on: (event: string, handler: (data?: any) => void) => { socketHandlers[event] = handler; },
     off: vi.fn(),
     once: (event: string, handler: (data?: any) => void) => { socketHandlers[event] = handler; },
@@ -80,6 +86,7 @@ describe('useDriverTracking core logic', () => {
     vi.clearAllMocks(); // réinitialise les compteurs d'appels (implémentations conservées)
     socketConnected = false;
     socketEmits.length = 0;
+    emittedAt.length = 0;
     fakeQueue.length = 0;
     nativeLocationHandler.current = null;
     nativeSubscriptions.length = 0;
@@ -425,5 +432,64 @@ describe('useDriverTracking core logic', () => {
     await act(async () => {}); // microtasks (drainQueue async → flushQueue → queueSize)
     expect(offlineQueue.flushQueue).toHaveBeenCalled();
     expect(await offlineQueue.queueSize()).toBe(0);
+  });
+
+  it('Test cadence : 5 min simulées de positions natives (2s) → intervalle moyen entre positions émises ≤ 3s', async () => {
+    vi.useRealTimers();
+    socketConnected = true;
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/drivers/profile') {
+        return Promise.resolve({
+          data: { id: 'd1', firstName: 'A', lastName: 'B', vehicle: { id: 'v1', brand: 'X', model: 'Y', licensePlate: 'Z', positionSource: 'phone' } },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 1600)); }); // startTracking
+
+    vi.useFakeTimers();
+    const nativeHandler = nativeLocationHandler.current!;
+
+    // 150 positions natives à 2s d'intervalle = 5 minutes. Cadence « favorisée »
+    // par le foreground service (LOCATION_FASTEST_INTERVAL_MS = 2000L) quand le
+    // système remonte des fixes plus souvent : le nouveau throttle JS (2000ms)
+    // laisse passer le flux (l'ancien 3000ms l'étranglait à 3s).
+    for (let i = 0; i < 150; i++) {
+      act(() => {
+        nativeHandler({ latitude: -18.8792 + i * 0.0001, longitude: 47.5079 + i * 0.0001, speed: 12, heading: 0, altitude: 0, accuracy: 10 });
+      });
+      // ACK serveur rapide : libère isSendingRef (l'ACK réel, pas le filet 2000ms).
+      act(() => { socketHandlers['positionSaved']?.({ id: `pos-${i}`, suspect: false }); });
+      act(() => { vi.advanceTimersByTime(2000); });
+    }
+
+    // emittedAt = epoch ms (horloge fake) de chaque updatePosition réellement émis
+    // (callback natif direct + tick de l'intervalle), c'est-à-dire les instants où
+    // la position apparaît côté serveur/carte pendant la fenêtre de 5 minutes.
+    const intervals: number[] = [];
+    for (let i = 1; i < emittedAt.length; i++) {
+      intervals.push(emittedAt[i] - emittedAt[i - 1]);
+    }
+    const meanInterval = intervals.length > 0
+      ? intervals.reduce((a, b) => a + b, 0) / intervals.length
+      : Infinity;
+
+    // LOG RÉEL DES TIMESTAMPS (preuve exigée : log, pas une affirmation).
+    // eslint-disable-next-line no-console
+    console.log(
+      `[test cadence] positions émises=${emittedAt.length}/150 sur 300s simulées — `
+      + `intervalle moyen=${meanInterval.toFixed(0)}ms — `
+      + `premiers ts: ${emittedAt.slice(0, 3).join(', ')} — `
+      + `derniers ts: ${emittedAt.slice(-3).join(', ')}`,
+    );
+
+    // Au moins 110 des 150 positions partent en temps réel (le reste, coincé par
+    // le throttle pendant le conflit tick/natif, part via drainQueue en batch).
+    expect(emittedAt.length).toBeGreaterThanOrEqual(110);
+    // Intervalle moyen entre deux points émis ≤ 3s (exigence du test obligatoire).
+    expect(meanInterval).toBeLessThanOrEqual(3000);
   });
 });

@@ -36,15 +36,19 @@ const ACCURACY_POOR = 50;
 const ACCURACY_REJECT = 80;
 const SPEED_MOVING_THRESHOLD_MS = 1.39;
 const STOPPED_DURATION_MS = 30_000;
+// Cadence d'envoi en mouvement : 3s. Alignée sur le LOCATION_INTERVAL_MS natif
+// (LocationForegroundService.java = 3000L) pour un rendu temps réel fluide.
 const INTERVAL_FAST = 3000;
 const INTERVAL_SLOW = 20000;
 const INTERVAL_DEFAULT = 5000;
 // Cadence minimale entre deux envois de position, cohérente avec la cadence native
-// définie côté LocationForegroundService.java (LOCATION_FASTEST_INTERVAL_MS = 3000).
+// définie côté LocationForegroundService.java (LOCATION_FASTEST_INTERVAL_MS = 2000).
 // Protège contre la sur-fréquence quand l'intervalle ET le callback natif envoient tous
 // les deux en premier plan : le throttling de Chromium ne s'applique qu'en arrière-plan,
 // en premier plan les deux sources peuvent cohabiter → on borne le débit d'envoi.
-const LOCATION_FASTEST_INTERVAL_MS = 3000;
+// Reste sous l'intervalle nominal (3000ms) : l'écart autorise les fixes natifs remontés
+// plus souvent (LOCATION_FASTEST_INTERVAL_MS natif) sans jamais descendre sous 2s.
+const LOCATION_FASTEST_INTERVAL_MS = 2000;
 const DRAIN_INTERVAL_MS = 10000;
 const PROXIMITY_THRESHOLD_M = 300;
 const PROXIMITY_REMINDER_MS = 5 * 60 * 1000;

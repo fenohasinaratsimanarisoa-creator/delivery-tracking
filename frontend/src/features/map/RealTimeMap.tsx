@@ -11,6 +11,7 @@ import { formatDate, formatTime } from '../../services/i18n/formatDate';
 import { useDevicePerformance } from '../../hooks/useDevicePerformance';
 import { getDirections, formatDistance } from '../../services/routing/routingService';
 import { predictPosition, maxDeadReckonTime } from '../../services/tracking/deadReckoning';
+import { computeAnimationDuration, FALLBACK_ANIMATION_MS } from './animationTiming';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -104,7 +105,10 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
   const drRef = useRef<number>(0);
   const fromRef = useRef<{ lat: number; lng: number } | null>(null);
   const startTimeRef = useRef<number>(0);
-  const durationRef = useRef<number>(500);
+  const durationRef = useRef<number>(FALLBACK_ANIMATION_MS);
+  // Timestamp (epoch ms) de la position PRÉCÉDENTE reçue : c'est lui qui permet
+  // de calculer le délai réel entre deux positions (computeAnimationDuration).
+  const prevTsRef = useRef<number | null>(null);
   const lastUpdateRef = useRef<number>(Date.now());
   const lastStateRef = useRef<{ lat: number; lng: number; speed: number; heading: number } | null>(null);
   const vehicleRef = useRef(vehicle);
@@ -171,7 +175,13 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       return;
     }
 
-    const duration = 600;
+    // Durée d'animation = délai RÉEL entre la position reçue et la précédente
+    // (timestamp à timestamp), borné au max pour ne jamais « rattraper » un long
+    // gap de reconnexion. La vitesse d'interpolation visuelle correspond ainsi à
+    // la vitesse réelle du véhicule, quelle que soit la source (natif/JS/batch).
+    const currTs = vehicle.timestamp ? new Date(vehicle.timestamp).getTime() : null;
+    const duration = computeAnimationDuration(prevTsRef.current, currTs);
+    prevTsRef.current = currTs;
     startTimeRef.current = performance.now();
     durationRef.current = duration;
 
@@ -203,7 +213,11 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       if (!marker) return;
 
       const elapsed = Date.now() - lastUpdateRef.current;
-      if (elapsed < 1000) return; // Only predict after 1s without update
+      // L'animation en cours couvre déjà le délai réel entre deux positions
+      // (sa durée = delta timestamp à timestamp) : ne pas la court-circuiter
+      // par une extrapolation. Le dead reckoning ne prend le relais qu'après
+      // la fin de l'animation (1s minimum au premier fix).
+      if (elapsed < Math.max(durationRef.current, 1000)) return;
       if (elapsed > maxDrMs) return; // Stop predicting beyond limit
 
       const state = lastStateRef.current;

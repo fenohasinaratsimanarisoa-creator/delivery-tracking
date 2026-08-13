@@ -58,10 +58,15 @@ public class LocationForegroundService extends Service {
     public static final String CHANNEL_ID = "logitrack_location";
     public static final int NOTIFICATION_ID = 2471;
 
-    /** Intervalle cible d'acquisition GPS : 5 s. */
-    private static final long LOCATION_INTERVAL_MS = 5000L;
-    /** Intervalle minimal accepté : 3 s. */
-    private static final long LOCATION_FASTEST_INTERVAL_MS = 3000L;
+    /**
+     * Cadence d'acquisition GPS — compromis fluidité/batterie pour une flotte
+     * professionnelle. Alignées sur le JS (useDriverTracking.ts : INTERVAL_FAST
+     * et LOCATION_FASTEST_INTERVAL_MS) pour un rendu temps réel fluide type
+     * Google Maps. NE PAS descendre sous 1000ms : la précision GPS civile
+     * (~5-10m, même fixes) et le coût batterie rendraient la cadence sans bénéfice.
+     */
+    private static final long LOCATION_INTERVAL_MS = 3000L;
+    private static final long LOCATION_FASTEST_INTERVAL_MS = 2000L;
 
     public static boolean isRunning = false;
 
