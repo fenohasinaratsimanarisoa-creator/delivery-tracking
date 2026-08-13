@@ -1075,9 +1075,9 @@ export class TrackingService {
   async getLivePositions(companyId: string) {
     const positions = await this.prisma.$queryRaw<
       Array<{
-        driver_id: string;
-        driver_first_name: string;
-        driver_last_name: string;
+        driver_id: string | null;
+        driver_first_name: string | null;
+        driver_last_name: string | null;
         latitude: number;
         longitude: number;
         speed: number | null;
@@ -1105,16 +1105,16 @@ export class TrackingService {
         gp.delivery_id,
         EXTRACT(EPOCH FROM (NOW() - gp.timestamp)) / 60 AS minutes_ago
       FROM gps_positions gp
-      JOIN drivers d ON d.id = gp.driver_id
+      LEFT JOIN drivers d ON d.id = gp.driver_id AND d.deleted_at IS NULL AND d.is_active = true
       JOIN vehicles v ON v.id = gp.vehicle_id AND v.deleted_at IS NULL AND v.is_active = true
-      WHERE d.company_id = CAST(${companyId} AS uuid)
-        AND d.deleted_at IS NULL
-        AND d.is_active = true
+      WHERE v.company_id = CAST(${companyId} AS uuid)
       ORDER BY gp.vehicle_id, gp.timestamp DESC
     `;
     return positions.map((p) => ({
       driverId: p.driver_id,
-      driverName: `${p.driver_first_name} ${p.driver_last_name}`,
+      driverName: p.driver_id == null || !p.driver_first_name || !p.driver_last_name
+        ? 'Véhicule sans chauffeur assigné'
+        : `${p.driver_first_name} ${p.driver_last_name}`,
       latitude: p.latitude,
       longitude: p.longitude,
       speed: p.speed,

@@ -105,8 +105,8 @@ export function disconnectSocket(): void {
 }
 
 export interface PositionUpdate {
-  driverId: string;
-  driverName: string;
+  driverId?: string;
+  driverName?: string;
   latitude: number;
   longitude: number;
   speed?: number;

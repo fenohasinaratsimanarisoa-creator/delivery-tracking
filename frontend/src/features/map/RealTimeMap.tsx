@@ -75,24 +75,8 @@ interface SearchResult {
   licenseNumber?: string;
 }
 
-interface VehicleData {
-  id: string;
-  lat: number;
-  lng: number;
-  name: string;
-  speed?: number;
-  heading?: number;
-  timestamp: string;
-  status?: string;
-  eta?: string | null;
-  routeDistance?: number;
-  routeDuration?: number;
-  accuracy?: number;
-  confidence?: number;
-  vehicleId?: string;
-  deliveryId?: string;
-  suspect?: boolean;
-}
+import type { VehicleData } from './vehicleMap';
+import { mergePositionUpdate, mergeBootstrapPositions } from './vehicleMap';
 
 function buildIcon(vehicle: VehicleData, focused: boolean) {
   const rotation = vehicle.heading ?? 0;
@@ -611,74 +595,14 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
   // Bootstrap vehicles from REST live positions (before any WebSocket update)
   useEffect(() => {
     if (!livePositions || !Array.isArray(livePositions) || livePositions.length === 0) return;
-    const OFFLINE_TIMEOUT_MIN = 15;
-    setVehicles((prev) => {
-      const next = new Map(prev);
-      for (const pos of livePositions) {
-        if (!next.has(pos.driverId)) {
-          const minutesOld = pos.minutesAgo ?? 0;
-          const isOffline = minutesOld > OFFLINE_TIMEOUT_MIN;
-          const eta = computeETAForVehicle(pos);
-          next.set(pos.driverId, {
-            id: pos.driverId,
-            lat: pos.latitude,
-            lng: pos.longitude,
-            name: pos.driverName,
-            speed: pos.speed ?? undefined,
-            heading: pos.heading ?? undefined,
-            accuracy: pos.accuracy ?? undefined,
-            vehicleId: pos.vehicleId,
-            deliveryId: pos.deliveryId ?? undefined,
-            confidence: pos.accuracy ? Math.max(0.1, 1 - pos.accuracy / 50) : 1,
-            timestamp: pos.timestamp,
-            status: isOffline ? 'offline' as const : pos.speed && pos.speed > 0.5 ? 'moving' as const : 'static' as const,
-            suspect: pos.suspect ?? false,
-            eta,
-          });
-        }
-      }
-      return next;
-    });
+    setVehicles((prev) => mergeBootstrapPositions(prev, livePositions, computeETAForVehicle));
   }, [livePositions, computeETAForVehicle]);
 
   const addPosition = useCallback((update: PositionUpdate) => {
-    const eta = computeETAForVehicle(update);
     const dLat = deliveryLatRef.current;
     const dLng = deliveryLngRef.current;
 
-    setVehicles((prev) => {
-      const next = new Map(prev);
-      const existing = prev.get(update.driverId);
-
-      if (update.suspect && existing) {
-        next.set(update.driverId, {
-          ...existing,
-          speed: update.speed,
-          heading: update.heading,
-          accuracy: update.accuracy,
-          timestamp: update.timestamp,
-          suspect: true,
-        });
-      } else {
-        next.set(update.driverId, {
-          id: update.driverId,
-          lat: update.latitude,
-          lng: update.longitude,
-          name: update.driverName,
-          speed: update.speed,
-          heading: update.heading,
-          accuracy: update.accuracy,
-          vehicleId: update.vehicleId,
-          deliveryId: update.deliveryId,
-          confidence: update.confidence ?? (update.accuracy ? Math.max(0.1, 1 - update.accuracy / 50) : 1),
-          timestamp: update.timestamp,
-          status: update.speed && update.speed > 0.5 ? 'moving' : 'static',
-          eta,
-          suspect: false,
-        });
-      }
-      return next;
-    });
+    setVehicles((prev) => mergePositionUpdate(prev, update, computeETAForVehicle));
 
     if (deliveryId && update.deliveryId === deliveryId && dLat && dLng) {
       setRoutePath((prev) => {

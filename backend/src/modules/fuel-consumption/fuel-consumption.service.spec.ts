@@ -1269,7 +1269,11 @@ describe('FuelConsumptionService', () => {
     it('crée un DailyFuelReport pour un véhicule sans chauffeur (gpsKm > 0) → cross-check détectable', async () => {
       // Aucun chauffeur actif : seule la boucle "véhicules sans chauffeur" tourne.
       mockPrisma.driver.findMany.mockResolvedValue([]);
-      mockPrisma.vehicle.findMany.mockResolvedValue([{ id: 'vehicle-orphan' }]);
+      // Passe 2 (véhicules SANS chauffeur) → 1 véhicule orphelin ; passe 3
+      // (véhicules AVEC chauffeur) → aucun.
+      mockPrisma.vehicle.findMany
+        .mockResolvedValueOnce([{ id: 'vehicle-orphan' }])
+        .mockResolvedValueOnce([]);
       // 2 positions sur ce véhicule (driverId quelconque) → ~1.11 km.
       mockPrisma.gpsPosition.findMany.mockResolvedValue([
         { latitude: 0, longitude: 0, driverId: 'driver-x' },
@@ -1846,6 +1850,125 @@ describe('FuelConsumptionService', () => {
         new Date('2026-07-20'),
       );
       expect(priced).toBe(1500);
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // GpsPosition.driverId nullable — troisième passe positions driverId=null
+  // ----------------------------------------------------------------
+  describe('generateDailyReportForCompany — positions driverId=null (nullable GpsPosition)', () => {
+    const COMPANY = 'company-1';
+    const DRIVER = '00000000-0000-4000-0000-000000000001';
+    const VEHICLE = '00000000-0000-4000-0000-000000000002';
+
+    const nullDriverPosition = (lon: number, i: number) => ({
+      latitude: -18.8792,
+      longitude: lon,
+      driverId: null,
+      accuracy: 5,
+      speed: 15,
+      timestamp: new Date(`2026-08-13T0${i}:30:00.000Z`),
+    });
+
+    it('Test D : génère un DailyFuelReport dont distanceKm reflète les positions driverId=null d\'un véhicule avec chauffeur assigné', async () => {
+      // Fenêtre du jour malgache (UTC+3) pour targetDate = 2026-08-13T12:00Z :
+      // [2026-08-12T21:00Z → 2026-08-13T20:59:59.999Z]
+      const positions = [
+        nullDriverPosition(47.5079, 1),
+        nullDriverPosition(47.51265, 2),
+        nullDriverPosition(47.5174, 3),
+      ];
+
+      mockPrisma.driver.findMany.mockResolvedValueOnce([
+        { id: DRIVER, firstName: 'Jean', lastName: 'Rakoto' },
+      ]);
+
+      // Passe 1 (par chauffeur) : aucune position avec driverId=DRIVER ce jour
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
+
+      // Passe 2 (véhicules SANS chauffeur) : aucun
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([]);
+
+      // Troisième passe : le véhicule actif AVEC chauffeur a des positions
+      // driverId=null dans la fenêtre du jour
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([
+        { id: VEHICLE, driver: { id: DRIVER } },
+      ]);
+
+      // Requête de détection des positions null-driver du jour (non vides)
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positions);
+
+      // generateDailyReportForVehicle : groupe complet des positions du jour
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positions);
+
+      mockPrisma.driver.findUnique.mockResolvedValue({
+        firstName: 'Jean',
+        lastName: 'Rakoto',
+      });
+      mockPrisma.vehicle.findUnique.mockResolvedValue({
+        id: VEHICLE,
+        licensePlate: 'TRK-001',
+        fuelType: 'Diesel',
+        theoreticalConsumption: 10,
+      });
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 4900 });
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (args: any) => args);
+
+      await service.generateDailyReportForCompanyOnDemand(COMPANY, '2026-08-13T12:00:00.000Z');
+
+      expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(1);
+      const args = mockPrisma.dailyFuelReport.upsert.mock.calls[0][0];
+
+      // Le rapport est bien rattaché au chauffeur assigné (le plus proche résolu)
+      expect(args.where.driverId_vehicleId_reportDate.driverId).toBe(DRIVER);
+      expect(args.where.driverId_vehicleId_reportDate.vehicleId).toBe(VEHICLE);
+      expect(args.create.driverId).toBe(DRIVER);
+      expect(args.create.vehicleId).toBe(VEHICLE);
+
+      // distanceKm reflète CES positions null-driver (2 segments ~500 m = ~1 km),
+      // pas 0, pas ignorées.
+      expect(args.create.distanceKm).toBeGreaterThan(0.9);
+      expect(args.create.distanceKm).toBeLessThan(1.1);
+      expect(args.create.gpsDataQuality).toBe('sufficient');
+    });
+
+    it('ne génère AUCUN rapport quand le véhicule n\'a pas de positions driverId=null (pas de 3e passe inutile)', async () => {
+      mockPrisma.driver.findMany.mockResolvedValueOnce([]);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([]);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([
+        { id: VEHICLE, driver: { id: DRIVER } },
+      ]);
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
+
+      await service.generateDailyReportForCompanyOnDemand(COMPANY, '2026-08-13T12:00:00.000Z');
+
+      expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
+    });
+
+    it('log un warning explicite quand aucun chauffeur n\'est résolvable (positions 100% null-driver, véhicule sans chauffeur)', async () => {
+      const positions = [
+        nullDriverPosition(47.5079, 1),
+        nullDriverPosition(47.51265, 2),
+      ];
+      const warnSpy = jest
+        .spyOn((service as any).logger, 'warn')
+        .mockImplementation(() => undefined);
+
+      mockPrisma.driver.findMany.mockResolvedValueOnce([]);
+      // Passe 2 : véhicule sans chauffeur assigné, toutes ses positions du jour
+      // sont null-driver → aucun chauffeur résolvable → warning explicite.
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VEHICLE }]);
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positions);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([]);
+
+      await service.generateDailyReportForCompanyOnDemand(COMPANY, '2026-08-13T12:00:00.000Z');
+
+      expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
+      const message = String(warnSpy.mock.calls[0][0]);
+      expect(message).toContain(VEHICLE);
+      expect(message).toContain('AUCUN chauffeur résolvable');
+      warnSpy.mockRestore();
     });
   });
 });

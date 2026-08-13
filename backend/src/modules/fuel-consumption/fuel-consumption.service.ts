@@ -751,6 +751,53 @@ export class FuelConsumptionService {
     for (const vehicle of unassignedVehicles) {
       await this.generateDailyReportForVehicle(vehicle.id, companyId, targetDate);
     }
+
+    // Troisième passe : les véhicules actifs AVEC un chauffeur assigné dont
+    // certaines positions GPS du jour ont driverId=null. Quand AUCUNE
+    // VehicleAssignmentHistory ne couvre l'instant du fix (comportement voulu du
+    // pont Traccar), ces positions n'apparaissent dans AUCUN DailyFuelReport — ni
+    // via generateDailyReportForDriver (qui filtre driverId=driver.id), ni via la
+    // boucle précédente (qui ne cible que les véhicules SANS chauffeur). On les
+    // rattache au chauffeur le plus proche (celui assigné au véhicule).
+    const bounds = this.getMadagascarDayBounds(targetDate);
+    const assignedVehicles = await this.prisma.vehicle.findMany({
+      where: { companyId, deletedAt: null, isActive: true, driver: { isNot: null } },
+      select: { id: true, driver: { select: { id: true } } },
+    });
+
+    for (const vehicle of assignedVehicles) {
+      const nullDriverPositions = await this.prisma.gpsPosition.findMany({
+        where: {
+          vehicleId: vehicle.id,
+          companyId,
+          driverId: null,
+          suspect: false,
+          timestamp: { gte: bounds.start, lte: bounds.end },
+        },
+        orderBy: { timestamp: 'asc' },
+        select: {
+          latitude: true,
+          longitude: true,
+          driverId: true,
+          accuracy: true,
+          speed: true,
+          timestamp: true,
+        },
+      });
+      if (nullDriverPositions.length === 0) continue;
+
+      // generateDailyReportForVehicle couvre TOUTES les positions du jour du
+      // véhicule (driverId non-null ET null) : l'upsert par (driverId, vehicleId,
+      // reportDate) écrase le rapport de la passe driver avec le groupe COMPLET,
+      // donc chaque position est comptée EXACTEMENT une fois (pas de double
+      // comptage), y compris les fixes null-driver.
+      await this.generateDailyReportForVehicle(
+        vehicle.id,
+        companyId,
+        targetDate,
+        vehicle.driver?.id,
+      );
+    }
   }
 
   /**
@@ -861,11 +908,19 @@ export class FuelConsumptionService {
    * GPS du véhicule reste complet pour crossCheckFuelLogWithGps(). Le driverId du
    * rapport est celui de la position la plus récente du groupe (le rapport reste
    * attribué à un driver réel, la FK l'exige).
+   *
+   * `currentDriverId` est le fallback pour les groupes ne contenant QUE des
+   * positions driverId=null (aucune affectation historique couvrante ce jour) :
+   * le rapport est alors attribué au chauffeur historiquement le plus proche,
+   * c'est-à-dire le chauffeur actuellement assigné au véhicule. S'il n'y a
+   * strictement aucun driver résolvable, on log un warning explicite au lieu de
+   * silencieusement ignorer ces positions.
    */
   private async generateDailyReportForVehicle(
     vehicleId: string,
     companyId: string,
     targetDate: Date,
+    currentDriverId?: string | null,
   ) {
     const bounds = this.getMadagascarDayBounds(targetDate);
 
@@ -892,12 +947,21 @@ export class FuelConsumptionService {
     // driverId est NULLABLE depuis 20260805183000 : une position peut exister sans
     // chauffeur assigné au moment du fix. Pour le DailyFuelReport (driverId NOT NULL),
     // on attribue le rapport au dernier driver NON NULL présent sur le véhicule ce
-    // jour ; si TOUTES les positions sont null-driver, aucun rapport ne peut être
-    // rattaché à un chauffeur (ligne DailyFuelReport impossible) → on saute. La
-    // distance GPS du véhicule est calculée sur TOUTES ses positions (y compris
-    // null-driver) : elles restent donc comptées dans le référentiel par-véhicule.
-    const reportDriverId = [...positions].reverse().find((p) => p.driverId)?.driverId ?? null;
-    if (!reportDriverId) return;
+    // jour ; si TOUTES les positions sont null-driver, on retombe sur le chauffeur
+    // actuellement assigné au véhicule (le plus proche historiquement). Si aucun
+    // driver n'est résolvable, la ligne DailyFuelReport est impossible (FK NOT NULL) :
+    // on log un warning explicite plutôt que de silencieusement ignorer ces km.
+    const reportDriverId =
+      [...positions].reverse().find((p) => p.driverId)?.driverId ?? currentDriverId ?? null;
+    if (!reportDriverId) {
+      this.logger.warn(
+        `[fuel-report] vehicle=${vehicleId} company=${companyId} le ${targetDate.toISOString()} : ` +
+          `${positions.length} position(s) avec driverId=null et AUCUN chauffeur résolvable ` +
+          `(ni driver non-null sur le véhicule ce jour, ni chauffeur assigné au véhicule) — ` +
+          `ces positions ne peuvent être rattachées à aucun DailyFuelReport`,
+      );
+      return;
+    }
 
     const lastDriver = await this.prisma.driver.findUnique({
       where: { id: reportDriverId },

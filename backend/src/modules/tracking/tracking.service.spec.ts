@@ -1825,5 +1825,123 @@ describe('TrackingService', () => {
       // est une retransmission/doublon, pas une anomalie — jamais inséré en base.
       expect(mockPrisma.gpsPosition.createMany).not.toHaveBeenCalled();
     });
+
+    describe('getLivePositions nullable driverId fixes', () => {
+      const ID = '00000000-0000-4000-0000-000000000001';
+      const VID = '00000000-0000-4000-0000-000000000002';
+      const VID2 = '00000000-0000-4000-0000-000000000003';
+      const NAME = 'Test Driver';
+
+      it('returns a vehicle whose last position has driverId=null, with driverName as fallback', async () => {
+        const now = new Date();
+        const posNullDriver = {
+          driver_id: null,
+          driver_first_name: null,
+          driver_last_name: null,
+          latitude: -18.8792,
+          longitude: 47.5079,
+          speed: null,
+          heading: null,
+          accuracy: null,
+          suspect: false,
+          timestamp: now,
+          vehicle_id: VID,
+          delivery_id: null,
+          minutes_ago: 0,
+        };
+
+        mockPrisma.$queryRaw.mockResolvedValueOnce([posNullDriver]);
+        mockPrisma.vehicle.findFirst.mockResolvedValue({ companyId: 'company-1' });
+        mockPrisma.driver.findUnique.mockResolvedValue({ id: 'driver-1' });
+
+        const result = await service.getLivePositions('company-1');
+
+        expect(result).toHaveLength(1);
+        expect(result[0].driverId).toBeNull();
+        expect(result[0].driverName).toBe('Véhicule sans chauffeur assigné');
+        expect(result[0].latitude).toBe(-18.8792);
+        expect(result[0].vehicleId).toBe(VID);
+      });
+
+      it('returns both vehicles with driverId=null as separate entries (no key collision)', async () => {
+        const now = new Date();
+        const posNullDriver1 = {
+          driver_id: null,
+          driver_first_name: null,
+          driver_last_name: null,
+          latitude: -18.8792,
+          longitude: 47.5079,
+          speed: null,
+          heading: null,
+          accuracy: null,
+          suspect: false,
+          timestamp: now,
+          vehicle_id: VID,
+          delivery_id: null,
+          minutes_ago: 0,
+        };
+        const posNullDriver2 = {
+          driver_id: null,
+          driver_first_name: null,
+          driver_last_name: null,
+          latitude: -18.8793,
+          longitude: 47.5080,
+          speed: null,
+          heading: null,
+          accuracy: null,
+          suspect: false,
+          timestamp: now,
+          vehicle_id: VID2,
+          delivery_id: null,
+          minutes_ago: 0,
+        };
+
+        mockPrisma.$queryRaw.mockResolvedValueOnce([posNullDriver1, posNullDriver2]);
+        mockPrisma.vehicle.findFirst.mockResolvedValue({ companyId: 'company-1' });
+        mockPrisma.driver.findUnique.mockResolvedValue({ id: 'driver-1' });
+
+        const result = await service.getLivePositions('company-1');
+
+        expect(result).toHaveLength(2);
+        const v1 = result.find((r) => r.vehicleId === VID);
+        const v2 = result.find((r) => r.vehicleId === VID2);
+        expect(v1).toBeDefined();
+        expect(v2).toBeDefined();
+        expect(v1!.driverId).toBeNull();
+        expect(v2!.driverId).toBeNull();
+        expect(v1!.driverName).toBe('Véhicule sans chauffeur assigné');
+        expect(v2!.driverName).toBe('Véhicule sans chauffeur assigné');
+      });
+
+      it('includes normal driver entries (not affected by change)', async () => {
+        const now = new Date();
+        const posWithDriver = {
+          driver_id: 'driver-1',
+          driver_first_name: 'John',
+          driver_last_name: 'Doe',
+          latitude: -18.8794,
+          longitude: 47.5081,
+          speed: 10,
+          heading: 90,
+          accuracy: 5,
+          suspect: false,
+          timestamp: now,
+          vehicle_id: VID,
+          delivery_id: null,
+          minutes_ago: 0,
+        };
+
+        mockPrisma.$queryRaw.mockResolvedValueOnce([posWithDriver]);
+        mockPrisma.vehicle.findFirst.mockResolvedValue({ companyId: 'company-1' });
+        mockPrisma.driver.findUnique.mockResolvedValue({ id: 'driver-1' });
+
+        const result = await service.getLivePositions('company-1');
+
+        expect(result).toHaveLength(1);
+        expect(result[0].driverId).toBe('driver-1');
+        expect(result[0].driverName).toBe('John Doe');
+        expect(result[0].latitude).toBe(-18.8794);
+      });
+    });
   });
 });
