@@ -193,6 +193,37 @@ export class DeliveriesService {
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
+    /**
+   * Verrou optimiste : le WHERE inclut le statut lu par findOne(). Si une
+   * requête concurrente a modifié le statut entre-temps, Prisma ne matche
+   * aucune ligne et lève P2025 → converti en 400 explicite au lieu d'un 500.
+   */
+  private async updateWithOptimisticLock(
+    id: string,
+    expectedStatus: DeliveryStatus,
+    data: any,
+    include: any,
+  ) {
+    try {
+      return await this.prisma.delivery.update({
+        where: { id, status: expectedStatus },
+        data,
+        include,
+      });
+    } catch (err: any) {
+      const isRecordNotFound =
+        (err instanceof Prisma.PrismaClientKnownRequestError ||
+          err?.name === 'PrismaClientKnownRequestError') &&
+        err?.code === 'P2025';
+      if (isRecordNotFound) {
+        throw new BadRequestException(
+          'Ce statut a déjà été modifié entretemps, actualisez la page',
+        );
+      }
+      throw err;
+    }
+  }
+
   async updateDriverStatus(
     companyId: string,
     id: string,
@@ -221,18 +252,22 @@ export class DeliveriesService {
 
     const proofData = await this.verifyDeliveryLocation(companyId, delivery, dto, lang);
     const updateData: any = { ...proofData, status: dto.status };
-    if (this.isFuelReportTriggerStatus(dto.status)) {
-      if (dto.status === DeliveryStatus.delivered) {
-        updateData.completedAt = new Date();
-      }
-      this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId, dto.status);
+    if (dto.status === DeliveryStatus.delivered) {
+      updateData.completedAt = new Date();
     }
 
-    const updated = await this.prisma.delivery.update({
-      where: { id },
-      data: updateData,
-      include: { vehicle: true, driver: true },
-    });
+    const updated = await this.updateWithOptimisticLock(
+      id,
+      delivery.status,
+      updateData,
+      { vehicle: true, driver: true },
+    );
+
+    // Recalcul du fuel report UNIQUEMENT si l'update a gagné le verrou optimiste :
+    // un appel concurrent qui a perdu ne doit pas déclencher le job une 2e fois.
+    if (this.isFuelReportTriggerStatus(dto.status)) {
+      this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId, dto.status);
+    }
 
     const statusLabel = dto.status.replace('_', ' ');
     await this.notifications.create(companyId, {
@@ -378,18 +413,21 @@ export class DeliveriesService {
 
     const proofData = await this.verifyDeliveryLocation(companyId, delivery, dto, lang);
     const updateData: any = { ...proofData, status: dto.status };
-    if (this.isFuelReportTriggerStatus(dto.status)) {
-      if (dto.status === DeliveryStatus.delivered) {
-        updateData.completedAt = new Date();
-      }
-      this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId, dto.status);
+    if (dto.status === DeliveryStatus.delivered) {
+      updateData.completedAt = new Date();
     }
 
-    const updated = await this.prisma.delivery.update({
-      where: { id },
-      data: updateData,
-      include: { vehicle: true, driver: true, assignedDriver: true },
-    });
+    const updated = await this.updateWithOptimisticLock(
+      id,
+      delivery.status,
+      updateData,
+      { vehicle: true, driver: true, assignedDriver: true },
+    );
+
+    // Recalcul du fuel report UNIQUEMENT si l'update a gagné le verrou optimiste.
+    if (this.isFuelReportTriggerStatus(dto.status)) {
+      this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId, dto.status);
+    }
 
     const statusLabel = dto.status.replace('_', ' ');
     await this.notifications.create(companyId, {

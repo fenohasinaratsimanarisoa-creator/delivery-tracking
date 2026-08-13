@@ -913,4 +913,64 @@ describe('DeliveriesService - State Machine', () => {
       ).resolves.toBeDefined();
     });
   });
+
+  describe('verrou optimiste — updateStatus concurrents', () => {
+    const inProgressDelivery = {
+      id: 'del-1',
+      companyId: 'comp-1',
+      title: 'Test',
+      status: DeliveryStatus.in_progress,
+      deletedAt: null,
+      vehicle: null,
+      driver: null,
+      deliveryLat: null,
+      deliveryLng: null,
+      deliveryAddress: 'Ivato',
+      assignedDriverId: 'user-1',
+      clientId: null,
+      driverId: 'driver-1',
+    };
+
+    it('deux updateStatus() concurrents sur la même livraison : un seul réussit, notifications/webhooks ne partent qu\'une fois', async () => {
+      // Les DEUX appels lisent d'abord la livraison (statut in_progress), puis
+      // le premier update réussit ; le second, déclenché sur le même statut,
+      // ne matche plus aucune ligne (verrou optimiste) → P2025 en base.
+      mockPrisma.delivery.findFirst
+        .mockResolvedValueOnce(inProgressDelivery)
+        .mockResolvedValueOnce(inProgressDelivery);
+      mockPrisma.delivery.update
+        .mockResolvedValueOnce({ ...inProgressDelivery, status: 'delivered' })
+        .mockRejectedValueOnce(
+          new MockPrismaClientKnownRequestError('Record to update not found', 'P2025'),
+        );
+
+      const [r1, r2] = await Promise.allSettled([
+        service.updateStatus('comp-1', 'del-1', { status: DeliveryStatus.delivered } as any),
+        service.updateStatus('comp-1', 'del-1', { status: DeliveryStatus.delivered } as any),
+      ]);
+
+      // Un seul appel réussit...
+      const fulfilled = [r1, r2].filter((r) => r.status === 'fulfilled');
+      const rejected = [r1, r2].filter((r) => r.status === 'rejected');
+      expect(fulfilled).toHaveLength(1);
+      // ...l'autre échoue proprement en 400 (et NON en 500) avec le message explicite.
+      expect(rejected).toHaveLength(1);
+      const err = (rejected[0] as PromiseRejectedResult).reason;
+      expect(err).toBeInstanceOf(BadRequestException);
+      expect(err.message).toBe('Ce statut a déjà été modifié entretemps, actualisez la page');
+
+      // Le verrou optimiste passe bien le statut attendu dans le WHERE.
+      expect(mockPrisma.delivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: DeliveryStatus.in_progress }),
+        }),
+      );
+
+      // Les effets de bord ne partent qu'UNE fois (livraison "delivered" =
+      // notification + webhook status_changed + webhook delivered + job fuel).
+      expect(mockNotifications.create).toHaveBeenCalledTimes(1);
+      expect(mockWebhooks.dispatch).toHaveBeenCalledTimes(2);
+      expect(mockQueue.add).toHaveBeenCalledTimes(1);
+    });
+  });
 });
