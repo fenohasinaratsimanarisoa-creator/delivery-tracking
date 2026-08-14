@@ -17,7 +17,7 @@ import { InvoicePdfService } from './invoice-pdf.service';
 import { EmailService } from '../email/email.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { CreatePlanDto } from './dto/create-plan.dto';
-import { BillingProvider, InvoiceStatus, SubscriptionStatus } from '@prisma/client';
+import { BillingProvider, SubscriptionStatus } from '@prisma/client';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { t, formatLongDate, type Language } from '../../common/i18n';
 

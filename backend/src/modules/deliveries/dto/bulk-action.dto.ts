@@ -1,4 +1,4 @@
-import { IsArray, IsString, IsIn, IsOptional, IsUUID, ArrayNotEmpty } from 'class-validator';
+import { IsArray, IsString, IsIn, IsOptional, ArrayNotEmpty } from 'class-validator';
 import { DeliveryStatus } from '@prisma/client';
 
 const VALID_ACTIONS = ['delete', 'updateStatus', 'assignDriver'] as const;

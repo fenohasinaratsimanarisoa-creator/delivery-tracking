@@ -20,34 +20,41 @@ export class DashboardService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const [deliveriesToday, totalDeliveries, activeVehicles, activeDrivers, fuelTotals, anomalies, recentLogs] =
-      await Promise.all([
-        this.prisma.delivery.count({
-          where: { companyId, createdAt: { gte: today, lt: tomorrow } },
-        }),
-        this.prisma.delivery.count({ where: { companyId } }),
-        this.prisma.vehicle.count({ where: { companyId, isActive: true } }),
-        this.prisma.driver.count({ where: { companyId, isActive: true } }),
-        // M3 : avant, les totaux étaient calculés sur les 50 derniers pleins (take: 50)
-        // puis étiquetés « Total Fuel / Total Distance » dans le PDF/Excel — chiffres
-        // sous-évalués pour une flotte active. L'agrégat couvre TOUS les pleins ; les
-        // recentLogs (10 derniers) restent un simple aperçu.
-        this.prisma.fuelLog.aggregate({
-          where: { companyId },
-          _sum: { liters: true, kilometers: true },
-        }),
-        this.prisma.fuelLog.count({
-          where: {
-            companyId,
-            OR: [{ consumptionAnomalyFlag: true }, { gpsAnomalyFlag: true }],
-          },
-        }),
-        this.prisma.fuelLog.findMany({
-          where: { companyId },
-          orderBy: { fillDate: 'desc' },
-          take: 10,
-        }),
-      ]);
+    const [
+      deliveriesToday,
+      totalDeliveries,
+      activeVehicles,
+      activeDrivers,
+      fuelTotals,
+      anomalies,
+      recentLogs,
+    ] = await Promise.all([
+      this.prisma.delivery.count({
+        where: { companyId, createdAt: { gte: today, lt: tomorrow } },
+      }),
+      this.prisma.delivery.count({ where: { companyId } }),
+      this.prisma.vehicle.count({ where: { companyId, isActive: true } }),
+      this.prisma.driver.count({ where: { companyId, isActive: true } }),
+      // M3 : avant, les totaux étaient calculés sur les 50 derniers pleins (take: 50)
+      // puis étiquetés « Total Fuel / Total Distance » dans le PDF/Excel — chiffres
+      // sous-évalués pour une flotte active. L'agrégat couvre TOUS les pleins ; les
+      // recentLogs (10 derniers) restent un simple aperçu.
+      this.prisma.fuelLog.aggregate({
+        where: { companyId },
+        _sum: { liters: true, kilometers: true },
+      }),
+      this.prisma.fuelLog.count({
+        where: {
+          companyId,
+          OR: [{ consumptionAnomalyFlag: true }, { gpsAnomalyFlag: true }],
+        },
+      }),
+      this.prisma.fuelLog.findMany({
+        where: { companyId },
+        orderBy: { fillDate: 'desc' },
+        take: 10,
+      }),
+    ]);
 
     const totalLiters = fuelTotals._sum.liters ?? 0;
     const totalKm = fuelTotals._sum.kilometers ?? 0;

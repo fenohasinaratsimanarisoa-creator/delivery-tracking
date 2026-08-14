@@ -18,12 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import {
-  UpdateProfileDto,
-  ChangePasswordDto,
-  UpdateEmailDto,
-  UpdateAvatarDto,
-} from './dto/update-profile.dto';
+import { UpdateProfileDto, ChangePasswordDto, UpdateEmailDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { BlockImpersonationGuard } from '../../common/guards/block-impersonation.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
@@ -32,7 +27,6 @@ import { UsageGuard } from '../../common/guards/usage.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { normalizePagination } from '../../common/utils/pagination';
-import { UserRole } from '@prisma/client';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, CompanyScopeGuard)

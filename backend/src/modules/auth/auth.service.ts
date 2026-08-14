@@ -192,7 +192,7 @@ export class AuthService {
     return this.generateTokens(user.id, user.email, user.role, user.companyId, session.id);
   }
 
-  async refresh(refreshToken: string, ip?: string, userAgent?: string): Promise<TokenResponse> {
+  async refresh(refreshToken: string, ip?: string, _userAgent?: string): Promise<TokenResponse> {
     let payload: JwtPayload;
     try {
       payload = this.jwtService.verify<JwtPayload>(refreshToken, {

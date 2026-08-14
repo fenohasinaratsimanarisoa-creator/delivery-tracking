@@ -16,7 +16,6 @@ import {
   Logger,
 } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { AuthGuard } from '@nestjs/passport';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { Response, Request } from 'express';
 import * as passport from 'passport';
@@ -29,7 +28,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { Enable2faDto, Verify2faDto, Verify2faCodeDto, Disable2faDto } from './dto/two-factor.dto';
+import { Verify2faDto, Verify2faCodeDto, Disable2faDto } from './dto/two-factor.dto';
 import { OAuthBeginDto } from './dto/oauth-begin.dto';
 import { OAuthExchangeDto } from './dto/oauth-exchange.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -451,11 +450,6 @@ export class AuthController {
     const frontendUrl = this.configService.get<string>('APP_URL') || 'http://localhost:5173';
     const refreshOpts = this.getRefreshCookieOpts();
     const csrfOpts = this.getCsrfCookieOpts();
-
-    const handleError = (errorCode: string, logMsg?: string) => {
-      if (logMsg) this.logger.error(logMsg);
-      res.redirect(`${frontendUrl}/auth/callback?error=${errorCode}`);
-    };
 
     const authenticate = passport.authenticate(
       'google',

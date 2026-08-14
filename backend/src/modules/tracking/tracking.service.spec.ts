@@ -676,6 +676,75 @@ describe('TrackingService', () => {
       );
     });
 
+    it('P0 : une alerte VITESSE est émise même SANS deliveryId (avant : findUnique({id: undefined}) faisait tomber TOUTES les alertes)', async () => {
+      mockPrisma.gpsPosition.findFirst
+        .mockResolvedValueOnce(null) // dedup
+        .mockResolvedValueOnce(null) // teleportation
+        .mockResolvedValueOnce(null); // prevPosition
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-speed', suspect: false });
+      mockPrisma.companySettings.findUnique.mockResolvedValue({
+        speedAlertThreshold: 50, // km/h
+        prolongedStopMinutes: null,
+        offlineTimeoutMinutes: null,
+      });
+      mockCacheService.get.mockResolvedValueOnce(null); // speed_alert cooldown libre
+
+      await service.savePosition(
+        DRIVER,
+        {
+          latitude: -18.8792,
+          longitude: 47.5079,
+          speed: 20, // 72 km/h > 50
+          timestamp: '2026-07-21T10:00:00.000Z',
+          vehicleId: VID,
+        },
+        'company-1',
+      );
+      await new Promise((r) => setTimeout(r, 50));
+
+      const speedCalls = mockNotifications.create.mock.calls.filter(
+        (call: any[]) => call[1]?.type === 'speed_alert',
+      );
+      expect(speedCalls.length).toBeGreaterThanOrEqual(1);
+      // Pas de crash sur findUnique delivery (aucune deliveryId).
+      expect(mockPrisma.delivery.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('P0 : alerte SIGNAL PERDU émise grâce à la position PRÉCÉDENTE (avant : self-comparaison → jamais déclenchée)', async () => {
+      mockPrisma.gpsPosition.findFirst
+        .mockResolvedValueOnce(null) // dedup
+        .mockResolvedValueOnce(null) // teleportation
+        .mockResolvedValueOnce({
+          // prevPosition : la position d'avant, 10 minutes plus tôt (capturée AVANT l'insert).
+          speed: 0,
+          timestamp: new Date('2026-07-21T09:50:00.000Z'),
+        });
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-offline', suspect: false });
+      mockPrisma.companySettings.findUnique.mockResolvedValue({
+        speedAlertThreshold: null,
+        prolongedStopMinutes: null,
+        offlineTimeoutMinutes: 5,
+      });
+
+      await service.savePosition(
+        DRIVER,
+        {
+          latitude: -18.8792,
+          longitude: 47.5079,
+          speed: 5,
+          timestamp: '2026-07-21T10:00:00.000Z',
+          vehicleId: VID,
+        },
+        'company-1',
+      );
+      await new Promise((r) => setTimeout(r, 50));
+
+      const offlineCalls = mockNotifications.create.mock.calls.filter(
+        (call: any[]) => call[1]?.type === 'device_offline',
+      );
+      expect(offlineCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
     it('rejects empty vehicleId with a clear log, no Prisma crash', async () => {
       const result = await service.savePosition(DRIVER, {
         latitude: -18.8792,
@@ -1832,10 +1901,12 @@ describe('TrackingService', () => {
         .mockResolvedValueOnce([]) // lastPositions : base vide
         .mockResolvedValueOnce([]); // lecture des insérées
       const inserted: any[] = [];
-      mockPrisma.gpsPosition.createManyAndReturn.mockReset().mockImplementation(async ({ data }: any) => {
-        inserted.push(...data);
-        return inserted;
-      });
+      mockPrisma.gpsPosition.createManyAndReturn
+        .mockReset()
+        .mockImplementation(async ({ data }: any) => {
+          inserted.push(...data);
+          return inserted;
+        });
 
       // Point à ~6672m en 9s (< 10s) : conditions du « saut court ». Note : avec les
       // constantes actuelles (5000m, 10s, 55.56 m/s, scale >= 1), cette situation est
@@ -1876,7 +1947,9 @@ describe('TrackingService', () => {
       mockPrisma.gpsPosition.createMany.mockReset();
       mockPrisma.gpsPosition.createManyAndReturn.mockReset();
 
-      // Lot : P2 (t=+0s, ANTÉRIEUR à la référence en base) + P1 (déjà en base).
+      // Lot : P2 (t=+0s, ANTÉRIEUR à la référence en base — backfill légitime) + P1 (t=+10s,
+      // déjà en base — vraie retransmission du point le plus récent).
+      mockPrisma.gpsPosition.createManyAndReturn.mockResolvedValueOnce([{ id: 'inserted-p2' }]);
       await service.saveBatch('user-1', 'driver-1', [
         { latitude: 0, longitude: 0, timestamp: new Date(base).toISOString(), vehicleId: VID },
         {
@@ -1887,10 +1960,13 @@ describe('TrackingService', () => {
         },
       ] as any);
 
-      // P2 (timeDiffSec = -10s) et P1 (doublon) sont rejetés par le dédoublonnage 1s,
-      // même politique que isDuplicateByTimestamp du temps réel : un point non croissant
-      // est une retransmission/doublon, pas une anomalie — jamais inséré en base.
-      expect(mockPrisma.gpsPosition.createManyAndReturn).not.toHaveBeenCalled();
+      // CORRIGÉ (P0) : P2 (diff -10s vs DB) est un BACKFILL → inséré (avant le correctif,
+      // il était rejeté → perte de positions du rattrapage réseau). P1 (t=+10s) est la
+      // retransmission du point DB le plus récent → dédoublonné (jamais réinséré).
+      expect(mockPrisma.gpsPosition.createManyAndReturn).toHaveBeenCalledTimes(1);
+      const insertedData = mockPrisma.gpsPosition.createManyAndReturn.mock.calls[0][0].data;
+      expect(insertedData).toHaveLength(1);
+      expect(new Date(insertedData[0].timestamp).getTime()).toBe(base);
     });
 
     describe('getLivePositions nullable driverId fixes', () => {

@@ -169,6 +169,11 @@ export function useDriverTracking() {
   });
 
   const driver = profile as { id: string; firstName: string; lastName: string; vehicle?: { id: string; brand: string; model: string; licensePlate: string; positionSource?: string } } | undefined;
+  // P1 : le geofence est diffusé sur la room company (tous les chauffeurs). On filtre
+  // côté client pour ne garder que les événements du chauffeur courant (sinon chaque
+  // chauffeur recevait les alertes zones des livraisons des autres).
+  const driverIdRef = useRef<string>('');
+  driverIdRef.current = driver?.id || '';
   const deliveries: Delivery[] = deliveriesData?.data ?? [];
   const vehicleId = driver?.vehicle?.id || '';
   const positionSource = driver?.vehicle?.positionSource || 'phone';
@@ -430,7 +435,13 @@ export function useDriverTracking() {
 
     const acc = p.accuracy ?? 50;
     if (acc >= ACCURACY_REJECT) {
+      // P1 : avant, on JETAIT la position (return silencieux) malgré une accuracy que
+      // le backend tolère (DTO jusqu'à 1000m, téléportation modulée par accuracy). En
+      // zone urbaine dense (fixes 80-150m), la trace avait des trous et la distance/ETA
+      // étaient faussés. On la met en file (envoyée telle quelle, le serveur décide du
+      // suspect) au lieu de la perdre.
       setPoorAccuracy(true);
+      queueAndSkip(p);
       return;
     }
     setPoorAccuracy(acc > ACCURACY_MODERATE);
@@ -773,8 +784,8 @@ export function useDriverTracking() {
   useEffect(() => {
     const socket = getSocket();
     socket.on('connect', drainQueue);
-    socket.on('dataUpdate', (event: { entity: string; action: string; geofenceName: string; deliveryId?: string }) => {
-      if (event.entity === 'geofence_event') {
+    socket.on('dataUpdate', (event: { entity: string; action: string; geofenceName: string; deliveryId?: string; driverId?: string }) => {
+      if (event.entity === 'geofence_event' && event.driverId && event.driverId === driverIdRef.current) {
         addAlert({
           type: 'geofence',
           title: `Zone ${event.action === 'entry' ? 'entrée' : 'sortie'}`,

@@ -11,12 +11,7 @@ import { CompanyScopedContext } from '../../common/tenant/company-scoped-context
 import { VehicleAssignmentHistoryService } from '../../common/vehicle-assignment/vehicle-assignment-history.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import {
-  UpdateProfileDto,
-  ChangePasswordDto,
-  UpdateEmailDto,
-  UpdateAvatarDto,
-} from './dto/update-profile.dto';
+import { UpdateProfileDto, ChangePasswordDto, UpdateAvatarDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class UsersService {

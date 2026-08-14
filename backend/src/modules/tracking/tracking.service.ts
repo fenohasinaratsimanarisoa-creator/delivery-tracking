@@ -261,7 +261,8 @@ export class TrackingService {
     dto: UpdatePositionDto,
     companyId: string,
     driverId: string | null,
-    savedPosition: { id: string; suspect: boolean },
+    _savedPosition: { id: string; suspect: boolean },
+    prevPosition?: { timestamp: Date; speed: number | null } | null,
   ) {
     const settings = await this.getCompanySettings(companyId);
     if (!settings) return;
@@ -306,11 +307,15 @@ export class TrackingService {
     }
 
     if (
+      prevPosition &&
       settings.prolongedStopMinutes &&
       dto.speed !== undefined &&
       dto.speed < STOP_SPEED_THRESHOLD_MS
     ) {
-      const lastPos = await this.getLastPosition(dto.vehicleId);
+      // La position PRÉCÉDENTE est transmise (capturée AVANT l'insertion) : sans cela,
+      // getLastPosition() retournait la position qu'on vient d'écrire → stoppedMs = 0 →
+      // l'alerte « arrêt prolongé » ne se déclenchait JAMAIS.
+      const lastPos = prevPosition;
       if (lastPos && lastPos.speed !== null && lastPos.speed < STOP_SPEED_THRESHOLD_MS) {
         const stoppedMs = new Date(dto.timestamp).getTime() - new Date(lastPos.timestamp).getTime();
         const stoppedMin = stoppedMs / 60000;
@@ -330,7 +335,10 @@ export class TrackingService {
       }
     }
 
-    if (dto.speed !== undefined && dto.speed > 0) {
+    if (dto.deliveryId && dto.speed !== undefined && dto.speed > 0) {
+      // P0 : sans deliveryId (chauffeur roulant sans livraison active — cas courant),
+      // findUnique({ id: undefined }) levait une PrismaClientValidationError qui faisait
+      // tomber TOUT generateAlerts → aucune alerte (vitesse, stop) n'était émise.
       const delivery = await this.prisma.delivery.findUnique({
         where: { id: dto.deliveryId },
         select: { scheduledDate: true, deliveryLat: true, deliveryLng: true },
@@ -352,6 +360,13 @@ export class TrackingService {
           const etaSec = distanceRemaining / effectiveSpeed;
           const etaDate = new Date(new Date(dto.timestamp).getTime() + etaSec * 1000);
           if (etaDate > delivery.scheduledDate) {
+            // P1 : sans cooldown, chaque position (~3s) créait une ligne delay_alert →
+            // inondation des notifications pendant tout le retard. Même mécanisme que
+            // le speed alert (cache 300s).
+            const delayKey = `delay_alert:${dto.vehicleId}`;
+            const delaySent = await this.cacheService.get<boolean>(delayKey);
+            if (delaySent) return;
+            await this.cacheService.set(delayKey, true, 900);
             const delayMin = Math.round(
               (etaDate.getTime() - delivery.scheduledDate.getTime()) / 60000,
             );
@@ -373,8 +388,10 @@ export class TrackingService {
 
     // Un point suspect prouve quand même que le dispositif transmet : il ne doit PAS
     // compter comme une perte de signal (sinon un véhicule dont les dernières positions
-    // sont suspectes serait déclaré "offline" à tort).
-    const lastPos = await this.getLastPosition(dto.vehicleId, false);
+    // sont suspectes serait déclaré "offline" à tort). La position PRÉCÉDENTE est
+    // transmise (capturée avant l'insertion) : sinon getLastPosition() retournait la
+    // position courante → gap = 0 → l'alerte « signal perdu » ne se déclenchait JAMAIS.
+    const lastPos = prevPosition ?? (await this.getLastPosition(dto.vehicleId, false));
     if (lastPos && settings.offlineTimeoutMinutes) {
       const gapMs = new Date(dto.timestamp).getTime() - lastPos.timestamp.getTime();
       const gapMin = gapMs / 60000;
@@ -533,6 +550,11 @@ export class TrackingService {
 
     const resolvedCompanyId = companyId || vehicle.companyId;
 
+    // Position PRÉCÉDENTE capturée AVANT l'insertion : generateAlerts en a besoin
+    // pour les alertes « arrêt prolongé » et « signal perdu » (comparaison avec le
+    // point précédent, PAS avec celui qu'on vient d'écrire).
+    const prevPosition = await this.getLastPosition(dto.vehicleId, false);
+
     const saved = await this.prisma.gpsPosition.create({
       data: {
         latitude: dto.latitude,
@@ -559,7 +581,7 @@ export class TrackingService {
     }
 
     if (companyId && !suspect) {
-      this.generateAlerts(dto, companyId, driverId, saved).catch((err) =>
+      this.generateAlerts(dto, companyId, driverId, saved, prevPosition).catch((err) =>
         this.logger.error(`Alert generation failed: ${err}`),
       );
     }
@@ -672,6 +694,10 @@ export class TrackingService {
         lastPositions.set(row.vehicleId, row);
       }
     }
+    // Copie IMMUABLE de la dernière position DB par véhicule : utilisée pour détecter
+    // une vraie retransmission du point le plus récent (le Map lastPositions, lui, est
+    // mis à jour au fil du lot pour servir de référence téléportation/vitesse).
+    const dbLastPositions = new Map(lastPositions);
 
     // 1er passage : ne garder que les positions VALIDES (IDs bien formés, livraison du bon
     // chauffeur, véhicule actif). Le tri chronologique s'applique à ce sous-ensemble, pas
@@ -724,16 +750,32 @@ export class TrackingService {
     for (const pos of sorted) {
       const ts = new Date(pos.timestamp);
       const last = lastPositions.get(pos.vehicleId);
+      const dbLatest = dbLastPositions.get(pos.vehicleId);
 
-      const timeDiffSec = last ? (ts.getTime() - last.timestamp.getTime()) / 1000 : Infinity;
+      // Fenêtre SYMÉTRIQUE sur les DEUX références (DB + lot) :
+      //  - un backfill (position plus ANCIENNE que la dernière DB, diff négative — file
+      //    IndexedDB flushée après coupure) est une donnée nouvelle légitime : JAMAIS rejeté ;
+      //  - seule une vraie retransmission (même instant ±1s) est dédoublonnée — soit contre
+      //    la position précédente du lot, soit contre la dernière position DB (retransmission
+      //    du point le plus récent, garde conservée par dbLastPositions immuable).
+      const isDup =
+        (last &&
+          Math.abs((ts.getTime() - last.timestamp.getTime()) / 1000) <= DEDUP_CLOCK_SKEW_S) ||
+        (dbLatest &&
+          Math.abs((ts.getTime() - dbLatest.timestamp.getTime()) / 1000) <= DEDUP_CLOCK_SKEW_S);
 
-      if (timeDiffSec <= DEDUP_CLOCK_SKEW_S) {
+      if (isDup) {
         this.metrics.deduped++;
         this.logger.debug(
           `Batch duplicate rejected (timestamp): vehicle=${pos.vehicleId} ts=${pos.timestamp}`,
         );
         continue;
       }
+
+      // Différence vs la référence du lot (dernier candidat traité pour ce véhicule) :
+      // utilisée pour la vitesse de secours et la téléportation (négatif = backfill,
+      // dans ce cas on saute ces deux calculs — pas de référence antérieure fiable).
+      const timeDiffSec = last ? (ts.getTime() - last.timestamp.getTime()) / 1000 : Infinity;
 
       // NOUVEAU : vitesse de secours si le device n'a pas fourni pos.speed (cas de la
       // file offline flushée après une coupure réseau / passage en arrière-plan). Même
@@ -817,6 +859,9 @@ export class TrackingService {
 
     this.metrics.saved += inserted.length;
 
+    // Dernier enregistrement inséré par véhicule : sert de position « précédente »
+    // pour generateAlerts (arrêt prolongé / signal perdu), comme le chemin temps réel.
+    const lastByVehicle = new Map<string, { timestamp: Date; speed: number | null }>();
     for (const record of inserted) {
       saved.push(record);
       if (companyId && !record.suspect) {
@@ -835,8 +880,13 @@ export class TrackingService {
           companyId,
           driverId,
           record,
+          lastByVehicle.get(record.vehicleId) ?? null,
         ).catch((err) => this.logger.error(`Alert generation failed: ${err}`));
       }
+      lastByVehicle.set(record.vehicleId, {
+        timestamp: record.timestamp,
+        speed: record.speed ?? null,
+      });
     }
 
     if (companyId && inserted.length > 0) {
@@ -1251,7 +1301,7 @@ export class TrackingService {
     const font = await doc.embedFont(StandardFonts.Helvetica);
     const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
     const page = doc.addPage([595, 842]);
-    const { width, height } = page.getSize();
+    const { height } = page.getSize();
     const margin = 50;
     let y = height - margin;
 

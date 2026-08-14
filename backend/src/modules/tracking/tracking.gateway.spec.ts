@@ -334,7 +334,13 @@ describe('TrackingGateway — cross-tenant security', () => {
         new NotFoundException('Driver is not assigned to this delivery'),
       );
 
-      await gateway.handlePosition(client, positionDto({ deliveryId: '33333333-3333-4333-8333-333333333333', vehicleId: '22222222-2222-4222-8222-222222222222' }));
+      await gateway.handlePosition(
+        client,
+        positionDto({
+          deliveryId: '33333333-3333-4333-8333-333333333333',
+          vehicleId: '22222222-2222-4222-8222-222222222222',
+        }),
+      );
 
       // Rejet EXPLICITE avec le motif not_assigned : le client débloque isSendingRef
       // immédiatement au lieu d'attendre son timeout de secours.
@@ -360,7 +366,10 @@ describe('TrackingGateway — cross-tenant security', () => {
         vehicleId: '11111111-1111-4111-8111-111111111111',
       });
 
-      await gateway.handlePosition(client, positionDto({ vehicleId: '11111111-1111-4111-8111-111111111111' }));
+      await gateway.handlePosition(
+        client,
+        positionDto({ vehicleId: '11111111-1111-4111-8111-111111111111' }),
+      );
 
       expect(trackingService.assertVehicleOwnership).toHaveBeenCalledWith(
         '11111111-1111-4111-8111-111111111111',
@@ -412,7 +421,10 @@ describe('TrackingGateway — cross-tenant security', () => {
       );
 
       // getLastPosition has a spy but should never be called
-      await gateway.handlePosition(client, positionDto({ vehicleId: '22222222-2222-4222-8222-222222222222' }));
+      await gateway.handlePosition(
+        client,
+        positionDto({ vehicleId: '22222222-2222-4222-8222-222222222222' }),
+      );
 
       expect(trackingService.getLastPosition).not.toHaveBeenCalled();
       // Le client est débloqué explicitement (jamais de retour silencieux).

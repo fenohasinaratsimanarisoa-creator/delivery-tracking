@@ -203,12 +203,29 @@ describe('TrackingGateway — ACK WebSocket réel (Test D)', () => {
     // (saveBatch ne reçoit que 1 position) et l'ACK est émis — aucune position
     // corrompue ne bloque le rattrapage réseau des autres.
     trackingService.saveBatch.mockResolvedValueOnce([
-      { id: 'b-1', latitude: -18.88, longitude: 47.51, speed: null, heading: null, altitude: null, accuracy: null, suspect: false, timestamp: new Date(), deliveryId: null, vehicleId: UUID },
+      {
+        id: 'b-1',
+        latitude: -18.88,
+        longitude: 47.51,
+        speed: null,
+        heading: null,
+        altitude: null,
+        accuracy: null,
+        suspect: false,
+        timestamp: new Date(),
+        deliveryId: null,
+        vehicleId: UUID,
+      },
     ]);
     ack = waitEvent('positionsSaved');
     client.emit('batchPosition', {
       positions: [
-        { latitude: -18.88, longitude: 47.51, timestamp: new Date().toISOString(), vehicleId: UUID },
+        {
+          latitude: -18.88,
+          longitude: 47.51,
+          timestamp: new Date().toISOString(),
+          vehicleId: UUID,
+        },
         { latitude: 999, longitude: 999, timestamp: new Date().toISOString(), vehicleId: UUID },
         { latitude: 777, longitude: 47.52, timestamp: new Date().toISOString(), vehicleId: UUID },
       ],

@@ -1,13 +1,4 @@
-import {
-  IsNumber,
-  Min,
-  Max,
-  IsDateString,
-  IsString,
-  IsOptional,
-  IsArray,
-  IsUUID,
-} from 'class-validator';
+import { IsNumber, Min, Max, IsDateString, IsOptional, IsArray, IsUUID } from 'class-validator';
 
 export class UpdatePositionDto {
   @IsNumber()

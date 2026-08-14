@@ -1,6 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
 import * as dns from 'dns/promises';
-import * as net from 'net';
 
 const PRIVATE_RANGES = [
   { prefix: '10.', mask: null },

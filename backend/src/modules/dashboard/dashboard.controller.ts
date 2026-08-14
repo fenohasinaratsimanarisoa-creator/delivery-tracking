@@ -41,7 +41,7 @@ export class DashboardController {
     const doc = await PDFDocument.create();
     const font = await doc.embedFont(StandardFonts.Helvetica);
     const page = doc.addPage([595, 842]);
-    const { width, height } = page.getSize();
+    const { height } = page.getSize();
 
     page.drawText('Delivery Tracking - Report', {
       x: 50,

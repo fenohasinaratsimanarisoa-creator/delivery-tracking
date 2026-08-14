@@ -65,7 +65,12 @@ export function mergePositionUpdate(
   const key = update.vehicleId;
   const existing = next.get(key);
 
-  if (update.suspect && existing) {
+  if (update.suspect) {
+    // P1 : un PREMIER point suspect (réveil du flux, téléportation « vitesse ») n'a
+    // aucune position fiable de référence — le placer sur l'ancien `else` affichait un
+    // marqueur fiable à des coordonnées fausses (« DÉPLACEMENT CONFIRMÉ »). On l'ignore
+    // : le véhicule apparaîtra au prochain fix fiable.
+    if (!existing) return next;
     next.set(key, {
       ...existing,
       speed: update.speed,

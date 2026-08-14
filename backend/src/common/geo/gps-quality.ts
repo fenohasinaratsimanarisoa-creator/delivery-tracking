@@ -4,7 +4,7 @@ export function computeConfidence(
   accuracy: number | undefined,
   suspect: boolean,
   speed?: number,
-  heading?: number,
+  _heading?: number,
 ): number {
   let score = 100;
 

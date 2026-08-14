@@ -17,9 +17,6 @@ export class UsageGuard implements CanActivate {
     const companyId = request.companyId || request.user?.companyId;
     if (!companyId) return true;
 
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
     const sub = await this.prisma.subscription.findUnique({
       where: { companyId },
       include: { plan: true },

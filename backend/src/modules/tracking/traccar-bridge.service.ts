@@ -7,6 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { WebSocket } from 'ws';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { plainToInstance } from 'class-transformer';
@@ -703,7 +704,6 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       const cookie = await this.authenticate();
-      const { WebSocket } = require('ws');
       const wsUrl = this.traccarUrl.replace(/^http/, 'ws') + '/api/socket';
 
       this.socket = new WebSocket(wsUrl, {
@@ -1009,7 +1009,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async handlePosition(pos: TraccarPosition, isBackfill = false) {
+  private async handlePosition(pos: TraccarPosition, _isBackfill = false) {
     try {
       const timestamp = this.parseTimestamp(pos);
       if (!this.isValidCoordinates(pos.latitude, pos.longitude)) {

@@ -105,24 +105,30 @@ export class FuelAnalysisProcessor extends WorkerHost {
       let deviation: number | null = null;
       const theoretical = fuelLog.vehicle.theoreticalConsumption;
 
-      const defaultThreshold = parseInt(process.env.FUEL_ANOMALY_THRESHOLD_PERCENT || '20', 10);
+      // B9 : défaut ALIGNÉ sur le schéma (companyFuelSettings.anomalyThreshold @default(15)).
+      // Avant : 20 en dur jusqu'à création de la ligne settings, puis 15 une fois créée →
+      // le MÊME plein pouvait être analysé à 20% puis à 15% (verdicts changeants, fausses
+      // alertes). L'env FUEL_ANOMALY_THRESHOLD_PERCENT reste la source de remplacement.
+      const defaultThreshold = parseInt(process.env.FUEL_ANOMALY_THRESHOLD_PERCENT || '15', 10);
       const threshold = fuelSettings?.anomalyThreshold ?? defaultThreshold;
 
       if (calculatedConsumption !== null) {
-        if (theoretical && theoretical > 0) {
-          deviation = (Math.abs(calculatedConsumption - theoretical) / theoretical) * 100;
+        // B7 : référence de consommation = théorique du véhicule, sinon défaut 8 L/100km
+        // (MÊME défaut que le DailyFuelReport, service ~ligne 1106). Avant, un véhicule
+        // sans theoreticalConsumption n'était JAMAIS flaggé — même à 50 L/100km.
+        const reference = theoretical && theoretical > 0 ? theoretical : 8;
+        deviation = (Math.abs(calculatedConsumption - reference) / reference) * 100;
 
-          if (deviation > threshold) {
-            consumptionAnomalyFlag = true;
-            consumptionAnomalyReason = `Consumption ${calculatedConsumption.toFixed(2)} L/100km deviates ${deviation.toFixed(1)}% from theoretical ${theoretical} L/100km (threshold: ${threshold}%)`;
-            // Sens réel de l'écart : la détection est bidirectionnelle (Math.abs), une
-            // sous-consommation (mesuré < théorique) n'est PAS un dépassement. Le champ
-            // permet au frontend d'afficher over/under sans parser le message.
-            consumptionDeviationDirection =
-              calculatedConsumption > theoretical
-                ? ConsumptionDeviationDirection.over
-                : ConsumptionDeviationDirection.under;
-          }
+        if (deviation > threshold) {
+          consumptionAnomalyFlag = true;
+          consumptionAnomalyReason = `Consumption ${calculatedConsumption.toFixed(2)} L/100km deviates ${deviation.toFixed(1)}% from expected ${reference} L/100km (threshold: ${threshold}%)`;
+          // Sens réel de l'écart : la détection est bidirectionnelle (Math.abs), une
+          // sous-consommation (mesuré < théorique) n'est PAS un dépassement. Le champ
+          // permet au frontend d'afficher over/under sans parser le message.
+          consumptionDeviationDirection =
+            calculatedConsumption > reference
+              ? ConsumptionDeviationDirection.over
+              : ConsumptionDeviationDirection.under;
         }
       }
 
@@ -157,7 +163,7 @@ export class FuelAnalysisProcessor extends WorkerHost {
           type: NotificationType.fuel_anomaly,
           priority: NotificationPriority.high,
           title: 'Fuel Consumption Anomaly',
-          message: `Vehicle ${fuelLog.vehicle.licensePlate}: consumption ${calculatedConsumption.toFixed(1)} L/100km is ${deviation.toFixed(0)}% ${direction} the expected ${theoretical?.toFixed(1) || 'N/A'} L/100km`,
+          message: `Vehicle ${fuelLog.vehicle.licensePlate}: consumption ${calculatedConsumption.toFixed(1)} L/100km is ${deviation.toFixed(0)}% ${direction} the expected ${(theoretical && theoretical > 0 ? theoretical : 8).toFixed(1)} L/100km`,
           link: `/fuel-consumption`,
           deliveryId: undefined,
           userId: fuelLog.vehicle?.driver?.userId ?? undefined,

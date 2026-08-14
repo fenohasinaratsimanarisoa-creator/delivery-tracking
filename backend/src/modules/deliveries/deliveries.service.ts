@@ -825,7 +825,6 @@ export class DeliveriesService {
       skipped: [] as { row: number; orderRef: string; reason: string }[],
       errors: [] as { row: number; reason: string }[],
     };
-    const toCreate: any[] = [];
 
     const totalRows = worksheet.rowCount;
     for (let rowNum = 2; rowNum <= totalRows; rowNum++) {

@@ -49,8 +49,18 @@ const mockPrisma = {
   },
   gpsPosition: {
     findMany: jest.fn(),
+    findFirst: jest.fn(),
   },
 };
+
+// Construit un tableau de positions GPS tel que computeFilteredDistance renvoie ≈ km
+// (1° de latitude ≈ 111,32 km, segments sans vitesse ni accuracy → toujours comptés).
+function positionsForKm(km: number) {
+  return [
+    { latitude: 0, longitude: 0, accuracy: null, speed: null },
+    { latitude: km / 111.32, longitude: 0, accuracy: null, speed: null },
+  ];
+}
 
 const mockConfigService = {
   get: jest.fn(),
@@ -68,7 +78,9 @@ describe('FuelConsumptionService', () => {
   let service: FuelConsumptionService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    // resetAllMocks (et non clearAllMocks) : les files mockResolvedValueOnce non
+    // consommées d'un test fuyaient vers le suivant (échecs dépendant de l'ordre).
+    jest.resetAllMocks();
     mockConfigService.get.mockReturnValue(25);
     service = new FuelConsumptionService(
       mockPrisma as unknown as PrismaService,
@@ -193,7 +205,7 @@ describe('FuelConsumptionService', () => {
   // BUG 3 : GPS cross-check not filtered by vehicle
   // ----------------------------------------------------------------
   describe('BUG 3 — crossCheckFuelLogWithGps filters by vehicleId', () => {
-    it('aggregates dailyFuelReport scoped to the same vehicleId, not the whole fleet', async () => {
+    it('interroge gps_positions scopé au même vehicleId, bornes EXACTES des pleins (B2)', async () => {
       const fuelLog = {
         id: 'fuel-log-1',
         vehicleId: 'vehicle-a',
@@ -204,23 +216,21 @@ describe('FuelConsumptionService', () => {
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({
         fillDate: new Date('2026-07-20'),
       });
-      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({
-        _sum: { distanceKm: 100 },
-      });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positionsForKm(140));
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
-      expect(mockPrisma.dailyFuelReport.aggregate).toHaveBeenCalledWith({
+      expect(mockPrisma.gpsPosition.findMany).toHaveBeenCalledWith({
         where: {
-          companyId: 'company-1',
           vehicleId: 'vehicle-a',
-          reportDate: {
-            gte: new Date('2026-07-20'),
-            lte: new Date('2026-07-25'),
-          },
+          timestamp: { gte: new Date('2026-07-20'), lte: new Date('2026-07-25') },
+          suspect: false,
         },
-        _sum: { distanceKm: true },
+        orderBy: { timestamp: 'asc' },
+        select: expect.objectContaining({ latitude: true, longitude: true }),
       });
+      // ratio 150/140 = 1.07 < 1.3 → aucun flag.
+      expect(mockPrisma.fuelLog.update).not.toHaveBeenCalled();
     });
 
     it('does NOT flag an anomaly when the vehicle GPS distance matches (filter prevents fleet pollution)', async () => {
@@ -234,9 +244,7 @@ describe('FuelConsumptionService', () => {
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({
         fillDate: new Date('2026-07-18'),
       });
-      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({
-        _sum: { distanceKm: 85 },
-      });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positionsForKm(85));
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
@@ -259,28 +267,28 @@ describe('FuelConsumptionService', () => {
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({
         fillDate: new Date('2026-07-15T14:30:00.000Z'),
       });
-      // Somme post-correction : jours 15 (200km) + 16 (50km) + 17 (50km) = 300km
-      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({
-        _sum: { distanceKm: 300 },
-      });
+      // Distance GPS entre les deux pleins = 300km (bornes exactes des pleins, B2).
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positionsForKm(300));
       // Seuil explicitement configuré à 3 pour isoler la logique des bornes de date
-      // (la normalisation du jour entier) de la logique de seuil, testée séparément.
+      // (bornes exactes des pleins) de la logique de seuil, testée séparément.
       mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({
         crossCheckThreshold: 3,
       });
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
-      expect(mockPrisma.dailyFuelReport.aggregate).toHaveBeenCalledWith({
+      // Bornes EXACTES : plus de troncature au jour UTC (B2).
+      expect(mockPrisma.gpsPosition.findMany).toHaveBeenCalledWith({
         where: {
-          companyId: 'company-1',
           vehicleId: 'vehicle-a',
-          reportDate: {
-            gte: new Date('2026-07-15T00:00:00.000Z'),
-            lte: new Date('2026-07-18T00:00:00.000Z'),
+          timestamp: {
+            gte: new Date('2026-07-15T14:30:00.000Z'),
+            lte: new Date('2026-07-18T09:00:00.000Z'),
           },
+          suspect: false,
         },
-        _sum: { distanceKm: true },
+        orderBy: { timestamp: 'asc' },
+        select: expect.objectContaining({ latitude: true, longitude: true }),
       });
       // ratio = 400/300 = 1.33 < 3 (seuil configuré ici) → aucun flag d'anomalie
       expect(mockPrisma.fuelLog.update).not.toHaveBeenCalled();
@@ -298,9 +306,7 @@ describe('FuelConsumptionService', () => {
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({
         fillDate: new Date('2026-07-15'),
       });
-      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({
-        _sum: { distanceKm: 100 },
-      });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positionsForKm(100));
       // ratio = 200/100 = 2 : INVISIBLE avec l'ancien seuil de 3 (300%), visible à 1.3.
       mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({
         crossCheckThreshold: 1.3,
@@ -331,9 +337,7 @@ describe('FuelConsumptionService', () => {
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({
         fillDate: new Date('2026-07-15'),
       });
-      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({
-        _sum: { distanceKm: 100 },
-      });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positionsForKm(100));
       // Pas de ligne companyFuelSettings (ou champ null) → défaut 1.3.
       mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce(null);
 
@@ -358,9 +362,7 @@ describe('FuelConsumptionService', () => {
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({
         fillDate: new Date('2026-07-15'),
       });
-      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({
-        _sum: { distanceKm: 100 },
-      });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positionsForKm(100));
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
@@ -537,7 +539,7 @@ describe('FuelConsumptionService', () => {
       };
       // Aucun plein précédent → période = 30 jours. Aucun dailyFuelReport → gpsKm = 0.
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce(null);
-      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({ _sum: { distanceKm: 0 } });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
@@ -569,7 +571,7 @@ describe('FuelConsumptionService', () => {
         gpsCoverageInsufficientFlag: false,
       };
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({ fillDate: new Date('2026-07-20') });
-      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({ _sum: { distanceKm: 90 } });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positionsForKm(90));
       mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({ crossCheckThreshold: 1.3 });
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
@@ -594,7 +596,7 @@ describe('FuelConsumptionService', () => {
         gpsCoverageInsufficientReason: 'ancienne raison',
       };
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({ fillDate: new Date('2026-07-20') });
-      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({ _sum: { distanceKm: 90 } });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positionsForKm(90));
       mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({ crossCheckThreshold: 1.3 });
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
@@ -797,7 +799,7 @@ describe('FuelConsumptionService', () => {
         },
       });
       // Aucun champ mesuré changé : ni le cross-check ni le job 'analyze' ne sont relancés.
-      expect(mockPrisma.dailyFuelReport.aggregate).not.toHaveBeenCalled();
+      expect(mockPrisma.gpsPosition.findMany).not.toHaveBeenCalled();
       expect(mockQueue.add).not.toHaveBeenCalled();
     });
 
@@ -850,7 +852,7 @@ describe('FuelConsumptionService', () => {
       mockPrisma.fuelLog.findFirst
         .mockResolvedValueOnce(flagged)
         .mockResolvedValueOnce({ fillDate: new Date('2026-07-10T00:00:00.000Z') });
-      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({ _sum: { distanceKm: 0 } });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
       mockPrisma.fuelLog.update.mockResolvedValueOnce(corrected);
       mockPrisma.fuelLog.findUnique.mockResolvedValueOnce(enriched);
 
@@ -874,7 +876,7 @@ describe('FuelConsumptionService', () => {
         },
       });
       // Le cross-check a été relancé après la correction de saisie.
-      expect(mockPrisma.dailyFuelReport.aggregate).toHaveBeenCalled();
+      expect(mockPrisma.gpsPosition.findMany).toHaveBeenCalled();
     });
 
     it('re-dispatches the analyze job when measured fields change (recompute calculatedConsumption)', async () => {
@@ -895,7 +897,7 @@ describe('FuelConsumptionService', () => {
       mockPrisma.fuelLog.findFirst
         .mockResolvedValueOnce(stale)
         .mockResolvedValueOnce({ fillDate: new Date('2026-07-10T00:00:00.000Z') });
-      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({ _sum: { distanceKm: 0 } });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
       mockPrisma.fuelLog.update.mockResolvedValueOnce(updated);
       mockPrisma.fuelLog.findUnique.mockResolvedValueOnce(enriched);
 
@@ -1295,7 +1297,7 @@ describe('FuelConsumptionService', () => {
 
       // crossCheckFuelLogWithGps peut alors agréger gpsKm > 0 pour ce véhicule et détecter.
       mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({ fillDate: new Date('2026-07-18') });
-      mockPrisma.dailyFuelReport.aggregate.mockResolvedValueOnce({ _sum: { distanceKm: 1.11 } });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positionsForKm(1.11));
       const fuelLog = {
         id: 'fuel-orphan',
         vehicleId: 'vehicle-orphan',
@@ -1305,7 +1307,7 @@ describe('FuelConsumptionService', () => {
       };
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
-      expect(mockPrisma.dailyFuelReport.aggregate).toHaveBeenCalledWith(
+      expect(mockPrisma.gpsPosition.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ vehicleId: 'vehicle-orphan' }),
         }),
@@ -1510,7 +1512,10 @@ describe('FuelConsumptionService', () => {
     });
 
     it('updateFuelPrice normalise aussi le fuelType (H4)', async () => {
-      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce({ id: 'fp-1', companyId: 'company-1' });
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce({
+        id: 'fp-1',
+        companyId: 'company-1',
+      });
       mockPrisma.fuelPriceHistory.update.mockResolvedValueOnce({ id: 'fp-1' });
 
       await service.updateFuelPrice('company-1', 'fp-1', { fuelType: 'Gazoil' });
@@ -1521,7 +1526,9 @@ describe('FuelConsumptionService', () => {
     });
 
     it('getDailyReports rejette une date invalide en 400 (M5)', async () => {
-      await expect(service.getDailyReports('company-1', 'abc')).rejects.toThrow(BadRequestException);
+      await expect(service.getDailyReports('company-1', 'abc')).rejects.toThrow(
+        BadRequestException,
+      );
       expect(mockPrisma.dailyFuelReport.findMany).not.toHaveBeenCalled();
     });
 
@@ -1946,8 +1953,9 @@ describe('FuelConsumptionService', () => {
       // driverId=null dans la fenêtre du jour
       mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VEHICLE, driver: { id: DRIVER } }]);
 
-      // Requête de détection des positions null-driver du jour (non vides)
-      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positions);
+      // B4 : passe 3 couvre tout véhicule actif assigné AYANT des positions le jour
+      // (existence check en findFirst, plus seulement les positions null-driver).
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce({ id: 'exists' });
 
       // generateDailyReportForVehicle : groupe complet des positions du jour
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positions);
@@ -2104,13 +2112,13 @@ describe('FuelConsumptionService', () => {
         .mockResolvedValueOnce(positionsB);
       // Passe 2 (véhicules SANS chauffeur) : aucun.
       mockPrisma.vehicle.findMany.mockResolvedValueOnce([]);
-      // Passe 3 : le véhicule a un chauffeur assigné (B) ET des positions null-driver.
+      // Passe 3 : le véhicule a un chauffeur assigné (B) ET des positions le jour.
       mockPrisma.vehicle.findMany.mockResolvedValueOnce([
         { id: VEHICLE, driver: { id: DRIVER_B } },
       ]);
+      // B4 : existence check (findFirst) — plus de détection findMany des null-driver.
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce({ id: 'exists' });
       mockPrisma.gpsPosition.findMany
-        // Détection des positions null-driver du jour (non vides → 3e passe active).
-        .mockResolvedValueOnce(positionsNull)
         // generateDailyReportForVehicle : TOUTES les positions du jour (A + nulls + B).
         .mockResolvedValueOnce(allPositions);
       mockPrisma.driver.findUnique.mockResolvedValue({
@@ -2195,8 +2203,8 @@ describe('FuelConsumptionService', () => {
       ]);
       mockPrisma.gpsPosition.findMany
         .mockResolvedValueOnce(positionsDriver) // passe 1 (driver A)
-        .mockResolvedValueOnce(positionsNullB) // passe 3 (détection null)
         .mockResolvedValueOnce(all); // generateDailyReportForVehicle (tout le jour)
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce({ id: 'exists' }); // B4 existence
       mockPrisma.vehicle.findMany
         .mockResolvedValueOnce([]) // passe 2 : aucun véhicule sans chauffeur
         .mockResolvedValueOnce([{ id: VEHICLE, driver: { id: DRIVER_A } }]); // passe 3

@@ -1,5 +1,7 @@
+// pg n'a pas de types TS : on garde le require (implicit any, toléré en spec).
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { Client } = require('pg');
-const nodeCrypto = require('crypto');
+import * as nodeCrypto from 'crypto';
 
 // Base de TEST dédiée (jamais de production) fournie via l'environnement.
 // Sans variable configurée, on SKIP proprement (ne pas échouer la CI, ne pas

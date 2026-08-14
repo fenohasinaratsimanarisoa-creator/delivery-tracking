@@ -486,7 +486,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
   const { data: driversData } = useQuery({
     queryKey: ['drivers', 'list'],
     queryFn: () => api.get('/drivers?limit=100').then((r: { data: unknown }) =>
-      ((r.data as { data?: { id: string; firstName: string; lastName: string; licenseNumber: string; vehicle?: { licensePlate: string } }[] })?.data ?? r.data ?? []) as { id: string; firstName: string; lastName: string; licenseNumber: string; vehicle?: { licensePlate: string } }[]
+      ((r.data as { data?: { id: string; firstName: string; lastName: string; licenseNumber: string; vehicle?: { id: string; licensePlate: string } }[] })?.data ?? r.data ?? []) as { id: string; firstName: string; lastName: string; licenseNumber: string; vehicle?: { id: string; licensePlate: string } }[]
     ),
     staleTime: 60_000,
   });
@@ -500,7 +500,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
     refetchInterval: 30_000,
   });
 
-  const allDrivers: Array<{ id: string; firstName: string; lastName: string; licenseNumber: string; vehicle?: { licensePlate: string } }> = driversData ?? [];
+  const allDrivers: Array<{ id: string; firstName: string; lastName: string; licenseNumber: string; vehicle?: { id: string; licensePlate: string } }> = driversData ?? [];
 
   const lastRouteCalcPos = useRef<{ lat: number; lng: number } | null>(null);
   const lastRouteCalcTime = useRef<number>(0);
@@ -524,9 +524,16 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
     if (!driverFilter.trim()) return [];
     const q = driverFilter.toLowerCase();
     const active = allPositions.filter((v) => v.name.toLowerCase().includes(q));
-    const activeIds = new Set(active.map((v) => v.id));
+    // P1 : la Map des positions est cléée par vehicleId, pas driverId — comparer des
+    // driverId (d.id) contre des vehicleId (v.id) était TOUJOURS vrai → chaque chauffeur
+    // en ligne apparaissait aussi « Hors ligne ». On compare par le véhicule assigné.
+    const activeVehicleIds = new Set(active.map((v) => v.vehicleId));
     const offline = allDrivers
-      .filter((d) => !activeIds.has(d.id) && `${d.firstName} ${d.lastName}`.toLowerCase().includes(q))
+      .filter(
+        (d) =>
+          !activeVehicleIds.has(d.vehicle?.id || '') &&
+          `${d.firstName} ${d.lastName}`.toLowerCase().includes(q),
+      )
       .map((d) => ({
         id: d.id,
         lat: 0,
@@ -649,12 +656,22 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
       socket.emit('subscribeToCompany');
     }
 
+    // P2 : à chaque reconnexion (ex. refresh token toutes les ~14 min), le serveur ne
+    // re-joint que company:* et driver:* dans handleConnection — la room delivery:*
+    // était perdue. On resubscribe à chaque 'connect'.
+    const resubscribe = () => {
+      if (deliveryId) socket.emit('subscribeToDelivery', deliveryId);
+      else socket.emit('subscribeToCompany');
+    };
+    socket.on('connect', resubscribe);
+
     socket.on('positionUpdate', addPosition);
     socket.on('batchPositionUpdate', (updates: PositionUpdate[]) => {
       updates.forEach((u) => addPosition(u));
     });
 
     return () => {
+      socket.off('connect', resubscribe);
       if (deliveryId) {
         socket.emit('unsubscribeFromDelivery', deliveryId);
       } else {

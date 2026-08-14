@@ -1,4 +1,5 @@
-import { WebSocketGateway,
+import {
+  WebSocketGateway,
   WebSocketServer,
   SubscribeMessage,
   OnGatewayConnection,
@@ -133,12 +134,16 @@ export class TrackingGateway
         exposeUnsetFields: false,
         enableImplicitConversion: true,
       });
-      const validationErrors = await validate(instance, { whitelist: true, skipMissingProperties: false });
+      const validationErrors = await validate(instance, {
+        whitelist: true,
+        skipMissingProperties: false,
+      });
       if (validationErrors.length > 0) {
-        const fields = validationErrors.map((e) => Object.keys(e.constraints || {})).flat().join(', ');
-        this.logger.warn(
-          `Position payload invalid (driver=${user.id}): ${fields}`,
-        );
+        const fields = validationErrors
+          .map((e) => Object.keys(e.constraints || {}))
+          .flat()
+          .join(', ');
+        this.logger.warn(`Position payload invalid (driver=${user.id}): ${fields}`);
         client.emit('positionRejected', { reason: 'invalid_payload' });
         return;
       }
@@ -235,10 +240,12 @@ export class TrackingGateway
         `[POSITION] driver=${driver.id} lat=${dto.latitude.toFixed(6)} lng=${dto.longitude.toFixed(6)} speed=${speed?.toFixed(2)} heading=${dto.heading} delivery=${dto.deliveryId || 'none'} company=${user.companyId}`,
       );
 
+      // P2 : suspect était codé en dur à false → la confiance affichée ignorait les
+      // points de téléportation (contrairement au chemin batch). On propage position.suspect.
       const confidence =
         dto.accuracy && dto.accuracy > 0
-          ? computeConfidence(dto.accuracy, false, speed, dto.heading)
-          : computeConfidence(undefined, false, speed, dto.heading);
+          ? computeConfidence(dto.accuracy, position.suspect, speed, dto.heading)
+          : computeConfidence(undefined, position.suspect, speed, dto.heading);
 
       const broadcast = {
         driverId: driver.id,

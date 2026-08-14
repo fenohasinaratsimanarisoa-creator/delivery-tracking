@@ -1,5 +1,7 @@
+// pg n'a pas de types TS : on garde le require (implicit any, toléré en spec).
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const PgClient = require('pg').Client;
-const alertCrypto = require('crypto');
+import * as alertCrypto from 'crypto';
 
 // Base de TEST dédiée (jamais de production) fournie via l'environnement.
 // Ce test fait des écritures réelles (INSERT/DELETE) : sans variable configurée,

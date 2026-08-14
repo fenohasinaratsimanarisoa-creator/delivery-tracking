@@ -20,7 +20,7 @@ export class ReportsService {
 
     const where = { companyId, createdAt: { gte: periodStart, lte: periodEnd } };
 
-    const [total, statusBreakdown, completed, onTime] = await Promise.all([
+    const [total, statusBreakdown, completed] = await Promise.all([
       this.prisma.delivery.count({ where }),
       Promise.all(
         (['pending', 'assigned', 'in_progress', 'delivered', 'failed', 'cancelled'] as const).map(
@@ -33,14 +33,6 @@ export class ReportsService {
       this.prisma.delivery.findMany({
         where: { ...where, status: 'delivered', completedAt: { not: null } },
         select: { completedAt: true, scheduledDate: true, createdAt: true },
-      }),
-      this.prisma.delivery.count({
-        where: {
-          ...where,
-          status: 'delivered',
-          completedAt: { not: null },
-          scheduledDate: { not: null },
-        },
       }),
     ]);
 

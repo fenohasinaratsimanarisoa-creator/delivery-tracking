@@ -266,6 +266,14 @@ describe('FuelAnalysisProcessor', () => {
         dailyFuelReport: {
           aggregate: jest.fn(async () => ({ _sum: { distanceKm: 30 } })),
         },
+        gpsPosition: {
+          // B2 : crossCheckFuelLogWithGps calcule désormais gpsKm depuis les positions
+          // brutes (bornes exactes) — ~30 km ici (2 points à 30/111.32° de latitude).
+          findMany: jest.fn(async () => [
+            { latitude: 0, longitude: 0, accuracy: null, speed: null },
+            { latitude: 30 / 111.32, longitude: 0, accuracy: null, speed: null },
+          ]),
+        },
         companyFuelSettings: {
           findUnique: jest.fn(async () => ({ anomalyThreshold: 20 })),
         },
@@ -392,6 +400,10 @@ describe('FuelAnalysisProcessor', () => {
         },
         dailyFuelReport: {
           aggregate: jest.fn(async () => ({ _sum: { distanceKm: 0 } })),
+        },
+        gpsPosition: {
+          // B2 : gpsKm calculé depuis les positions brutes → aucune position = 0 km.
+          findMany: jest.fn(async () => []),
         },
         companyFuelSettings: {
           findUnique: jest.fn(async () => ({ anomalyThreshold: 20 })),

@@ -981,9 +981,9 @@ describe('DeliveriesService - State Machine', () => {
         DeliveryStatus.failed,
         DeliveryStatus.cancelled,
       ]) {
-        await expect(
-          service.create('comp-1', { title: 'X', status } as any),
-        ).rejects.toThrow(BadRequestException);
+        await expect(service.create('comp-1', { title: 'X', status } as any)).rejects.toThrow(
+          BadRequestException,
+        );
       }
       expect(mockPrisma.delivery.create).not.toHaveBeenCalled();
     });
@@ -1082,7 +1082,12 @@ describe('DeliveriesService - State Machine', () => {
       });
       mockPrisma.delivery.update.mockResolvedValue({ id: 'del-1' });
 
-      const result = await service.importExcel('comp-1', buffer as unknown as Buffer, 'Entrepôt', 'upsert');
+      const result = await service.importExcel(
+        'comp-1',
+        buffer as unknown as Buffer,
+        'Entrepôt',
+        'upsert',
+      );
       expect(result.updated).toBe(1);
       expect(mockPrisma.delivery.update).toHaveBeenCalledWith(
         expect.objectContaining({

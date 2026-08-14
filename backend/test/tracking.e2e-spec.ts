@@ -148,7 +148,10 @@ describe('Tracking GPS (e2e)', () => {
         .set('Authorization', `Bearer ${dispatcherToken}`)
         .expect(200);
 
-      expect(res.body).toEqual({ data: [], meta: { total: 0, page: 1, limit: 200, totalPages: 0 } });
+      expect(res.body).toEqual({
+        data: [],
+        meta: { total: 0, page: 1, limit: 200, totalPages: 0 },
+      });
     });
   });
 
@@ -290,9 +293,7 @@ describe('Tracking GPS (e2e)', () => {
       // 2e envoi du MÊME payload : dédoublonnée par le serveur (timestamp identique)
       // → rejet explicite (positionRejected) sur le socket du CHAUFFEUR, jamais de
       // doublon en base ni de broadcast.
-      const rejected = waitForEvent(driverSocket, 'positionRejected', 5000).then(
-        (d: unknown) => d,
-      );
+      const rejected = waitForEvent(driverSocket, 'positionRejected', 5000).then((d: unknown) => d);
       driverSocket.emit('updatePosition', pos);
       await rejected;
 

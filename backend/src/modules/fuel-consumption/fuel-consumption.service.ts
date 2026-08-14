@@ -47,9 +47,12 @@ export class FuelConsumptionService {
     @Optional() @InjectQueue('fuel-analysis') private fuelAnalysisQueue: Queue,
     private trackingGateway: TrackingGateway,
   ) {
+    // B9 : défaut 15 ALIGNÉ sur le schéma (companyFuelSettings.anomalyThreshold @default(15))
+    // et sur le processor (fuel-analysis.processor.ts). Avant : 20 ici, 15 en base → verdicts
+    // changeants selon que la ligne settings existe ou non.
     this.fallbackThresholdPercent = this.configService.get<number>(
       'FUEL_ANOMALY_THRESHOLD_PERCENT',
-      20,
+      15,
     );
   }
 
@@ -352,10 +355,12 @@ export class FuelConsumptionService {
       next.setDate(next.getDate() + 1);
       where.reportDate = { gte: d, lt: next };
     }
+    // B6 : avant, take:100 tronquait silencieusement le rapport quotidien (une flotte de
+    // ~60 chauffeurs × 2 véhicules produit >100 lignes/jour) → kilométrage total sous-évalué
+    // à l'écran. Le volume est borné par (chauffeurs × véhicules du jour) : on renvoie tout.
     return this.prisma.dailyFuelReport.findMany({
       where,
       orderBy: { reportDate: 'desc' },
-      take: 100,
     });
   }
 
@@ -470,7 +475,22 @@ export class FuelConsumptionService {
       ]),
     );
     const driverById = new Map(drivers.map((d) => [d.id, d]));
-    const reportByVehicle = new Map(reports.map((r) => [r.vehicleId, r]));
+    // B5 : un véhicule conduit par 2 chauffeurs dans la journée a 2 DailyFuelReport
+    // (clé driverId_vehicleId_reportDate) — un Map simple n'en gardait que le dernier,
+    // la colonne « Rapport » du diagnostic sous-estimait donc la distance (vs « Filtrée »
+    // calculée sur toutes les positions). On SOMME les distances par véhicule.
+    const reportByVehicle = new Map<
+      string,
+      { distanceKm: number; fuelType: string | null; pricePerLiterUsed: number | null }
+    >();
+    for (const r of reports) {
+      const prev = reportByVehicle.get(r.vehicleId);
+      reportByVehicle.set(r.vehicleId, {
+        distanceKm: (prev?.distanceKm ?? 0) + (r.distanceKm ?? 0),
+        fuelType: r.fuelType ?? prev?.fuelType ?? null,
+        pricePerLiterUsed: r.pricePerLiterUsed ?? prev?.pricePerLiterUsed ?? null,
+      });
+    }
 
     const vehiclesDiag = [...byVehicle.entries()].map(([vehicleId, group]) => {
       const valid = group.filter((p) => !p.suspect);
@@ -740,12 +760,23 @@ export class FuelConsumptionService {
   }
 
   private async generateDailyReportForCompany(companyId: string, forDate?: Date) {
-    const targetDate = forDate || new Date();
+    // B1 : normalise à 00h UTC. Le cron (22h UTC) et le mode manuel (?date=YYYY-MM-DD
+    // → 00h UTC) résolvent ainsi le MÊME point de référence pour getFuelPriceForDate :
+    // avant, le cron passait 22h → un prix entré en vigueur en cours de journée était
+    // appliqué par le cron mais pas par la régénération manuelle (estimatedCost différent
+    // pour le même jour). Le jour malgache (getMadagascarDayBounds) reste identique.
+    const rawDate = forDate || new Date();
+    const targetDate = new Date(
+      Date.UTC(rawDate.getUTCFullYear(), rawDate.getUTCMonth(), rawDate.getUTCDate()),
+    );
 
     const drivers = await this.prisma.driver.findMany({
       where: { companyId, deletedAt: null, isActive: true },
       select: { id: true, firstName: true, lastName: true },
     });
+    // B4 : ids des chauffeurs ACTIFS, passés à la passe 3 pour inclure les positions
+    // des chauffeurs désactivés (sans ré-requêter driver.findMany par véhicule).
+    const activeDriverIds = new Set(drivers.map((d) => d.id));
 
     for (const driver of drivers) {
       await this.generateDailyReportForDriver(driver, companyId, targetDate);
@@ -763,7 +794,13 @@ export class FuelConsumptionService {
     });
 
     for (const vehicle of unassignedVehicles) {
-      await this.generateDailyReportForVehicle(vehicle.id, companyId, targetDate);
+      await this.generateDailyReportForVehicle(
+        vehicle.id,
+        companyId,
+        targetDate,
+        null,
+        activeDriverIds,
+      );
     }
 
     // Troisième passe : les véhicules actifs AVEC un chauffeur assigné dont
@@ -780,36 +817,31 @@ export class FuelConsumptionService {
     });
 
     for (const vehicle of assignedVehicles) {
-      const nullDriverPositions = await this.prisma.gpsPosition.findMany({
+      // B4 : on traite TOUT véhicule actif assigné ayant des positions le jour (pas
+      // seulement ceux avec des positions null-driver). AVANT : un véhicule dont les
+      // positions portaient un driver DÉSACTIVÉ (et aucune position null) n'avait
+      // AUCUN DailyFuelReport → crossCheckFuelLogWithGps renvoyait gpsKm=0 → pleins
+      // toujours « non vérifiables ».
+      const hasPositions = await this.prisma.gpsPosition.findFirst({
         where: {
           vehicleId: vehicle.id,
           companyId,
-          driverId: null,
           suspect: false,
           timestamp: { gte: bounds.start, lte: bounds.end },
         },
-        orderBy: { timestamp: 'asc' },
-        select: {
-          latitude: true,
-          longitude: true,
-          driverId: true,
-          accuracy: true,
-          speed: true,
-          timestamp: true,
-        },
+        select: { id: true },
       });
-      if (nullDriverPositions.length === 0) continue;
+      if (!hasPositions) continue;
 
-      // generateDailyReportForVehicle couvre TOUTES les positions du jour du
-      // véhicule (driverId non-null ET null) : l'upsert par (driverId, vehicleId,
-      // reportDate) écrase le rapport de la passe driver avec le groupe COMPLET,
-      // donc chaque position est comptée EXACTEMENT une fois (pas de double
-      // comptage), y compris les fixes null-driver.
+      // generateDailyReportForVehicle (avec le filtre anti double-comptage interne)
+      // produit le rapport complet du véhicule ; chaque position est comptée EXACTEMENT
+      // une fois, y compris les fixes null-driver et ceux des chauffeurs désactivés.
       await this.generateDailyReportForVehicle(
         vehicle.id,
         companyId,
         targetDate,
         vehicle.driver?.id,
+        activeDriverIds,
       );
     }
   }
@@ -935,6 +967,7 @@ export class FuelConsumptionService {
     companyId: string,
     targetDate: Date,
     currentDriverId?: string | null,
+    activeDriverIds?: Set<string>,
   ) {
     const bounds = this.getMadagascarDayBounds(targetDate);
 
@@ -999,8 +1032,17 @@ export class FuelConsumptionService {
     // Si le véhicule n'a QUE des positions null-driver ce jour (aucune position
     // propre à reportDriverId), le filtre garde tout : l'upsert sous
     // reportDriverId (fallback currentDriverId) reste inchangé.
+    //
+    // B4 : les positions portant un driver DÉSACTIVÉ (hors activeDriverIds) sont AUSSI
+    // incluses — elles ne figurent dans AUCUN rapport (la passe driver ne traite que
+    // les chauffeurs actifs). Les exclure laissait le véhicule sans DailyFuelReport
+    // (cross-check GPS toujours « non vérifiable »). Le set est passé depuis
+    // generateDailyReportForCompany (pas de requête par véhicule).
     const scopedPositions = positions.filter(
-      (p) => p.driverId === null || p.driverId === reportDriverId,
+      (p) =>
+        p.driverId === null ||
+        p.driverId === reportDriverId ||
+        (activeDriverIds ? !activeDriverIds.has(p.driverId) : false),
     );
 
     const lastDriver = await this.prisma.driver.findUnique({
@@ -1178,45 +1220,33 @@ export class FuelConsumptionService {
       prevLog?.fillDate || new Date(fuelLog.fillDate.getTime() - 30 * 24 * 60 * 60 * 1000);
     const rawEnd = fuelLog.fillDate;
 
-    // Normalisation des bornes au jour UTC (minuit), alignée sur dailyFuelReport.reportDate
-    // qui est TOUJOURS minuit UTC (voir generateDailyReportForCompany, ligne ~350 :
-    // new Date(Date.UTC(year, month, date))). Sans cette troncature, un plein précédent à
-    // 14h30 exclurait le reportDate du jour J (minuit, antérieur à 14h30) de la période
-    // gte/lte : la distance GPS de ce jour serait ignorée, sous-estimant gpsKm et risquant
-    // une fausse anomalie sur un plein pourtant légitime. Inclure le jour entier du plein
-    // précédent ET du plein courant sur-estime légèrement la distance GPS, ce qui est le
-    // comportement le plus sûr : mieux vaut inclure un peu plus que déclencher une fausse
-    // anomalie. (Même logique de commentaire documenté que GPS_NOISE_THRESHOLD_M ci-dessus.)
-    const periodStart = new Date(
-      Date.UTC(rawStart.getUTCFullYear(), rawStart.getUTCMonth(), rawStart.getUTCDate()),
-    );
-    const periodEnd = new Date(
-      Date.UTC(rawEnd.getUTCFullYear(), rawEnd.getUTCMonth(), rawEnd.getUTCDate()),
-    );
-
-    const gpsDistance = await this.prisma.dailyFuelReport.aggregate({
+    // B2 : distance GPS calculée depuis les POSITIONS BRUTES entre les deux pleins
+    // (bornes EXACTES), pas depuis dailyFuelReport agrégé par jour entier. Avant, la
+    // fenêtre normalisée à minuit incluait le jour entier du plein précédent ET du plein
+    // courant → gpsKm gonflé (double comptage des km avant/après les pleins) → le ratio
+    // manuel/GPS était sous-évalué et masquait la sur-déclaration (fraude silencieuse).
+    const gpsPositions = await this.prisma.gpsPosition.findMany({
       where: {
-        companyId,
         vehicleId: fuelLog.vehicleId,
-        reportDate: { gte: periodStart, lte: periodEnd },
+        timestamp: { gte: rawStart, lte: rawEnd },
+        suspect: false,
       },
-      _sum: { distanceKm: true },
+      orderBy: { timestamp: 'asc' },
+      select: { latitude: true, longitude: true, accuracy: true, speed: true },
     });
 
-    const gpsKm = gpsDistance._sum?.distanceKm || 0;
+    const gpsKm = computeFilteredDistance(gpsPositions) / 1000;
     const manualKm = fuelLog.kilometers;
 
     if (gpsKm <= 0) {
-      // Aucune donnée GPS exploitable sur la période (GPS téléphone coupé, permission
-      // refusée, traceur physique débranché/hors ligne, ou rapports jamais générés) :
-      // le kilométrage saisi est TOTALEMENT invérifiable. Avant cette correction, la
-      // fonction retournait SILENCIEUSEMENT — un plein sans aucune trace GPS devenait
-      // indistinguable d'un plein cohérent (faille de fraude). On émet désormais un
-      // signal explicite d'« impossibilité de vérifier », distinct d'une anomalie
-      // confirmée (sémantique ≠ gpsAnomalyFlag), via une paire de champs dédiée + une
-      // notification de priorité medium. On n'écrit/ne notifie que si le flag n'est pas
-      // déjà posé : éviter les écritures/notifications redondantes à chaque create/update.
-      const reason = `Aucune position GPS enregistrée pour ce véhicule entre ${periodStart.toISOString().slice(0, 10)} et ${periodEnd.toISOString().slice(0, 10)} — kilométrage saisi non vérifiable (${manualKm} km déclarés).`;
+      // B3 : on distingue désormais « aucune position GPS » (vraie absence de couverture)
+      // de « positions existantes mais distance filtrée ≈ 0 » (trace courte/suspecte),
+      // pour ne plus accuser à tort une absence de GPS quand les rapports n'étaient
+      // simplement pas encore générés (l'ancien agrégat sur dailyFuelReport renvoyait 0).
+      const hasPositions = gpsPositions.length > 0;
+      const reason = hasPositions
+        ? `Positions GPS insuffisantes (${gpsPositions.length} fix(s), distance filtrée 0 km) entre ${rawStart.toISOString().slice(0, 10)} et ${rawEnd.toISOString().slice(0, 10)} — kilométrage saisi non vérifiable (${manualKm} km déclarés).`
+        : `Aucune position GPS enregistrée pour ce véhicule entre ${rawStart.toISOString().slice(0, 10)} et ${rawEnd.toISOString().slice(0, 10)} — kilométrage saisi non vérifiable (${manualKm} km déclarés).`;
       if (!fuelLog.gpsCoverageInsufficientFlag) {
         await this.prisma.fuelLog.update({
           where: { id: fuelLog.id },
@@ -1230,8 +1260,8 @@ export class FuelConsumptionService {
           priority: NotificationPriority.medium,
           title: 'Couverture GPS insuffisante',
           message:
-            `Vehicle ${fuelLog.vehicle?.licensePlate || fuelLog.vehicleId}: aucun kilométrage GPS vérifiable entre ` +
-            `${periodStart.toISOString().slice(0, 10)} et ${periodEnd.toISOString().slice(0, 10)} (${manualKm} km déclarés).`,
+            `Vehicle ${fuelLog.vehicle?.licensePlate || fuelLog.vehicleId}: ${hasPositions ? 'distance GPS filtrée nulle' : 'aucune position GPS'} entre ` +
+            `${rawStart.toISOString().slice(0, 10)} et ${rawEnd.toISOString().slice(0, 10)} (${manualKm} km déclarés).`,
           link: `/fuel-consumption`,
           deliveryId: undefined,
           userId: fuelLog.vehicle?.driver?.userId ?? undefined,
