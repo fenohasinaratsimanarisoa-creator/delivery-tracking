@@ -98,25 +98,15 @@ export class AuthService {
       where: { email: dto.email, deletedAt: null },
     });
 
-    await bcrypt.compare(dto.password, user?.passwordHash || this.getDummyHash());
-
-    if (!user || !user.isActive) {
+    // Un seul bcrypt.compare : impossible d'énumérer les comptes par le temps de
+    // réponse (côté temps de vérification, user inexistant == user invalide).
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user?.passwordHash || this.getDummyHash(),
+    );
+    if (!user || !user.isActive || !isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
-
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const session = await this.prisma.userSession.create({
-      data: {
-        userId: user.id,
-        device: userAgent,
-        ip,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
 
     if (user.totpEnabled) {
       const tempToken = this.jwtService.sign(
@@ -145,10 +135,22 @@ export class AuthService {
       };
     }
 
+    // La UserSession n'est créée qu'ici (jamais à l'étape 1 du 2FA) : en 2FA,
+    // c'est verify2faToken qui matérialise la session, avec le même contexte
+    // ip/device. Sinon on laisserait une session orpheline à chaque étape 1.
+    const session = await this.prisma.userSession.create({
+      data: {
+        userId: user.id,
+        device: userAgent,
+        ip,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
     return this.generateTokens(user.id, user.email, user.role, user.companyId, session.id);
   }
 
-  async verify2faToken(dto: Verify2faDto): Promise<TokenResponse> {
+  async verify2faToken(dto: Verify2faDto, ip?: string, userAgent?: string): Promise<TokenResponse> {
     let payload: { sub: string; scope: string };
     try {
       payload = this.jwtService.verify<{ sub: string; scope: string }>(dto.tempToken, {
@@ -176,7 +178,18 @@ export class AuthService {
       throw new UnauthorizedException('Invalid 2FA code');
     }
 
-    return this.generateTokens(user.id, user.email, user.role, user.companyId);
+    // Étape 2 du 2FA : c'est ici que la session est matérialisée (l'étape 1 n'en
+    // crée pas), avec le contexte ip/device de la requête.
+    const session = await this.prisma.userSession.create({
+      data: {
+        userId: user.id,
+        device: userAgent,
+        ip,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    return this.generateTokens(user.id, user.email, user.role, user.companyId, session.id);
   }
 
   async refresh(refreshToken: string, ip?: string, userAgent?: string): Promise<TokenResponse> {
@@ -300,6 +313,9 @@ export class AuthService {
     email = email.toLowerCase().trim();
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
+      // Consomme le même budget temps qu'un utilisateur existant, afin qu'on ne
+      // puisse pas énumérer les comptes via la latence.
+      await bcrypt.compare('dummy', this.getDummyHash());
       return;
     }
 
@@ -361,6 +377,16 @@ export class AuthService {
         refreshTokenHash: null,
       },
     });
+
+    // Réinitialisation du mot de passe == révocation de TOUTES les sessions :
+    // purge les refreshTokenHash des UserSession (le hash vit sur Session depuis
+    // le modèle session-scoped) puis supprime les lignes. Sinon un appareil volé
+    // garderait un refresh token valide malgré le changement de mot de passe.
+    await this.prisma.userSession.updateMany({
+      where: { userId: user.id },
+      data: { refreshTokenHash: null },
+    });
+    await this.prisma.userSession.deleteMany({ where: { userId: user.id } });
   }
 
   async validateGoogleUser(profile: {
@@ -372,11 +398,21 @@ export class AuthService {
     const { googleId, firstName, lastName } = profile;
     const email = profile.email.toLowerCase().trim();
 
+    // Un compte avec 2FA activée ne peut PAS passer par Google (aucun moyen de
+    // présenter le code TOTP dans ce flux) : on refuse plutôt que de
+    // contourner la 2FA en authentifiant l'utilisateur sans son deuxième facteur.
+    const refuseTotp = (u: { id: string; totpEnabled: boolean }) => {
+      if (u.totpEnabled) {
+        throw new UnauthorizedException('Two-factor authentication required');
+      }
+    };
+
     let user = await this.prisma.user.findUnique({ where: { googleId } });
     if (user) {
       if (!user.isActive) {
         throw new UnauthorizedException('Account deactivated');
       }
+      refuseTotp(user);
       return this.generateTokens(user.id, user.email, user.role, user.companyId);
     }
 
@@ -385,6 +421,7 @@ export class AuthService {
       if (!user.isActive) {
         throw new UnauthorizedException('Account deactivated');
       }
+      refuseTotp(user);
       await this.prisma.user.update({
         where: { id: user.id },
         data: { googleId },
@@ -441,13 +478,23 @@ export class AuthService {
   async createSessionForUser(userId: string): Promise<TokenResponse> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, role: true, companyId: true, isActive: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        companyId: true,
+        isActive: true,
+        totpEnabled: true,
+      },
     });
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
     if (!user.isActive) {
       throw new UnauthorizedException('Account deactivated');
+    }
+    if (user.totpEnabled) {
+      throw new UnauthorizedException('Two-factor authentication required');
     }
     return this.generateTokens(user.id, user.email, user.role, user.companyId);
   }
@@ -503,7 +550,8 @@ export class AuthService {
         UPDATE user_sessions
         SET previous_refresh_token_hash = refresh_token_hash,
             refresh_token_hash = ${refreshTokenHash},
-            last_activity = now()
+            last_activity = now(),
+            expires_at = GREATEST(expires_at, now() + interval '7 days')
         WHERE id = ${sessionId}::uuid AND user_id = ${userId}::uuid
       `;
       if (rotated === 0) {

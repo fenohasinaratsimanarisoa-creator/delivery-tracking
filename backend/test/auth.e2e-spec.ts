@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
 import * as bcrypt from 'bcrypt';
+import * as speakeasy from 'speakeasy';
+import * as cookieParser from 'cookie-parser';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { AppModule } from '../src/app.module';
 
@@ -16,6 +18,7 @@ describe('Authentication (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
@@ -27,6 +30,7 @@ describe('Authentication (e2e)', () => {
   });
 
   afterAll(async () => {
+    await prisma.auditLog.deleteMany({ where: { companyId } });
     await prisma.notification.deleteMany({ where: { companyId } });
     await prisma.user.deleteMany({ where: { companyId } });
     await prisma.company.delete({ where: { id: companyId } });
@@ -41,6 +45,21 @@ describe('Authentication (e2e)', () => {
   };
 
   let accessToken: string;
+
+  // POST /auth/refresh exige désormais la protection CSRF (cookie+headers) :
+  // helper pour récupérer un couple csrf valide avant chaque refresh.
+  async function fetchCsrf() {
+    const res = await request(app.getHttpServer()).get('/auth/csrf-token').expect(200);
+    const cookie = Array.isArray(res.headers['set-cookie'])
+      ? res.headers['set-cookie'].find((c: string) => c.startsWith('csrf-token='))
+      : res.headers['set-cookie'];
+    const cookieValue = (cookie || '').split(';')[0];
+    return {
+      cookie: cookieValue,
+      token: res.body.csrfToken as string,
+      hmac: res.body.csrfHmac as string,
+    };
+  }
 
   describe('POST /auth/register', () => {
     afterAll(async () => {
@@ -265,13 +284,16 @@ describe('Authentication (e2e)', () => {
         .expect(200);
 
       // Old refresh token should no longer work
+      const csrf = await fetchCsrf();
       const refreshRes = await request(app.getHttpServer())
         .post('/auth/refresh')
-        // The refresh endpoint reads from cookie, not body
         .set(
           'Cookie',
-          Array.isArray(refreshCookie) ? refreshCookie.join('; ') : refreshCookie || '',
+          `${Array.isArray(refreshCookie) ? `${refreshCookie[0].split(';')[0]}; ` : ''}${csrf.cookie}`,
         )
+        .set('X-CSRF-Token', csrf.token)
+        .set('X-CSRF-HMAC', csrf.hmac)
+        // The refresh endpoint reads from cookie, not body
         .expect(401);
     });
   });
@@ -296,6 +318,263 @@ describe('Authentication (e2e)', () => {
         .post('/auth/reset-password')
         .send({ token: 'some-token', password: 'NoSpecialChar1' })
         .expect(400);
+    });
+  });
+
+  describe('CSRF protection on refresh', () => {
+    it('should reject POST /auth/refresh without CSRF headers', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: testUser.email, password: 'FinalPass123!' });
+      const refreshCookie = loginRes.headers['set-cookie'];
+
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set(
+          'Cookie',
+          Array.isArray(refreshCookie) ? refreshCookie.join('; ') : refreshCookie || '',
+        )
+        .expect(403);
+    });
+
+    it('should accept POST /auth/refresh with CSRF headers', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: testUser.email, password: 'FinalPass123!' });
+      const refreshCookie = loginRes.headers['set-cookie'];
+      expect(refreshCookie).toBeDefined();
+
+      const csrf = await fetchCsrf();
+      const res = await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set(
+          'Cookie',
+          `${Array.isArray(refreshCookie) ? `${refreshCookie[0].split(';')[0]}; ` : ''}${csrf.cookie}`,
+        )
+        .set('X-CSRF-Token', csrf.token)
+        .set('X-CSRF-HMAC', csrf.hmac)
+        .expect(200);
+
+      expect(res.body).toHaveProperty('accessToken');
+      expect(res.body).not.toHaveProperty('refreshToken');
+    });
+  });
+
+  describe('2FA login flow', () => {
+    const twoFaUser = {
+      email: 'twofa@example.com',
+      password: 'StrongPass123',
+      firstName: 'Totp',
+      lastName: 'User',
+      totpSecret: 'JBSWY3DPEHPK3PXP',
+    };
+
+    beforeAll(async () => {
+      const hash = await bcrypt.hash(twoFaUser.password, 12);
+      await prisma.user.create({
+        data: {
+          email: twoFaUser.email,
+          passwordHash: hash,
+          firstName: twoFaUser.firstName,
+          lastName: twoFaUser.lastName,
+          role: 'dispatcher',
+          companyId,
+          totpSecret: twoFaUser.totpSecret,
+          totpEnabled: true,
+        },
+      });
+    });
+
+    afterAll(async () => {
+      await prisma.userSession.deleteMany({
+        where: { user: { email: twoFaUser.email } },
+      });
+      await prisma.user.deleteMany({ where: { email: twoFaUser.email } });
+    });
+
+    it('step 1: returns tempToken and requiresTwoFactor, no refresh cookie', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: twoFaUser.email, password: twoFaUser.password })
+        .expect(200);
+
+      expect(res.body.requiresTwoFactor).toBe(true);
+      expect(res.body.tempToken).toBeDefined();
+      expect(res.body.tempToken.length).toBeGreaterThan(20);
+      expect(res.body.accessToken).toBe('');
+      expect(res.headers['set-cookie']).toBeUndefined();
+    });
+
+    it('step 2: verifies code and sets refresh + csrf cookies', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: twoFaUser.email, password: twoFaUser.password })
+        .expect(200);
+      const tempToken = loginRes.body.tempToken as string;
+      expect(tempToken).toBeDefined();
+
+      const code = speakeasy.totp({
+        secret: twoFaUser.totpSecret,
+        encoding: 'base32',
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/2fa/authenticate')
+        .send({ token: code, tempToken })
+        .expect(200);
+
+      expect(res.body).toHaveProperty('accessToken');
+      expect(res.body.user.email).toBe(twoFaUser.email);
+      const cookies = res.headers['set-cookie'];
+      expect(cookies).toBeDefined();
+      const refreshCookie = Array.isArray(cookies)
+        ? cookies.find((c: string) => c.startsWith('refreshToken='))
+        : cookies;
+      expect(refreshCookie).toBeDefined();
+      const csrfCookie = Array.isArray(cookies)
+        ? cookies.find((c: string) => c.startsWith('csrf-token='))
+        : cookies;
+      expect(csrfCookie).toBeDefined();
+    });
+
+    it('rejects an invalid 2FA code', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: twoFaUser.email, password: twoFaUser.password })
+        .expect(200);
+      const tempToken = loginRes.body.tempToken as string;
+
+      await request(app.getHttpServer())
+        .post('/auth/2fa/authenticate')
+        .send({ token: '000000', tempToken })
+        .expect(401);
+    });
+
+    it('rejects a forged/expired tempToken', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/2fa/authenticate')
+        .send({ token: '123456', tempToken: 'forged-temp-token' })
+        .expect(401);
+    });
+  });
+
+  describe('Session revocation & access token invalidation', () => {
+    // L'utilisateur testUser finit la suite reset-password avec ce mot de passe.
+    const PASSWORD = 'FinalPass123!';
+
+    async function login() {
+      const res = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: testUser.email, password: PASSWORD })
+        .expect(200);
+      const refreshCookie = res.headers['set-cookie'];
+      return {
+        accessToken: res.body.accessToken as string,
+        refreshCookie: (Array.isArray(refreshCookie)
+          ? refreshCookie[0]
+          : refreshCookie || ''
+        ).split(';')[0],
+      };
+    }
+
+    async function listSessions(token: string) {
+      const res = await request(app.getHttpServer())
+        .get('/auth/sessions')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      return res.body as Array<Record<string, unknown>>;
+    }
+
+    it('GET /auth/sessions ne renvoie AUCUN champ sensible et marque la session courante', async () => {
+      const { accessToken } = await login();
+      const sessions = await listSessions(accessToken);
+      expect(sessions.length).toBeGreaterThan(0);
+      for (const s of sessions) {
+        expect(s).not.toHaveProperty('refreshTokenHash');
+        expect(s).not.toHaveProperty('previousRefreshTokenHash');
+      }
+      expect(sessions.filter((s) => s.isCurrent === true).length).toBe(1);
+    });
+
+    it("logout révoque l'access token de la session courante (session-scoped)", async () => {
+      const { accessToken } = await login();
+      const csrf = await fetchCsrf();
+      await request(app.getHttpServer())
+        .post('/auth/logout')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('Cookie', csrf.cookie)
+        .set('X-CSRF-Token', csrf.token)
+        .set('X-CSRF-HMAC', csrf.hmac)
+        .expect(204);
+
+      // L'access token de la session déconnectée est désormais refusé.
+      await request(app.getHttpServer())
+        .get('/auth/sessions')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(401);
+
+      // Une nouvelle connexion fonctionne normalement.
+      const fresh = await login();
+      await listSessions(fresh.accessToken);
+    });
+
+    it("révoquer UNE session ne coupe PAS l'access token des autres appareils", async () => {
+      const a = await login();
+      const b = await login();
+
+      const sessionsA = await listSessions(a.accessToken);
+      const current = sessionsA.find((s) => s.isCurrent === true);
+      expect(current).toBeDefined();
+
+      const csrf = await fetchCsrf();
+      await request(app.getHttpServer())
+        .delete(`/auth/sessions/${current!.id}`)
+        .set('Authorization', `Bearer ${a.accessToken}`)
+        .set('Cookie', csrf.cookie)
+        .set('X-CSRF-Token', csrf.token)
+        .set('X-CSRF-HMAC', csrf.hmac)
+        .expect(204);
+
+      // Session A révoquée → access token mort.
+      await request(app.getHttpServer())
+        .get('/auth/sessions')
+        .set('Authorization', `Bearer ${a.accessToken}`)
+        .expect(401);
+
+      // Session B toujours vivante → son access token continue de fonctionner.
+      await listSessions(b.accessToken);
+    });
+
+    it('revoke-all exclut la session courante mais tue les autres', async () => {
+      const a = await login();
+      const b = await login();
+
+      const csrf = await fetchCsrf();
+      await request(app.getHttpServer())
+        .post('/auth/sessions/revoke-all')
+        .set('Authorization', `Bearer ${a.accessToken}`)
+        .set('Cookie', csrf.cookie)
+        .set('X-CSRF-Token', csrf.token)
+        .set('X-CSRF-HMAC', csrf.hmac)
+        .expect(204);
+
+      // Session courante (A) : access token encore valide.
+      await listSessions(a.accessToken);
+
+      // Session B : access token révoqué.
+      await request(app.getHttpServer())
+        .get('/auth/sessions')
+        .set('Authorization', `Bearer ${b.accessToken}`)
+        .expect(401);
+
+      // Refresh token de B : session supprimée en base → refusé aussi.
+      const csrfB = await fetchCsrf();
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', `${b.refreshCookie}; ${csrfB.cookie}`)
+        .set('X-CSRF-Token', csrfB.token)
+        .set('X-CSRF-HMAC', csrfB.hmac)
+        .expect(401);
     });
   });
 });

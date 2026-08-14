@@ -44,6 +44,10 @@ async function bootstrap() {
 
   app.useLogger(app.get(Logger));
 
+  // Derrière les proxies (Render) : req.ip et req.secure doivent refléter le
+  // client réel via X-Forwarded-For / X-Forwarded-Proto, pas l'adresse du proxy.
+  (app.getHttpAdapter().getInstance() as any).set('trust proxy', 1);
+
   const configService = app.get(ConfigService);
   validateCsrfSecret(configService);
   MobileMoneyService.validateSandbox(configService);

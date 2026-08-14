@@ -10,6 +10,7 @@ import { TotpService } from './totp.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { EmailModule } from '../email/email.module';
+import { SessionsModule } from '../sessions/sessions.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { EmailModule } from '../email/email.module';
       }),
     }),
     EmailModule,
+    SessionsModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, OAuthRelayService, TotpService, JwtStrategy, GoogleStrategy],

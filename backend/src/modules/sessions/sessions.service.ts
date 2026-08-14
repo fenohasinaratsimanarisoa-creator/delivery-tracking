@@ -14,6 +14,15 @@ export class SessionsService {
     return this.prisma.userSession.findMany({
       where: { userId },
       orderBy: { lastActivity: 'desc' },
+      select: {
+        id: true,
+        device: true,
+        ip: true,
+        location: true,
+        lastActivity: true,
+        createdAt: true,
+        expiresAt: true,
+      },
     });
   }
 
@@ -93,7 +102,7 @@ export class SessionsService {
       userAgent,
     });
 
-    return { message: `${toDelete.length} session(s) revoked` };
+    return { message: `${toDelete.length} session(s) revoked`, ids: toDelete.map((s) => s.id) };
   }
 
   async getLoginHistory(userId: string, limit = 50) {

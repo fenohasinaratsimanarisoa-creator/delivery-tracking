@@ -15,6 +15,7 @@ import {
   Inject,
   Logger,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { AuthGuard } from '@nestjs/passport';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { Response, Request } from 'express';
@@ -40,6 +41,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
+import { SessionsService } from '../sessions/sessions.service';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const isSecure = isProduction || (process.env.CORS_ORIGIN || '').startsWith('https');
@@ -71,6 +73,7 @@ export class AuthController {
     private readonly oauthRelayService: OAuthRelayService,
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly sessionsService: SessionsService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis | null,
   ) {}
 
@@ -127,22 +130,35 @@ export class AuthController {
       const ip = req.ip || '';
       const userAgent = req.headers?.['user-agent'] || '';
       const result = await this.authService.login(dto, ip, userAgent);
+      if (result.requiresTwoFactor) {
+        // Étape 1 : aucun cookie de session (refreshToken vide). Le tempToken
+        // (usage unique, TTL court) est passé au front pour l'étape 2.
+        return {
+          accessToken: '',
+          user: result.user,
+          requiresTwoFactor: true,
+          tempToken: result.tempToken,
+        };
+      }
       const opts = this.getRefreshCookieOpts();
       res.cookie('refreshToken', result.refreshToken, opts);
       return {
         accessToken: result.accessToken,
         user: result.user,
-        requiresTwoFactor: result.requiresTwoFactor,
+        requiresTwoFactor: false,
       };
     } catch (err: any) {
-      this.logger.error(`LOGIN FAILED for ${dto.email}: ${err?.message || err}`, err?.stack);
+      // Pas d'email en clair dans les logs (PII).
+      const emailHash = createHash('sha256').update(dto.email).digest('hex').slice(0, 16);
+      this.logger.error(`LOGIN FAILED (email sha256:${emailHash}): ${err?.message || err}`);
       throw err;
     }
   }
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Public()
-  @SkipCsrf()
+  // PAS de @SkipCsrf ici : la rotation hostile du refresh token via formulaire
+  // cross-site est précisément ce que CsrfGuard neutralise (cookie+header).
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -169,27 +185,22 @@ export class AuthController {
     @CurrentUser('sessionId') sessionId: string | undefined = undefined,
   ) {
     await this.authService.logout(userId, sessionId);
-    res.clearCookie('refreshToken', { path: '/' });
-    res.clearCookie('csrf-token', { path: '/' });
+    // Invalide l'access token de CETTE session (défense en profondeur : sans
+    // ça, un token volé restait utilisable jusqu'à son expiration, ~15 min).
+    // Les autres sessions de l'utilisateur ne sont pas touchées.
+    if (sessionId) await this.markAccessRevoked(userId, sessionId);
+    const opts = this.getRefreshCookieOpts();
+    res.clearCookie('refreshToken', { ...opts, maxAge: undefined });
+    res.clearCookie('csrf-token', { ...this.getCsrfCookieOpts(), maxAge: undefined });
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('sessions')
   async getSessions(@CurrentUser('id') userId: string, @Req() req: Request) {
-    const sessions = await this.prisma.userSession.findMany({
-      where: { userId },
-      orderBy: { lastActivity: 'desc' },
-      select: {
-        id: true,
-        device: true,
-        ip: true,
-        location: true,
-        lastActivity: true,
-        createdAt: true,
-        expiresAt: true,
-      },
-    });
-    const currentSessionId = (req as any).sessionId;
+    // Passe par le service : le select n'expose jamais refreshTokenHash (avant,
+    // la requête était dupliquée dans le controller avec un select partiel).
+    const sessions = await this.sessionsService.findAll(userId);
+    const currentSessionId = (req.user as any)?.sessionId;
     return sessions.map((s) => ({ ...s, isCurrent: s.id === currentSessionId }));
   }
 
@@ -202,17 +213,17 @@ export class AuthController {
     @Param('id') sessionId: string,
     @Req() req: any,
   ) {
-    const session = await this.prisma.userSession.findFirst({
-      where: { id: sessionId, userId },
-    });
-    if (!session) {
-      throw new UnauthorizedException('Session not found');
-    }
-    await this.prisma.userSession.delete({ where: { id: sessionId } });
-    if (this.redis) {
-      const now = Math.floor(Date.now() / 1000);
-      await this.redis.set(`revoked:user:${userId}`, String(now), 'EX', 900);
-    }
+    // Purge le refreshTokenHash + audit (voir SessionsService.revokeSession)
+    await this.sessionsService.revokeSession(
+      userId,
+      sessionId,
+      companyId,
+      req.ip,
+      req.headers?.['user-agent'],
+    );
+    // Révocation SCOPÉE à cette session : les access tokens des autres appareils
+    // restent valides (avant : clé user-scoped qui déconnectait tout l'utilisateur).
+    await this.markAccessRevoked(userId, sessionId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -223,11 +234,58 @@ export class AuthController {
     @CurrentUser('companyId') companyId: string,
     @Req() req: any,
   ) {
-    await this.prisma.userSession.deleteMany({ where: { userId } });
-    if (this.redis) {
-      const now = Math.floor(Date.now() / 1000);
-      await this.redis.set(`revoked:user:${userId}`, String(now), 'EX', 900);
+    const currentSessionId = (req.user as any)?.sessionId;
+    const revoked = await this.sessionsService.revokeAllSessions(
+      userId,
+      companyId,
+      currentSessionId,
+      req.ip,
+      req.headers?.['user-agent'],
+    );
+    // Révocation SCOPÉE par session ciblée : les access tokens des sessions
+    // supprimées meurent, celui de la session courante (exclue) survit. Avant :
+    // (req as any).sessionId était undefined → la session courante était aussi
+    // supprimée, et la clé user-scoped coupait même les sessions exclues.
+    if (Array.isArray(revoked.ids)) {
+      for (const id of revoked.ids) {
+        await this.markAccessRevoked(userId, id);
+      }
     }
+  }
+
+  /**
+   * Invalide les access tokens encore vivants d'UNE session ou de TOUTES les
+   * sessions. Les clés sont lues par JwtStrategy (revoked:session:<id> /
+   * revoked:user:<id>), qui refuse les tokens émis AVANT la révocation
+   * (payload.iat < revokedAt). TTL = durée de vie restante de l'access token —
+   * au-delà, le token est de toute façon expiré.
+   *
+   * On stocke now + 1 : payload.iat est en SECONDES (granularité 1 s) — si
+   * login, révocation et requête suivante arrivent dans la MÊME seconde, un
+   * iat == now rendrait « iat < revokedAt » faux et laisserait passer un token
+   * pourtant émis avant/au moment de la révocation. now+1 garantit qu'aucun
+   * token existant au moment de la révocation ne survit (un token émis après,
+   * iat >= now+1, reste valide).
+   */
+  private async markAccessRevoked(userId: string, sessionId?: string) {
+    if (!this.redis) return;
+    const cutoff = Math.floor(Date.now() / 1000) + 1;
+    const ttl = this.getAccessTokenExpirySeconds();
+    if (sessionId) {
+      await this.redis.set(`revoked:session:${sessionId}`, String(cutoff), 'EX', ttl);
+    } else {
+      await this.redis.set(`revoked:user:${userId}`, String(cutoff), 'EX', ttl);
+    }
+  }
+
+  private getAccessTokenExpirySeconds(): number {
+    const raw = this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m');
+    const match = /^(\d+)([smhd])$/.exec(raw);
+    if (!match) return 900;
+    const value = parseInt(match[1], 10);
+    const unit = match[2];
+    const multiplier: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+    return value * (multiplier[unit] || 60);
   }
 
   @Throttle({ default: { limit: 3, ttl: 60000 } })
@@ -311,8 +369,22 @@ export class AuthController {
   @SkipCsrf()
   @Post('2fa/authenticate')
   @HttpCode(HttpStatus.OK)
-  async authenticate2fa(@Body() dto: Verify2faDto, @CurrentUser('id') userId?: string) {
-    return this.authService.verify2faToken(dto);
+  async authenticate2fa(
+    @Body() dto: Verify2faDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verify2faToken(
+      dto,
+      req.ip || '',
+      req.headers?.['user-agent'] || '',
+    );
+    res.cookie('refreshToken', result.refreshToken, this.getRefreshCookieOpts());
+    const configuredSecret = this.configService.get<string>('CSRF_SECRET');
+    const secret = configuredSecret || getDevFallbackSecret();
+    const { token: csrfTok } = CsrfGuard.generateToken(secret);
+    res.cookie('csrf-token', csrfTok, this.getCsrfCookieOpts());
+    return { accessToken: result.accessToken, user: result.user };
   }
 
   @Public()

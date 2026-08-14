@@ -27,11 +27,24 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     if (payload.iat && this.redis) {
+      // Révocation globale (toutes les sessions) : clé user-scoped.
       const revokedAt = await this.redis.get(`revoked:user:${payload.sub}`);
       if (revokedAt) {
         const revokedTimestamp = parseInt(revokedAt, 10);
         if (payload.iat < revokedTimestamp) {
           throw new UnauthorizedException('Token has been revoked');
+        }
+      }
+      // Révocation ciblée (une session précise) : clé session-scoped. Un logout
+      // ou une révocation de session ne doit PAS couper les autres appareils —
+      // seul le token portant ce sessionId (et émis avant la révocation) est refusé.
+      if (payload.sessionId) {
+        const sessionRevokedAt = await this.redis.get(`revoked:session:${payload.sessionId}`);
+        if (sessionRevokedAt) {
+          const revokedTimestamp = parseInt(sessionRevokedAt, 10);
+          if (payload.iat < revokedTimestamp) {
+            throw new UnauthorizedException('Token has been revoked');
+          }
         }
       }
     }

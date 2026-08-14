@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import api from '../../services/api/client';
+import api, { fetchCsrfToken } from '../../services/api/client';
 import { useAuth } from '../../hooks/AuthContext';
 import LoginLayout from './components/LoginLayout';
 import VisualPanel from './components/VisualPanel';
@@ -110,6 +110,10 @@ export default function LoginPage() {
       const { accessToken, user } = res.data;
       login(user, accessToken);
       writeSessionCache(user.firstName, user.email);
+      // Le serveur a fait tourner le cookie csrf-token pendant l'étape 2 : on
+      // resynchronise le token en mémoire du client, sinon la première mutation
+      // déclencherait un 403 CSRF + retry inutile.
+      await fetchCsrfToken();
       const target = ROLE_REDIRECT[user.role] || '/dashboard';
       navigate(target, { replace: true });
     } catch (err: unknown) {
