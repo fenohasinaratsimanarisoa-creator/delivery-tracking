@@ -108,7 +108,10 @@ describe('TrackingGateway — ACK WebSocket réel (Test D)', () => {
 
     const ackReceived = () =>
       new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('ACK positionSaved non reçu (bug de retour silencieux ?)')), 2000);
+        const timer = setTimeout(
+          () => reject(new Error('ACK positionSaved non reçu (bug de retour silencieux ?)')),
+          2000,
+        );
         client.once('positionSaved', () => {
           clearTimeout(timer);
           resolve();

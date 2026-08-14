@@ -713,8 +713,18 @@ export class TrackingService {
       // Calculé APRÈS le dédoublonnage (timeDiffSec > 1s garanti ici), avant/indépendamment
       // d'evaluateTeleportation qui ne doit PAS être modifié.
       let resolvedSpeed = pos.speed;
-      if ((!resolvedSpeed || resolvedSpeed <= 0) && last && timeDiffSec > 0 && Number.isFinite(timeDiffSec)) {
-        const distance = haversineDistance(last.latitude, last.longitude, pos.latitude, pos.longitude);
+      if (
+        (!resolvedSpeed || resolvedSpeed <= 0) &&
+        last &&
+        timeDiffSec > 0 &&
+        Number.isFinite(timeDiffSec)
+      ) {
+        const distance = haversineDistance(
+          last.latitude,
+          last.longitude,
+          pos.latitude,
+          pos.longitude,
+        );
         resolvedSpeed = distance / timeDiffSec;
       }
 
@@ -1112,9 +1122,10 @@ export class TrackingService {
     `;
     return positions.map((p) => ({
       driverId: p.driver_id,
-      driverName: p.driver_id == null || !p.driver_first_name || !p.driver_last_name
-        ? 'Véhicule sans chauffeur assigné'
-        : `${p.driver_first_name} ${p.driver_last_name}`,
+      driverName:
+        p.driver_id == null || !p.driver_first_name || !p.driver_last_name
+          ? 'Véhicule sans chauffeur assigné'
+          : `${p.driver_first_name} ${p.driver_last_name}`,
       latitude: p.latitude,
       longitude: p.longitude,
       speed: p.speed,

@@ -931,7 +931,7 @@ describe('DeliveriesService - State Machine', () => {
       driverId: 'driver-1',
     };
 
-    it('deux updateStatus() concurrents sur la même livraison : un seul réussit, notifications/webhooks ne partent qu\'une fois', async () => {
+    it("deux updateStatus() concurrents sur la même livraison : un seul réussit, notifications/webhooks ne partent qu'une fois", async () => {
       // Les DEUX appels lisent d'abord la livraison (statut in_progress), puis
       // le premier update réussit ; le second, déclenché sur le même statut,
       // ne matche plus aucune ligne (verrou optimiste) → P2025 en base.

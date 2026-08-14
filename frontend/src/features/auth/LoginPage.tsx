@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/AuthContext';
 import LoginLayout from './components/LoginLayout';
 import VisualPanel from './components/VisualPanel';
 import LoginForm from './components/LoginForm';
+import TwoFactorForm from './components/TwoFactorForm';
 import styles from './LoginPage.module.css';
 
 const ROLE_REDIRECT: Record<string, string> = {
@@ -40,6 +41,13 @@ export default function LoginPage() {
   const { login, isAuthenticated, isInitializing, user } = useAuth();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [twoFactor, setTwoFactor] = useState<{
+    tempToken: string;
+    email: string;
+    firstName: string;
+  } | null>(null);
+  const [twoFactorError, setTwoFactorError] = useState('');
+  const [twoFactorLoading, setTwoFactorLoading] = useState(false);
 
   const cached = readSessionCache();
 
@@ -63,7 +71,15 @@ export default function LoginPage() {
     setError('');
     try {
       const res = await api.post('/auth/login', { email, password });
-      const { accessToken, user } = res.data;
+      const { accessToken, user, requiresTwoFactor, tempToken } = res.data;
+      if (requiresTwoFactor) {
+        setTwoFactor({
+          tempToken,
+          email: user?.email || email,
+          firstName: user?.firstName || cached.name || '',
+        });
+        return;
+      }
       login(user, accessToken);
       writeSessionCache(user.firstName, user.email);
       const target = ROLE_REDIRECT[user.role] || '/dashboard';
@@ -82,6 +98,32 @@ export default function LoginPage() {
     }
   };
 
+  const handleVerify2fa = async (code: string) => {
+    if (!twoFactor) return;
+    setTwoFactorLoading(true);
+    setTwoFactorError('');
+    try {
+      const res = await api.post('/auth/2fa/authenticate', {
+        token: code,
+        tempToken: twoFactor.tempToken,
+      });
+      const { accessToken, user } = res.data;
+      login(user, accessToken);
+      writeSessionCache(user.firstName, user.email);
+      const target = ROLE_REDIRECT[user.role] || '/dashboard';
+      navigate(target, { replace: true });
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 429) {
+        setTwoFactorError(t('auth.login.error429'));
+      } else {
+        setTwoFactorError(t('auth.login.twoFactorInvalid'));
+      }
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
   if (isInitializing) {
     return (
       <div className={styles.loadingContainer}>
@@ -96,13 +138,26 @@ export default function LoginPage() {
     <LoginLayout
       visualPanel={<VisualPanel />}
     >
-      <LoginForm
-        onSubmit={handleLogin}
-        error={error}
-        loading={loading}
-        cachedName={cached.name}
-        cachedEmail={cached.email}
-      />
+      {twoFactor ? (
+        <TwoFactorForm
+          email={twoFactor.email}
+          error={twoFactorError}
+          loading={twoFactorLoading}
+          onVerify={handleVerify2fa}
+          onBack={() => {
+            setTwoFactor(null);
+            setTwoFactorError('');
+          }}
+        />
+      ) : (
+        <LoginForm
+          onSubmit={handleLogin}
+          error={error}
+          loading={loading}
+          cachedName={cached.name}
+          cachedEmail={cached.email}
+        />
+      )}
     </LoginLayout>
   );
 }

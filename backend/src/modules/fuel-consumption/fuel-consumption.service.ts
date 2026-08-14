@@ -604,8 +604,7 @@ export class FuelConsumptionService {
       where: { companyId },
       select: { defaultFuelPrices: true },
     });
-    const existingDefaults =
-      (existing?.defaultFuelPrices as Record<string, number> | null) ?? {};
+    const existingDefaults = (existing?.defaultFuelPrices as Record<string, number> | null) ?? {};
     const merged = { ...existingDefaults, ...sanitized };
     await this.prisma.companyFuelSettings.upsert({
       where: { companyId },

@@ -14,6 +14,7 @@ const QUERY_MAP: Record<string, string[]> = {
   vehicle: ['vehicles', 'vehicles', 'list'],
   alert: ['alerts', 'alerts-stats'],
   fuelReport: ['fuel-daily-reports', 'fuel-consumption'],
+  geofence_event: ['geofences', 'alerts', 'deliveries'],
 };
 
 export function useDataUpdates() {

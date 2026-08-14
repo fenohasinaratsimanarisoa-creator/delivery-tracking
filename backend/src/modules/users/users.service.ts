@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
 import { VehicleAssignmentHistoryService } from '../../common/vehicle-assignment/vehicle-assignment-history.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -26,9 +27,15 @@ export class UsersService {
 
   async create(companyId: string, dto: CreateUserDto) {
     dto.email = dto.email.toLowerCase().trim();
-    const existing = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
+    // Unicité GLOBALE de l'email : le middleware tenant injecterait companyId
+    // dans le where d'un findUnique, ce qui laisserait passer un email déjà
+    // utilisé par une AUTRE entreprise (→ P2002 → 500). On désactive le
+    // contexte pour cette requête précise, comme dans invitations.service.ts.
+    const existing = await CompanyScopedContext.run(null, () =>
+      this.prisma.user.findUnique({
+        where: { email: dto.email },
+      }),
+    );
     if (existing) {
       throw new ConflictException('Email already in use');
     }
@@ -264,9 +271,11 @@ export class UsersService {
     if (!user) throw new NotFoundException('User not found');
 
     if (dto.email && dto.email !== user.email) {
-      const existing = await this.prisma.user.findUnique({
-        where: { email: dto.email },
-      });
+      const existing = await CompanyScopedContext.run(null, () =>
+        this.prisma.user.findUnique({
+          where: { email: dto.email },
+        }),
+      );
       if (existing) throw new ConflictException('Email already in use');
     }
 
@@ -439,9 +448,11 @@ export class UsersService {
       throw new BadRequestException('New email must be different from current email');
     }
 
-    const existing = await this.prisma.user.findUnique({
-      where: { email: newEmail },
-    });
+    const existing = await CompanyScopedContext.run(null, () =>
+      this.prisma.user.findUnique({
+        where: { email: newEmail },
+      }),
+    );
     if (existing) throw new ConflictException('Email already in use');
 
     // TODO: Send email verification to new email

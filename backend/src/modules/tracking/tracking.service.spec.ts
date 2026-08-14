@@ -875,8 +875,22 @@ describe('TrackingService', () => {
     it('computes fallback speed in saveBatch when device speed is missing (offline queue flush scenario)', async () => {
       const VID = VID1;
       const positions = [
-        { vehicleId: VID, latitude: -18.8792, longitude: 47.5079, timestamp: '2026-08-10T10:00:00.000Z', speed: undefined, accuracy: 8 },
-        { vehicleId: VID, latitude: -18.8797, longitude: 47.5079, timestamp: '2026-08-10T10:00:05.000Z', speed: undefined, accuracy: 8 }, // ~55m/5s ≈ 11 m/s
+        {
+          vehicleId: VID,
+          latitude: -18.8792,
+          longitude: 47.5079,
+          timestamp: '2026-08-10T10:00:00.000Z',
+          speed: undefined,
+          accuracy: 8,
+        },
+        {
+          vehicleId: VID,
+          latitude: -18.8797,
+          longitude: 47.5079,
+          timestamp: '2026-08-10T10:00:05.000Z',
+          speed: undefined,
+          accuracy: 8,
+        }, // ~55m/5s ≈ 11 m/s
       ];
 
       mockPrisma.delivery.findMany.mockResolvedValue([]);
@@ -1885,7 +1899,7 @@ describe('TrackingService', () => {
           driver_first_name: null,
           driver_last_name: null,
           latitude: -18.8793,
-          longitude: 47.5080,
+          longitude: 47.508,
           speed: null,
           heading: null,
           accuracy: null,

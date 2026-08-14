@@ -193,7 +193,7 @@ export class DeliveriesService {
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
-    /**
+  /**
    * Verrou optimiste : le WHERE inclut le statut lu par findOne(). Si une
    * requête concurrente a modifié le statut entre-temps, Prisma ne matche
    * aucune ligne et lève P2025 → converti en 400 explicite au lieu d'un 500.
@@ -256,12 +256,10 @@ export class DeliveriesService {
       updateData.completedAt = new Date();
     }
 
-    const updated = await this.updateWithOptimisticLock(
-      id,
-      delivery.status,
-      updateData,
-      { vehicle: true, driver: true },
-    );
+    const updated = await this.updateWithOptimisticLock(id, delivery.status, updateData, {
+      vehicle: true,
+      driver: true,
+    });
 
     // Recalcul du fuel report UNIQUEMENT si l'update a gagné le verrou optimiste :
     // un appel concurrent qui a perdu ne doit pas déclencher le job une 2e fois.
@@ -417,12 +415,11 @@ export class DeliveriesService {
       updateData.completedAt = new Date();
     }
 
-    const updated = await this.updateWithOptimisticLock(
-      id,
-      delivery.status,
-      updateData,
-      { vehicle: true, driver: true, assignedDriver: true },
-    );
+    const updated = await this.updateWithOptimisticLock(id, delivery.status, updateData, {
+      vehicle: true,
+      driver: true,
+      assignedDriver: true,
+    });
 
     // Recalcul du fuel report UNIQUEMENT si l'update a gagné le verrou optimiste.
     if (this.isFuelReportTriggerStatus(dto.status)) {

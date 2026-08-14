@@ -83,7 +83,7 @@ describe('InvitationsService', () => {
       expect(mockPrisma.invitation.create).not.toHaveBeenCalled();
     });
 
-    it('rejette l\'invitation d\'un email déjà utilisé par une AUTRE entreprise, DÈS la création (unicité globale)', async () => {
+    it("rejette l'invitation d'un email déjà utilisé par une AUTRE entreprise, DÈS la création (unicité globale)", async () => {
       // Le compte existe sur la plateforme, mais dans une AUTRE entreprise
       // (company-2) : la vérification GLOBALE par email doit quand même le
       // trouver — avant ce correctif, le check scopé à company-1 laissait

@@ -465,7 +465,9 @@ describe('AuthService', () => {
       // La session est retrouvée PAR SON ID (payload JWT), jamais via userId seul.
       expect(mockTx.userSession.findUnique).toHaveBeenCalledWith({
         where: { id: 'session-1' },
-        include: expect.objectContaining({ user: expect.objectContaining({ select: expect.anything() }) }),
+        include: expect.objectContaining({
+          user: expect.objectContaining({ select: expect.anything() }),
+        }),
       });
       expect(bcrypt.compare).toHaveBeenCalledWith(refreshToken, 'stored_hash');
       // Le hash est vérifié sur CETTE session ; les autres sessions sont intactes.
@@ -998,14 +1000,14 @@ describe('AuthService', () => {
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // timing dummy
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // vérification réelle
       mockPrisma.userSession.create.mockResolvedValueOnce({ id: sessionId });
-      mockPrisma.user.findUnique
-        .mockResolvedValueOnce(namesUser)
-        .mockResolvedValueOnce(fullUser);
-      mockJwtService.sign.mockReturnValueOnce(`at_${sessionId}`).mockReturnValueOnce(`rt_${sessionId}`);
+      mockPrisma.user.findUnique.mockResolvedValueOnce(namesUser).mockResolvedValueOnce(fullUser);
+      mockJwtService.sign
+        .mockReturnValueOnce(`at_${sessionId}`)
+        .mockReturnValueOnce(`rt_${sessionId}`);
       (bcrypt.hash as jest.Mock).mockResolvedValueOnce(hash);
     };
 
-    it('Test A : login appareil 1 puis login appareil 2 → le refresh token de l\'appareil 1 RESTE valide (pas de 401)', async () => {
+    it("Test A : login appareil 1 puis login appareil 2 → le refresh token de l'appareil 1 RESTE valide (pas de 401)", async () => {
       // Appareil 1
       mockDeviceLogin('session-1', 'hash-1');
       const res1 = await service.login(dto, '10.0.0.1', 'Chrome');
@@ -1044,12 +1046,8 @@ describe('AuthService', () => {
         user: sessionUser,
       });
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
-      mockPrisma.user.findUnique
-        .mockResolvedValueOnce(namesUser)
-        .mockResolvedValueOnce(fullUser);
-      mockJwtService.sign
-        .mockReturnValueOnce('at_1_rotated')
-        .mockReturnValueOnce('rt_1_rotated');
+      mockPrisma.user.findUnique.mockResolvedValueOnce(namesUser).mockResolvedValueOnce(fullUser);
+      mockJwtService.sign.mockReturnValueOnce('at_1_rotated').mockReturnValueOnce('rt_1_rotated');
       (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hash-1-rotated');
 
       await expect(service.refresh('rt_session-1', '10.0.0.1', 'Chrome')).resolves.toEqual(
@@ -1069,7 +1067,7 @@ describe('AuthService', () => {
       expect(mockTx.userSession.deleteMany).not.toHaveBeenCalled();
     });
 
-    it('Test B : révocation explicite de la session de l\'appareil 1 (revokeSession) → l\'appareil 2 n\'est PAS affecté, son refresh continue de fonctionner', async () => {
+    it("Test B : révocation explicite de la session de l'appareil 1 (revokeSession) → l'appareil 2 n'est PAS affecté, son refresh continue de fonctionner", async () => {
       mockDeviceLogin('session-1', 'hash-1');
       await service.login(dto, '10.0.0.1', 'Chrome');
       mockDeviceLogin('session-2', 'hash-2');
@@ -1110,12 +1108,8 @@ describe('AuthService', () => {
         user: sessionUser,
       });
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
-      mockPrisma.user.findUnique
-        .mockResolvedValueOnce(namesUser)
-        .mockResolvedValueOnce(fullUser);
-      mockJwtService.sign
-        .mockReturnValueOnce('at_2_rotated')
-        .mockReturnValueOnce('rt_2_rotated');
+      mockPrisma.user.findUnique.mockResolvedValueOnce(namesUser).mockResolvedValueOnce(fullUser);
+      mockJwtService.sign.mockReturnValueOnce('at_2_rotated').mockReturnValueOnce('rt_2_rotated');
       (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hash-2-rotated');
 
       await expect(service.refresh('rt_session-2', '10.0.0.2', 'Firefox')).resolves.toEqual(
@@ -1143,12 +1137,8 @@ describe('AuthService', () => {
         user: sessionUser,
       });
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // token légitime OK
-      mockPrisma.user.findUnique
-        .mockResolvedValueOnce(namesUser)
-        .mockResolvedValueOnce(fullUser);
-      mockJwtService.sign
-        .mockReturnValueOnce('at_rotated')
-        .mockReturnValueOnce('rt_rotated');
+      mockPrisma.user.findUnique.mockResolvedValueOnce(namesUser).mockResolvedValueOnce(fullUser);
+      mockJwtService.sign.mockReturnValueOnce('at_rotated').mockReturnValueOnce('rt_rotated');
       (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hash-1-rotated');
       await service.refresh('rt_session-1', '10.0.0.1', 'Chrome');
       expect(mockPrisma.userSession.update).toHaveBeenLastCalledWith({

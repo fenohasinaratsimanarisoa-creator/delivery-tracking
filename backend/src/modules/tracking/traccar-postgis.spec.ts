@@ -18,7 +18,7 @@ postgisDescribeOrSkip('Traccar → PostGIS data coherence', () => {
   beforeAll(async () => {
     if (POSTGIS_TEST_DB && !/test|staging/i.test(POSTGIS_TEST_DB)) {
       throw new Error(
-        "TRACCAR_TEST_DATABASE_URL ne semble pas pointer vers une base de test " +
+        'TRACCAR_TEST_DATABASE_URL ne semble pas pointer vers une base de test ' +
           '(le nom ne contient ni "test" ni "staging") — arrêt par sécurité pour ' +
           "éviter d'écrire dans une base de production.",
       );

@@ -256,7 +256,6 @@ export default function DeliveriesPage() {
       const formData = new FormData();
       formData.append('file', file);
       return api.post(`/deliveries/import?mode=${mode}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 60000,
       }).then((r) => r.data);
     },

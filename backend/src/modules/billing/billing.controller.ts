@@ -25,6 +25,8 @@ import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
+import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
 
 @Controller('billing')
 @UseGuards(JwtAuthGuard, CompanyScopeGuard)
@@ -118,6 +120,8 @@ export class BillingController {
 }
 
 @Controller('billing/webhooks')
+@Public()
+@SkipCsrf()
 export class BillingWebhookController {
   constructor(
     private readonly billingService: BillingService,

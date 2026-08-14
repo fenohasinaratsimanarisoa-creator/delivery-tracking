@@ -233,7 +233,7 @@ export class VehiclesService {
       if (!response.ok) {
         throw new Error(`Traccar API returned ${response.status}`);
       }
-            const devices: Array<{ id: number; name: string; uniqueId: string }> = await response.json();
+      const devices: Array<{ id: number; name: string; uniqueId: string }> = await response.json();
 
       // Filtre par entreprise : on ne garde que les devices dont le uniqueId
       // porte le préfixe de CETTE entreprise (defense en profondeur, même si un

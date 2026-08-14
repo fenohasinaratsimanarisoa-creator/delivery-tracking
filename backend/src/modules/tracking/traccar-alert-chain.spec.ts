@@ -19,7 +19,7 @@ alertDescribeOrSkip('Traccar → Alert chain (intégration réelle)', () => {
   beforeAll(async () => {
     if (ALERT_TEST_DB && !/test|staging/i.test(ALERT_TEST_DB)) {
       throw new Error(
-        "TRACCAR_TEST_DATABASE_URL ne semble pas pointer vers une base de test " +
+        'TRACCAR_TEST_DATABASE_URL ne semble pas pointer vers une base de test ' +
           '(le nom ne contient ni "test" ni "staging") — arrêt par sécurité pour ' +
           "éviter d'écrire dans une base de production.",
       );

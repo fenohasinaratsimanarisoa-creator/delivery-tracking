@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import axios from 'axios';
-import { fetchCsrfToken, getCsrfHeaders } from '../services/api/client';
+import api, { fetchCsrfToken, getCsrfHeaders } from '../services/api/client';
 import type { User } from '../types';
 import { setAccessToken, getAccessToken } from '../services/auth/tokenStore';
 import { disconnectSocket } from '../services/socket/socket';
@@ -116,9 +116,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await axios.post('/api/auth/logout', {}, { withCredentials: true });
+      await api.post('/auth/logout');
     } catch {
-      // ignore
+      // Le logout serveur échoue (réseau, token expiré) → on nettoie localement
+      // et on tente quand même d'expirer le cookie de refresh.
+      try {
+        await axios.post('/api/auth/logout', {}, { headers: getCsrfHeaders(), withCredentials: true });
+      } catch {
+        // ignore
+      }
     }
     setAccessToken(null);
     setUser(null);

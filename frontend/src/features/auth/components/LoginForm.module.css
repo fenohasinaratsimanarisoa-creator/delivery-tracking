@@ -349,6 +349,27 @@
   line-height: 1.4;
 }
 
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 18px;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.backLink:hover {
+  color: var(--color-primary);
+}
+.backLink:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .divider {
   display: flex;
   align-items: center;

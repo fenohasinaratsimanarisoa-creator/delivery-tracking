@@ -88,6 +88,12 @@
       "error429": "Too many attempts. Please try again in a few moments.",
       "errorGeneric": "Something went wrong. Please try again.",
       "sessionExpired": "Your session has expired. Please sign in again.",
+      "twoFactorTitle": "Two-factor authentication",
+      "twoFactorDesc": "Enter the 6-digit code from your authenticator app to finish signing in.",
+      "twoFactorCode": "6-digit code",
+      "twoFactorSubmit": "Verify",
+      "twoFactorInvalid": "Invalid code. Please try again.",
+      "twoFactorBack": "Back to sign in",
       "brand": "DeliveryTrack",
       "secure": "Secure platform",
       "uptime": "99.9% uptime",
@@ -1769,6 +1775,7 @@
     },
     "toast": {
       "markRead": "All notifications marked as read.",
+      "markedRead": "Notification marked as read.",
       "deletedAll": "All notifications cleared.",
       "deleted": "Notification deleted."
     }

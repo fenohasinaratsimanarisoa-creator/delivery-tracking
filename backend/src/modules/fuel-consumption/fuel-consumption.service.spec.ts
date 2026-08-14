@@ -1870,7 +1870,7 @@ describe('FuelConsumptionService', () => {
       timestamp: new Date(`2026-08-13T0${i}:30:00.000Z`),
     });
 
-    it('Test D : génère un DailyFuelReport dont distanceKm reflète les positions driverId=null d\'un véhicule avec chauffeur assigné', async () => {
+    it("Test D : génère un DailyFuelReport dont distanceKm reflète les positions driverId=null d'un véhicule avec chauffeur assigné", async () => {
       // Fenêtre du jour malgache (UTC+3) pour targetDate = 2026-08-13T12:00Z :
       // [2026-08-12T21:00Z → 2026-08-13T20:59:59.999Z]
       const positions = [
@@ -1891,9 +1891,7 @@ describe('FuelConsumptionService', () => {
 
       // Troisième passe : le véhicule actif AVEC chauffeur a des positions
       // driverId=null dans la fenêtre du jour
-      mockPrisma.vehicle.findMany.mockResolvedValueOnce([
-        { id: VEHICLE, driver: { id: DRIVER } },
-      ]);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VEHICLE, driver: { id: DRIVER } }]);
 
       // Requête de détection des positions null-driver du jour (non vides)
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positions);
@@ -1932,12 +1930,10 @@ describe('FuelConsumptionService', () => {
       expect(args.create.gpsDataQuality).toBe('sufficient');
     });
 
-    it('ne génère AUCUN rapport quand le véhicule n\'a pas de positions driverId=null (pas de 3e passe inutile)', async () => {
+    it("ne génère AUCUN rapport quand le véhicule n'a pas de positions driverId=null (pas de 3e passe inutile)", async () => {
       mockPrisma.driver.findMany.mockResolvedValueOnce([]);
       mockPrisma.vehicle.findMany.mockResolvedValueOnce([]);
-      mockPrisma.vehicle.findMany.mockResolvedValueOnce([
-        { id: VEHICLE, driver: { id: DRIVER } },
-      ]);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VEHICLE, driver: { id: DRIVER } }]);
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
 
       await service.generateDailyReportForCompanyOnDemand(COMPANY, '2026-08-13T12:00:00.000Z');
@@ -1945,11 +1941,8 @@ describe('FuelConsumptionService', () => {
       expect(mockPrisma.dailyFuelReport.upsert).not.toHaveBeenCalled();
     });
 
-    it('log un warning explicite quand aucun chauffeur n\'est résolvable (positions 100% null-driver, véhicule sans chauffeur)', async () => {
-      const positions = [
-        nullDriverPosition(47.5079, 1),
-        nullDriverPosition(47.51265, 2),
-      ];
+    it("log un warning explicite quand aucun chauffeur n'est résolvable (positions 100% null-driver, véhicule sans chauffeur)", async () => {
+      const positions = [nullDriverPosition(47.5079, 1), nullDriverPosition(47.51265, 2)];
       const warnSpy = jest
         .spyOn((service as any).logger, 'warn')
         .mockImplementation(() => undefined);
@@ -1972,7 +1965,7 @@ describe('FuelConsumptionService', () => {
     });
   });
 
-    // ----------------------------------------------------------------
+  // ----------------------------------------------------------------
   // DOUBLE COMPTAGE DE DISTANCE — multi-chauffeurs sur un même véhicule/jour +
   // positions null-driver : la 3e passe de generateDailyReportForVehicle ne doit
   // PAS recalculer la distance du véhicule tous chauffeurs confondus (elle
@@ -2006,12 +1999,12 @@ describe('FuelConsumptionService', () => {
     // suivant (waypoint partagé) : la somme des rapports doit être EXACTEMENT la
     // distance réelle de la journée, ni plus, ni moins.
     const positionsA = [
-      pos(DRIVER_A, 0.000, '2026-08-13T05:00:00.000Z'),
-      pos(DRIVER_A, 0.010, '2026-08-13T06:00:00.000Z'),
-      pos(DRIVER_A, 0.020, '2026-08-13T07:00:00.000Z'),
+      pos(DRIVER_A, 0.0, '2026-08-13T05:00:00.000Z'),
+      pos(DRIVER_A, 0.01, '2026-08-13T06:00:00.000Z'),
+      pos(DRIVER_A, 0.02, '2026-08-13T07:00:00.000Z'),
     ];
     const positionsNull = [
-      pos(null, 0.020, '2026-08-13T10:00:00.000Z'),
+      pos(null, 0.02, '2026-08-13T10:00:00.000Z'),
       pos(null, 0.026, '2026-08-13T10:10:00.000Z'),
       pos(null, 0.032, '2026-08-13T10:20:00.000Z'),
       pos(null, 0.038, '2026-08-13T10:30:00.000Z'),
@@ -2019,9 +2012,9 @@ describe('FuelConsumptionService', () => {
     ];
     const positionsB = [
       pos(DRIVER_B, 0.044, '2026-08-13T11:00:00.000Z'),
-      pos(DRIVER_B, 0.060, '2026-08-13T11:30:00.000Z'),
-      pos(DRIVER_B, 0.070, '2026-08-13T12:00:00.000Z'),
-      pos(DRIVER_B, 0.080, '2026-08-13T12:30:00.000Z'),
+      pos(DRIVER_B, 0.06, '2026-08-13T11:30:00.000Z'),
+      pos(DRIVER_B, 0.07, '2026-08-13T12:00:00.000Z'),
+      pos(DRIVER_B, 0.08, '2026-08-13T12:30:00.000Z'),
     ];
     const allPositions = [...positionsA, ...positionsNull, ...positionsB];
 
@@ -2115,7 +2108,19 @@ describe('FuelConsumptionService', () => {
       // (rattachées au chauffeur chronologiquement le plus proche = B) :
       // 6.67 km > les 4.00 km qui ne seraient que les siens.
       expect(reportB.create.distanceKm).toBeGreaterThan(
-        positionsB.reduce((acc, p, i) => i === 0 ? acc : acc + haversineDistance(positionsB[i - 1].latitude, positionsB[i - 1].longitude, p.latitude, p.longitude), 0) / 1000,
+        positionsB.reduce(
+          (acc, p, i) =>
+            i === 0
+              ? acc
+              : acc +
+                haversineDistance(
+                  positionsB[i - 1].latitude,
+                  positionsB[i - 1].longitude,
+                  p.latitude,
+                  p.longitude,
+                ),
+          0,
+        ) / 1000,
       );
     });
 
@@ -2123,11 +2128,11 @@ describe('FuelConsumptionService', () => {
       // Même scénario que le fix précédent : toutes les positions (driver + nulls)
       // finissent dans LE rapport du chauffeur, sans duplication.
       const positionsDriver = [
-        pos(DRIVER_A, 0.000, '2026-08-13T05:00:00.000Z'),
-        pos(DRIVER_A, 0.010, '2026-08-13T06:00:00.000Z'),
+        pos(DRIVER_A, 0.0, '2026-08-13T05:00:00.000Z'),
+        pos(DRIVER_A, 0.01, '2026-08-13T06:00:00.000Z'),
       ];
       const positionsNullB = [
-        pos(null, 0.010, '2026-08-13T10:00:00.000Z'),
+        pos(null, 0.01, '2026-08-13T10:00:00.000Z'),
         pos(null, 0.016, '2026-08-13T10:10:00.000Z'),
       ];
       const all = [...positionsDriver, ...positionsNullB];

@@ -45,6 +45,11 @@ export class UsersController {
     return this.usersService.create(companyId, dto);
   }
 
+  @Get('me')
+  getProfile(@CurrentUser('id') userId: string) {
+    return this.usersService.findById(userId);
+  }
+
   @Get(':id')
   findOne(
     @CurrentUser('companyId') companyId: string,
@@ -64,11 +69,6 @@ export class UsersController {
     @Query('limit') limit = 20,
   ) {
     return this.usersService.findAll(companyId, +page, +limit);
-  }
-
-  @Get('me')
-  getProfile(@CurrentUser('id') userId: string) {
-    return this.usersService.findById(userId);
   }
 
   @Patch('me/profile')

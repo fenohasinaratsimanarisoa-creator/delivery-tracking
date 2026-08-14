@@ -88,6 +88,12 @@
       "error429": "Trop de tentatives. Veuillez réessayer dans quelques instants.",
       "errorGeneric": "Un problème est survenu. Veuillez réessayer.",
       "sessionExpired": "Votre session a expiré. Veuillez vous reconnecter.",
+      "twoFactorTitle": "Authentification à deux facteurs",
+      "twoFactorDesc": "Saisissez le code à 6 chiffres de votre application d'authentification pour terminer la connexion.",
+      "twoFactorCode": "Code à 6 chiffres",
+      "twoFactorSubmit": "Vérifier",
+      "twoFactorInvalid": "Code invalide. Veuillez réessayer.",
+      "twoFactorBack": "Retour à la connexion",
       "brand": "DeliveryTrack",
       "secure": "Plateforme sécurisée",
       "uptime": "99.9% disponibilité",
@@ -1769,6 +1775,7 @@
     },
     "toast": {
       "markRead": "Toutes les notifications marquées comme lues.",
+      "markedRead": "Notification marquée comme lue.",
       "deletedAll": "Toutes les notifications ont été effacées.",
       "deleted": "Notification supprimée."
     }

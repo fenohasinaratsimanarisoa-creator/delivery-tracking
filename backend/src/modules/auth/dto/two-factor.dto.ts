@@ -17,6 +17,13 @@ export class Verify2faDto {
   tempToken: string;
 }
 
+export class Verify2faCodeDto {
+  @IsString()
+  @IsNotEmpty()
+  @Length(6, 6)
+  token: string;
+}
+
 export class Disable2faDto {
   @IsString()
   @IsNotEmpty()

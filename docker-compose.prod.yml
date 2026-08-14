@@ -141,7 +141,7 @@ services:
       dockerfile: Dockerfile
     image: deliverytrack-api:latest
     container_name: delivery-tracking-worker
-    command: ["node", "dist/modules/queue/queue.worker.js"]
+    command: ["node", "dist/src/queue/queue.worker.js"]
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}

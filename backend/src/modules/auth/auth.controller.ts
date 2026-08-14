@@ -28,7 +28,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { Enable2faDto, Verify2faDto, Disable2faDto } from './dto/two-factor.dto';
+import { Enable2faDto, Verify2faDto, Verify2faCodeDto, Disable2faDto } from './dto/two-factor.dto';
 import { OAuthBeginDto } from './dto/oauth-begin.dto';
 import { OAuthExchangeDto } from './dto/oauth-exchange.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -271,7 +271,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('2fa/verify')
   @HttpCode(HttpStatus.OK)
-  async verify2fa(@CurrentUser('id') userId: string, @Body() dto: Verify2faDto) {
+  async verify2fa(@CurrentUser('id') userId: string, @Body() dto: Verify2faCodeDto) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.totpSecret) {
       throw new BadRequestException('2FA not set up. Generate a secret first.');
@@ -350,10 +350,7 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('exchange')
   @HttpCode(HttpStatus.OK)
-  async oauthExchange(
-    @Body() dto: OAuthExchangeDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async oauthExchange(@Body() dto: OAuthExchangeDto, @Res({ passthrough: true }) res: Response) {
     const result = this.oauthRelayService.verifyAndConsumeCode(dto.code, dto.verifier);
     if (!result) {
       throw new UnauthorizedException('Invalid or expired exchange code');
@@ -412,8 +409,7 @@ export class AuthController {
 
         this.logger.log(`Google OAuth success for user ${user.user?.id}`);
 
-        const relayId =
-          req.query && typeof req.query.state === 'string' ? req.query.state : null;
+        const relayId = req.query && typeof req.query.state === 'string' ? req.query.state : null;
 
         const tokenParam = encodeURIComponent(user.accessToken);
         res.cookie('refreshToken', user.refreshToken || '', refreshOpts);

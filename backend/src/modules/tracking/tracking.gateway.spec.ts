@@ -424,7 +424,13 @@ describe('TrackingGateway — cross-tenant security', () => {
         timestamp: new Date('2026-08-10T10:00:00.000Z'),
       });
       const client = mockSocket();
-      client.data.user = { id: 'u1', companyId: 'c1', role: 'driver', firstName: 'A', lastName: 'B' };
+      client.data.user = {
+        id: 'u1',
+        companyId: 'c1',
+        role: 'driver',
+        firstName: 'A',
+        lastName: 'B',
+      };
       trackingService.findDriverByUserId.mockResolvedValue({ id: 'd1' });
       trackingService.assertVehicleOwnership.mockResolvedValue(undefined);
 

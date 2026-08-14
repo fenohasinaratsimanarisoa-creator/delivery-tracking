@@ -267,7 +267,7 @@ describe('VehiclesService', () => {
       expect(available.map((d) => d.uniqueId)).toEqual(['aaaaaaaa-TRK-A1']);
     });
 
-    it('filtre par préfixe : un device non-lié de l\'entreprise B n\'est jamais proposé à A', async () => {
+    it("filtre par préfixe : un device non-lié de l'entreprise B n'est jamais proposé à A", async () => {
       enableTraccar();
       mockTraccarDevicesResponse();
       mockPrisma.vehicle.findMany.mockResolvedValueOnce([]);
@@ -314,7 +314,10 @@ describe('VehiclesService', () => {
 
       // 2) Suppression du véhicule → le driver est désassigné (vehicleId null)
       //    dans la MÊME transaction que le soft-delete du véhicule.
-      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1', companyId: 'company-1' });
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        id: 'vehicle-1',
+        companyId: 'company-1',
+      });
       mockPrisma.delivery.findFirst.mockResolvedValueOnce(null);
       mockPrisma.driver.updateMany.mockResolvedValueOnce({ count: 1 });
       mockPrisma.vehicle.update.mockResolvedValueOnce({

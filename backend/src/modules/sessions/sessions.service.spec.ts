@@ -73,9 +73,9 @@ describe('SessionsService', () => {
         userId: 'user-2',
       });
 
-      await expect(
-        service.revokeSession('user-1', 'session-2', 'company-1'),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.revokeSession('user-1', 'session-2', 'company-1')).rejects.toThrow(
+        ForbiddenException,
+      );
       expect(mockPrisma.userSession.delete).not.toHaveBeenCalled();
       expect(mockPrisma.userSession.updateMany).not.toHaveBeenCalled();
     });

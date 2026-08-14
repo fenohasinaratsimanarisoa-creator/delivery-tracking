@@ -34,8 +34,26 @@ export default function TripReportPage() {
       .finally(() => setLoading(false));
   }, [selectedId]);
 
-  const exportPdf = () => {
-    window.open(`/api/tracking/report/${selectedId}/export`, '_blank');
+  const [exporting, setExporting] = useState(false);
+
+  const exportPdf = async () => {
+    if (!selectedId || exporting) return;
+    setExporting(true);
+    try {
+      const res = await api.get(`/tracking/report/${selectedId}/export`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `trip-report-${selectedId.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      // toast handled by api interceptor
+    } finally {
+      setExporting(false);
+    }
   };
 
   const formatDuration = (sec: number) => {
@@ -67,9 +85,10 @@ export default function TripReportPage() {
         {report && (
           <button
             onClick={exportPdf}
+            disabled={exporting}
             className={styles.exportBtn}
           >
-            <FileText size={14} /> {t('tripReport.exportPdf') || 'Export PDF'}
+            <FileText size={14} /> {exporting ? t('common.loading') || '...' : t('tripReport.exportPdf') || 'Export PDF'}
           </button>
         )}
       </div>
