@@ -15,6 +15,7 @@ const mockPrisma = {
   fuelLog: {
     findMany: jest.fn(),
     count: jest.fn(),
+    aggregate: jest.fn(),
   },
 };
 
@@ -37,16 +38,21 @@ describe('DashboardService', () => {
     jest.useRealTimers();
   });
 
-  it('computes KPI totals and recent fuel statistics', async () => {
-    const fuelLogs = [
+  it('computes KPI totals and recent fuel statistics (totaux agrégés sur TOUS les pleins, M3)', async () => {
+    const recentLogs = [
       { id: 'fuel-1', liters: 50, kilometers: 500 },
       { id: 'fuel-2', liters: 20, kilometers: 100 },
     ];
     mockPrisma.delivery.count.mockResolvedValueOnce(3).mockResolvedValueOnce(20);
     mockPrisma.vehicle.count.mockResolvedValueOnce(8);
     mockPrisma.driver.count.mockResolvedValueOnce(6);
-    mockPrisma.fuelLog.findMany.mockResolvedValueOnce(fuelLogs);
+    // L'agrégat couvre TOUS les pleins (pas seulement les 10 derniers affichés) :
+    // un « Total » sous-évalué (ancien take:50) faussait le PDF/Excel.
+    mockPrisma.fuelLog.aggregate.mockResolvedValueOnce({
+      _sum: { liters: 70, kilometers: 600 },
+    });
     mockPrisma.fuelLog.count.mockResolvedValueOnce(2);
+    mockPrisma.fuelLog.findMany.mockResolvedValueOnce(recentLogs);
 
     await expect(service.getKpis('company-1')).resolves.toEqual({
       deliveriesToday: 3,
@@ -58,7 +64,7 @@ describe('DashboardService', () => {
         totalLiters: 70,
         totalKilometers: 600,
         averageConsumption: (70 / 600) * 100,
-        recentLogs: fuelLogs,
+        recentLogs,
       },
     });
     expect(mockPrisma.delivery.count).toHaveBeenNthCalledWith(1, {
@@ -69,6 +75,17 @@ describe('DashboardService', () => {
           lt: expect.any(Date),
         },
       },
+    });
+    // L'agrégat est bien demandé sur TOUTE la company (pas de take).
+    expect(mockPrisma.fuelLog.aggregate).toHaveBeenCalledWith({
+      where: { companyId: 'company-1' },
+      _sum: { liters: true, kilometers: true },
+    });
+    // recentLogs limité à 10.
+    expect(mockPrisma.fuelLog.findMany).toHaveBeenCalledWith({
+      where: { companyId: 'company-1' },
+      orderBy: { fillDate: 'desc' },
+      take: 10,
     });
   });
 

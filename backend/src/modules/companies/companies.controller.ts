@@ -1,4 +1,13 @@
-import { Controller, Get, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  NotFoundException,
+} from '@nestjs/common';
 import { CompaniesService } from './companies.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { BlockImpersonationGuard } from '../../common/guards/block-impersonation.guard';
@@ -13,10 +22,21 @@ import { UpdateCompanySettingsDto, UpdateCompanyFuelSettingsDto } from './dto/co
 export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
 
+  // L6 : avant, le paramètre :id était décoratif (le JWT companyId faisait foi, le
+  // :id était ignoré). Un admin appelant /companies/<autre-id>/settings opérait en
+  // silence sur SA propre company. Le :id doit désormais correspondre à la company
+  // de l'utilisateur : sinon 404 (pas de fuite d'existence cross-tenant).
+  private assertOwnCompany(companyId: string, paramId: string): void {
+    if (paramId !== companyId) {
+      throw new NotFoundException('Company not found');
+    }
+  }
+
   @Get(':id/settings')
   @UseGuards(RolesGuard)
   @Roles('admin')
-  getSettings(@CurrentUser('companyId') companyId: string) {
+  getSettings(@CurrentUser('companyId') companyId: string, @Param('id') id: string) {
+    this.assertOwnCompany(companyId, id);
     return this.companiesService.getSettings(companyId);
   }
 
@@ -25,8 +45,10 @@ export class CompaniesController {
   @Roles('admin')
   updateSettings(
     @CurrentUser('companyId') companyId: string,
+    @Param('id') id: string,
     @Body() dto: UpdateCompanySettingsDto,
   ) {
+    this.assertOwnCompany(companyId, id);
     return this.companiesService.updateSettings(companyId, dto);
   }
 
@@ -35,8 +57,10 @@ export class CompaniesController {
   @Roles('admin')
   updateFuelSettings(
     @CurrentUser('companyId') companyId: string,
+    @Param('id') id: string,
     @Body() dto: UpdateCompanyFuelSettingsDto,
   ) {
+    this.assertOwnCompany(companyId, id);
     return this.companiesService.updateFuelSettings(companyId, dto);
   }
 
@@ -45,8 +69,10 @@ export class CompaniesController {
   @Roles('admin')
   deleteCompany(
     @CurrentUser('companyId') companyId: string,
+    @Param('id') id: string,
     @Body('confirmationName') confirmationName: string,
   ) {
+    this.assertOwnCompany(companyId, id);
     return this.companiesService.deleteCompany(companyId, confirmationName);
   }
 }

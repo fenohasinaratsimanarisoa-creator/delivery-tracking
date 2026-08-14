@@ -94,4 +94,18 @@ describe('CompaniesController — DELETE :id confirmationName', () => {
       data: { deletedAt: expect.any(Date) },
     });
   });
+
+  it('L6 : refuse /companies/<autre-id> (le :id doit correspondre à la company du JWT) → 404 sans exécution', async () => {
+    // L'utilisateur est scopé sur comp-1 ; appeler /companies/comp-999/... ne doit
+    // NI opérer sur sa propre company NI fuiter l'existence d'une autre.
+    const res = await request(app.getHttpServer())
+      .delete('/companies/comp-999')
+      .send({ confirmationName: 'Acme Inc' });
+
+    expect(res.status).toBe(404);
+    expect(mockPrisma.company.update).not.toHaveBeenCalled();
+
+    const resSettings = await request(app.getHttpServer()).get('/companies/comp-999/settings');
+    expect(resSettings.status).toBe(404);
+  });
 });
