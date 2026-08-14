@@ -31,6 +31,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { UsageGuard } from '../../common/guards/usage.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { normalizePagination } from '../../common/utils/pagination';
 import { UserRole } from '@prisma/client';
 
 @Controller('users')
@@ -65,10 +66,11 @@ export class UsersController {
   @Get()
   findAll(
     @CurrentUser('companyId') companyId: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
+    @Query('page') page?: unknown,
+    @Query('limit') limit?: unknown,
   ) {
-    return this.usersService.findAll(companyId, +page, +limit);
+    const { page: p, limit: l } = normalizePagination(page, limit);
+    return this.usersService.findAll(companyId, p, l);
   }
 
   @Patch('me/profile')

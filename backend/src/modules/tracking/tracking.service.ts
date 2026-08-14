@@ -11,6 +11,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GeofenceService } from './geofence.service';
 import { DeliveryProximityService } from './delivery-proximity.service';
+import { ConfigService } from '@nestjs/config';
 import { CacheService } from '../../common/cache/cache.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { UpdatePositionDto } from './dto/update-position.dto';
@@ -54,6 +55,7 @@ export class TrackingService {
     private deliveryProximityService: DeliveryProximityService,
     private cacheService: CacheService,
     private dataUpdateBus: DataUpdateBus,
+    private configService: ConfigService,
   ) {}
 
   getMetrics() {
@@ -61,13 +63,18 @@ export class TrackingService {
   }
 
   async isRateLimited(driverId: string): Promise<boolean> {
+    // Fenêtre anti-flood configurable (ms). 0 ou négatif = limite désactivée
+    // (utilisé par les tests e2e pour exercer le flux de sauvegarde sans rejets,
+    // la cadence réelle de l'app étant de ~5s par position, très en dessous du défaut 1s).
+    const ttlMs = Number(this.configService.get<string>('POSITION_RATE_LIMIT_TTL_MS', '1000'));
+    if (!ttlMs || ttlMs <= 0) return false;
     const key = `rate_limit:driver:${driverId}`;
     const existing = await this.cacheService.get<boolean>(key);
     if (existing) {
       this.metrics.rateLimited++;
       return true;
     }
-    await this.cacheService.set(key, true, 1);
+    await this.cacheService.set(key, true, ttlMs / 1000);
     return false;
   }
 
@@ -602,8 +609,17 @@ export class TrackingService {
     ];
     const verifiedDeliveries = new Set<string>();
     if (deliveryIds.length > 0) {
+      // MÊME règle que verifyDriverAssignment() (chemin temps réel updatePosition) :
+      // le chauffeur est accepté si assignedDriverId == userId OU si delivery.driverId
+      // correspond à son record Driver. Avant, le batch n'acceptait QUE assignedDriverId
+      // → une livraison assignée via le record Driver passait en temps réel mais était
+      // rejetée ("wrong driver") en rattrapage réseau. Incohérence corrigée.
       const validDeliveries = await this.prisma.delivery.findMany({
-        where: { id: { in: deliveryIds }, assignedDriverId: userId, deletedAt: null },
+        where: {
+          id: { in: deliveryIds },
+          deletedAt: null,
+          OR: [{ assignedDriverId: userId }, { driverId }],
+        },
         select: { id: true },
       });
       validDeliveries.forEach((d) => verifiedDeliveries.add(d.id));

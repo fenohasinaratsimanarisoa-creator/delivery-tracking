@@ -141,6 +141,7 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
       proximityService,
       mockCache as any,
       mockDataUpdateBus as any,
+      { get: () => undefined } as any,
     );
   });
 

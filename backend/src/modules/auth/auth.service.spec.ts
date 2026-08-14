@@ -215,8 +215,9 @@ describe('AuthService', () => {
 
     it('should return tokens when credentials are valid (no 2FA)', async () => {
       mockPrisma.user.findFirst.mockResolvedValueOnce(baseUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // timing dummy
-      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // actual validation
+      // Un SEUL bcrypt.compare (timing-safe) depuis l'audit : user inexistant ==
+      // hash dummy, mot de passe invalide == compte invalide — impossible d'énumérer.
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
       mockPrisma.userSession.create.mockResolvedValueOnce({ id: 'session-1' });
       mockPrisma.user.findUnique
         .mockResolvedValueOnce({ firstName: 'John', lastName: 'Doe' })
@@ -278,10 +279,11 @@ describe('AuthService', () => {
 
     it('should throw UnauthorizedException when password is invalid', async () => {
       mockPrisma.user.findFirst.mockResolvedValueOnce(baseUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
 
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
+      // Aucune session créée sur un login refusé.
+      expect(mockPrisma.userSession.create).not.toHaveBeenCalled();
     });
 
     it('should return tempToken when 2FA is enabled', async () => {
@@ -290,9 +292,7 @@ describe('AuthService', () => {
         totpEnabled: true,
       };
       mockPrisma.user.findFirst.mockResolvedValueOnce(userWith2fa);
-      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // timing dummy
-      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // actual validation
-      mockPrisma.userSession.create.mockResolvedValueOnce({ id: 'session-1' });
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
       mockJwtService.sign.mockReturnValueOnce('temp_token_value');
 
       const result = await service.login(dto, undefined, undefined);
@@ -346,6 +346,9 @@ describe('AuthService', () => {
       });
       mockPrisma.user.findUnique.mockResolvedValueOnce(baseUser);
       mockTotpService.verifyToken.mockReturnValueOnce(true);
+      // Étape 2 du 2FA : la session est matérialisée ICI (l'étape 1 n'en crée pas),
+      // avec le contexte ip/device de la requête.
+      mockPrisma.userSession.create.mockResolvedValueOnce({ id: 'session-2fa' });
       mockPrisma.user.findUnique
         .mockResolvedValueOnce({ firstName: 'John', lastName: 'Doe' })
         .mockResolvedValueOnce({
@@ -997,8 +1000,7 @@ describe('AuthService', () => {
     // puis generateTokens qui écrit le hash du refresh SUR CETTE session.
     const mockDeviceLogin = (sessionId: string, hash: string) => {
       mockPrisma.user.findFirst.mockResolvedValueOnce(baseUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // timing dummy
-      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // vérification réelle
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // unique bcrypt.compare
       mockPrisma.userSession.create.mockResolvedValueOnce({ id: sessionId });
       mockPrisma.user.findUnique.mockResolvedValueOnce(namesUser).mockResolvedValueOnce(fullUser);
       mockJwtService.sign

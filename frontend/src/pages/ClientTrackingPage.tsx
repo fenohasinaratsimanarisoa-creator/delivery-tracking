@@ -70,7 +70,10 @@ export default function ClientTrackingPage() {
         .then(([delRes, posRes]) => {
           if (cancelled) return;
           setDelivery(delRes.data);
-          setPositions(posRes.data);
+          // GET /tracking/positions/:id est paginé ({ data, meta }) : sans ce
+          // fallback, positions.map() plantait à chaque polling (crash du suivi
+          // client). Voir TripReplayPage qui gère déjà cette shape.
+          setPositions(posRes.data?.data ?? posRes.data ?? []);
           setError('');
         })
         .catch(() => {

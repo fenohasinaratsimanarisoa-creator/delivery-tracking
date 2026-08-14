@@ -62,6 +62,7 @@ describe('Traccar multi-tenant isolation', () => {
       mockProximity as any,
       mockCache as any,
       mockDataUpdateBus as any,
+      { get: () => undefined } as any,
     );
   });
 

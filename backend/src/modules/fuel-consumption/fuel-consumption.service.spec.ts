@@ -1478,6 +1478,59 @@ describe('FuelConsumptionService', () => {
       });
     });
 
+    it('normalise le fuelType au token canonique (H4) — « Électrique » → electric, « Hybride Essence » → essence', async () => {
+      mockPrisma.fuelPriceHistory.updateMany.mockResolvedValueOnce({ count: 0 });
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.fuelPriceHistory.create.mockResolvedValueOnce({ id: 'fp-elec' });
+
+      await service.createFuelPrice('company-1', {
+        fuelType: 'Électrique',
+        pricePerLiter: 3000,
+        effectiveFrom: '2026-04-02',
+      });
+      // AVANT le correctif : stocké « electrique » (toLowerCase brut) → jamais
+      // retrouvé par getFuelPriceForDate (token canonique « electric »).
+      expect(mockPrisma.fuelPriceHistory.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ fuelType: 'electric' }) }),
+      );
+
+      mockPrisma.fuelPriceHistory.updateMany.mockResolvedValueOnce({ count: 0 });
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.fuelPriceHistory.create.mockResolvedValueOnce({ id: 'fp-hybrid' });
+
+      await service.createFuelPrice('company-1', {
+        fuelType: 'Hybride Essence',
+        pricePerLiter: 6000,
+        effectiveFrom: '2026-04-01',
+      });
+      // Token canonique du modèle de coût : un hybride essence est facturé essence.
+      expect(mockPrisma.fuelPriceHistory.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ fuelType: 'essence' }) }),
+      );
+    });
+
+    it('updateFuelPrice normalise aussi le fuelType (H4)', async () => {
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce({ id: 'fp-1', companyId: 'company-1' });
+      mockPrisma.fuelPriceHistory.update.mockResolvedValueOnce({ id: 'fp-1' });
+
+      await service.updateFuelPrice('company-1', 'fp-1', { fuelType: 'Gazoil' });
+      expect(mockPrisma.fuelPriceHistory.update).toHaveBeenCalledWith({
+        where: { id: 'fp-1' },
+        data: { fuelType: 'gasoil' },
+      });
+    });
+
+    it('getDailyReports rejette une date invalide en 400 (M5)', async () => {
+      await expect(service.getDailyReports('company-1', 'abc')).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.dailyFuelReport.findMany).not.toHaveBeenCalled();
+    });
+
+    it('getGpsDiagnostics rejette une date invalide en 400 (M5)', async () => {
+      await expect(service.getGpsDiagnostics('company-1', 'pas-une-date')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
     it('updateFuelPrice throws NotFound when the price belongs to another company', async () => {
       mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(null);
 

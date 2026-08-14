@@ -44,18 +44,18 @@ export class CompaniesService {
       throw new NotFoundException('Company not found');
     }
 
-    // Create default settings if they don't exist
-    if (!company.settings) {
-      await this.prisma.companySettings.create({
-        data: { companyId },
-      });
-    }
-
-    if (!company.fuelSettings) {
-      await this.prisma.companyFuelSettings.create({
-        data: { companyId },
-      });
-    }
+    // Création idempotente (upsert) : deux requêtes simultanées sur une company
+    // sans settings faisaient chacune un create → violation d'unicité P2002 → 500.
+    await this.prisma.companySettings.upsert({
+      where: { companyId },
+      update: {},
+      create: { companyId },
+    });
+    await this.prisma.companyFuelSettings.upsert({
+      where: { companyId },
+      update: {},
+      create: { companyId },
+    });
 
     // Re-fetch with created settings
     return this.prisma.company.findUnique({

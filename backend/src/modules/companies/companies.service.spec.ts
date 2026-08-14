@@ -14,6 +14,8 @@ const mockPrisma = {
   user: { updateMany: jest.fn() },
   driver: { updateMany: jest.fn() },
   vehicle: { updateMany: jest.fn() },
+  companySettings: { upsert: jest.fn(), create: jest.fn() },
+  companyFuelSettings: { upsert: jest.fn(), create: jest.fn() },
 };
 
 const mockQueue = { add: jest.fn() };
@@ -58,5 +60,36 @@ describe('CompaniesService', () => {
     await expect(promise).rejects.toThrow(BadRequestException);
     await expect(promise).rejects.toThrow('Company name confirmation does not match');
     expect(mockPrisma.company.update).not.toHaveBeenCalled();
+  });
+
+  describe('getSettings — création idempotente (M4)', () => {
+    it('crée les settings par défaut via UPSERT (pas de course P2002 en concurrence)', async () => {
+      mockPrisma.company.findUnique
+        .mockResolvedValueOnce({ id: 'comp-1', settings: null, fuelSettings: null })
+        .mockResolvedValueOnce({
+          id: 'comp-1',
+          settings: { id: 's-1' },
+          fuelSettings: { id: 'fs-1' },
+        });
+      mockPrisma.companySettings.upsert.mockResolvedValue({ id: 's-1' });
+      mockPrisma.companyFuelSettings.upsert.mockResolvedValue({ id: 'fs-1' });
+
+      await service.getSettings('comp-1');
+
+      // UPSERT (idempotent) : deux requêtes simultanées ne créent plus chacune la
+      // ligne → violation d'unicité sur companyId → 500.
+      expect(mockPrisma.companySettings.upsert).toHaveBeenCalledWith({
+        where: { companyId: 'comp-1' },
+        update: {},
+        create: { companyId: 'comp-1' },
+      });
+      expect(mockPrisma.companyFuelSettings.upsert).toHaveBeenCalledWith({
+        where: { companyId: 'comp-1' },
+        update: {},
+        create: { companyId: 'comp-1' },
+      });
+      expect(mockPrisma.companySettings.create).not.toHaveBeenCalled();
+      expect(mockPrisma.companyFuelSettings.create).not.toHaveBeenCalled();
+    });
   });
 });

@@ -95,12 +95,15 @@ export class DashboardService {
     const sixtyDaysAgo = new Date(now);
     sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
+    // Fenêtre sur createdAt (TOUJOURS positionné) et non completedAt : une livraison
+    // `failed` a completedAt = null et était donc exclue du calcul → le score
+    // « fiabilité » ne pénalisait JAMAIS les échecs (100/100 même en échec total).
     const [currentPeriod, previousPeriod] = await Promise.all([
       this.prisma.delivery.findMany({
         where: {
           companyId,
           status: { in: ['delivered', 'failed'] },
-          completedAt: { gte: thirtyDaysAgo },
+          createdAt: { gte: thirtyDaysAgo },
         },
         select: { status: true, completedAt: true, scheduledDate: true },
       }),
@@ -108,7 +111,7 @@ export class DashboardService {
         where: {
           companyId,
           status: { in: ['delivered', 'failed'] },
-          completedAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo },
+          createdAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo },
         },
         select: { status: true, completedAt: true, scheduledDate: true },
       }),
@@ -117,16 +120,20 @@ export class DashboardService {
     const calculateScore = (
       deliveries: Array<{ status: string; completedAt: Date | null; scheduledDate: Date | null }>,
     ) => {
-      const completed = deliveries.filter((d) => d.status === 'delivered');
-      if (completed.length === 0) return { score: 100, onTime: 0, total: 0 };
-      const onTime = completed.filter((d) => {
+      const total = deliveries.length;
+      if (total === 0) return { score: 100, onTime: 0, total: 0 };
+      // Fiabilité = livraisons livrées À TEMPS / toutes les livraisons terminées
+      // (delivered + failed). Les échecs comptent donc contre le score, et une
+      // livraison failed n'est jamais « on time ».
+      const onTime = deliveries.filter((d) => {
+        if (d.status !== 'delivered') return false;
         if (!d.scheduledDate) return true;
         return d.completedAt && d.completedAt <= d.scheduledDate;
       });
       return {
-        score: Math.round((onTime.length / completed.length) * 100),
+        score: Math.round((onTime.length / total) * 100),
         onTime: onTime.length,
-        total: completed.length,
+        total,
       };
     };
 

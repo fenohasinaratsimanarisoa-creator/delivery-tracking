@@ -77,6 +77,8 @@ export class FuelConsumptionService {
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
+    // Un hybride est facturé au prix de SON carburant de combustion : « Hybride
+    // Essence » → essence, « Hybride Diesel » → diesel (d'où 'hybr' en dernier).
     if (s.includes('elect')) return 'electric'; // 'electrique' (accentué) et 'electric'
     if (s.includes('gasoil') || s.includes('gazoil')) return 'gasoil'; // historique gasoil distinct
     if (s.includes('diesel')) return 'diesel';
@@ -344,7 +346,8 @@ export class FuelConsumptionService {
   async getDailyReports(companyId: string, reportDate?: string) {
     const where: any = { companyId };
     if (reportDate) {
-      const d = new Date(reportDate);
+      // ?date=abc produisait un Invalid Date passé à Prisma → 500. On refuse proprement.
+      const d = this.parseDateOrThrow(reportDate, 'reportDate');
       const next = new Date(d);
       next.setDate(next.getDate() + 1);
       where.reportDate = { gte: d, lt: next };
@@ -376,7 +379,7 @@ export class FuelConsumptionService {
    * coveragePercent) explique le sous-comptage.
    */
   async getGpsDiagnostics(companyId: string, dateStr?: string) {
-    const targetDate = dateStr ? new Date(dateStr) : new Date();
+    const targetDate = dateStr ? this.parseDateOrThrow(dateStr, 'date') : new Date();
     const bounds = this.getMadagascarDayBounds(targetDate);
 
     const positions = await this.prisma.gpsPosition.findMany({
@@ -616,7 +619,11 @@ export class FuelConsumptionService {
 
   /** Ajoute un prix dans l'historique et ferme l'entrée ouverte précédente du même type. */
   async createFuelPrice(companyId: string, dto: CreateFuelPriceDto) {
-    const fuelType = dto.fuelType.toLowerCase();
+    // Token CANONIQUE (normalizeFuelType), comme à la lecture (getFuelPriceForDate) :
+    // avant, un prix créé pour « Hybride Essence »/« Électrique » était stocké brut
+    // (hybride essence / electrique) et ne correspondait JAMAIS au token cherché
+    // (hybrid / electric) → prix jamais appliqué, coût estimé faux.
+    const fuelType = this.normalizeFuelType(dto.fuelType);
     const effectiveFrom = new Date(dto.effectiveFrom);
     const effectiveUntil = dto.effectiveUntil ? new Date(dto.effectiveUntil) : null;
 
@@ -669,7 +676,7 @@ export class FuelConsumptionService {
     if (!existing) throw new NotFoundException('Fuel price not found');
 
     const data: any = {};
-    if (dto.fuelType !== undefined) data.fuelType = dto.fuelType.toLowerCase();
+    if (dto.fuelType !== undefined) data.fuelType = this.normalizeFuelType(dto.fuelType);
     if (dto.pricePerLiter !== undefined) data.pricePerLiter = dto.pricePerLiter;
     if (dto.effectiveFrom !== undefined) data.effectiveFrom = new Date(dto.effectiveFrom);
     if (dto.effectiveUntil !== undefined) {
@@ -704,8 +711,16 @@ export class FuelConsumptionService {
   }
 
   async generateDailyReportForCompanyOnDemand(companyId: string, dateStr?: string) {
-    const date = dateStr ? new Date(dateStr) : new Date();
+    const date = dateStr ? this.parseDateOrThrow(dateStr, 'date') : new Date();
     await this.generateDailyReportForCompany(companyId, date);
+  }
+
+  private parseDateOrThrow(raw: string, fieldName: string): Date {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) {
+      throw new BadRequestException(`Invalid ${fieldName}: "${raw}" is not a valid date`);
+    }
+    return d;
   }
 
   /**

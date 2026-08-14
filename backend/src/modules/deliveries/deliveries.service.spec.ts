@@ -973,4 +973,140 @@ describe('DeliveriesService - State Machine', () => {
       expect(mockQueue.add).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('create — refus des statuts terminaux', () => {
+    it('rejette la création directe en delivered/failed/cancelled (L2)', async () => {
+      for (const status of [
+        DeliveryStatus.delivered,
+        DeliveryStatus.failed,
+        DeliveryStatus.cancelled,
+      ]) {
+        await expect(
+          service.create('comp-1', { title: 'X', status } as any),
+        ).rejects.toThrow(BadRequestException);
+      }
+      expect(mockPrisma.delivery.create).not.toHaveBeenCalled();
+    });
+
+    it('accepte pending/assigned/in_progress à la création', async () => {
+      mockPrisma.delivery.create.mockResolvedValue({ id: 'del-1', status: 'pending' });
+      await expect(
+        service.create('comp-1', { title: 'X', status: DeliveryStatus.pending } as any),
+      ).resolves.toBeDefined();
+    });
+  });
+
+  describe('update — purge de assignedDriverId (H2)', () => {
+    const baseDelivery = {
+      id: 'del-1',
+      companyId: 'comp-1',
+      title: 'Livraison',
+      status: DeliveryStatus.pending,
+      driverId: null,
+      assignedDriverId: null,
+      deletedAt: null,
+      vehicle: null,
+      driver: null,
+    };
+
+    it('assigne l’utilisateur quand le chauffeur a un compte', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValue(baseDelivery);
+      mockPrisma.driver.findFirst.mockResolvedValue({ id: 'drv-1', userId: 'user-9' });
+      mockPrisma.delivery.update.mockResolvedValue({ id: 'del-1' });
+
+      await service.update('comp-1', 'del-1', { driverId: 'drv-1' } as any);
+      expect(mockPrisma.delivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ assignedDriverId: 'user-9' }) }),
+      );
+    });
+
+    it('purge assignedDriverId quand le chauffeur n’a PAS de compte (H2)', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValue({
+        ...baseDelivery,
+        driverId: 'drv-0',
+        assignedDriverId: 'old-user',
+      });
+      mockPrisma.driver.findFirst.mockResolvedValue({ id: 'drv-1', userId: null });
+      mockPrisma.delivery.update.mockResolvedValue({ id: 'del-1' });
+
+      await service.update('comp-1', 'del-1', { driverId: 'drv-1' } as any);
+      // L'ANCIEN assignedDriverId est purgé : l'ancien chauffeur ne garde pas l'accès.
+      expect(mockPrisma.delivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ assignedDriverId: null }) }),
+      );
+    });
+  });
+
+  describe('update — changement de statut avec effets de bord (M1)', () => {
+    it('déclenche notification + webhook + broadcast quand PATCH change le statut', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValue({
+        id: 'del-1',
+        companyId: 'comp-1',
+        title: 'Livraison',
+        status: DeliveryStatus.in_progress,
+        driverId: 'drv-1',
+        assignedDriverId: 'user-9',
+        completedAt: null,
+        deletedAt: null,
+        vehicle: null,
+        driver: null,
+      });
+      mockPrisma.delivery.update.mockResolvedValue({
+        id: 'del-1',
+        title: 'Livraison',
+        status: DeliveryStatus.delivered,
+        assignedDriverId: 'user-9',
+      });
+      // pas de driverId fourni → pas de dispatchDailyFuelReportRecompute
+      (service as any).dispatchDailyFuelReportRecompute = jest.fn();
+
+      await service.update('comp-1', 'del-1', { status: DeliveryStatus.delivered } as any);
+
+      expect(mockNotifications.create).toHaveBeenCalled();
+      expect(mockWebhooks.dispatch).toHaveBeenCalled();
+    });
+  });
+
+  describe('importExcel — avancement du statut en upsert (M2)', () => {
+    it('avance une livraison pending/assigned à in_progress', async () => {
+      // Génère un buffer Excel minimal avec l'en-tête attendu.
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Feuille 1');
+      ws.addRow(['N° Commande', 'Lieu']);
+      ws.addRow(['CMD-1', 'Antananarivo']);
+      const buffer = await wb.xlsx.writeBuffer();
+
+      mockPrisma.delivery.findFirst.mockResolvedValue({
+        id: 'del-1',
+        status: DeliveryStatus.pending,
+      });
+      mockPrisma.delivery.update.mockResolvedValue({ id: 'del-1' });
+
+      const result = await service.importExcel('comp-1', buffer as unknown as Buffer, 'Entrepôt', 'upsert');
+      expect(result.updated).toBe(1);
+      expect(mockPrisma.delivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: DeliveryStatus.in_progress }),
+        }),
+      );
+    });
+
+    it('ne régresse PAS une livraison delivered lors de la réimportation', async () => {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Feuille 1');
+      ws.addRow(['N° Commande', 'Lieu']);
+      ws.addRow(['CMD-2', 'Toamasina']);
+      const buffer = await wb.xlsx.writeBuffer();
+
+      mockPrisma.delivery.findFirst.mockResolvedValue({
+        id: 'del-1',
+        status: DeliveryStatus.delivered,
+      });
+      mockPrisma.delivery.update.mockResolvedValue({ id: 'del-1' });
+
+      await service.importExcel('comp-1', buffer as unknown as Buffer, 'Entrepôt', 'upsert');
+      const updateArg = mockPrisma.delivery.update.mock.calls[0][0];
+      expect(updateArg.data.status).toBeUndefined();
+    });
+  });
 });

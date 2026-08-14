@@ -88,7 +88,7 @@ describe('DashboardService', () => {
   });
 
   describe('getReliabilityScore', () => {
-    it('calculates on-time score and downward trend', async () => {
+    it('calculates on-time score and downward trend, échecs INCLUS au dénominateur', async () => {
       mockPrisma.delivery.findMany
         .mockResolvedValueOnce([
           {
@@ -103,7 +103,7 @@ describe('DashboardService', () => {
           },
           {
             status: 'failed',
-            completedAt: new Date('2026-07-20T12:00:00.000Z'),
+            completedAt: null,
             scheduledDate: new Date('2026-07-20T10:00:00.000Z'),
           },
         ])
@@ -115,10 +115,40 @@ describe('DashboardService', () => {
           },
         ]);
 
+      // 3 terminées (dont 1 failed) → 1 à temps → 33 %. AVANT le correctif, le failed
+      // (completedAt null) était exclu → 50 % et le score ne pénalisait jamais les échecs.
       await expect(service.getReliabilityScore('company-1')).resolves.toEqual({
-        score: 50,
+        score: 33,
         trend: 'down',
         onTime: 1,
+        total: 3,
+      });
+      // La fenêtre est calculée sur createdAt (toujours renseigné), pas completedAt.
+      const currentQuery = mockPrisma.delivery.findMany.mock.calls[0][0];
+      expect(currentQuery.where.createdAt).toBeDefined();
+      expect(currentQuery.where.completedAt).toBeUndefined();
+    });
+
+    it('exclut les cancelled de la requête (hors périmètre fiabilité)', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      await service.getReliabilityScore('company-1');
+      const currentQuery = mockPrisma.delivery.findMany.mock.calls[0][0];
+      expect(currentQuery.where.status).toEqual({ in: ['delivered', 'failed'] });
+    });
+
+    it('100% quand TOUT échoue (les échecs comptent contre le score)', async () => {
+      mockPrisma.delivery.findMany
+        .mockResolvedValueOnce([
+          { status: 'failed', completedAt: null, scheduledDate: null },
+          { status: 'failed', completedAt: null, scheduledDate: null },
+        ])
+        .mockResolvedValueOnce([]);
+
+      await expect(service.getReliabilityScore('company-1')).resolves.toEqual({
+        score: 0,
+        trend: 'stable',
+        onTime: 0,
         total: 2,
       });
     });

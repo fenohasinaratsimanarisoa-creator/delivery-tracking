@@ -151,6 +151,7 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       proximityService,
       mockCache as any,
       mockDataUpdateBus as any,
+      { get: () => undefined } as any,
     );
   }
 

@@ -125,12 +125,26 @@ export class DeliveriesService {
       } catch {}
     }
 
+    const requestedStatus = dto.status ?? DeliveryStatus.pending;
+    if (
+      requestedStatus === DeliveryStatus.delivered ||
+      requestedStatus === DeliveryStatus.failed ||
+      requestedStatus === DeliveryStatus.cancelled
+    ) {
+      // Une livraison ne peut pas NAÎTRE dans un état terminal : ces statuts sont
+      // réservés au flux d'exécution (updateStatus/updateDriverStatus), sinon une
+      // création « delivered » contournait notification, preuve GPS et webhooks.
+      throw new BadRequestException(
+        `Cannot create a delivery with terminal status "${requestedStatus}"`,
+      );
+    }
+
     const delivery = await this.prisma.delivery.create({
       data: {
         ...dto,
         deliveryLat,
         deliveryLng,
-        status: dto.status ?? DeliveryStatus.pending,
+        status: requestedStatus,
         assignedDriverId,
         scheduledDate: dto.scheduledDate ? new Date(dto.scheduledDate) : undefined,
         companyId,
@@ -368,13 +382,18 @@ export class DeliveriesService {
         select: { userId: true },
       });
       if (!driver) throw new NotFoundException('Driver not found in your company');
-      if (driver.userId) updateData.assignedDriverId = driver.userId;
+      // Chauffeur sans compte utilisateur (userId null) : on DOIT purger l'ancien
+      // assignedDriverId, sinon l'ancien chauffeur garde l'accès à la livraison via
+      // l'app (findMyDeliveries / updateDriverStatus) alors qu'il n'est plus affecté.
+      updateData.assignedDriverId = driver.userId ?? null;
     }
+    let statusChanged = false;
     if (dto.status && dto.status !== delivery.status) {
       const allowed = TRANSITION_MATRIX[delivery.status];
       if (!allowed.includes(dto.status)) {
         throw new BadRequestException(`Cannot transition from ${delivery.status} to ${dto.status}`);
       }
+      statusChanged = true;
       if (this.isFuelReportTriggerStatus(dto.status)) {
         if (dto.status === DeliveryStatus.delivered) {
           updateData.completedAt = new Date();
@@ -387,11 +406,42 @@ export class DeliveriesService {
       }
     }
 
-    return this.prisma.delivery.update({
+    const updated = await this.prisma.delivery.update({
       where: { id },
       data: updateData,
-      include: { vehicle: true, driver: true },
+      include: { vehicle: true, driver: true, assignedDriver: true },
     });
+
+    // Un changement de statut via PATCH /deliveries/:id doit déclencher les MÊMES
+    // effets de bord que l'endpoint dédié (updateStatus) : notification, webhook et
+    // broadcast. Avant, ces événements étaient silencieusement perdus selon l'endpoint
+    // utilisé (intégrations webhook ratant des livraisons livrées/échouées).
+    if (statusChanged && dto.status) {
+      const statusLabel = dto.status.replace('_', ' ');
+      await this.notifications.create(companyId, {
+        type: NotificationType.delivery_status,
+        priority:
+          dto.status === DeliveryStatus.delivered
+            ? NotificationPriority.low
+            : dto.status === DeliveryStatus.failed
+              ? NotificationPriority.high
+              : NotificationPriority.medium,
+        title: `Livraison ${statusLabel}`,
+        message: `${updated.title} est maintenant ${statusLabel}`,
+        link: `/deliveries/${id}`,
+        userId: updated.assignedDriverId ?? undefined,
+        deliveryId: id,
+      });
+      await this.dispatchWebhook(companyId, updated, dto.status);
+      this.dataUpdateBus.emitUpdate({
+        companyId,
+        entity: 'delivery',
+        action: dto.status,
+        payload: { id },
+      });
+    }
+
+    return updated;
   }
 
   async updateStatus(
@@ -703,7 +753,10 @@ export class DeliveriesService {
             where: { id },
             data: {
               driverId: dto.driverId,
-              ...(driver.userId ? { assignedDriverId: driver.userId } : {}),
+              // Purge l'ancien assignedDriverId si le nouveau chauffeur n'a pas de
+              // compte (userId null) — voir update() : même règle, cohérence entre
+              // affectation simple et affectation en masse.
+              assignedDriverId: driver.userId ?? null,
             },
           });
           this.webhooks.dispatch('delivery.driver_assigned', {
@@ -811,8 +864,10 @@ export class DeliveriesService {
           continue;
         }
         // upsert mode: update fields but NEVER regress a status that has progressed beyond in_progress
-        // (delivered, failed, cancelled) — those terminal states must stay unchanged.
-        const newStatus = existing.status;
+        // (delivered, failed, cancelled) — those terminal states must stay unchanged. Une livraison
+        // encore pending/assigned est AVANCÉE à in_progress à la réimportation (avant, le branchement
+        // `newStatus ? {} : ...` était mort : newStatus (enum) était toujours truthy → statut gelé).
+        const notStarted = existing.status === 'pending' || existing.status === 'assigned';
         const updateData: any = {
           deliveryAddress: lieu,
           deliveryLocationLabel: adresse,
@@ -823,7 +878,7 @@ export class DeliveriesService {
           description: produits || undefined,
           notes: notes || undefined,
           pickupAddress: defaultPickupAddress,
-          ...(newStatus ? {} : { status: DeliveryStatus.in_progress }),
+          ...(notStarted ? { status: DeliveryStatus.in_progress } : {}),
         };
         await this.prisma.delivery.update({
           where: { id: existing.id },

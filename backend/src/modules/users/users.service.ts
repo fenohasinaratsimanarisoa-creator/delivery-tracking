@@ -331,7 +331,10 @@ export class UsersService {
     }
 
     const data: any = {};
-    if (dto.email !== undefined) data.email = dto.email;
+    // Normalisation de l'email, comme à la création : sans trim/toLowerCase, la
+    // contrainte Postgres (sensible à la casse) laissait coexister User@X.com et
+    // user@x.com → doublons et confusion de comptes.
+    if (dto.email !== undefined) data.email = dto.email.toLowerCase().trim();
     if (dto.firstName !== undefined) data.firstName = dto.firstName;
     if (dto.lastName !== undefined) data.lastName = dto.lastName;
     if (dto.phone !== undefined) data.phone = dto.phone;
@@ -358,10 +361,11 @@ export class UsersService {
         },
       });
 
-      if (
-        targetRole === 'driver' &&
-        (dto.vehicleId !== undefined || dto.licenseNumber !== undefined)
-      ) {
+      if (targetRole === 'driver') {
+        // On garantit l'existence d'un record Driver pour TOUT utilisateur passé
+        // chauffeur (même sans véhicule/licence fournis) : avant, un rôle 'driver'
+        // sans vehicleId ni licenseNumber ne créait AUCUN record → affectation
+        // véhicule impossible et findDriverByUserId échouait.
         const existingDriver = await tx.driver.findFirst({
           where: { companyId, userId: id, deletedAt: null },
         });
@@ -444,6 +448,9 @@ export class UsersService {
     });
     if (!user) throw new NotFoundException('User not found');
 
+    // Normalisation (trim + minuscules) : la contrainte d'unicité Postgres est
+    // sensible à la casse — sans cela, User@X.com et user@x.com coexistaient.
+    newEmail = newEmail.toLowerCase().trim();
     if (newEmail === user.email) {
       throw new BadRequestException('New email must be different from current email');
     }

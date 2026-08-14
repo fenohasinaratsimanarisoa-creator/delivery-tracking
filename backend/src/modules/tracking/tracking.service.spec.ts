@@ -70,11 +70,21 @@ const mockDataUpdateBus = {
   on: jest.fn(),
 };
 
+// Fenêtre anti-flood configurable, remise à 1s avant chaque test (les tests de
+// rate-limiting la modifient localement sans fuite vers les autres tests).
+let rateLimitTtl = '1000';
+const mockConfig = {
+  get: jest.fn((key: string, def: unknown) =>
+    key === 'POSITION_RATE_LIMIT_TTL_MS' ? rateLimitTtl : def,
+  ),
+};
+
 describe('TrackingService', () => {
   let service: TrackingService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    rateLimitTtl = '1000';
     // savePosition() résout désormais le véhicule via findFirst (filtre deletedAt:null + isActive:true)
     mockPrisma.vehicle.findFirst.mockResolvedValue({ companyId: 'company-1' });
     service = new TrackingService(
@@ -84,6 +94,7 @@ describe('TrackingService', () => {
       mockDeliveryProximityService as any,
       mockCacheService as any,
       mockDataUpdateBus as any,
+      mockConfig as any,
     );
   });
 
@@ -93,6 +104,29 @@ describe('TrackingService', () => {
     await expect(service.findDriverByUserId('user-1')).resolves.toEqual({ id: 'driver-1' });
     expect(mockPrisma.driver.findUnique).toHaveBeenCalledWith({
       where: { userId: 'user-1' },
+    });
+  });
+
+  describe('isRateLimited', () => {
+    it('limite une seconde position dans la fenêtre (TTL > 0)', async () => {
+      (mockCacheService.get as jest.Mock).mockResolvedValueOnce(null);
+      (mockCacheService.set as jest.Mock).mockResolvedValueOnce(undefined);
+
+      expect(await service.isRateLimited('driver-1')).toBe(false);
+      expect(mockCacheService.set).toHaveBeenCalledWith('rate_limit:driver:driver-1', true, 1);
+
+      (mockCacheService.get as jest.Mock).mockResolvedValueOnce(true);
+      expect(await service.isRateLimited('driver-1')).toBe(true);
+    });
+
+    it('désactivé quand TTL est 0 ou négatif (utilisé par les tests e2e)', async () => {
+      rateLimitTtl = '0';
+      expect(await service.isRateLimited('driver-1')).toBe(false);
+      expect(mockCacheService.set).not.toHaveBeenCalled();
+
+      rateLimitTtl = '-1';
+      expect(await service.isRateLimited('driver-1')).toBe(false);
+      expect(mockCacheService.set).not.toHaveBeenCalled();
     });
   });
 

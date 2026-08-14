@@ -1,3 +1,8 @@
+// Désactive l'anti-flood GPS (1 position/s par défaut) pour que les tests
+// puissent envoyer plusieurs positions en rafale et exercer le flux réel de
+// sauvegarde/dedup/batch. Le comportement de rate-limiting est testé à part.
+process.env.POSITION_RATE_LIMIT_TTL_MS = '0';
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
@@ -137,13 +142,13 @@ describe('Tracking GPS (e2e)', () => {
       expect(res.body.kilometers).toBe(0);
     });
 
-    it('GET /tracking/positions/:deliveryId - should return empty array', async () => {
+    it('GET /tracking/positions/:deliveryId - should return empty paginated list', async () => {
       const res = await request(app.getHttpServer())
         .get(`/tracking/positions/${deliveryId}`)
         .set('Authorization', `Bearer ${dispatcherToken}`)
         .expect(200);
 
-      expect(res.body).toEqual([]);
+      expect(res.body).toEqual({ data: [], meta: { total: 0, page: 1, limit: 200, totalPages: 0 } });
     });
   });
 
@@ -192,6 +197,15 @@ describe('Tracking GPS (e2e)', () => {
       dispatcherSocket?.close();
     });
 
+    // Horloge monotone : le serveur rejette (dedup par timestamp, fenêtre 1s) toute
+    // position au même instant ou antérieure à la dernière. Chaque test avance donc
+    // l'horloge de +5s pour que chaque position soit réellement persistée.
+    let wsClock = Date.parse('2025-01-01T10:00:00Z');
+    const nextTimestamp = (stepMs: number) => {
+      wsClock += stepMs;
+      return new Date(wsClock).toISOString();
+    };
+
     it('should receive position update on dispatcher when driver sends one', async () => {
       const eventPromise = waitForEvent<{
         latitude: number;
@@ -203,7 +217,7 @@ describe('Tracking GPS (e2e)', () => {
         latitude: 48.8566,
         longitude: 2.3522,
         speed: 50,
-        timestamp: new Date().toISOString(),
+        timestamp: nextTimestamp(0),
         deliveryId,
         vehicleId,
       });
@@ -222,26 +236,33 @@ describe('Tracking GPS (e2e)', () => {
         .set('Authorization', `Bearer ${dispatcherToken}`)
         .expect(200);
 
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
-      expect(res.body[0].latitude).toBe(48.8566);
+      expect(res.body.meta.total).toBeGreaterThan(0);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(res.body.data[0].latitude).toBe(48.8566);
     });
 
     it('should calculate distance with positions', async () => {
-      const eventPromise = waitForEvent(dispatcherSocket, 'positionUpdate');
+      const sendAndWait = async (lat: number, lng: number, stepMs: number) => {
+        const p = waitForEvent(dispatcherSocket, 'positionUpdate');
+        driverSocket.emit('updatePosition', {
+          latitude: lat,
+          longitude: lng,
+          speed: 11,
+          timestamp: nextTimestamp(stepMs),
+          deliveryId,
+          vehicleId,
+        });
+        await p;
+      };
 
-      driverSocket.emit('updatePosition', {
-        latitude: 48.8584,
-        longitude: 2.2945,
-        speed: 60,
-        timestamp: new Date().toISOString(),
-        deliveryId,
-        vehicleId,
-      });
-
-      await eventPromise;
-      // Wait for DB write
-      await new Promise((r) => setTimeout(r, 500));
+      // Trajet réaliste (~4,6 km vers l'est, pas de ~330 m toutes les 30 s ≈ 40 km/h)
+      // pour que la distance soit calculée SANS déclencher la téléportation (un saut de
+      // 4 km en 5 s = suspect → exclu → distance 0).
+      const startLat = 48.8566;
+      const startLng = 2.3522;
+      for (let i = 1; i <= 14; i++) {
+        await sendAndWait(startLat, startLng + i * 0.0045, 30000);
+      }
 
       const res = await request(app.getHttpServer())
         .get(`/tracking/distance/${deliveryId}`)
@@ -250,25 +271,30 @@ describe('Tracking GPS (e2e)', () => {
 
       expect(res.body.meters).toBeGreaterThan(4000);
       expect(res.body.meters).toBeLessThan(6000);
-    }, 10000);
+    }, 15000);
 
     it('should deduplicate identical positions', async () => {
       const pos = {
         latitude: 48.862,
         longitude: 2.352,
-        timestamp: new Date(Date.now() - 7200000).toISOString(),
+        timestamp: nextTimestamp(5000),
         deliveryId,
         vehicleId,
       };
 
-      // Send twice and wait for broadcast
+      // 1er envoi : position nouvelle → sauvée et diffusée.
       const p1 = waitForEvent(dispatcherSocket, 'positionUpdate');
       driverSocket.emit('updatePosition', pos);
       await p1;
 
-      const p2 = waitForEvent(dispatcherSocket, 'positionUpdate');
+      // 2e envoi du MÊME payload : dédoublonnée par le serveur (timestamp identique)
+      // → rejet explicite (positionRejected) sur le socket du CHAUFFEUR, jamais de
+      // doublon en base ni de broadcast.
+      const rejected = waitForEvent(driverSocket, 'positionRejected', 5000).then(
+        (d: unknown) => d,
+      );
       driverSocket.emit('updatePosition', pos);
-      await p2;
+      await rejected;
 
       await new Promise((r) => setTimeout(r, 500));
 
@@ -277,7 +303,7 @@ describe('Tracking GPS (e2e)', () => {
         .set('Authorization', `Bearer ${dispatcherToken}`)
         .expect(200);
 
-      const dups = res.body.filter(
+      const dups = res.body.data.filter(
         (p: any) =>
           p.latitude === pos.latitude &&
           p.longitude === pos.longitude &&
@@ -287,14 +313,16 @@ describe('Tracking GPS (e2e)', () => {
     }, 15000);
 
     it('should handle batch position sending', async () => {
-      // Just verify that batch does not throw and positions are saved
+      // Le batch est diffusé sous l'événement batchPositionUpdate (le front écoute
+      // les deux), pas positionUpdate.
+      const batchPromise = waitForEvent<unknown[]>(dispatcherSocket, 'batchPositionUpdate');
       driverSocket.emit('batchPosition', {
         positions: [
           {
             latitude: 48.863,
             longitude: 2.353,
             speed: 40,
-            timestamp: new Date(Date.now() - 2000).toISOString(),
+            timestamp: nextTimestamp(5000),
             deliveryId,
             vehicleId,
           },
@@ -302,15 +330,15 @@ describe('Tracking GPS (e2e)', () => {
             latitude: 48.873,
             longitude: 2.363,
             speed: 45,
-            timestamp: new Date(Date.now() - 1000).toISOString(),
+            timestamp: nextTimestamp(5000),
             deliveryId,
             vehicleId,
           },
         ],
       });
-
-      // Wait for the positions to be saved and broadcast
-      await waitForEvent(dispatcherSocket, 'positionUpdate');
+      const batch = await batchPromise;
+      expect(Array.isArray(batch)).toBe(true);
+      expect(batch.length).toBe(2);
       await new Promise((r) => setTimeout(r, 500));
 
       const res = await request(app.getHttpServer())
@@ -318,7 +346,7 @@ describe('Tracking GPS (e2e)', () => {
         .set('Authorization', `Bearer ${dispatcherToken}`)
         .expect(200);
 
-      const batchPositions = res.body.filter(
+      const batchPositions = res.body.data.filter(
         (p: any) => p.latitude === 48.863 || p.latitude === 48.873,
       );
       expect(batchPositions.length).toBe(2);

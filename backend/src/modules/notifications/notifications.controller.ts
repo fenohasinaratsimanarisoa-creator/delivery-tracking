@@ -3,6 +3,7 @@ import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { normalizePagination } from '../../common/utils/pagination';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard, CompanyScopeGuard)
@@ -13,9 +14,14 @@ export class NotificationsController {
   findAll(
     @CurrentUser('companyId') companyId: string,
     @CurrentUser('id') userId: string,
-    @Query('limit') limit?: string,
+    @Query('limit') limit?: unknown,
   ) {
-    return this.notificationsService.findAll(companyId, userId, Number(limit) || 50);
+    // limit < 1 ou mal formé provoquait un take négatif/NaN → 500.
+    return this.notificationsService.findAll(
+      companyId,
+      userId,
+      normalizePagination(1, limit, 200).limit,
+    );
   }
 
   @Get('unread-count')

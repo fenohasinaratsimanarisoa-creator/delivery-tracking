@@ -25,6 +25,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { UsageGuard } from '../../common/guards/usage.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { normalizePagination } from '../../common/utils/pagination';
 
 @Controller('deliveries')
 @UseGuards(JwtAuthGuard, CompanyScopeGuard)
@@ -65,20 +66,22 @@ export class DeliveriesController {
   findMyOrders(
     @CurrentUser('id') userId: string,
     @CurrentUser('companyId') companyId: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
+    @Query('page') page?: unknown,
+    @Query('limit') limit?: unknown,
   ) {
-    return this.deliveriesService.findMyOrders(userId, companyId, +page, +limit);
+    const { page: p, limit: l } = normalizePagination(page, limit);
+    return this.deliveriesService.findMyOrders(userId, companyId, p, l);
   }
 
   @Get('my-deliveries')
   findMyDeliveries(
     @CurrentUser('id') userId: string,
     @CurrentUser('companyId') companyId: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
+    @Query('page') page?: unknown,
+    @Query('limit') limit?: unknown,
   ) {
-    return this.deliveriesService.findMyDeliveries(userId, companyId, +page, +limit);
+    const { page: p, limit: l } = normalizePagination(page, limit);
+    return this.deliveriesService.findMyDeliveries(userId, companyId, p, l);
   }
 
   @UseGuards(RolesGuard)
@@ -98,11 +101,12 @@ export class DeliveriesController {
   @Get()
   findAll(
     @CurrentUser('companyId') companyId: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
+    @Query('page') page?: unknown,
+    @Query('limit') limit?: unknown,
     @Query('status') status?: DeliveryStatus,
   ) {
-    return this.deliveriesService.findAll(companyId, +page, +limit, status);
+    const { page: p, limit: l } = normalizePagination(page, limit);
+    return this.deliveriesService.findAll(companyId, p, l, status);
   }
 
   @UseGuards(RolesGuard)
@@ -110,11 +114,12 @@ export class DeliveriesController {
   @Get('proofs')
   getProofs(
     @CurrentUser('companyId') companyId: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
+    @Query('page') page?: unknown,
+    @Query('limit') limit?: unknown,
     @Query('status') status?: string,
   ) {
-    return this.deliveriesService.findProofs(companyId, +page, +limit, status);
+    const { page: p, limit: l } = normalizePagination(page, limit);
+    return this.deliveriesService.findProofs(companyId, p, l, status);
   }
 
   @UseGuards(RolesGuard)
