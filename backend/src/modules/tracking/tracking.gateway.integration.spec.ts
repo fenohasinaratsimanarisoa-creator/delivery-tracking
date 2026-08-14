@@ -153,4 +153,74 @@ describe('TrackingGateway — ACK WebSocket réel (Test D)', () => {
     expect(meanLatency).toBeLessThan(500);
     expect(Math.max(...latencies)).toBeLessThan(500);
   });
+
+  it('validation payloads : lat hors bornes rejetée, whitelist acceptée, batch filtré sans échec global', async () => {
+    const UUID = '00000000-0000-4000-8000-000000000001';
+    const waitEvent = (ev: string, ms = 2000) =>
+      new Promise<any>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error(`timeout waiting ${ev}`)), ms);
+        client.once(ev, (d: unknown) => {
+          clearTimeout(t);
+          resolve(d);
+        });
+      });
+
+    // a) Latitude hors bornes → rejet EXPLICITE invalid_payload (jamais un
+    // silence qui ferait croire à une position acceptée).
+    let ack = waitEvent('positionRejected');
+    client.emit('updatePosition', {
+      latitude: 999,
+      longitude: 47.5,
+      timestamp: new Date().toISOString(),
+      vehicleId: UUID,
+    });
+    expect(await ack).toEqual({ reason: 'invalid_payload' });
+
+    // b) Payload valide portant une clé inconnue (event, envoyée par
+    // d'anciennes versions de l'app) → ACCEPTÉ (whitelist strips la clé).
+    ack = waitEvent('positionSaved');
+    client.emit('updatePosition', {
+      event: 'updatePosition',
+      latitude: -18.87,
+      longitude: 47.5,
+      speed: 30,
+      timestamp: new Date().toISOString(),
+      vehicleId: UUID,
+    });
+    expect(await ack).toEqual(expect.objectContaining({ id: expect.any(String) }));
+
+    // c) Timestamp illisible → rejet invalid_payload.
+    ack = waitEvent('positionRejected');
+    client.emit('updatePosition', {
+      latitude: -18.87,
+      longitude: 47.5,
+      timestamp: 'hier-negatif',
+      vehicleId: UUID,
+    });
+    expect(await ack).toEqual({ reason: 'invalid_payload' });
+
+    // d) Batch mixte [valide, invalide, invalide] : les invalides sont filtrées
+    // (saveBatch ne reçoit que 1 position) et l'ACK est émis — aucune position
+    // corrompue ne bloque le rattrapage réseau des autres.
+    trackingService.saveBatch.mockResolvedValueOnce([
+      { id: 'b-1', latitude: -18.88, longitude: 47.51, speed: null, heading: null, altitude: null, accuracy: null, suspect: false, timestamp: new Date(), deliveryId: null, vehicleId: UUID },
+    ]);
+    ack = waitEvent('positionsSaved');
+    client.emit('batchPosition', {
+      positions: [
+        { latitude: -18.88, longitude: 47.51, timestamp: new Date().toISOString(), vehicleId: UUID },
+        { latitude: 999, longitude: 999, timestamp: new Date().toISOString(), vehicleId: UUID },
+        { latitude: 777, longitude: 47.52, timestamp: new Date().toISOString(), vehicleId: UUID },
+      ],
+    });
+    expect(await ack).toEqual({ count: 1 });
+    expect(trackingService.saveBatch).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.arrayContaining([expect.objectContaining({ latitude: -18.88 })]),
+      expect.anything(),
+    );
+    const batchArg = trackingService.saveBatch.mock.calls.at(-1)![2] as unknown[];
+    expect(batchArg).toHaveLength(1);
+  });
 });
