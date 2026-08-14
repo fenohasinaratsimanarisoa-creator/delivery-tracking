@@ -6,6 +6,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api/client';
+import { TILE_PROVIDERS } from '../features/map/tileProviders';
 import styles from './ClientTrackingPage.module.css';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -162,8 +163,10 @@ export default function ClientTrackingPage() {
       <div className={styles.mapArea}>
         <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution={TILE_PROVIDERS.plan.attribution}
+            url={TILE_PROVIDERS.plan.url}
+            maxZoom={TILE_PROVIDERS.plan.maxZoom}
+            detectRetina
           />
           <Polyline positions={path} color="blue" weight={3} opacity={0.6} />
           {currentPos && (

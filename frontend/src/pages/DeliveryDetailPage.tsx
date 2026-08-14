@@ -9,6 +9,7 @@ import { formatDate } from '../services/i18n/formatDate';
 import { formatAriary } from '../services/formatAriary';
 import api from '../services/api/client';
 import type { Delivery } from '../types';
+import { TILE_PROVIDERS } from '../features/map/tileProviders';
 import styles from './DeliveryDetailPage.module.css';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -108,7 +109,12 @@ export default function DeliveryDetailPage() {
       {hasCoords && (
         <div className={styles.mapContainer}>
           <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
-            <TileLayer attribution='&copy; OSM' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <TileLayer
+              attribution={TILE_PROVIDERS.plan.attribution}
+              url={TILE_PROVIDERS.plan.url}
+              maxZoom={TILE_PROVIDERS.plan.maxZoom}
+              detectRetina
+            />
             <Marker position={[d.pickupLat!, d.pickupLng!]} />
             <Marker position={[d.deliveryLat!, d.deliveryLng!]} />
             <Polyline positions={[[d.pickupLat!, d.pickupLng!], [d.deliveryLat!, d.deliveryLng!]]} color={themeBlue()} weight={3} dashArray="10 6" />

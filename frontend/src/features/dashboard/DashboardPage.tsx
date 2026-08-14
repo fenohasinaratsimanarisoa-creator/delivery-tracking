@@ -9,6 +9,7 @@ import { MapPin, Truck, Clock, AlertTriangle, CheckCircle, Fuel, TrendingUp, Spa
 import RealTimeMap from '../map/RealTimeMap';
 import api from '../../services/api/client';
 import type { Kpis, DeliveryStat, FuelChartPoint } from '../../types';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import OnboardingChecklist from './OnboardingChecklist';
 import styles from './DashboardPage.module.css';
 
@@ -265,6 +266,11 @@ export default function DashboardPage() {
 
   const perfectMonth = useMemo(() => !!reliability && reliability.score === 100, [reliability]);
 
+  // Un SEUL RealTimeMap est monté (desktop OU mobile) : avant, les deux layouts
+  // étaient rendus simultanément et cachés en CSS → double connexion WebSocket
+  // `subscribeToCompany`, double polling /tracking/live et double rendu des markers.
+  const isMobile = useMediaQuery('(max-width: 768px)');
+
   const kpiItems = useMemo(() => [
     { icon: Truck, label: t('dashboard.kpis.deliveriesToday'), value: kpis?.deliveriesToday ?? '\u2014', color: 'var(--color-accent)' },
     { icon: CheckCircle, label: t('dashboard.kpis.totalDeliveries'), value: kpis?.totalDeliveries ?? '\u2014', color: 'var(--color-teal)' },
@@ -286,113 +292,117 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* Desktop layout: full-screen map with floating overlays */}
-      <div className={`${styles.desktopLayout} ${styles.dashboardDesktopOnly}`}>
-        <div className={styles.mapContainer}>
-          <RealTimeMap />
-        </div>
-
-        <div className={styles.overlayContainer}>
-          {/* Top bar */}
-          <header className={styles.topBar}>
-            <div className={styles.topBarLeft}>
-              <span className={styles.titleIconChip}><Gauge size={20} /></span>
-              <div className={styles.headerText}>
-                <span className={styles.kicker}>{t('dashboard.kicker')}</span>
-                <h1 className={styles.pageTitle}>{t('dashboard.title')}</h1>
-                <span className={styles.dashboardDate}>{formatDateLong(new Date())}</span>
-              </div>
-            </div>
-            <div className={styles.topBarRight}>
-              {perfectMonth && <PerfectMonthBadge month={currentMonth} />}
-              {kpis && reliability && (
-                <ReliabilityScore score={reliability.score} trend={reliability.trend} delay={0.04} />
-              )}
-            </div>
-          </header>
-
-          {/* Left: overview KPI panel */}
-          <div className={styles.kpiPanel}>
-            <div className={styles.kpiPanelHeader}>
-              <span className={styles.kpiPanelDot} />
-              <span className={styles.kpiPanelTitle}>{t('dashboard.overviewTitle')}</span>
-            </div>
-            <div className={styles.kpiGrid}>
-              {kpiItems.map((item, i) => (
-                <KpiCard key={item.label} {...item} delay={0.1 + i * 0.06} />
-              ))}
-            </div>
+      {!isMobile && (
+        /* Desktop layout: full-screen map with floating overlays */
+        <div className={`${styles.desktopLayout} ${styles.dashboardDesktopOnly}`}>
+          <div className={styles.mapContainer}>
+            <RealTimeMap />
           </div>
 
-          {/* Right column: charts + recent deliveries */}
-          {anyChart && (
-            <div className={styles.chartsColumn}>
-              {deliveryStats.length > 0 && <MiniChart data={deliveryStats} delay={0.14} />}
-              {fuelData.length > 0 && <FuelMiniChart data={fuelData} delay={0.18} />}
-              <RecentDeliveriesMini delay={0.22} />
-            </div>
-          )}
+          <div className={styles.overlayContainer}>
+            {/* Top bar */}
+            <header className={styles.topBar}>
+              <div className={styles.topBarLeft}>
+                <span className={styles.titleIconChip}><Gauge size={20} /></span>
+                <div className={styles.headerText}>
+                  <span className={styles.kicker}>{t('dashboard.kicker')}</span>
+                  <h1 className={styles.pageTitle}>{t('dashboard.title')}</h1>
+                  <span className={styles.dashboardDate}>{formatDateLong(new Date())}</span>
+                </div>
+              </div>
+              <div className={styles.topBarRight}>
+                {perfectMonth && <PerfectMonthBadge month={currentMonth} />}
+                {kpis && reliability && (
+                  <ReliabilityScore score={reliability.score} trend={reliability.trend} delay={0.04} />
+                )}
+              </div>
+            </header>
 
-          {/* Error toast */}
-          {error && (
-            <div className={styles.errorToast}>
-              {error}
+            {/* Left: overview KPI panel */}
+            <div className={styles.kpiPanel}>
+              <div className={styles.kpiPanelHeader}>
+                <span className={styles.kpiPanelDot} />
+                <span className={styles.kpiPanelTitle}>{t('dashboard.overviewTitle')}</span>
+              </div>
+              <div className={styles.kpiGrid}>
+                {kpiItems.map((item, i) => (
+                  <KpiCard key={item.label} {...item} delay={0.1 + i * 0.06} />
+                ))}
+              </div>
             </div>
-          )}
+
+            {/* Right column: charts + recent deliveries */}
+            {anyChart && (
+              <div className={styles.chartsColumn}>
+                {deliveryStats.length > 0 && <MiniChart data={deliveryStats} delay={0.14} />}
+                {fuelData.length > 0 && <FuelMiniChart data={fuelData} delay={0.18} />}
+                <RecentDeliveriesMini delay={0.22} />
+              </div>
+            )}
+
+            {/* Error toast */}
+            {error && (
+              <div className={styles.errorToast}>
+                {error}
+              </div>
+            )}
+
+            <OnboardingChecklist />
+          </div>
+          </div>
+        )}
+
+      {isMobile && (
+        /* Mobile layout: stacked below map */
+        <div className={`${styles.mobileLayout} ${styles.dashboardMobileOnly}`}>
+          <div className={styles.mobileMap}>
+            <RealTimeMap />
+          </div>
+
+          <div className={styles.mobileStack}>
+            <div className={styles.mobileTitleRow}>
+              <span className={styles.titleIconChip}><Gauge size={18} /></span>
+              <div className={styles.headerText}>
+                <span className={styles.kicker}>{t('dashboard.kicker')}</span>
+                <h1 className={styles.mobileTitle}>{t('dashboard.title')}</h1>
+              </div>
+              {perfectMonth && <PerfectMonthBadge month={currentMonth} />}
+            </div>
+
+            {kpis && reliability && (
+              <ReliabilityScore score={reliability.score} trend={reliability.trend} delay={0.04} />
+            )}
+
+            <div className={styles.kpiPanel}>
+              <div className={styles.kpiPanelHeader}>
+                <span className={styles.kpiPanelDot} />
+                <span className={styles.kpiPanelTitle}>{t('dashboard.overviewTitle')}</span>
+              </div>
+              <div className={styles.kpiGrid}>
+                {kpiItems.map((item, i) => (
+                  <KpiCard key={item.label} {...item} delay={0.08 + i * 0.06} />
+                ))}
+              </div>
+            </div>
+
+            {anyChart && (
+              <>
+                {deliveryStats.length > 0 && <MiniChart data={deliveryStats} delay={0.1} />}
+                {fuelData.length > 0 && <FuelMiniChart data={fuelData} delay={0.18} />}
+                <RecentDeliveriesMini delay={0.26} />
+              </>
+            )}
+
+            {error && (
+              <div className={styles.mobileError}>
+                {error}
+              </div>
+            )}
+          </div>
 
           <OnboardingChecklist />
         </div>
-      </div>
-
-      {/* Mobile layout: stacked below map */}
-      <div className={`${styles.mobileLayout} ${styles.dashboardMobileOnly}`}>
-        <div className={styles.mobileMap}>
-          <RealTimeMap />
-        </div>
-
-        <div className={styles.mobileStack}>
-          <div className={styles.mobileTitleRow}>
-            <span className={styles.titleIconChip}><Gauge size={18} /></span>
-            <div className={styles.headerText}>
-              <span className={styles.kicker}>{t('dashboard.kicker')}</span>
-              <h1 className={styles.mobileTitle}>{t('dashboard.title')}</h1>
-            </div>
-            {perfectMonth && <PerfectMonthBadge month={currentMonth} />}
-          </div>
-
-          {kpis && reliability && (
-            <ReliabilityScore score={reliability.score} trend={reliability.trend} delay={0.04} />
-          )}
-
-          <div className={styles.kpiPanel}>
-            <div className={styles.kpiPanelHeader}>
-              <span className={styles.kpiPanelDot} />
-              <span className={styles.kpiPanelTitle}>{t('dashboard.overviewTitle')}</span>
-            </div>
-            <div className={styles.kpiGrid}>
-              {kpiItems.map((item, i) => (
-                <KpiCard key={item.label} {...item} delay={0.08 + i * 0.06} />
-              ))}
-            </div>
-          </div>
-
-          {anyChart && (
-            <>
-              {deliveryStats.length > 0 && <MiniChart data={deliveryStats} delay={0.1} />}
-              {fuelData.length > 0 && <FuelMiniChart data={fuelData} delay={0.18} />}
-              <RecentDeliveriesMini delay={0.26} />
-            </>
-          )}
-
-          {error && (
-            <div className={styles.mobileError}>
-              {error}
-            </div>
-          )}
-        </div>
-
-        <OnboardingChecklist />
-      </div>
+      )}
     </>
   );
 }

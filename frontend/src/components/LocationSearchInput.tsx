@@ -9,6 +9,7 @@ import { useGpsPreload } from '../hooks/useGpsPreload'
 import { getApiBaseUrl } from '../services/api/config'
 import type { GeocodingResult } from '../services/geocoding/types'
 import { MG_COMMUNES } from '../services/geocoding/mg-communes'
+import { TILE_PROVIDERS } from '../features/map/tileProviders'
 import styles from './LocationSearchInput.module.css'
 
 import icon from 'leaflet/dist/images/marker-icon.png'
@@ -191,7 +192,12 @@ export default memo(function LocationSearchInput({
       {showMap && (
         <div className={styles.mapContainer}>
           <MapContainer center={mapPos} zoom={16} style={{ height: '100%', width: '100%' }} zoomControl={true}>
-            <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <TileLayer
+              attribution={TILE_PROVIDERS.plan.attribution}
+              url={TILE_PROVIDERS.plan.url}
+              maxZoom={TILE_PROVIDERS.plan.maxZoom}
+              detectRetina
+            />
             <DraggableMarker position={mapPos} onChange={handleMapConfirm} /><MapUpdater center={mapPos} />
           </MapContainer>
           <div className={styles.mapHint}>{t('locationSearch.mapHint')}</div>

@@ -715,6 +715,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
     <MapContainer
       center={center}
       zoom={13}
+      maxZoom={20}
       className={styles.mapContainer}
       zoomControl={true}
     >
