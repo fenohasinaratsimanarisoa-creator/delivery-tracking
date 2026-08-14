@@ -300,6 +300,14 @@ model UserSession {
   // sans écraser les autres sessions (le champ éponyme sur User est conservé
   // pour compatibilité descendante mais n'est plus utilisé par la logique).
   refreshTokenHash String?   @map("refresh_token_hash")
+  // Historique de rotation (un seul niveau) : le cookie de refresh étant partagé
+  // entre les onglets, deux refreshes concurrents peuvent faire la course sur le
+  // hash. Sans cet historique, le perdant (mismatch) faisait révoquer la session
+  // → déconnexion en cascade de TOUS les onglets. La rotation est atomique
+  // (UPDATE ... SET previous = refresh_token_hash, refresh_token_hash = $1), donc
+  // sous concurrence l'ancien hash du dernier gagnant est toujours dans
+  // previous_refresh_token_hash : le perdant est accepté et re-rotaté (convergence).
+  previousRefreshTokenHash String? @map("previous_refresh_token_hash")
 
   @@index([userId])
   @@map("user_sessions")
@@ -526,9 +534,9 @@ model GpsPositionArchive {
   location   String   @map("location")
   timestamp  DateTime
   createdAt  DateTime @map("created_at")
-  deliveryId String   @map("delivery_id") @db.Uuid
+  deliveryId String?  @map("delivery_id") @db.Uuid
   vehicleId  String   @map("vehicle_id") @db.Uuid
-  driverId   String   @map("driver_id") @db.Uuid
+  driverId   String?  @map("driver_id") @db.Uuid
   archivedAt DateTime @default(now()) @map("archived_at")
 
   @@index([timestamp])

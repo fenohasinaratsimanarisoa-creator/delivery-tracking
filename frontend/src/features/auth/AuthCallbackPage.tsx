@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/AuthContext';
 import { setAccessToken } from '../../services/auth/tokenStore';
 import { parseToken } from '../../services/jwt';
+import { getApiBaseUrl } from '../../services/api/config';
 import { isNativeApp, isWebView, isMobileBrowser, relayTokenToNativeApp, OAUTH_VERIFIER_KEY, clearOAuthNativeState } from '../../services/native/nativeAuth';
 import type { User } from '../../types';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -57,7 +58,7 @@ export default function AuthCallbackPage() {
         if (!verifier) {
           throw new Error('missing PKCE verifier');
         }
-        const res = await fetch('/api/auth/exchange', {
+        const res = await fetch(`${getApiBaseUrl()}/auth/exchange`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code, verifier }),

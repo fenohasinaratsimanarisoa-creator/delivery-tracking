@@ -72,7 +72,12 @@ export function useEntityForm<T extends Record<string, any>>({
     }
     if (def.rules) {
       const r = def.rules;
-      if (r.minLength && value.length < r.minLength) {
+      // minLength ne doit s'appliquer QUE quand il y a réellement une valeur :
+      // un champ OPTIONNEL laissé vide ('' → longueur 0) ne doit jamais être
+      // bloqué par une règle de longueur minimale (ex. vin obligatoire en
+      // création, mais optionnel en édition — le formulaire était impossible
+      // à valider en mode édition sans ressaisir le champ).
+      if (r.minLength && value.length < r.minLength && (def.required || value.trim().length > 0)) {
         return i18n.t('form.validation.minLength', { min: r.minLength });
       }
       if (r.maxLength && value.length > r.maxLength) {

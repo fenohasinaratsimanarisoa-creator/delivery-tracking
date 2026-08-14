@@ -259,6 +259,21 @@ export class TrackingService {
     const settings = await this.getCompanySettings(companyId);
     if (!settings) return;
 
+    // CRITIQUE : Notification.userId est une FK vers users.id. Les appelsants
+    // (gateway, traccar-bridge, saveBatch) passent ici l'ID de la LIGNE Driver,
+    // pas l'UUID utilisateur — un create avec userId=driverId lève P2003 et
+    // TOUTES les alertes types (speed, stop, retard, offline, géofence) mouraient
+    // silencieusement (Promise.allSettled). On résout donc l'utilisateur cible
+    // UNE fois pour l'ensemble des alertes de cette position.
+    let alertUserId: string | null = null;
+    if (driverId) {
+      const driverRow = await this.prisma.driver.findFirst({
+        where: { id: driverId },
+        select: { userId: true },
+      });
+      alertUserId = driverRow?.userId ?? null;
+    }
+
     const tasks: Promise<unknown>[] = [];
 
     if (dto.speed !== undefined && settings.speedAlertThreshold) {
@@ -276,7 +291,7 @@ export class TrackingService {
               message: `Vehicle exceeded ${settings.speedAlertThreshold} km/h (${Math.round(speedKmh)} km/h)`,
               link: `/tracking/${dto.deliveryId}`,
               deliveryId: dto.deliveryId,
-              userId: driverId ?? undefined,
+              userId: alertUserId ?? undefined,
             }),
           );
         }
@@ -301,7 +316,7 @@ export class TrackingService {
               message: `Vehicle stopped for ${Math.round(stoppedMin)} minutes`,
               link: `/tracking/${dto.deliveryId}`,
               deliveryId: dto.deliveryId,
-              userId: driverId ?? undefined,
+              userId: alertUserId ?? undefined,
             }),
           );
         }
@@ -341,7 +356,7 @@ export class TrackingService {
                 message: `Estimated arrival ${delayMin} min late (scheduled: ${delivery.scheduledDate.toLocaleString()})`,
                 link: `/tracking/${dto.deliveryId}`,
                 deliveryId: dto.deliveryId ?? undefined,
-                userId: driverId ?? undefined,
+                userId: alertUserId ?? undefined,
               }),
             );
           }
@@ -365,7 +380,7 @@ export class TrackingService {
             message: `Vehicle signal lost for ${Math.round(gapMin)} minutes — now reconnected`,
             link: `/tracking/${dto.deliveryId}`,
             deliveryId: dto.deliveryId,
-            userId: driverId ?? undefined,
+            userId: alertUserId ?? undefined,
           }),
         );
       }
@@ -388,7 +403,7 @@ export class TrackingService {
           message: `Vehicle ${geofenceEvent.event === 'entry' ? 'entered' : 'exited'} "${geofenceEvent.geofenceName}"`,
           link: `/tracking/${dto.deliveryId}`,
           deliveryId: dto.deliveryId,
-          userId: driverId ?? undefined,
+          userId: alertUserId ?? undefined,
         }),
       );
       this.dataUpdateBus.emit('dataUpdate', {
@@ -774,18 +789,14 @@ export class TrackingService {
 
     this.metrics.batchSaved += toInsert.length;
 
-    await this.prisma.gpsPosition.createMany({
+    // createManyAndReturn (au lieu de createMany + findMany ré-fetch) : sous charge,
+    // les lignes du lot étaient re-cherchées par (vehicleId, timestamp, driverId) —
+    // un autre batch concurrent, ou les positions temps réel du même véhicule,
+    // pouvaient échanger des timestamps entre l'INSERT et la SELECT (timestamps
+    // identiques sur le même véhicule), faussant l'ordre, voire omettant des lignes.
+    const inserted = await this.prisma.gpsPosition.createManyAndReturn({
       data: toInsert,
-    });
-
-    const timestamps = [...new Set(toInsert.map((r) => r.timestamp))];
-    const inserted = await this.prisma.gpsPosition.findMany({
-      where: {
-        vehicleId: { in: vehicleIds },
-        timestamp: { in: timestamps },
-        driverId,
-      },
-      orderBy: { timestamp: 'asc' },
+      skipDuplicates: false,
     });
 
     this.metrics.saved += inserted.length;

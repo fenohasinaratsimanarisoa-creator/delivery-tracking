@@ -66,6 +66,8 @@ describe('E2E: Full delivery scenario using ONLY Traccar positions', () => {
       driver: {
         findUnique: jest.fn().mockResolvedValue({ id: DRIVER_ID, userId: USER_ID }),
         findMany: jest.fn(),
+        // generateAlerts résout l'utilisateur cible via l'ID de la ligne Driver
+        findFirst: jest.fn().mockResolvedValue({ id: DRIVER_ID, userId: USER_ID }),
       },
       vehicle: {
         findUnique: jest.fn().mockResolvedValue({ companyId: COMPANY_ID }),

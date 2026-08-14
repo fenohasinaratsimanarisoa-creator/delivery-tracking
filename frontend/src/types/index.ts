@@ -42,6 +42,8 @@ export interface Vehicle {
   isActive: boolean;
   positionSource?: string;
   traccarDeviceId?: string | null;
+  vin?: string | null;
+  theoreticalConsumption?: number | null;
   driver?: { id: string; firstName: string; lastName: string } | null;
 }
 

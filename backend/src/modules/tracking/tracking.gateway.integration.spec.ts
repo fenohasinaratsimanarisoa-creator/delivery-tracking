@@ -128,7 +128,7 @@ describe('TrackingGateway — ACK WebSocket réel (Test D)', () => {
         altitude: 200,
         accuracy: 8,
         timestamp: new Date().toISOString(),
-        vehicleId: 'vehicle-1',
+        vehicleId: '00000000-0000-4000-8000-000000000001',
       });
       // Le téléphone réel envoie à ~3s d'intervalle : l'ACK est mesuré PAR position,
       // la cadence d'émission ne change ni l'émission explicite ni la latence du

@@ -12,6 +12,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
 import { useEntityForm, type FieldDef, type FormSection } from '../hooks/useEntityForm';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../hooks/AuthContext';
 import type { Vehicle } from '../types';
 import styles from './FleetPage.module.css';
 
@@ -137,6 +138,10 @@ function SkeletonRows() {
 
 export default function FleetPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  // DELETE /vehicles/:id est réservé admin (contrôleur backend) : un
+  // dispatcher verrait le bouton puis un 403 — on masque les actions delete.
+  const canDelete = user?.role === 'admin';
   const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Vehicle | null>(null);
@@ -288,7 +293,9 @@ export default function FleetPage() {
         positionSource: body.positionSource || 'phone',
       };
       if (body.vin) payload.vin = body.vin;
+      else if (editing) payload.vin = '';
       if (body.theoreticalConsumption) payload.theoreticalConsumption = Number(body.theoreticalConsumption);
+      else if (editing) payload.theoreticalConsumption = null;
       if (body.positionSource === 'physical_tracker' && body.traccarDeviceId) {
         payload.traccarDeviceId = body.traccarDeviceId;
       }
@@ -318,8 +325,11 @@ export default function FleetPage() {
       year: String(editing.year),
       licensePlate: editing.licensePlate,
       fuelType: editing.fuelType,
-      vin: '',
-      theoreticalConsumption: '',
+      // Pré-saisie réelle des valeurs existantes : avant ce fix, vin et
+      // consommation théorique démarraient toujours vides en édition (et
+      // théoriquement jamais renvoyées au serveur) — toute édition les effaçait.
+      vin: editing.vin ?? '',
+      theoreticalConsumption: editing.theoreticalConsumption != null ? String(editing.theoreticalConsumption) : '',
       positionSource: editing.positionSource || 'phone',
       traccarDeviceId: editing.traccarDeviceId || '',
     } : { brand: '', model: '', year: String(new Date().getFullYear()), licensePlate: '', fuelType: 'Diesel', vin: '', theoreticalConsumption: '', positionSource: 'phone', traccarDeviceId: '' },
@@ -478,7 +488,7 @@ export default function FleetPage() {
               limit={20}
               onPageChange={setPage}
               onEdit={(r) => { setEditing(r); setDrawerOpen(true); }}
-              onDelete={(r) => setDeleting(r)}
+              onDelete={canDelete ? (r) => setDeleting(r) : undefined}
               loading={false}
               emptyMessage=""
               keyExtractor={(r) => r.id}

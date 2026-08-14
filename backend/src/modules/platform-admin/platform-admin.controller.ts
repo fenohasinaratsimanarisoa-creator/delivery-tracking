@@ -10,6 +10,7 @@ import {
   HttpStatus,
   Req,
   Query,
+  BadRequestException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { PlatformAdminService } from './platform-admin.service';
@@ -173,7 +174,13 @@ export class PlatformAdminController {
   @Post('tracking/archive')
   @HttpCode(HttpStatus.OK)
   async archiveAllPositions(@Body('before') before: string) {
-    const count = await this.trackingService.archiveAllCompaniesPositionsBefore(new Date(before));
+    // Même garde que POST /tracking/archive : date invalide -> 400 explicite
+    // au lieu d'un Invalid Date avalé par le garde "48h minimum".
+    const beforeDate = new Date(before);
+    if (Number.isNaN(beforeDate.getTime())) {
+      throw new BadRequestException('`before` must be a valid ISO-8601 date');
+    }
+    const count = await this.trackingService.archiveAllCompaniesPositionsBefore(beforeDate);
     return { archived: count };
   }
 }

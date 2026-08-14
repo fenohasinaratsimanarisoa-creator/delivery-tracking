@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { isNativeApp, openGoogleOAuthInNative } from '../../../services/native/nativeAuth';
+import { getApiBaseUrl } from '../../../services/api/config';
 import Button from '../../../components/Button';
 import styles from './LoginForm.module.css';
 
@@ -46,7 +47,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
   useEffect(() => { emailRef.current?.focus(); }, []);
 
   useEffect(() => {
-    fetch('/api/auth/google/status')
+    fetch(`${getApiBaseUrl()}/auth/google/status`)
       .then(r => r.json())
       .then(d => setGoogleConfigured(d.configured))
       .catch(() => setGoogleConfigured(false));
@@ -224,7 +225,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
                   });
                   return;
                 }
-                window.location.href = '/api/auth/google';
+                window.location.href = `${getApiBaseUrl()}/auth/google`;
               }}
             >
               <span className={styles.googleG}>G</span>

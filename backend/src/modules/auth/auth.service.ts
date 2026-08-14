@@ -230,13 +230,20 @@ export class AuthService {
           throw new UnauthorizedException('Invalid refresh token');
         }
 
-        const isTokenValid = await bcrypt.compare(refreshToken, session.refreshTokenHash);
-        if (!isTokenValid) {
-          // Reuse détecté : le token a été remplacé par la rotation précédente et
-          // rejoué après coup. On ne révoque QUE CETTE session (avant : deleteMany
-          // sur userId, qui révoquait TOUTES les sessions — y compris un appareil
-          // qui venait de se connecter légitimement). Une IP très différente de
-          // celle de la session est signalée pour investigation (replay suspect).
+        const matchesCurrent = await bcrypt.compare(refreshToken, session.refreshTokenHash);
+        const matchesPrevious = session.previousRefreshTokenHash
+          ? await bcrypt.compare(refreshToken, session.previousRefreshTokenHash)
+          : false;
+
+        if (!matchesCurrent && !matchesPrevious) {
+          // Reuse détecté : le token ne correspond à AUCUNE génération de la
+          // session (ni courante, ni la précédente). C'est un rejeu après au
+          // moins deux rotations, donc un vrai replay/vol — pas la course
+          // multi-onglets (celle-ci est couverte par previousRefreshTokenHash).
+          // On ne révoque QUE CETTE session (avant : deleteMany sur userId, qui
+          // révoquait TOUTES les sessions — y compris un appareil qui venait de
+          // se connecter légitimement). Une IP très différente de celle de la
+          // session est signalée pour investigation (replay suspect).
           if (session.ip && ip && session.ip !== ip) {
             this.logger.warn(
               `[auth] refresh reuse suspect: session=${sessionId} user=${session.user.id} ` +
@@ -245,10 +252,20 @@ export class AuthService {
           }
           await tx.userSession.update({
             where: { id: sessionId },
-            data: { refreshTokenHash: null },
+            data: { refreshTokenHash: null, previousRefreshTokenHash: null },
           });
           await tx.userSession.delete({ where: { id: sessionId } });
           throw new UnauthorizedException('Refresh token reuse detected — session revoked');
+        }
+
+        if (!matchesCurrent && matchesPrevious) {
+          // Course multi-onglets légitime : ce token est l'ancienne génération,
+          // écrasée par un refresh concurrent (même cookie partagé). On accepte
+          // et la rotation ATOMIQUE de generateTokens le remettra en position
+          // courante → les onglets convergent au lieu d'être déconnectés.
+          this.logger.warn(
+            `[auth] refresh race window (concurrent tabs): session=${sessionId} user=${session.user.id}`,
+          );
         }
 
         return session.user;
@@ -475,13 +492,26 @@ export class AuthService {
 
     const refreshTokenHash = await bcrypt.hash(refreshToken, 12);
     if (sessionId) {
-      // Rotation du refresh token SUR CETTE session précise : les autres sessions
-      // de l'utilisateur gardent leur hash (et donc leur refresh token) intacts.
-      // Le champ legacy User.refreshTokenHash n'est plus écrit ni lu.
-      await this.prisma.userSession.update({
-        where: { id: sessionId },
-        data: { refreshTokenHash, lastActivity: new Date() },
-      });
+      // Rotation ATOMIQUE du refresh token sur CETTE session : le hash courant
+      // devient previous (historique un niveau), le nouveau hash prend sa place.
+      // Les autres sessions de l'utilisateur gardent leur hash intacts. Le champ
+      // legacy User.refreshTokenHash n'est plus écrit ni lu. En concurrence
+      // (multi-onglets), l'UPDATE verrouille la ligne : le perdant du dernier
+      // gagnant reste toujours accessible via previous_refresh_token_hash et sa
+      // prochaine rotation le ré-accepte (voir refresh()).
+      const rotated = await this.prisma.$executeRaw`
+        UPDATE user_sessions
+        SET previous_refresh_token_hash = refresh_token_hash,
+            refresh_token_hash = ${refreshTokenHash},
+            last_activity = now()
+        WHERE id = ${sessionId}::uuid AND user_id = ${userId}::uuid
+      `;
+      if (rotated === 0) {
+        // Session supprimée entre la validation (refresh) et la rotation
+        // (révocation concurrente) : ne jamais émettre de tokens pour une
+        // session morte, on révoque implicitement en refusant.
+        throw new UnauthorizedException('Invalid refresh token');
+      }
     } else {
       // Appelant sans session existante (register / OAuth / création de session) :
       // on matérialise la UserSession ici pour que le refresh token soit TOUJOURS

@@ -1,5 +1,4 @@
-import {
-  WebSocketGateway,
+import { WebSocketGateway,
   WebSocketServer,
   SubscribeMessage,
   OnGatewayConnection,
@@ -9,6 +8,8 @@ import {
 } from '@nestjs/websockets';
 import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { UseGuards, UseFilters, Logger } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { Server, Socket } from 'socket.io';
 import { GpsPosition } from '@prisma/client';
 import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
@@ -121,6 +122,28 @@ export class TrackingGateway
     if (!user || user.role !== 'driver') return;
 
     return CompanyScopedContext.run(user.companyId, async () => {
+      // Validation EXPLICITE dans le handler : le ValidationPipe global ne
+      // s'applique PAS aux @SubscribeMessage (vérifié empiriquement) — sans
+      // cela, des coordonnées invalides (lat 999, speed "abc", timestamp
+      // illisible) atteignaient Prisma tel quel. La validation rejette le
+      // payload (positionRejected explicite, jamais un silence qui ferait
+      // rejouer le client), et STRIP les clés inconnues (whitelist) comme le
+      // champ event envoyé par certaines versions de l'app mobile.
+      const instance = plainToInstance(UpdatePositionDto, dto, {
+        exposeUnsetFields: false,
+        enableImplicitConversion: true,
+      });
+      const validationErrors = await validate(instance, { whitelist: true, skipMissingProperties: false });
+      if (validationErrors.length > 0) {
+        const fields = validationErrors.map((e) => Object.keys(e.constraints || {})).flat().join(', ');
+        this.logger.warn(
+          `Position payload invalid (driver=${user.id}): ${fields}`,
+        );
+        client.emit('positionRejected', { reason: 'invalid_payload' });
+        return;
+      }
+      dto = instance;
+
       if (await this.trackingService.isRateLimited(user.id)) {
         // Rate limiting : on rejette l'envoi, mais PAS silencieusement. Sans signal,
         // le client croirait sa position acceptée et la perdrait définitivement (elle
@@ -256,13 +279,52 @@ export class TrackingGateway
     if (!user || user.role !== 'driver') return;
 
     return CompanyScopedContext.run(user.companyId, async () => {
+      // Validation individuelle des positions : une position corrompue ne doit
+      // pas tuer le rattrapage réseau des autres, et les payloads VALIDÉS
+      // (clés inconnues — dont event — stripped, conversions implicites
+      // appliquées) sont ce qui part en persistence.
+      const rawPositions = dto?.positions;
+      if (!Array.isArray(rawPositions) || rawPositions.length === 0) {
+        client.emit('positionsSaved', { count: 0 });
+        return;
+      }
+      const validatedPositions: UpdatePositionDto[] = [];
+      for (const raw of rawPositions) {
+        const instance = plainToInstance(UpdatePositionDto, raw, {
+          exposeUnsetFields: false,
+          enableImplicitConversion: true,
+        });
+        const errors = await validate(instance, {
+          whitelist: true,
+          skipMissingProperties: false,
+        });
+        if (errors.length > 0) {
+          this.logger.warn(
+            `Batch position invalid (driver=${user.id}): ${errors
+              .map((e) => Object.keys(e.constraints || {}))
+              .flat()
+              .join(', ')}`,
+          );
+          continue;
+        }
+        validatedPositions.push(instance);
+      }
+
       const driver = await this.trackingService.findDriverByUserId(user.id);
-      if (!driver) return;
+      if (!driver) {
+        client.emit('positionsSaved', { count: 0 });
+        return;
+      }
+
+      if (validatedPositions.length === 0) {
+        client.emit('positionsSaved', { count: 0 });
+        return;
+      }
 
       const saved = await this.trackingService.saveBatch(
         user.id,
         driver.id,
-        dto.positions,
+        validatedPositions,
         user.companyId,
       );
 

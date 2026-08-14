@@ -835,7 +835,7 @@ export default function FuelPage() {
                             className={`${styles.tableCell} ${styles.tableCellRight}`}
                           >
                             <span className={styles.costCell}>
-                              {l.cost.toFixed(2)} €
+                              {formatAriary(l.cost)}
                             </span>
                           </td>
                           <td className={styles.tableCell}>

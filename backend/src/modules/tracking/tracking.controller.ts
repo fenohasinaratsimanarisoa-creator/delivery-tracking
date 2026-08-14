@@ -7,6 +7,7 @@ import {
   Query,
   UseGuards,
   UnauthorizedException,
+  BadRequestException,
   Res,
   Header,
 } from '@nestjs/common';
@@ -157,7 +158,14 @@ export class TrackingController {
     @Body('before') before: string,
     @CurrentUser('companyId') companyId: string,
   ) {
-    const count = await this.trackingService.archivePositionsBefore(new Date(before), companyId);
+    // Validation EXPLICITE de la date : une chaîne non-ISO devenait
+    // `Invalid Date`, contournait le garde "48h minimum" (comparaison triviale
+    // avec Invalid Date) et lançait un 500/UNIQUE. 400 explicite à la place.
+    const beforeDate = new Date(before);
+    if (Number.isNaN(beforeDate.getTime())) {
+      throw new BadRequestException('`before` must be a valid ISO-8601 date');
+    }
+    const count = await this.trackingService.archivePositionsBefore(beforeDate, companyId);
     return { archived: count };
   }
 

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { getApiBaseUrl } from '../services/api/config';
 import type { GeocodingResult } from '../services/geocoding/types';
 
 const MG_CENTER = { lat: -18.7669, lng: 46.8691 };
@@ -54,7 +55,7 @@ export function useGpsPreload(): GpsPreloadResult {
     }
 
     try {
-      const res = await fetch(`/api/geocoding/nearby?lat=${lat}&lng=${lng}`);
+      const res = await fetch(`${getApiBaseUrl()}/geocoding/nearby?lat=${lat}&lng=${lng}`);
       if (!res.ok) return;
       const data: GeocodingResult[] = await res.json();
       if (data.length > 0) {

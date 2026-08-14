@@ -1,3 +1,6 @@
+"use client";
+import { getApiBaseUrl } from '../api/config';
+
 const RELAY_KEY = 'dt_oauth_relay';
 const VERIFIER_KEY = 'dt_oauth_verifier';
 
@@ -59,7 +62,7 @@ export async function openGoogleOAuthInNative(): Promise<void> {
 
   let relayId = '';
   try {
-    const res = await fetch('/api/auth/oauth/begin', {
+    const res = await fetch(`${getApiBaseUrl()}/auth/oauth/begin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ codeChallenge }),
@@ -76,8 +79,13 @@ export async function openGoogleOAuthInNative(): Promise<void> {
   }
 
   const { Browser } = await import('@capacitor/browser');
-  const url = `${window.location.origin}/api/auth/google?state=${encodeURIComponent(relayId)}`;
-  await Browser.open({ url });
+  // Base résolue (remote VITE_API_URL en mode local-assets, sinon origine courante) :
+  // le custom tab doit ouvrir l'API qui détient le state relay (nonce).
+  const base = getApiBaseUrl();
+  const authUrl = /^https?:\/\//.test(base)
+    ? `${base.replace(/\/api\/?$/, '')}/api/auth/google?state=${encodeURIComponent(relayId)}`
+    : `${window.location.origin}${base.replace(/\/api\/?$/, '')}/api/auth/google?state=${encodeURIComponent(relayId)}`;
+  await Browser.open({ url: authUrl });
 }
 
 export function relayTokenToNativeApp(code: string, state: string): void {

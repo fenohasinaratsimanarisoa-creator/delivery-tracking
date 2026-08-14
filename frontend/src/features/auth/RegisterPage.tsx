@@ -5,6 +5,7 @@ import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../../hooks/AuthContext';
 import api from '../../services/api/client';
 import { isNativeApp, openGoogleOAuthInNative } from '../../services/native/nativeAuth';
+import { getApiBaseUrl } from '../../services/api/config';
 import Button from '../../components/Button';
 import styles from './RegisterPage.module.css';
 
@@ -37,7 +38,7 @@ export default function RegisterPage() {
   const [googleConfigured, setGoogleConfigured] = useState(true);
 
   useEffect(() => {
-    fetch('/api/auth/google/status')
+    fetch(`${getApiBaseUrl()}/auth/google/status`)
       .then(r => r.json())
       .then(d => setGoogleConfigured(d.configured))
       .catch(() => setGoogleConfigured(false));
@@ -288,7 +289,7 @@ export default function RegisterPage() {
                     void openGoogleOAuthInNative();
                     return;
                   }
-                  window.location.href = '/api/auth/google';
+                  window.location.href = `${getApiBaseUrl()}/auth/google`;
                 }}
               >
                 <span className={styles.googleG}>G</span>

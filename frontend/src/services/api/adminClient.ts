@@ -24,7 +24,7 @@ export async function fetchAdminCsrfToken(): Promise<void> {
 }
 
 const adminApi = axios.create({
-  baseURL: '/api/platform-admin',
+  baseURL: `${getApiBaseUrl()}/platform-admin`,
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
   withCredentials: true,
@@ -68,7 +68,7 @@ adminApi.interceptors.response.use(
     if (error.response?.status === 401 && !error.config._retry) {
       error.config._retry = true;
       try {
-        const res = await axios.post('/api/auth/refresh', {}, {
+        const res = await axios.post(`${getApiBaseUrl()}/auth/refresh`, {}, {
           headers: { Authorization: `Bearer ${getAdminToken()}` },
           withCredentials: true,
         });

@@ -15,6 +15,10 @@ const QUERY_MAP: Record<string, string[]> = {
   alert: ['alerts', 'alerts-stats'],
   fuelReport: ['fuel-daily-reports', 'fuel-consumption'],
   geofence_event: ['geofences', 'alerts', 'deliveries'],
+  // Émis par DeliveryProximityService (targetUserId → room driver, ET companyId
+  // → room company via dataUpdate) : sans ce mapping, les alertes de proximité
+  // apparaissaient mais les listes de livraisons associées restaient figées.
+  proximityAlert: ['deliveries', 'my-deliveries', 'drivers'],
 };
 
 export function useDataUpdates() {

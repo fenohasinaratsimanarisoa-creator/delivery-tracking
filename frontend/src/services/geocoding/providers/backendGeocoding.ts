@@ -1,6 +1,10 @@
 import type { GeocodingProvider, GeocodingResult, PlacePrediction } from '../types'
+import { getApiBaseUrl } from '../../api/config'
 
 const sessionCache = new Map<string, GeocodingResult[]>()
+
+// Base API résolue une seule fois (override localStorage / VITE_API_URL).
+const BASE = getApiBaseUrl()
 
 export class BackendGeocodingProvider implements GeocodingProvider {
   private abortController: AbortController | null = null
@@ -17,10 +21,10 @@ export class BackendGeocodingProvider implements GeocodingProvider {
 
     try {
       const [nominatimRes, placesRes] = await Promise.all([
-        fetch(`/api/geocoding/search?q=${encodeURIComponent(query)}`, { signal: this.abortController.signal })
+        fetch(`${BASE}/geocoding/search?q=${encodeURIComponent(query)}`, { signal: this.abortController.signal })
           .then(r => r.ok ? r.json() as Promise<GeocodingResult[]> : Promise.resolve([]))
           .catch(() => [] as GeocodingResult[]),
-        fetch(`/api/geocoding/places/autocomplete?input=${encodeURIComponent(query)}`, { signal: this.abortController.signal })
+        fetch(`${BASE}/geocoding/places/autocomplete?input=${encodeURIComponent(query)}`, { signal: this.abortController.signal })
           .then(r => r.ok ? r.json() as Promise<PlacePrediction[]> : Promise.resolve([]))
           .catch(() => [] as PlacePrediction[]),
       ])
@@ -49,7 +53,7 @@ export class BackendGeocodingProvider implements GeocodingProvider {
 
   async fetchPlaceDetails(placeId: string): Promise<GeocodingResult | null> {
     try {
-      const res = await fetch(`/api/geocoding/places/details?placeid=${placeId}`)
+      const res = await fetch(`${BASE}/geocoding/places/details?placeid=${placeId}`)
       if (!res.ok) return null
       const data = await res.json()
       if (!data?.lat) return null
@@ -62,7 +66,7 @@ export class BackendGeocodingProvider implements GeocodingProvider {
     const cached = sessionCache.get(key) as unknown as string
     if (cached) return cached
     try {
-      const res = await fetch(`/api/geocoding/reverse?lat=${lat}&lng=${lng}`)
+      const res = await fetch(`${BASE}/geocoding/reverse?lat=${lat}&lng=${lng}`)
       if (!res.ok) return null
       const data = await res.json()
       const label = data.label || null

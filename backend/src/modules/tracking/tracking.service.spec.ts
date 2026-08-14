@@ -19,6 +19,7 @@ const mockPrisma = {
     findFirst: jest.fn(),
     create: jest.fn(),
     createMany: jest.fn(),
+    createManyAndReturn: jest.fn(),
     findMany: jest.fn(),
     count: jest.fn(),
   },
@@ -847,7 +848,22 @@ describe('TrackingService', () => {
       mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VID1 }, { id: VID2 }]);
 
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
-      mockPrisma.gpsPosition.createMany.mockResolvedValueOnce({ count: 1 });
+      mockPrisma.gpsPosition.createManyAndReturn.mockResolvedValueOnce([
+        {
+          id: 'gps-1',
+          vehicleId: 'vehicle-1',
+          timestamp: new Date(),
+          latitude: 1,
+          longitude: 2,
+          speed: null,
+          heading: null,
+          altitude: null,
+          accuracy: null,
+          suspect: false,
+          driverId: 'driver-1',
+          deliveryId: 'delivery-1',
+        },
+      ]);
 
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([
         {
@@ -869,7 +885,7 @@ describe('TrackingService', () => {
       const saved = await service.saveBatch('user-1', 'driver-1', positions);
 
       expect(saved).toHaveLength(1);
-      expect(mockPrisma.gpsPosition.createMany).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.gpsPosition.createManyAndReturn).toHaveBeenCalledTimes(1);
     });
 
     it('computes fallback speed in saveBatch when device speed is missing (offline queue flush scenario)', async () => {
@@ -898,9 +914,9 @@ describe('TrackingService', () => {
       // lastPositions : aucune position en base (flush d'une file offline vide côté DB)
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
       let inserted: any[] = [];
-      mockPrisma.gpsPosition.createMany.mockImplementation(async ({ data }: any) => {
+      mockPrisma.gpsPosition.createManyAndReturn.mockImplementation(async ({ data }: any) => {
         inserted = data;
-        return { count: data.length };
+        return inserted;
       });
       // Lecture des positions insérées (pour le broadcast) → aucune
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
@@ -935,7 +951,7 @@ describe('TrackingService', () => {
       const saved = await service.saveBatch('user-1', 'driver-1', positions);
 
       expect(saved).toHaveLength(0);
-      expect(mockPrisma.gpsPosition.createMany).not.toHaveBeenCalled();
+      expect(mockPrisma.gpsPosition.createManyAndReturn).not.toHaveBeenCalled();
     });
 
     it('trie le lot par timestamp croissant AVANT le calcul (pas de doublon/vitesse à tort sur lot désordonné)', async () => {
@@ -963,16 +979,16 @@ describe('TrackingService', () => {
       // lastPositions (aucune position en base) puis lecture des positions insérées.
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
       let inserted: any[] = [];
-      mockPrisma.gpsPosition.createMany.mockImplementation(async ({ data }: any) => {
+      mockPrisma.gpsPosition.createManyAndReturn.mockImplementation(async ({ data }: any) => {
         inserted = data;
-        return { count: data.length };
+        return inserted;
       });
 
       await service.saveBatch('user-1', 'driver-1', positions as any);
 
       // Les 3 positions doivent être insérées : sans tri, les points antérieurs à la
       // première position traitée (t=+20s) sont rejetés à tort comme doublons.
-      expect(mockPrisma.gpsPosition.createMany).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.gpsPosition.createManyAndReturn).toHaveBeenCalledTimes(1);
       expect(inserted).toHaveLength(3);
       const byTime = new Map(inserted.map((p) => [new Date(p.timestamp).getTime(), p]));
       // Aucune vitesse absurde (>200 km/h) → aucune position suspecte à tort.
@@ -1003,6 +1019,7 @@ describe('TrackingService', () => {
       mockPrisma.gpsPosition.findFirst.mockReset();
       mockPrisma.gpsPosition.create.mockReset();
       mockPrisma.gpsPosition.createMany.mockReset();
+      mockPrisma.gpsPosition.createManyAndReturn.mockReset();
       mockPrisma.gpsPosition.findMany.mockReset();
       mockPrisma.vehicle.findMany.mockReset();
       mockPrisma.vehicle.findFirst.mockReset();
@@ -1015,9 +1032,9 @@ describe('TrackingService', () => {
         .mockResolvedValueOnce([]) // lastPositions : aucune position en base
         .mockResolvedValueOnce([]); // lecture des positions insérées
       const inserted: any[] = [];
-      mockPrisma.gpsPosition.createMany.mockImplementation(async ({ data }: any) => {
+      mockPrisma.gpsPosition.createManyAndReturn.mockImplementation(async ({ data }: any) => {
         inserted.push(...data);
-        return { count: data.length };
+        return inserted;
       });
       await service.saveBatch('user-1', DRIVER, [P1, P2] as any);
       return inserted.length >= 2 ? inserted[1].suspect : null;
@@ -1028,6 +1045,7 @@ describe('TrackingService', () => {
       mockPrisma.gpsPosition.findFirst.mockReset();
       mockPrisma.gpsPosition.create.mockReset();
       mockPrisma.gpsPosition.createMany.mockReset();
+      mockPrisma.gpsPosition.createManyAndReturn.mockReset();
       mockPrisma.gpsPosition.findMany.mockReset();
       mockPrisma.vehicle.findMany.mockReset();
       mockPrisma.vehicle.findFirst.mockReset();
@@ -1780,9 +1798,9 @@ describe('TrackingService', () => {
         .mockResolvedValueOnce([]) // lastPositions : base vide
         .mockResolvedValueOnce([]); // lecture des insérées
       const inserted: any[] = [];
-      mockPrisma.gpsPosition.createMany.mockReset().mockImplementation(async ({ data }: any) => {
+      mockPrisma.gpsPosition.createManyAndReturn.mockReset().mockImplementation(async ({ data }: any) => {
         inserted.push(...data);
-        return { count: data.length };
+        return inserted;
       });
 
       // Point à ~6672m en 9s (< 10s) : conditions du « saut court ». Note : avec les
@@ -1822,6 +1840,7 @@ describe('TrackingService', () => {
         ])
         .mockResolvedValueOnce([]);
       mockPrisma.gpsPosition.createMany.mockReset();
+      mockPrisma.gpsPosition.createManyAndReturn.mockReset();
 
       // Lot : P2 (t=+0s, ANTÉRIEUR à la référence en base) + P1 (déjà en base).
       await service.saveBatch('user-1', 'driver-1', [
@@ -1837,7 +1856,7 @@ describe('TrackingService', () => {
       // P2 (timeDiffSec = -10s) et P1 (doublon) sont rejetés par le dédoublonnage 1s,
       // même politique que isDuplicateByTimestamp du temps réel : un point non croissant
       // est une retransmission/doublon, pas une anomalie — jamais inséré en base.
-      expect(mockPrisma.gpsPosition.createMany).not.toHaveBeenCalled();
+      expect(mockPrisma.gpsPosition.createManyAndReturn).not.toHaveBeenCalled();
     });
 
     describe('getLivePositions nullable driverId fixes', () => {

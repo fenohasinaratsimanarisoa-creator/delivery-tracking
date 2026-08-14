@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import { Loader2, MapPin, Search, Crosshair, ArrowRightFromLine } from 'lucide-react'
 import { reverseGeocode } from '../services/geocoding/geocodingService'
 import { useGpsPreload } from '../hooks/useGpsPreload'
+import { getApiBaseUrl } from '../services/api/config'
 import type { GeocodingResult } from '../services/geocoding/types'
 import { MG_COMMUNES } from '../services/geocoding/mg-communes'
 import styles from './LocationSearchInput.module.css'
@@ -44,7 +45,7 @@ function MapUpdater({ center }: { center: [number, number] }) { const map = useM
 
 async function fetchGooglePlaces(input: string): Promise<GeocodingResult[]> {
   try {
-    const r = await fetch(`/api/geocoding/places/autocomplete?input=${encodeURIComponent(input)}`)
+    const r = await fetch(`${getApiBaseUrl()}/geocoding/places/autocomplete?input=${encodeURIComponent(input)}`)
     if (!r.ok) return []
     const predictions: { placeId: string; description: string; mainText: string }[] = await r.json()
     return predictions.map(p => ({ lat: 0, lng: 0, label: p.mainText, displayName: p.description, placeId: p.placeId, pendingDetails: true }))
@@ -53,7 +54,7 @@ async function fetchGooglePlaces(input: string): Promise<GeocodingResult[]> {
 
 async function fetchNominatim(input: string): Promise<GeocodingResult[]> {
   try {
-    const r = await fetch(`/api/geocoding/search?q=${encodeURIComponent(input)}`)
+    const r = await fetch(`${getApiBaseUrl()}/geocoding/search?q=${encodeURIComponent(input)}`)
     if (!r.ok) return []
     return await r.json()
   } catch { return [] }
@@ -61,7 +62,7 @@ async function fetchNominatim(input: string): Promise<GeocodingResult[]> {
 
 async function fetchPlaceDetails(placeId: string): Promise<GeocodingResult | null> {
   try {
-    const r = await fetch(`/api/geocoding/places/details?placeid=${placeId}`)
+    const r = await fetch(`${getApiBaseUrl()}/geocoding/places/details?placeid=${placeId}`)
     if (!r.ok) return null
     const d = await r.json()
     if (!d?.lat) return null

@@ -281,14 +281,26 @@ export default function ReportsPage() {
     enabled: tab === 'driver',
   });
 
-  const exportFile = useCallback((format: 'pdf' | 'excel') => {
+  const exportFile = useCallback(async (format: 'pdf' | 'excel') => {
     const ext = format === 'pdf' ? 'pdf' : 'xlsx';
-    const url = `/api/reports/export/${format}?type=${tab}&from=${from}&to=${to}`;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `rapport-${tab}-${today()}.${ext}`;
-    a.click();
-    toast(t('reports.toast.downloaded', { tab: t(`reports.tabs.${tab}`), format: format.toUpperCase() }));
+    // Téléchargement via l'API client (Bearer + base URL dynamique) : window.open
+    // brut envoyait une requête SANS cookie/Autorisation → 401 systématique.
+    try {
+      const res = await api.get(`/reports/export/${format}?type=${tab}&from=${from}&to=${to}`, {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `rapport-${tab}-${today()}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast(t('reports.toast.downloaded', { tab: t(`reports.tabs.${tab}`), format: format.toUpperCase() }));
+    } catch {
+      // toast géré par l'intercepteur de l'API client
+    }
   }, [tab, from, to, toast, t]);
 
   const reportTabs: { key: Tab; icon: React.ReactNode; label: string }[] = [

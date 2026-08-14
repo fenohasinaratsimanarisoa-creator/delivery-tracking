@@ -124,6 +124,8 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       },
       driver: {
         findUnique: jest.fn().mockResolvedValue(null),
+        // generateAlerts résout l'utilisateur cible via l'ID de la ligne Driver
+        findFirst: jest.fn().mockResolvedValue({ id: DRIVER_ID, userId: USER_ID }),
       },
       vehicleAssignmentHistory: {
         findFirst: jest.fn().mockResolvedValue(null),

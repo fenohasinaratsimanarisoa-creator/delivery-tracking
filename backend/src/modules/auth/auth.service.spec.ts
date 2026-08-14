@@ -55,6 +55,7 @@ const mockPrisma = {
     findFirst: jest.fn(),
     update: jest.fn(),
   },
+  $executeRaw: jest.fn().mockResolvedValue(1),
   $transaction: jest.fn().mockImplementation((cb: (tx: typeof mockTx) => unknown) => cb(mockTx)),
 };
 
@@ -472,11 +473,10 @@ describe('AuthService', () => {
       expect(bcrypt.compare).toHaveBeenCalledWith(refreshToken, 'stored_hash');
       // Le hash est vérifié sur CETTE session ; les autres sessions sont intactes.
       expect(mockTx.userSession.deleteMany).not.toHaveBeenCalled();
-      // Rotation : le nouveau hash est écrit sur la MÊME session.
-      expect(mockPrisma.userSession.update).toHaveBeenCalledWith({
-        where: { id: 'session-1' },
-        data: expect.objectContaining({ refreshTokenHash: 'new_hashed_refresh' }),
-      });
+      // Rotation ATOMIQUE SQL : le hash courant glisse en previous, le nouveau
+      // hash prend sa place (course multi-onglets → convergence, pas de révocation).
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.userSession.update).not.toHaveBeenCalled();
       expect(result).toEqual({
         accessToken: 'new_access_token',
         refreshToken: 'new_refresh_token',
@@ -564,7 +564,7 @@ describe('AuthService', () => {
       // Le hash de CETTE session est purgé puis la ligne supprimée...
       expect(mockTx.userSession.update).toHaveBeenCalledWith({
         where: { id: 'session-1' },
-        data: { refreshTokenHash: null },
+        data: { refreshTokenHash: null, previousRefreshTokenHash: null },
       });
       expect(mockTx.userSession.delete).toHaveBeenCalledWith({ where: { id: 'session-1' } });
       // ...mais JAMAIS toutes les sessions de l'utilisateur (l'ancien deleteMany
@@ -1008,6 +1008,7 @@ describe('AuthService', () => {
     };
 
     it("Test A : login appareil 1 puis login appareil 2 → le refresh token de l'appareil 1 RESTE valide (pas de 401)", async () => {
+      mockPrisma.$executeRaw.mockClear();
       // Appareil 1
       mockDeviceLogin('session-1', 'hash-1');
       const res1 = await service.login(dto, '10.0.0.1', 'Chrome');
@@ -1018,17 +1019,14 @@ describe('AuthService', () => {
       const res2 = await service.login(dto, '10.0.0.2', 'Firefox');
       expect(res2.refreshToken).toBe('rt_session-2');
 
-      // Le login de l'appareil 2 a bien écrit le hash de l'appareil 2 sur SA
-      // session, sans toucher à celle de l'appareil 1 : les deux lignes ont
-      // chacune leur propre refreshTokenHash (plus d'écrasement du hash unique).
-      expect(mockPrisma.userSession.update).toHaveBeenNthCalledWith(1, {
-        where: { id: 'session-1' },
-        data: expect.objectContaining({ refreshTokenHash: 'hash-1' }),
-      });
-      expect(mockPrisma.userSession.update).toHaveBeenNthCalledWith(2, {
-        where: { id: 'session-2' },
-        data: expect.objectContaining({ refreshTokenHash: 'hash-2' }),
-      });
+      // La rotation ATOMIQUE SQL a écrit le hash de chaque appareil SUR SA
+      // session (le hash courant glisse en previous), sans écraser les autres.
+      const rotateSql = (n: number) => mockPrisma.$executeRaw.mock.calls[n - 1].join('');
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(2);
+      expect(rotateSql(1)).toContain('session-1');
+      expect(rotateSql(1)).toContain('hash-1');
+      expect(rotateSql(2)).toContain('session-2');
+      expect(rotateSql(2)).toContain('hash-2');
 
       // AVANT le correctif : le login de l'appareil 2 écrasait le hash User →
       // refresh de l'appareil 1 = 401 (voire "reuse détecté" → révocation TOTALE).
@@ -1057,11 +1055,11 @@ describe('AuthService', () => {
         }),
       );
 
-      // La rotation de l'appareil 1 reste scopée à SA session.
-      expect(mockPrisma.userSession.update).toHaveBeenNthCalledWith(3, {
-        where: { id: 'session-1' },
-        data: expect.objectContaining({ refreshTokenHash: 'hash-1-rotated' }),
-      });
+      // La rotation de l'appareil 1 reste scopée à SA session (3e rotation SQL).
+      const rotateSqlAfterRefresh = mockPrisma.$executeRaw.mock.calls[2].join('');
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(3);
+      expect(rotateSqlAfterRefresh).toContain('session-1');
+      expect(rotateSqlAfterRefresh).toContain('hash-1-rotated');
       // Aucune révocation (deleteMany/update broad) déclenchée par le login n°2.
       expect(mockPrisma.userSession.deleteMany).not.toHaveBeenCalled();
       expect(mockTx.userSession.deleteMany).not.toHaveBeenCalled();
@@ -1115,13 +1113,14 @@ describe('AuthService', () => {
       await expect(service.refresh('rt_session-2', '10.0.0.2', 'Firefox')).resolves.toEqual(
         expect.objectContaining({ accessToken: 'at_2_rotated' }),
       );
-      expect(mockPrisma.userSession.update).toHaveBeenLastCalledWith({
-        where: { id: 'session-2' },
-        data: expect.objectContaining({ refreshTokenHash: 'hash-2-rotated' }),
-      });
+      // Dernière rotation SQL : hash-2-rotated sur la session-2 uniquement.
+      const rotateSql = mockPrisma.$executeRaw.mock.calls.at(-1)!.join('');
+      expect(rotateSql).toContain('session-2');
+      expect(rotateSql).toContain('hash-2-rotated');
     });
 
     it('Test C (sécurité) : refresh token volé rejoué APRÈS rotation → seule la session concernée est révoquée', async () => {
+      mockPrisma.$executeRaw.mockClear();
       mockDeviceLogin('session-1', 'hash-1');
       await service.login(dto, '10.0.0.1', 'Chrome');
 
@@ -1141,10 +1140,9 @@ describe('AuthService', () => {
       mockJwtService.sign.mockReturnValueOnce('at_rotated').mockReturnValueOnce('rt_rotated');
       (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hash-1-rotated');
       await service.refresh('rt_session-1', '10.0.0.1', 'Chrome');
-      expect(mockPrisma.userSession.update).toHaveBeenLastCalledWith({
-        where: { id: 'session-1' },
-        data: expect.objectContaining({ refreshTokenHash: 'hash-1-rotated' }),
-      });
+      // Rotation SQL : hash-1-rotated sur la session-1 (2e appel après le login).
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.$executeRaw.mock.calls[1].join('')).toContain('hash-1-rotated');
 
       // 2) Le voleur rejoue l'ANCIEN token (rt_session-1) contre la session qui
       // a déjà roté : le hash stocké (hash-1-rotated) ne correspond plus →
@@ -1167,7 +1165,7 @@ describe('AuthService', () => {
       // Seule session-1 est purgée puis supprimée...
       expect(mockTx.userSession.update).toHaveBeenCalledWith({
         where: { id: 'session-1' },
-        data: { refreshTokenHash: null },
+        data: { refreshTokenHash: null, previousRefreshTokenHash: null },
       });
       expect(mockTx.userSession.delete).toHaveBeenCalledWith({
         where: { id: 'session-1' },

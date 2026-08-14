@@ -223,14 +223,16 @@ describe('TrackingGateway — cross-tenant security', () => {
             altitude: 0,
             accuracy: 5,
             timestamp: '2026-07-21T10:00:00.000Z',
-            deliveryId: 'delivery-1',
-            vehicleId: 'vehicle-1',
+            deliveryId: '33333333-3333-4333-8333-333333333333',
+            vehicleId: '22222222-2222-4222-8222-222222222222',
           },
         ],
       };
 
       await gateway.handleBatchPosition(client, dto as any);
 
+      // Rooms construites depuis les positions SAUVÉES (retour de saveBatch),
+      // pas depuis le dto brut : les valeurs broadcastées sont celles persistées.
       expect(mockServer.to).toHaveBeenCalledWith('delivery:delivery-1');
       expect(mockServer.to).toHaveBeenCalledWith('company:company-a');
       // ACK explicite du batch reçu par le client (sans callback ack socket.io).
@@ -270,7 +272,7 @@ describe('TrackingGateway — cross-tenant security', () => {
             latitude: 3,
             longitude: 4,
             timestamp: '2026-07-21T10:00:00.000Z',
-            vehicleId: 'vehicle-1',
+            vehicleId: '22222222-2222-4222-8222-222222222222',
           },
         ],
       };
@@ -294,7 +296,7 @@ describe('TrackingGateway — cross-tenant security', () => {
       altitude: 100,
       accuracy: 10,
       timestamp: new Date().toISOString(),
-      vehicleId: 'vehicle-b-1',
+      vehicleId: '22222222-2222-4222-8222-222222222222',
       ...overrides,
     });
 
@@ -321,7 +323,7 @@ describe('TrackingGateway — cross-tenant security', () => {
       expect(trackingService.savePosition).not.toHaveBeenCalled();
       // assertVehicleOwnership was called with the right params
       expect(trackingService.assertVehicleOwnership).toHaveBeenCalledWith(
-        'vehicle-b-1',
+        '22222222-2222-4222-8222-222222222222',
         'company-a',
       );
     });
@@ -332,7 +334,7 @@ describe('TrackingGateway — cross-tenant security', () => {
         new NotFoundException('Driver is not assigned to this delivery'),
       );
 
-      await gateway.handlePosition(client, positionDto({ deliveryId: 'delivery-b-1' }));
+      await gateway.handlePosition(client, positionDto({ deliveryId: '33333333-3333-4333-8333-333333333333', vehicleId: '22222222-2222-4222-8222-222222222222' }));
 
       // Rejet EXPLICITE avec le motif not_assigned : le client débloque isSendingRef
       // immédiatement au lieu d'attendre son timeout de secours.
@@ -355,13 +357,13 @@ describe('TrackingGateway — cross-tenant security', () => {
         suspect: false,
         timestamp: new Date(),
         deliveryId: null,
-        vehicleId: 'vehicle-a-1',
+        vehicleId: '11111111-1111-4111-8111-111111111111',
       });
 
-      await gateway.handlePosition(client, positionDto({ vehicleId: 'vehicle-a-1' }));
+      await gateway.handlePosition(client, positionDto({ vehicleId: '11111111-1111-4111-8111-111111111111' }));
 
       expect(trackingService.assertVehicleOwnership).toHaveBeenCalledWith(
-        'vehicle-a-1',
+        '11111111-1111-4111-8111-111111111111',
         'company-a',
       );
       expect(trackingService.savePosition).toHaveBeenCalled();
@@ -410,7 +412,7 @@ describe('TrackingGateway — cross-tenant security', () => {
       );
 
       // getLastPosition has a spy but should never be called
-      await gateway.handlePosition(client, positionDto({ vehicleId: 'vehicle-b-1' }));
+      await gateway.handlePosition(client, positionDto({ vehicleId: '22222222-2222-4222-8222-222222222222' }));
 
       expect(trackingService.getLastPosition).not.toHaveBeenCalled();
       // Le client est débloqué explicitement (jamais de retour silencieux).
