@@ -25,11 +25,29 @@ export class WebhookRetryProcessor extends WorkerHost {
     const { webhookDeliveryId } = job.data;
     const delivery = await this.prisma.webhookDelivery.findUnique({
       where: { id: webhookDeliveryId },
-      include: { webhook: true },
+      include: { webhook: { include: { company: { select: { deletedAt: true } } } } },
     });
 
     if (!delivery || delivery.status === 'success' || delivery.attempts >= delivery.maxAttempts)
       return;
+
+    // GARDE-FOU TENANT : ne JAMAIS rejouer un webhook dont l'entreprise a été
+    // supprimée (soft delete — deletedAt posé). Le soft delete ne déclenche PAS le
+    // cascade Prisma (onDelete: Cascade ne s'applique qu'à un vrai DELETE), et la
+    // purge (CompanyPurgeProcessor) n'efface pas les webhooks : sans ce garde-fou,
+    // le retry continuerait de POSTer les données de livraison (adresses, chauffeur…)
+    // d'une entreprise supprimée vers une URL externe jusqu'à épuisement des
+    // tentatives. On stoppe la boucle : plus de rejeu, plus de prochaine tentative.
+    if (delivery.webhook.company?.deletedAt) {
+      this.logger.warn(
+        `Webhook retry aborted: company of webhook ${delivery.webhookId} is deleted — no replay`,
+      );
+      await this.prisma.webhookDelivery.update({
+        where: { id: webhookDeliveryId },
+        data: { status: 'failed', nextRetryAt: null },
+      });
+      return;
+    }
 
     try {
       await assertSafeWebhookUrl(delivery.webhook.url);
@@ -107,10 +125,16 @@ export class WebhookRetryProcessor extends WorkerHost {
     // le process() du worker s'arrête à delivery.maxAttempts, la sélection du cron doit
     // faire pareil, sinon une livraison configurée avec maxAttempts différent serait
     // relancée indéfiniment (ou jamais jusqu'à épuisement si maxAttempts > 5).
+    // SCOPING TENANT : les webhookDeliveries d'entreprises supprimées (deletedAt
+    // posé) ne doivent jamais être rejouées — le garde-fou du process() couvre le
+    // cas résiduel (job déjà en file), ce filtre évite même de les re-sélectionner.
+    // Le soft delete ne cascade pas (les webhooks survivent à la suppression de
+    // l'entreprise), la purge ne les efface pas : ce filtre est la première barrière.
     const failed = await this.prisma.webhookDelivery.findMany({
       where: {
         status: 'failed',
         nextRetryAt: { lte: now },
+        webhook: { company: { deletedAt: null } },
       },
       select: { id: true, attempts: true, maxAttempts: true },
     });
