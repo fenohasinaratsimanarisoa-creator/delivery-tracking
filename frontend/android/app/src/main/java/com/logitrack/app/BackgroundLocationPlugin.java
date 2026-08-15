@@ -338,16 +338,65 @@ public class BackgroundLocationPlugin extends Plugin {
     }
 
     /**
+     * Détection de la marque du téléphone (surcouches agressives : MIUI, EMUI,
+     * ColorOS, Vivo…) pour afficher au chauffeur les instructions de réglages
+     * manuels spécifiques (démarrage automatique, verrouillage en arrière-plan).
+     * Sans ces réglages, l'app est tuée en arrière-plan MÊME avec l'exemption
+     * Android accordée.
+     */
+    @PluginMethod
+    public void getDeviceInfo(PluginCall call) {
+        JSObject ret = DeviceOemInfo.detect();
+        ret.put("batteryOptimizationIgnored", isBatteryOptimizationIgnored());
+        call.resolve(ret);
+    }
+
+    /**
+     * Ouvre l'écran système le plus pertinent pour la marque : écran
+     * d'autostart/gestion en arrière-plan si la marque en a un (MIUI, EMUI,
+     * ColorOS, Vivo), sinon la page de détails de l'app (Batterie → Sans
+     * restriction). Retourne { opened } pour que l'UI puisse afficher le bon
+     * libellé.
+     */
+    @PluginMethod
+    public void openOemBatterySettings(PluginCall call) {
+        String opened = DeviceOemInfo.openBestSettings(getContext());
+        JSObject ret = new JSObject();
+        ret.put("opened", opened);
+        call.resolve(ret);
+    }
+
+    /**
+     * Met à jour le texte de statut de la notification persistante du foreground
+     * service (état RÉEL du suivi côté JS : actif / hors ligne avec file locale /
+     * en pause). Le chauffeur voit ainsi l'état du tracking sans ouvrir l'app.
+     */
+    @PluginMethod
+    public void updateTrackingStatus(PluginCall call) {
+        String status = call.getString("status");
+        if (status == null || status.trim().isEmpty()) {
+            call.resolve();
+            return;
+        }
+        LocationForegroundService.updateNotificationStatus(status.trim());
+        call.resolve();
+    }
+
+    /**
      * Demande l'exemption d'optimisation batterie.
      * Si déjà exempté, résout immédiatement avec batteryOptimizationIgnored=true. Sinon ouvre
      * un écran système ; l'état réel n'est connu qu'au retour → on le relit dans le callback.
      *
-     * POURQUOI LA PAGE DE DÉTAILS DE L'APP (et pas ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS) :
-     * sur les surcouches (MIUI/HyperOS, Samsung One UI…), l'écran « dédié » n'existe pas ou ne
-     * permet pas d'accorder réellement l'exemption (l'utilisateur revient sans changement →
-     * la bannière reste → il reclique → impression de boucle). La page de détails de l'app
-     * (Paramètres → Applications → LogiTrack → Batterie → Sans restriction) est présente sur
-     * TOUTES les surcouches et contient le réglage réel. On la privilégie donc.
+     * STRATÉGIE PAR MARQUE :
+     *  - Android quasi stock / Samsung : l'écran dédié ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+     *    (dialogue "Autoriser l'application à ignorer l'optimisation de la batterie ?") est le
+     *    plus simple pour l'utilisateur — il exige la permission REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+     *    (déclarée dans le manifest) et est désormais privilégié ici.
+     *  - Surcouches agressives (MIUI/HyperOS, EMUI, ColorOS, Vivo, OnePlus…) : cet écran « dédié »
+     *    n'existe pas ou ne permet pas d'accorder réellement l'exemption (l'utilisateur revient
+     *    sans changement → la bannière reste → il reclique → impression de boucle). On ouvre la
+     *    page de détails de l'app (Paramètres → Applications → LogiTrack → Batterie → Sans
+     *    restriction), présente sur TOUTES les surcouches et contenant le réglage réel.
      */
     @PluginMethod
     public void requestBatteryOptimizationExemption(PluginCall call) {
@@ -359,23 +408,29 @@ public class BackgroundLocationPlugin extends Plugin {
             return;
         }
         Activity activity = getActivity();
-        // 1) Page de détails de l'app (Batterie / Sans restriction accessible partout).
-        Intent intent = new Intent(
-            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-            Uri.parse("package:" + getContext().getPackageName())
+        boolean aggressiveOem = DeviceOemInfo.isAggressive(
+            detectOemKey()
         );
-        // 2) Repli : écran de demande dédié, s'il existe réellement.
-        if (activity != null && intent.resolveActivity(activity.getPackageManager()) == null) {
-            Intent dedicated = new Intent(
+        Intent intent;
+        if (!aggressiveOem) {
+            // 1) Android quasi stock : dialogue dédié (meilleure UX, permission manifest ajoutée).
+            intent = new Intent(
                 Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
                 Uri.parse("package:" + getContext().getPackageName())
             );
-            if (dedicated.resolveActivity(activity.getPackageManager()) != null) {
-                intent = dedicated;
-            } else {
-                // 3) Dernier repli : l'écran batterie générique.
-                intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+            // Repli : si l'écran dédié est absent (rare), page de détails de l'app.
+            if (activity == null || intent.resolveActivity(activity.getPackageManager()) == null) {
+                intent = new Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + getContext().getPackageName())
+                );
             }
+        } else {
+            // 2) Surcouche agressive : page de détails de l'app (Batterie → Sans restriction).
+            intent = new Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:" + getContext().getPackageName())
+            );
         }
         try {
             if (activity != null) {
@@ -393,6 +448,18 @@ public class BackgroundLocationPlugin extends Plugin {
         } catch (Exception ex) {
             call.reject("INTENT_FAILED", "intent_failed", ex);
         }
+    }
+
+    /** Clé OEM normalisée pour les décisions de stratégie batterie. */
+    private String detectOemKey() {
+        String manufacturer = Build.MANUFACTURER != null ? Build.MANUFACTURER.toLowerCase() : "";
+        String brand = Build.BRAND != null ? Build.BRAND.toLowerCase() : "";
+        String m = manufacturer + " " + brand;
+        if (m.contains("xiaomi") || m.contains("redmi") || m.contains("poco")) return DeviceOemInfo.OEM_XIAOMI;
+        if (m.contains("huawei") || m.contains("honor")) return DeviceOemInfo.OEM_HUAWEI;
+        if (m.contains("oppo") || m.contains("realme") || m.contains("oneplus")) return DeviceOemInfo.OEM_OPPO;
+        if (m.contains("vivo") || m.contains("iqoo")) return DeviceOemInfo.OEM_VIVO;
+        return DeviceOemInfo.OEM_UNKNOWN;
     }
 
     @ActivityCallback

@@ -299,6 +299,32 @@ function LivePill() {
       </span>
     );
   }
+  // Hors ligne avec file locale en cours : le chauffeur (et le dispatcher) doivent
+  // savoir immédiatement que les positions ne partent PAS en temps réel.
+  if (!status.socketConnected && status.queueCount > 0) {
+    return (
+      <span className={`${styles.livePill} ${styles.pillRed}`}>
+        <WifiOff size={13} />
+        {t('trackingIndicator.offlineQueue', 'Hors ligne — {{count}} en attente', { count: status.queueCount })}
+      </span>
+    );
+  }
+  if (!status.socketConnected) {
+    return (
+      <span className={`${styles.livePill} ${styles.pillAmber}`}>
+        <WifiOff size={13} />
+        {t('trackingIndicator.reconnecting', 'Reconnexion…')}
+      </span>
+    );
+  }
+  if (status.queueCount > 0) {
+    return (
+      <span className={`${styles.livePill} ${styles.pillAmber}`}>
+        <Radio size={13} />
+        {t('trackingIndicator.syncing', 'Synchronisation — {{count}} en attente', { count: status.queueCount })}
+      </span>
+    );
+  }
   if (!status.position) {
     return (
       <span className={`${styles.livePill} ${styles.pillAmber}`}>

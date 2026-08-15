@@ -10,6 +10,7 @@ export const TrackingContext = createContext<TrackingStatus>({
   degradedAccuracyWhileMoving: 0,
   isStationary: false,
   queueCount: 0,
+  socketConnected: false,
   statusMsg: '',
   geolocationDenied: false,
   activeDeliveryId: '',
@@ -17,6 +18,8 @@ export const TrackingContext = createContext<TrackingStatus>({
   dismissAlert: () => {},
   batteryOptimizationIgnored: true,
   requestBatteryExemption: () => Promise.resolve(),
+  deviceOem: null,
+  openOemSettings: () => Promise.resolve(),
 });
 
 export function useTrackingStatus() {

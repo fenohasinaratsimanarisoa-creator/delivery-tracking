@@ -8,11 +8,15 @@ import { sensorFusion, simulateStationaryFromSpeed } from '../services/tracking/
 import {
   getBackgroundLocationStatus,
   getBatteryOptimizationStatus,
+  getDeviceOemInfo,
+  openOemBatterySettings,
   requestBackgroundLocationPermissions,
   requestBatteryOptimizationExemption,
   startBackgroundLocation,
   stopBackgroundLocation,
   subscribeToNativeLocations,
+  updateNativeTrackingStatus,
+  type DeviceOemInfo,
 } from '../services/tracking/backgroundLocation';
 import type { Delivery } from '../types';
 
@@ -96,6 +100,8 @@ export interface TrackingStatus {
   degradedAccuracyWhileMoving: number;
   isStationary: boolean;
   queueCount: number;
+  /** true = socket temps réel connecté (le dispatcher reçoit les positions en direct). */
+  socketConnected: boolean;
   statusMsg: string;
   geolocationDenied: boolean;
   activeDeliveryId: string;
@@ -103,6 +109,10 @@ export interface TrackingStatus {
   dismissAlert: (type: string, deliveryId?: string) => void;
   batteryOptimizationIgnored: boolean;
   requestBatteryExemption: () => Promise<void>;
+  /** Marque du téléphone détectée (surcouches agressives) pour le guide de réglages manuels. */
+  deviceOem: DeviceOemInfo | null;
+  /** Ouvre l'écran système "démarrage automatique" propre à la marque (repli : détails app). */
+  openOemSettings: () => Promise<void>;
 }
 
 export function useDriverTracking() {
@@ -117,6 +127,8 @@ export function useDriverTracking() {
   // iOS/web (pas de Doze) ; relu au démarrage du tracking puis à chaque retour au premier
   // plan pour masquer la bannière dès que le chauffeur accorde l'exemption.
   const [batteryOptimizationIgnored, setBatteryOptimizationIgnored] = useState(true);
+  const [socketConnected, setSocketConnected] = useState(false);
+  const [deviceOem, setDeviceOem] = useState<DeviceOemInfo | null>(null);
   const [activeDeliveryId, setActiveDeliveryId] = useState('');
   const [alerts, setAlerts] = useState<DriverAlert[]>([]);
   const alertsRef = useRef<DriverAlert[]>([]);
@@ -348,6 +360,17 @@ export function useDriverTracking() {
     } catch {
       // L'utilisateur a pu fermer l'écran système sans réponse exploitable → on
       // relit l'état réel au retour (voir refreshBatteryOptimizationStatus via visibilitychange).
+    }
+  }, [refreshBatteryOptimizationStatus]);
+
+  const openOemSettings = useCallback(async () => {
+    try {
+      // Ouvre l'écran constructeur (autostart / gestion arrière-plan) ; au retour,
+      // on relit l'état batterie + l'info OEM (le visibilitychange le rafraîchit aussi).
+      await openOemBatterySettings();
+      await refreshBatteryOptimizationStatus();
+    } catch {
+      // Échec d'ouverture : silencieux, la bannière OEM reste visible.
     }
   }, [refreshBatteryOptimizationStatus]);
 
@@ -645,6 +668,13 @@ export function useDriverTracking() {
     // tant que batteryOptimizationIgnored === false (rafraîchi aussi au retour premier plan).
     refreshBatteryOptimizationStatus();
 
+    // Détection de la marque (surcouches agressives : MIUI, EMUI, ColorOS, Vivo…) :
+    // le guide de réglages manuels est affiché en fonction (voir BatterySetupGuide).
+    getDeviceOemInfo().then((info) => {
+      setDeviceOem(info);
+      setBatteryOptimizationIgnored(info.batteryOptimizationIgnored);
+    }).catch(() => {});
+
     // (Wake lock 'screen' retiré : illusoire en arrière-plan — voir en-tête du
     // fichier. La continuité derrière l'écran verrouillé est assurée par le
     // foreground service natif LocationForegroundService, démarré ci-dessous.)
@@ -771,6 +801,9 @@ export function useDriverTracking() {
       nativeSubscriptionRef.current = null;
     }
     stopBackgroundLocation().catch(() => {});
+    // Réinitialise le statut de la notification (le service s'arrête de toute façon,
+    // mais on s'assure qu'aucun texte périmé ne traîne si un redémarrage survient).
+    updateNativeTrackingStatus('').catch(() => {});
     releaseWakeLock();
     hiddenSinceRef.current = 0;
     lastMovingRef.current = Date.now();
@@ -783,6 +816,10 @@ export function useDriverTracking() {
 
   useEffect(() => {
     const socket = getSocket();
+    const updateConnState = () => setSocketConnected(socket.connected);
+    updateConnState();
+    socket.on('connect', updateConnState);
+    socket.on('disconnect', updateConnState);
     socket.on('connect', drainQueue);
     socket.on('dataUpdate', (event: { entity: string; action: string; geofenceName: string; deliveryId?: string; driverId?: string }) => {
       if (event.entity === 'geofence_event' && event.driverId && event.driverId === driverIdRef.current) {
@@ -819,12 +856,34 @@ export function useDriverTracking() {
         nativeSubscriptionRef.current.unsubscribe();
         nativeSubscriptionRef.current = null;
       }
+      socket.off('connect', updateConnState);
+      socket.off('disconnect', updateConnState);
       socket.off('connect', drainQueue);
       socket.off('dataUpdate');
       socket.off('proximityAlert');
       window.removeEventListener('online', onOnline);
     };
   }, [drainQueue, addAlert]);
+
+  // Indicateur utilisateur (PARTIE 1, point 5) : l'état RÉEL du tracking est poussé
+  // dans la notification persistante du foreground service (visible sans ouvrir
+  // l'app, même écran verrouillé) à chaque changement de connexion / file locale :
+  // actif en ligne / hors ligne avec file locale / synchronisation en cours.
+  // Le même état alimente l'indicateur dans l'app (LivePill via socketConnected).
+  useEffect(() => {
+    if (!startedRef.current) return;
+    let text: string;
+    if (socketConnected && queueCount === 0) {
+      text = 'Suivi actif — en ligne';
+    } else if (!socketConnected && queueCount > 0) {
+      text = `Hors ligne — ${queueCount} position${queueCount > 1 ? 's' : ''} en attente`;
+    } else if (!socketConnected) {
+      text = 'Hors ligne — reconnexion…';
+    } else {
+      text = `Synchronisation — ${queueCount} position${queueCount > 1 ? 's' : ''}…`;
+    }
+    updateNativeTrackingStatus(text).catch(() => {});
+  }, [socketConnected, queueCount, startedRef]);
 
   useEffect(() => {
     if (!driver || usesPhysicalTracker) {
@@ -853,6 +912,7 @@ export function useDriverTracking() {
     degradedAccuracyWhileMoving: degradedAccuracyWhileMovingRef.current,
     isStationary,
     queueCount,
+    socketConnected,
     statusMsg,
     geolocationDenied,
     activeDeliveryId,
@@ -860,6 +920,8 @@ export function useDriverTracking() {
     dismissAlert,
     batteryOptimizationIgnored,
     requestBatteryExemption,
+    deviceOem,
+    openOemSettings,
   };
 
   return trackingStatus;

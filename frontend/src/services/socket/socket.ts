@@ -19,7 +19,17 @@ let socket: Socket | null = null;
 const REFRESH_MARGIN_MS = 60_000; // 60 s de marge de sécurité avant l'expiration
 const REFRESH_RETRY_MS = 60_000; // nouvelle tentative après un échec de refresh
 
+// Durée de mise en veille de l'onglet au-delà de laquelle on force une reconnexion
+// propre au retour (Page Visibility API) : après un sommeil de l'ordinateur ou un
+// long passage en arrière-plan, la connexion TCP peut être morte sans que socket.io
+// l'ait encore détecté (les timers de ping sont throttlés en arrière-plan). Forcer
+// disconnect()+connect() déclenche les handlers 'connect' de l'app (refetch complet
+// de l'état via useDataUpdates, resubscribe des rooms par RealTimeMap) → le dispatcher
+// rattrape tout ce qui a été manqué, sans attendre le prochain événement temps réel.
+const VISIBLE_RECONNECT_THRESHOLD_MS = 10_000;
+
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+let lastHiddenAt = 0;
 
 /**
  * Programme un rafraîchissement du token au plus tard REFRESH_MARGIN_MS avant
@@ -73,6 +83,11 @@ export function getSocket(): Socket {
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
+      // Délai maximal d'établissement de la connexion (handshake + upgrade) avant
+      // abandon : les réseaux mobiles (3G/4G dégradées) peuvent mettre >20s à
+      // établir un handshake complet ; le défaut de 20s coupait des connexions
+      // légitimes qui étaient ensuite relancées inutilement.
+      timeout: 45_000,
     });
 
     socket.on('disconnect', (reason) => {
@@ -89,8 +104,42 @@ export function getSocket(): Socket {
     socket.on('connect', () => scheduleTokenRefresh());
     // Première programmation dès la création du socket.
     scheduleTokenRefresh();
+
+    registerVisibilityHandler();
   }
   return socket;
+}
+
+let visibilityHandlerRegistered = false;
+
+/**
+ * Page Visibility API : au retour au premier plan après une mise en veille de
+ * l'onglet / de l'ordinateur, force une reconnexion propre pour rattraper l'état
+ * complet (le serveur a pu émettre des événements pendant la déconnexion). Ne se
+ * déclenche que si la mise en arrière-plan a duré au-delà du seuil (10 s), pour
+ * ne pas recréer la connexion à chaque changement d'onglet rapide.
+ */
+function registerVisibilityHandler(): void {
+  if (visibilityHandlerRegistered || typeof document === 'undefined') return;
+  visibilityHandlerRegistered = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      lastHiddenAt = Date.now();
+      return;
+    }
+    // visible
+    const s = socket;
+    if (!s) return;
+    const hiddenMs = lastHiddenAt > 0 ? Date.now() - lastHiddenAt : 0;
+    if (hiddenMs > VISIBLE_RECONNECT_THRESHOLD_MS || !s.connected) {
+      // Reconnexion propre : les handlers 'connect' (refetch complet des queries
+      // dans useDataUpdates, resubscribe des rooms dans RealTimeMap, drainQueue
+      // dans useDriverTracking) se déclenchent et rattrapent le manqué.
+      s.disconnect();
+      s.connect();
+    }
+    lastHiddenAt = 0;
+  });
 }
 
 export function disconnectSocket(): void {

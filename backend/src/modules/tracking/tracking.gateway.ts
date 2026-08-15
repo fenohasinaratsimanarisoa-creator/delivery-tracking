@@ -27,6 +27,15 @@ import { getCorsOrigins } from '../../config/cors';
 
 @WebSocketGateway({
   cors: { origin: getCorsOrigins() },
+  // Ping/pong LENIENT : le défaut de socket.io (pingInterval 25 s / pingTimeout
+  // 20 s) ferme une connexion légitime après ~45 s de silence — trop court pour
+  // des réseaux mobiles momentanément lents (3G/4G dégradées, tunnels, zones
+  // blanches en zone urbaine). Avec 35 s / 25 s, une connexion tolère ~60 s de
+  // silence avant fermeture ; le client (reconnection: true, backoff 1→5 s) se
+  // reconnecte seul dans tous les cas, mais on évite les fermetures à tort qui
+  // sont perçues comme des "déconnexions" par le dispatcher.
+  pingInterval: 35_000,
+  pingTimeout: 25_000,
 })
 @UseGuards(WsJwtGuard)
 @UseFilters(WsTrackingExceptionFilter)

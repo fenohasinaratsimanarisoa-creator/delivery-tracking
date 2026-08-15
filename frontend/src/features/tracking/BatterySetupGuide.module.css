@@ -1,0 +1,204 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(3, 7, 15, 0.6);
+  backdrop-filter: blur(2px);
+  padding: 12px;
+  animation: dt-guide-fade 0.25s ease both;
+}
+
+@keyframes dt-guide-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay, .card { animation: none !important; }
+}
+
+.card {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  max-height: min(85vh, 640px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--color-surface, #121B2E);
+  border: 1px solid var(--color-border, #24304A);
+  border-radius: var(--radius-lg, 14px);
+  padding: 18px 18px 14px;
+  box-shadow: var(--shadow-lg, 0 12px 40px rgba(0, 0, 0, 0.5));
+  animation: dt-guide-up 0.3s var(--ease-premium, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+
+@keyframes dt-guide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.closeBtn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-tertiary, #7A8BA3);
+  cursor: pointer;
+}
+
+.closeBtn:hover {
+  color: var(--color-text, #E8ECF3);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 32px;
+}
+
+.iconChip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-orange, #E8753C) 16%, transparent);
+  color: var(--color-orange, #E8753C);
+}
+
+.title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text, #E8ECF3);
+}
+
+.message {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary, #9BA6B9);
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.step {
+  display: flex;
+  gap: 10px;
+}
+
+.stepNum {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: var(--color-accent-muted, rgba(242, 169, 60, 0.14));
+  color: var(--color-accent, #F2A93C);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.stepTitle {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text, #E8ECF3);
+}
+
+.stepText {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary, #9BA6B9);
+}
+
+.oemSteps {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary, #9BA6B9);
+}
+
+.actionBtn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-orange, #E8753C);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.78rem;
+  cursor: pointer;
+  min-height: 42px;
+}
+
+.actionBtn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.doneChip {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--color-teal, #3FA796) 14%, transparent);
+  color: var(--color-teal, #3FA796);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.dismissBtn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  background: transparent;
+  color: var(--color-text-tertiary, #7A8BA3);
+  font-size: 0.78rem;
+  cursor: pointer;
+  min-height: 40px;
+}

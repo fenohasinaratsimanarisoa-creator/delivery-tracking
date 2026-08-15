@@ -28,6 +28,29 @@ export interface BatteryOptimizationStatus {
   requested?: boolean;
 }
 
+/**
+ * Détection de la marque du téléphone (surcouches à gestion batterie agressive :
+ * Xiaomi/MIUI, Huawei/EMUI, Oppo/ColorOS, Vivo, OnePlus…). Ces OS tuent l'app en
+ * arrière-plan MÊME avec l'exemption Android accordée — il faut des réglages
+ * manuels constructeur supplémentaires (démarrage automatique, verrouillage en
+ * tâches récentes), documentés dans l'app.
+ */
+export interface DeviceOemInfo {
+  /** Clé normalisée : 'xiaomi' | 'huawei' | 'honor' | 'oppo' | 'vivo' | 'oneplus' | 'realme' | 'samsung' | 'other' */
+  oem: string;
+  manufacturer: string;
+  brand: string;
+  model: string;
+  os: string;
+  sdkInt: number;
+  /** true = surcouche agressive exigeant des réglages manuels supplémentaires. */
+  aggressive: boolean;
+  /** Intent deep-link vers l'écran "démarrage automatique" de la marque, si existant. */
+  autostartIntent?: string;
+  autostartAction?: string;
+  batteryOptimizationIgnored: boolean;
+}
+
 export interface BackgroundLocationStatus {
   running: boolean;
   permissions: BackgroundLocationPermissions;
@@ -40,6 +63,9 @@ interface BackgroundLocationNative {
   requestPermissions(): Promise<BackgroundLocationStatus>;
   getBatteryOptimizationStatus(): Promise<BatteryOptimizationStatus>;
   requestBatteryOptimizationExemption(): Promise<BatteryOptimizationStatus>;
+  getDeviceInfo(): Promise<DeviceOemInfo>;
+  openOemBatterySettings(): Promise<{ opened: string }>;
+  updateTrackingStatus(options: { status: string }): Promise<void>;
   addListener(
     eventName: 'locationUpdate',
     listenerFunc: (data: NativeLocationUpdate) => void,
@@ -123,6 +149,71 @@ export async function requestBatteryOptimizationExemption(): Promise<BatteryOpti
     return await p.requestBatteryOptimizationExemption();
   } catch {
     return { batteryOptimizationIgnored: true };
+  }
+}
+
+/**
+ * Détecte la marque du téléphone et ses réglages batterie spécifiques (Android).
+ * No-op sur iOS/web : retourne un objet neutre (oem 'other', non agressif).
+ */
+export async function getDeviceOemInfo(): Promise<DeviceOemInfo> {
+  const p = resolvePlugin();
+  if (!p) {
+    return {
+      oem: 'other',
+      manufacturer: '',
+      brand: '',
+      model: '',
+      os: '',
+      sdkInt: 0,
+      aggressive: false,
+      batteryOptimizationIgnored: true,
+    };
+  }
+  try {
+    return await p.getDeviceInfo();
+  } catch {
+    return {
+      oem: 'other',
+      manufacturer: '',
+      brand: '',
+      model: '',
+      os: '',
+      sdkInt: 0,
+      aggressive: false,
+      batteryOptimizationIgnored: true,
+    };
+  }
+}
+
+/**
+ * Ouvre l'écran système "démarrage automatique / gestion arrière-plan" propre
+ * à la marque (MIUI, EMUI, ColorOS, Vivo…), avec repli sur la page de détails
+ * de l'app (Batterie → Sans restriction). No-op sur iOS/web.
+ */
+export async function openOemBatterySettings(): Promise<string> {
+  const p = resolvePlugin();
+  if (!p) return 'unsupported';
+  try {
+    const res = await p.openOemBatterySettings();
+    return res.opened;
+  } catch {
+    return 'failed';
+  }
+}
+
+/**
+ * Met à jour le texte de statut de la notification persistante du foreground
+ * service (état réel du suivi vu par le JS : actif / hors ligne avec file
+ * locale / en pause). No-op sur iOS/web et si le service ne tourne pas.
+ */
+export async function updateNativeTrackingStatus(status: string): Promise<void> {
+  const p = resolvePlugin();
+  if (!p) return;
+  try {
+    await p.updateTrackingStatus({ status });
+  } catch {
+    // Non bloquant : la notification garde son texte par défaut.
   }
 }
 

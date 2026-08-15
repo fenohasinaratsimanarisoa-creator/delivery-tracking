@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { BatteryWarning } from 'lucide-react';
+import { BatteryWarning, Smartphone } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TrackingStatus } from '../../hooks/useDriverTracking';
 import styles from './BatteryExemptionBanner.module.css';
@@ -66,6 +66,19 @@ export default function BatteryExemptionBanner({ status }: { status: TrackingSta
             ? t('batteryExemption.opening', 'Ouverture des réglages…')
             : t('batteryExemption.allow', "Autoriser l'app à fonctionner en arrière-plan")}
         </button>
+        {status.deviceOem?.aggressive && (
+          <button
+            type="button"
+            className={styles.actionBtn}
+            disabled={opening}
+            onClick={() => void status.openOemSettings()}
+          >
+            <Smartphone size={14} />
+            {t('batteryExemption.oemSettings', 'Réglages {{brand}}', {
+              brand: status.deviceOem.model || status.deviceOem.manufacturer || '',
+            })}
+          </button>
+        )}
       </div>
       <p className={styles.hintLink}>
         {t(

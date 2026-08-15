@@ -47,6 +47,21 @@
             android:exported="false"
             android:foregroundServiceType="location"
             android:stopWithTask="false" />
+
+        <!-- Redémarre le foreground service après un reboot téléphone si un
+             tracking était en cours (SharedPreferences tracking_should_be_active).
+             Le chauffeur ne doit JAMAIS devoir rouvrir l'app après un redémarrage. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <!-- Certains constructeurs (Samsung, Huawei) émettent aussi cet action. -->
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <!-- Permissions -->
@@ -60,4 +75,12 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Permet à l'app de demander l'exemption d'optimisation batterie (Doze) :
+         sans elle, Android (surtout en Doze après quelques minutes d'immobilité)
+         suspend le réseau ET la géoloc de l'app en arrière-plan — cause n°1 du
+         tracking qui s'arrête. Les surcouches constructeur exigent en plus les
+         réglages manuels documentés dans l'app (OEM battery setup guide). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Permet au BootReceiver de relancer le service après un reboot téléphone. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 </manifest>

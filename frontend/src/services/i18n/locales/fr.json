@@ -1458,7 +1458,24 @@
     "searching": "Recherche signal...",
     "poorAccuracy": "GPS faible",
     "stationary": "Arrêté",
-    "moving": "En route"
+    "moving": "En route",
+    "offlineQueue": "Hors ligne — {{count}} en attente",
+    "reconnecting": "Reconnexion…",
+    "syncing": "Synchronisation — {{count}} en attente"
+  },
+  "batterySetup": {
+    "title": "Gardez le suivi actif en arrière-plan",
+    "intro": "Votre téléphone peut mettre l'app en veille pour économiser la batterie, ce qui interrompt la transmission de votre position au dispatcher. Quelques réglages en 2 minutes suffisent pour que le suivi continue écran verrouillé.",
+    "stepBattery": "Autoriser l'exemption d'optimisation batterie",
+    "stepBatteryText": "Ouvrir le réglage système et choisir « Sans restriction » (ou « Ne pas optimiser »).",
+    "openBattery": "Ouvrir le réglage batterie",
+    "stepOem": "Réglages spécifiques à votre téléphone",
+    "stepOemIntro": "Votre téléphone ({{brand}}) a une gestion batterie renforcée. Ces réglages manuels sont indispensables.",
+    "openOem": "Ouvrir le réglage constructeur",
+    "opening": "Ouverture…",
+    "done": "Réglé",
+    "dismiss": "J'ai compris, plus tard",
+    "close": "Fermer"
   },
   "locationSearch": {
     "placeholder": "Rechercher un lieu…",

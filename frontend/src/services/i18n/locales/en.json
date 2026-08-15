@@ -1458,7 +1458,24 @@
     "searching": "Searching for signal...",
     "poorAccuracy": "Poor GPS",
     "stationary": "Stationary",
-    "moving": "On the road"
+    "moving": "On the road",
+    "offlineQueue": "Offline — {{count}} pending",
+    "reconnecting": "Reconnecting…",
+    "syncing": "Syncing — {{count}} pending"
+  },
+  "batterySetup": {
+    "title": "Keep tracking active in the background",
+    "intro": "Your phone may put the app to sleep to save battery, stopping position transmission to the dispatcher. A few settings in 2 minutes keep tracking running with the screen locked.",
+    "stepBattery": "Allow the battery optimization exemption",
+    "stepBatteryText": "Open the system setting and choose \"No restrictions\" (or \"Don't optimize\").",
+    "openBattery": "Open battery settings",
+    "stepOem": "Settings specific to your phone",
+    "stepOemIntro": "Your phone ({{brand}}) has enhanced battery management. These manual settings are essential.",
+    "openOem": "Open manufacturer setting",
+    "opening": "Opening…",
+    "done": "Done",
+    "dismiss": "Got it, later",
+    "close": "Close"
   },
   "locationSearch": {
     "placeholder": "Search for a place…",

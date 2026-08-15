@@ -70,6 +70,12 @@ vi.mock('../services/tracking/backgroundLocation', () => ({
   requestBackgroundLocationPermissions: vi.fn().mockResolvedValue(true),
   getBatteryOptimizationStatus: vi.fn().mockResolvedValue({ batteryOptimizationIgnored: true }),
   requestBatteryOptimizationExemption: vi.fn().mockResolvedValue({ batteryOptimizationIgnored: true }),
+  getDeviceOemInfo: vi.fn().mockResolvedValue({
+    oem: 'other', manufacturer: '', brand: '', model: '', os: '', sdkInt: 0,
+    aggressive: false, batteryOptimizationIgnored: true,
+  }),
+  openOemBatterySettings: vi.fn().mockResolvedValue('app_details'),
+  updateNativeTrackingStatus: vi.fn().mockResolvedValue(undefined),
   startBackgroundLocation: vi.fn().mockResolvedValue(true),
   stopBackgroundLocation: vi.fn().mockResolvedValue(true),
   subscribeToNativeLocations: vi.fn((handler: (pos: any) => void) => {
