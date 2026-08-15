@@ -1,0 +1,898 @@
+[
+  {
+    "name": "dashboard-dark",
+    "route": "/dashboard",
+    "viewport": [
+      1440,
+      900
+    ],
+    "theme": "dark",
+    "context": null,
+    "title": "LogiTrack — Centre de contrôle logistique",
+    "waitSelFound": true,
+    "errors": [
+      {
+        "type": "warning",
+        "text": "[Sentry] VITE_SENTRY_DSN not set — skipping initialization"
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition."
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "warning",
+        "text": "[Sentry] VITE_SENTRY_DSN not set — skipping initialization"
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition."
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      }
+    ],
+    "audit": {
+      "theme": "dark",
+      "context": null,
+      "title": "LogiTrack — Centre de contrôle logistique",
+      "vars": {
+        "--color-bg": "#101216",
+        "--color-surface": "#171A1F",
+        "--color-surface-alt": "#1C2026",
+        "--color-text": "#EDEEF0",
+        "--color-text-secondary": "#A0A6B0",
+        "--color-text-tertiary": "#7A8089",
+        "--color-accent": "#6FBF9E",
+        "--color-accent-muted": "rgba(111, 191, 158, 0.14)",
+        "--color-glass": "#171A1F",
+        "--color-border": "rgba(237, 238, 240, 0.10)",
+        "--color-teal": "#4CAF87",
+        "--color-blue": "#8AA8C7",
+        "--color-red": "#E0756C",
+        "--color-warning": "#D9A441",
+        "--color-skeleton": "#1E2229",
+        "--font-display": "'IBM Plex Sans', 'Inter', sans-serif",
+        "--font-body": "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+        "--font-mono": "'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace",
+        "--radius-lg": "8px",
+        "--shadow-sm": "0 1px 3px rgba(0,0,0,0.32), 0 1px 2px rgba(0,0,0,0.18)"
+      },
+      "h1": "Tableau de bord",
+      "bodyOverflowX": 0,
+      "viewport": [
+        1440,
+        900
+      ],
+      "results": [
+        {
+          "sel": "h1",
+          "text": "Tableau de bord",
+          "color": "rgb(237, 238, 240)",
+          "bg": "rgb(16,18,22)",
+          "fontSize": 32,
+          "weight": 700,
+          "ratio": 16.15,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"kpiValue\"]",
+          "text": "12",
+          "color": "rgb(237, 238, 240)",
+          "bg": "rgb(23,26,31)",
+          "fontSize": 18,
+          "weight": 700,
+          "ratio": 15.02,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"kpiLabel\"]",
+          "text": "Livraisons ajd",
+          "color": "rgb(160, 166, 176)",
+          "bg": "rgb(23,26,31)",
+          "fontSize": 10,
+          "weight": 500,
+          "ratio": 7.12,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"kpiPanelTitle\"]",
+          "text": "Vue d'ensemble",
+          "color": "rgb(160, 166, 176)",
+          "bg": "rgb(23,26,31)",
+          "fontSize": 10,
+          "weight": 700,
+          "ratio": 7.12,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"chartPanelTitle\"]",
+          "text": "Statut des livraisons",
+          "color": "rgb(160, 166, 176)",
+          "bg": "rgb(23,26,31)",
+          "fontSize": 10,
+          "weight": 600,
+          "ratio": 7.12,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"recentTitle\"]",
+          "text": "Dernières livraisons",
+          "color": "rgb(160, 166, 176)",
+          "bg": "rgb(23,26,31)",
+          "fontSize": 10,
+          "weight": 600,
+          "ratio": 7.12,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"dashboardDate\"]",
+          "text": "samedi 15 août 2026",
+          "color": "rgb(122, 128, 137)",
+          "bg": "rgb(16,18,22)",
+          "fontSize": 10,
+          "weight": 400,
+          "ratio": 4.71,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"reliabilityScore\"]",
+          "text": "96%▲ vs mois préc.",
+          "color": "rgb(237, 238, 240)",
+          "bg": "rgb(23,26,31)",
+          "fontSize": 14,
+          "weight": 400,
+          "ratio": 15.02,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"reliabilityLabel\"]",
+          "text": "Fiabilité opérationnelle",
+          "color": "rgb(160, 166, 176)",
+          "bg": "rgb(23,26,31)",
+          "fontSize": 10,
+          "weight": 600,
+          "ratio": 7.12,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"perfectMonthBadge\"]",
+          "missing": true
+        },
+        {
+          "sel": "[class*=\"recentStatusPill\"]",
+          "text": "En cours",
+          "color": "rgb(111, 191, 158)",
+          "bg": "rgb(23,26,31)",
+          "fontSize": 10,
+          "weight": 500,
+          "ratio": 7.99,
+          "aa": true,
+          "overflowX": false
+        }
+      ],
+      "resourceErrors": [
+        "http://127.0.0.1:5174/api/notifications?limit=20",
+        "http://127.0.0.1:5174/api/notifications/unread-count",
+        "http://127.0.0.1:5174/api/notifications?limit=1",
+        "http://127.0.0.1:5174/api/notifications/unread-count",
+        "http://127.0.0.1:5174/api/notifications?limit=1",
+        "http://127.0.0.1:5174/api/notifications?limit=20",
+        "http://127.0.0.1:5174/api/notifications/unread-count",
+        "http://127.0.0.1:5174/api/notifications?limit=1",
+        "http://127.0.0.1:5174/api/notifications?limit=20"
+      ],
+      "waitSelFound": true
+    }
+  },
+  {
+    "name": "dashboard-light",
+    "route": "/dashboard",
+    "viewport": [
+      1440,
+      900
+    ],
+    "theme": "light",
+    "context": null,
+    "title": "LogiTrack — Centre de contrôle logistique",
+    "waitSelFound": true,
+    "errors": [
+      {
+        "type": "warning",
+        "text": "[Sentry] VITE_SENTRY_DSN not set — skipping initialization"
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition."
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "warning",
+        "text": "[Sentry] VITE_SENTRY_DSN not set — skipping initialization"
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition."
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      }
+    ],
+    "audit": {
+      "theme": "light",
+      "context": null,
+      "title": "LogiTrack — Centre de contrôle logistique",
+      "vars": {
+        "--color-bg": "#F6F7F9",
+        "--color-surface": "#FFFFFF",
+        "--color-surface-alt": "#F8F9FB",
+        "--color-text": "#16181D",
+        "--color-text-secondary": "#4B5563",
+        "--color-text-tertiary": "#6B7280",
+        "--color-accent": "#2F6B4F",
+        "--color-accent-muted": "rgba(47, 107, 79, 0.10)",
+        "--color-glass": "#FFFFFF",
+        "--color-border": "rgba(22, 24, 29, 0.10)",
+        "--color-teal": "#2E7D5B",
+        "--color-blue": "#4A6B8A",
+        "--color-red": "#B4443B",
+        "--color-warning": "#B7791F",
+        "--color-skeleton": "#E7E9ED",
+        "--font-display": "'IBM Plex Sans', 'Inter', sans-serif",
+        "--font-body": "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+        "--font-mono": "'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace",
+        "--radius-lg": "8px",
+        "--shadow-sm": "0 1px 3px rgba(16,18,22,0.05), 0 1px 2px rgba(16,18,22,0.03)"
+      },
+      "h1": "Tableau de bord",
+      "bodyOverflowX": 0,
+      "viewport": [
+        1440,
+        900
+      ],
+      "results": [
+        {
+          "sel": "h1",
+          "text": "Tableau de bord",
+          "color": "rgb(22, 24, 29)",
+          "bg": "rgb(246,247,249)",
+          "fontSize": 32,
+          "weight": 700,
+          "ratio": 16.57,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"kpiValue\"]",
+          "text": "12",
+          "color": "rgb(22, 24, 29)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 18,
+          "weight": 700,
+          "ratio": 17.76,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"kpiLabel\"]",
+          "text": "Livraisons ajd",
+          "color": "rgb(75, 85, 99)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 10,
+          "weight": 500,
+          "ratio": 7.56,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"kpiPanelTitle\"]",
+          "text": "Vue d'ensemble",
+          "color": "rgb(75, 85, 99)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 10,
+          "weight": 700,
+          "ratio": 7.56,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"chartPanelTitle\"]",
+          "text": "Statut des livraisons",
+          "color": "rgb(75, 85, 99)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 10,
+          "weight": 600,
+          "ratio": 7.56,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"recentTitle\"]",
+          "text": "Dernières livraisons",
+          "color": "rgb(75, 85, 99)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 10,
+          "weight": 600,
+          "ratio": 7.56,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"dashboardDate\"]",
+          "text": "samedi 15 août 2026",
+          "color": "rgb(107, 114, 128)",
+          "bg": "rgb(246,247,249)",
+          "fontSize": 10,
+          "weight": 400,
+          "ratio": 4.51,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"reliabilityScore\"]",
+          "text": "96%▲ vs mois préc.",
+          "color": "rgb(22, 24, 29)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 14,
+          "weight": 400,
+          "ratio": 17.76,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"reliabilityLabel\"]",
+          "text": "Fiabilité opérationnelle",
+          "color": "rgb(75, 85, 99)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 10,
+          "weight": 600,
+          "ratio": 7.56,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"perfectMonthBadge\"]",
+          "missing": true
+        },
+        {
+          "sel": "[class*=\"recentStatusPill\"]",
+          "text": "En cours",
+          "color": "rgb(47, 107, 79)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 10,
+          "weight": 500,
+          "ratio": 6.29,
+          "aa": true,
+          "overflowX": false
+        }
+      ],
+      "resourceErrors": [
+        "http://127.0.0.1:5174/api/notifications?limit=20",
+        "http://127.0.0.1:5174/api/notifications/unread-count",
+        "http://127.0.0.1:5174/api/notifications?limit=1",
+        "http://127.0.0.1:5174/api/notifications?limit=20",
+        "http://127.0.0.1:5174/api/notifications/unread-count",
+        "http://127.0.0.1:5174/api/notifications?limit=1",
+        "http://127.0.0.1:5174/api/notifications?limit=20",
+        "http://127.0.0.1:5174/api/notifications/unread-count",
+        "http://127.0.0.1:5174/api/notifications?limit=1"
+      ],
+      "waitSelFound": true
+    }
+  },
+  {
+    "name": "driver-deliveries",
+    "route": "/my-deliveries",
+    "viewport": [
+      390,
+      844
+    ],
+    "theme": "light",
+    "context": "field",
+    "title": "LogiTrack — Centre de contrôle logistique",
+    "waitSelFound": true,
+    "errors": [
+      {
+        "type": "warning",
+        "text": "[Sentry] VITE_SENTRY_DSN not set — skipping initialization"
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition."
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "warning",
+        "text": "[Sentry] VITE_SENTRY_DSN not set — skipping initialization"
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition."
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      }
+    ],
+    "audit": {
+      "theme": "light",
+      "context": "field",
+      "title": "LogiTrack — Centre de contrôle logistique",
+      "vars": {
+        "--color-bg": "#F4F5F6",
+        "--color-surface": "#FFFFFF",
+        "--color-surface-alt": "#F6F8FA",
+        "--color-text": "#14171B",
+        "--color-text-secondary": "#33373D",
+        "--color-text-tertiary": "#5B6470",
+        "--color-accent": "#275A43",
+        "--color-accent-muted": "rgba(39, 90, 67, 0.12)",
+        "--color-glass": "#FFFFFF",
+        "--color-border": "rgba(20, 23, 27, 0.14)",
+        "--color-teal": "#256B52",
+        "--color-blue": "#3A5F7D",
+        "--color-red": "#B03A32",
+        "--color-warning": "#9A6314",
+        "--color-skeleton": "#E2E6EA",
+        "--font-display": "'IBM Plex Sans', 'Inter', sans-serif",
+        "--font-body": "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+        "--font-mono": "'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace",
+        "--radius-lg": "8px",
+        "--shadow-sm": "0 1px 3px rgba(16,18,22,0.05), 0 1px 2px rgba(16,18,22,0.03)"
+      },
+      "h1": "Mes livraisons",
+      "bodyOverflowX": 0,
+      "viewport": [
+        390,
+        844
+      ],
+      "results": [
+        {
+          "sel": "h1",
+          "text": "Mes livraisons",
+          "color": "rgb(20, 23, 27)",
+          "bg": "rgb(244,245,246)",
+          "fontSize": 19,
+          "weight": 700,
+          "ratio": 16.47,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"pageTitle\"]",
+          "text": "Mes livraisons",
+          "color": "rgb(20, 23, 27)",
+          "bg": "rgb(244,245,246)",
+          "fontSize": 19,
+          "weight": 700,
+          "ratio": 16.47,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"hello\"]",
+          "text": "Bonjour, Mamy.",
+          "color": "rgb(51, 55, 61)",
+          "bg": "rgb(244,245,246)",
+          "fontSize": 13,
+          "weight": 600,
+          "ratio": 10.96,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"summaryLabel\"]",
+          "text": "À prendre en charge",
+          "color": "rgb(91, 100, 112)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 11,
+          "weight": 600,
+          "ratio": 6,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"summaryValue\"]",
+          "text": "2",
+          "color": "rgb(20, 23, 27)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 26,
+          "weight": 700,
+          "ratio": 17.98,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"addressLabel\"]",
+          "text": "Départ",
+          "color": "rgb(91, 100, 112)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 11,
+          "weight": 600,
+          "ratio": 6,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"addressText\"]",
+          "text": "DépartEntrepôt Ankorondrano, Antananariv",
+          "color": "rgb(20, 23, 27)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 15,
+          "weight": 400,
+          "ratio": 17.98,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"cardTitle\"]",
+          "text": "Livraison Analakely — Cotonou Fashion",
+          "color": "rgb(20, 23, 27)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 16.5008,
+          "weight": 600,
+          "ratio": 17.98,
+          "aa": true,
+          "overflowX": true
+        },
+        {
+          "sel": "[class*=\"cardTime\"]",
+          "text": "15 août",
+          "color": "rgb(91, 100, 112)",
+          "bg": "rgb(255,255,255)",
+          "fontSize": 11,
+          "weight": 400,
+          "ratio": 6,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"statusBadge\"]",
+          "text": "En cours",
+          "color": "rgb(58, 95, 125)",
+          "bg": "rgb(225,230,234)",
+          "fontSize": 11,
+          "weight": 700,
+          "ratio": 5.37,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": "[class*=\"livePill\"]",
+          "text": "GPS bloqué",
+          "color": "rgb(176, 58, 50)",
+          "bg": "rgb(237,226,226)",
+          "fontSize": 11,
+          "weight": 700,
+          "ratio": 4.75,
+          "aa": true,
+          "overflowX": false
+        }
+      ],
+      "resourceErrors": [
+        "http://127.0.0.1:5174/api/notifications?limit=20",
+        "http://127.0.0.1:5174/api/notifications/unread-count",
+        "http://127.0.0.1:5174/api/notifications?limit=1",
+        "http://127.0.0.1:5174/api/notifications/unread-count",
+        "http://127.0.0.1:5174/api/notifications?limit=20",
+        "http://127.0.0.1:5174/api/notifications?limit=1",
+        "http://127.0.0.1:5174/api/notifications/unread-count",
+        "http://127.0.0.1:5174/api/notifications?limit=20",
+        "http://127.0.0.1:5174/api/notifications?limit=1"
+      ],
+      "waitSelFound": true
+    }
+  },
+  {
+    "name": "driver-vehicle",
+    "route": "/my-vehicle",
+    "viewport": [
+      390,
+      844
+    ],
+    "theme": "light",
+    "context": "field",
+    "title": "LogiTrack — Centre de contrôle logistique",
+    "waitSelFound": true,
+    "errors": [
+      {
+        "type": "warning",
+        "text": "[Sentry] VITE_SENTRY_DSN not set — skipping initialization"
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition."
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "warning",
+        "text": "[Sentry] VITE_SENTRY_DSN not set — skipping initialization"
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition."
+      },
+      {
+        "type": "warning",
+        "text": "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "type": "log",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      }
+    ],
+    "audit": {
+      "theme": "light",
+      "context": "field",
+      "title": "LogiTrack — Centre de contrôle logistique",
+      "vars": {
+        "--color-bg": "#F4F5F6",
+        "--color-surface": "#FFFFFF",
+        "--color-surface-alt": "#F6F8FA",
+        "--color-text": "#14171B",
+        "--color-text-secondary": "#33373D",
+        "--color-text-tertiary": "#5B6470",
+        "--color-accent": "#275A43",
+        "--color-accent-muted": "rgba(39, 90, 67, 0.12)",
+        "--color-glass": "#FFFFFF",
+        "--color-border": "rgba(20, 23, 27, 0.14)",
+        "--color-teal": "#256B52",
+        "--color-blue": "#3A5F7D",
+        "--color-red": "#B03A32",
+        "--color-warning": "#9A6314",
+        "--color-skeleton": "#E2E6EA",
+        "--font-display": "'IBM Plex Sans', 'Inter', sans-serif",
+        "--font-body": "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+        "--font-mono": "'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace",
+        "--radius-lg": "8px",
+        "--shadow-sm": "0 1px 3px rgba(16,18,22,0.05), 0 1px 2px rgba(16,18,22,0.03)"
+      },
+      "h1": "Mon véhicule",
+      "bodyOverflowX": 0,
+      "viewport": [
+        390,
+        844
+      ],
+      "results": [
+        {
+          "sel": "h1",
+          "text": "Mon véhicule",
+          "color": "rgb(20, 23, 27)",
+          "bg": "rgb(244,245,246)",
+          "fontSize": 19,
+          "weight": 700,
+          "ratio": 16.47,
+          "aa": true,
+          "overflowX": false
+        },
+        {
+          "sel": ".pageTitle",
+          "missing": true
+        }
+      ],
+      "resourceErrors": [
+        "http://127.0.0.1:5174/api/notifications?limit=20",
+        "http://127.0.0.1:5174/api/notifications/unread-count",
+        "http://127.0.0.1:5174/api/notifications?limit=1",
+        "http://127.0.0.1:5174/api/notifications?limit=20",
+        "http://127.0.0.1:5174/api/notifications/unread-count",
+        "http://127.0.0.1:5174/api/notifications?limit=1",
+        "http://127.0.0.1:5174/api/notifications?limit=20",
+        "http://127.0.0.1:5174/api/notifications/unread-count",
+        "http://127.0.0.1:5174/api/notifications?limit=1"
+      ],
+      "waitSelFound": true
+    }
+  }
+]
