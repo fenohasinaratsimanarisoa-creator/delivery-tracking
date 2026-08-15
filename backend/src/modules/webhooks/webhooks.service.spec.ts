@@ -218,17 +218,28 @@ describe('WebhooksService', () => {
       jest.spyOn(service as any, 'deliver').mockResolvedValue({ status: 'success' });
     });
 
-    it('delivers to every active webhook subscribed to the event (fire-and-forget)', async () => {
+    it('delivers to every active webhook of THE SAME COMPANY subscribed to the event (fire-and-forget)', async () => {
       mockPrisma.webhook.findMany.mockResolvedValueOnce([
         { id: 'webhook-1' },
         { id: 'webhook-2' },
       ]);
 
-      await service.dispatch('delivery.status_changed', { deliveryId: 'del-1' });
+      await service.dispatch('delivery.status_changed', 'company-1', { deliveryId: 'del-1' });
       // dispatch() ne bloque pas sur les livraisons (Promise.allSettled non attendu) :
       // on laisse les micro-tasks se résoudre avant d'observer les appels.
       await new Promise((r) => setTimeout(r, 10));
 
+      // SCOPING TENANT : la sélection filtre par companyId — un événement d'entreprise A
+      // ne doit JAMAIS atteindre les webhooks d'entreprise B (fuite cross-tenant).
+      expect(mockPrisma.webhook.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            companyId: 'company-1',
+            isActive: true,
+            events: { array_contains: 'delivery.status_changed' },
+          },
+        }),
+      );
       expect(service['deliver']).toHaveBeenCalledTimes(2);
       expect(service['deliver']).toHaveBeenCalledWith(
         'webhook-1',
@@ -240,11 +251,11 @@ describe('WebhooksService', () => {
       );
     });
 
-    it('ne sélectionne que l\'id des webhooks actifs et NE REJETTE JAMAIS (une erreur de lecture ne casse pas l\'appelant)', async () => {
+    it('ne sélectionne que l\'id des webhooks actifs de la company et NE REJETTE JAMAIS (une erreur de lecture ne casse pas l\'appelant)', async () => {
       mockPrisma.webhook.findMany.mockRejectedValueOnce(new Error('DB down'));
 
       await expect(
-        service.dispatch('delivery.delivered', { deliveryId: 'del-1' }),
+        service.dispatch('delivery.delivered', 'company-1', { deliveryId: 'del-1' }),
       ).resolves.toBeUndefined();
       expect(service['deliver']).not.toHaveBeenCalled();
     });

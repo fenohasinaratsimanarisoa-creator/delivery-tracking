@@ -130,11 +130,23 @@ export class WebhooksService {
     return this.deliver(webhook.id, 'test.ping', payload);
   }
 
-  async dispatch(event: string, payload: Record<string, unknown> | Prisma.JsonObject) {
+  async dispatch(
+    event: string,
+    companyId: string,
+    payload: Record<string, unknown> | Prisma.JsonObject,
+  ) {
     let webhooks: { id: string }[] = [];
     try {
+      // SCOPING TENANT : un événement de livraison ne doit être notifié qu'aux
+      // webhooks de LA MÊME entreprise. AVANT, dispatch() sélectionnait tous les
+      // webhooks actifs abonnés à l'événement SANS filtre companyId → les données
+      // d'une livraison (adresses, chauffeur, titre) partaient vers les URLs
+      // configurées par TOUTES les autres entreprises de la plateforme (fuite
+      // cross-tenant — le middleware tenant ne couvre pas ce service appelé hors
+      // contexte HTTP).
       webhooks = await this.prisma.webhook.findMany({
         where: {
+          companyId,
           isActive: true,
           events: { array_contains: event },
         },

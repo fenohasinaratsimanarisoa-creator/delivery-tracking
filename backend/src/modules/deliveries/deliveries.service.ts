@@ -154,7 +154,7 @@ export class DeliveriesService {
       include: { vehicle: true, driver: true },
     });
 
-    await this.webhooks.dispatch('delivery.status_changed', {
+    await this.webhooks.dispatch('delivery.status_changed', companyId, {
       deliveryId: delivery.id,
       companyId,
       title: delivery.title,
@@ -655,7 +655,7 @@ export class DeliveriesService {
     // la transition de livraison déjà committée (WebhooksService.dispatch est déjà
     // non-bloquant, ce garde couvre les erreurs inattendues de l'appel lui-même).
     try {
-      await this.webhooks.dispatch('delivery.status_changed', {
+      await this.webhooks.dispatch('delivery.status_changed', companyId, {
         deliveryId: delivery.id,
         companyId,
         title: delivery.title,
@@ -668,7 +668,7 @@ export class DeliveriesService {
       });
 
       if (status === DeliveryStatus.delivered) {
-        await this.webhooks.dispatch('delivery.delivered', {
+        await this.webhooks.dispatch('delivery.delivered', companyId, {
           deliveryId: delivery.id,
           companyId,
           title: delivery.title,
@@ -777,7 +777,7 @@ export class DeliveriesService {
             this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId, targetStatus);
           }
           await this.prisma.delivery.update({ where: { id }, data: updateData });
-          this.webhooks.dispatch('delivery.status_changed', {
+          this.webhooks.dispatch('delivery.status_changed', companyId, {
             deliveryId: id,
             companyId,
             title: delivery.title,
@@ -813,7 +813,7 @@ export class DeliveriesService {
               assignedDriverId: driver.userId ?? null,
             },
           });
-          this.webhooks.dispatch('delivery.driver_assigned', {
+          this.webhooks.dispatch('delivery.driver_assigned', companyId, {
             deliveryId: id,
             companyId,
             title: delivery.title,
