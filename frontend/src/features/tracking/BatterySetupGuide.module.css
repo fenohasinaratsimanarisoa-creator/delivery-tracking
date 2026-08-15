@@ -165,7 +165,7 @@
   font-weight: 600;
   font-size: 0.78rem;
   cursor: pointer;
-  min-height: 42px;
+  min-height: 44px;
 }
 
 .actionBtn:disabled {
@@ -200,5 +200,5 @@
   color: var(--color-text-tertiary, #7A8BA3);
   font-size: 0.78rem;
   cursor: pointer;
-  min-height: 40px;
+  min-height: 44px;
 }

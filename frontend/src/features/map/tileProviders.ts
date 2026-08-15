@@ -35,6 +35,10 @@ export const TILE_PROVIDERS: Record<'plan' | 'planDark' | 'planLight' | 'satelli
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; OpenStreetMap contributors',
     maxZoom: 19,
+    // OSM ne sert pas de tuiles au-delà de 19 : maxNativeZoom aligné pour que le
+    // conteneur (maxZoom 20, aligné sur CARTO) agrandisse la dernière tuile
+    // valide au lieu d'upscaler en flou ou de demander des tuiles 404.
+    maxNativeZoom: 19,
   },
   satellite: {
     key: 'satellite',
