@@ -193,6 +193,14 @@ describe('NotificationsService', () => {
     });
   });
 
+  it('échappe le HTML des champs utilisateur avant interpolation dans l\'email critique (anti-XSS)', async () => {
+    // Un titre/message contenant du HTML ne doit JAMAIS atterrir tel quel dans le corps
+    // de l'email (sendCriticalEmail construit le HTML par concaténation).
+    const escaped = (service as any).escapeHtml(`<script>alert(1)</script> & "quoted" 'x'`);
+    expect(escaped).toBe('&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quoted&quot; &#39;x&#39;');
+    expect(escaped).not.toContain('<script>');
+  });
+
   it('groups digest notifications by priority', async () => {
     const notifications = [
       { id: 'n1', priority: NotificationPriority.critical },

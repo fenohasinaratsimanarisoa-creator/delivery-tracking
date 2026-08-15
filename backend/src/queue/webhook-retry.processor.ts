@@ -103,16 +103,20 @@ export class WebhookRetryProcessor extends WorkerHost {
   @Cron(CronExpression.EVERY_5_MINUTES)
   async enqueueFailedDeliveries() {
     const now = new Date();
+    // Limite de tentatives alignée sur maxAttempts de CHAQUE livraison (pas un 5 en dur) :
+    // le process() du worker s'arrête à delivery.maxAttempts, la sélection du cron doit
+    // faire pareil, sinon une livraison configurée avec maxAttempts différent serait
+    // relancée indéfiniment (ou jamais jusqu'à épuisement si maxAttempts > 5).
     const failed = await this.prisma.webhookDelivery.findMany({
       where: {
         status: 'failed',
         nextRetryAt: { lte: now },
-        attempts: { lt: 5 },
       },
-      select: { id: true },
+      select: { id: true, attempts: true, maxAttempts: true },
     });
 
     for (const delivery of failed) {
+      if (delivery.attempts >= delivery.maxAttempts) continue;
       await this.retryQueue.add(
         'retry',
         { webhookDeliveryId: delivery.id },

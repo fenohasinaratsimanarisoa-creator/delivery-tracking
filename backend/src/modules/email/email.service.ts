@@ -66,6 +66,15 @@ export class EmailService {
     await this.send(email, t('email.invitation.subject', lang), html);
   }
 
+  private escapeHtml(value: unknown): string {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   async sendDigest(
     email: string,
     firstName: string,
@@ -86,10 +95,12 @@ export class EmailService {
     },
     lang: Language = 'fr',
   ): Promise<void> {
+    // Échappe les champs potentiellement utilisateur (plaque du véhicule) injectés dans
+    // le HTML de l'email — même protection que sendCriticalEmail (notifications.service).
     const anomalyRows = data.anomalyDetails
       .map(
         (a) =>
-          `<tr><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">${a.vehicle}</td><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">${a.liters} L</td><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">${a.date}</td></tr>`,
+          `<tr><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">${this.escapeHtml(a.vehicle)}</td><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">${a.liters} L</td><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">${this.escapeHtml(a.date)}</td></tr>`,
       )
       .join('');
 

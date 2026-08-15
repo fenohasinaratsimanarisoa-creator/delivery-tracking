@@ -210,4 +210,43 @@ describe('WebhooksService', () => {
       });
     });
   });
+
+  describe('dispatch', () => {
+    beforeEach(() => {
+      // deliver() fait un fetch réel vers l'URL : on le court-circuite (la persistance
+      // webhookDelivery et le retry sont couverts par le retry worker).
+      jest.spyOn(service as any, 'deliver').mockResolvedValue({ status: 'success' });
+    });
+
+    it('delivers to every active webhook subscribed to the event (fire-and-forget)', async () => {
+      mockPrisma.webhook.findMany.mockResolvedValueOnce([
+        { id: 'webhook-1' },
+        { id: 'webhook-2' },
+      ]);
+
+      await service.dispatch('delivery.status_changed', { deliveryId: 'del-1' });
+      // dispatch() ne bloque pas sur les livraisons (Promise.allSettled non attendu) :
+      // on laisse les micro-tasks se résoudre avant d'observer les appels.
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(service['deliver']).toHaveBeenCalledTimes(2);
+      expect(service['deliver']).toHaveBeenCalledWith(
+        'webhook-1',
+        'delivery.status_changed',
+        expect.objectContaining({
+          event: 'delivery.status_changed',
+          data: expect.objectContaining({ deliveryId: 'del-1' }),
+        }),
+      );
+    });
+
+    it('ne sélectionne que l\'id des webhooks actifs et NE REJETTE JAMAIS (une erreur de lecture ne casse pas l\'appelant)', async () => {
+      mockPrisma.webhook.findMany.mockRejectedValueOnce(new Error('DB down'));
+
+      await expect(
+        service.dispatch('delivery.delivered', { deliveryId: 'del-1' }),
+      ).resolves.toBeUndefined();
+      expect(service['deliver']).not.toHaveBeenCalled();
+    });
+  });
 });

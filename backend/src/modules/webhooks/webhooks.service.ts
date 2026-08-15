@@ -131,20 +131,36 @@ export class WebhooksService {
   }
 
   async dispatch(event: string, payload: Record<string, unknown> | Prisma.JsonObject) {
-    const webhooks = await this.prisma.webhook.findMany({
-      where: {
-        isActive: true,
-        events: { array_contains: event },
-      },
-    });
-
-    for (const webhook of webhooks) {
-      await this.deliver(webhook.id, event, {
-        event,
-        timestamp: new Date().toISOString(),
-        data: payload,
+    let webhooks: { id: string }[] = [];
+    try {
+      webhooks = await this.prisma.webhook.findMany({
+        where: {
+          isActive: true,
+          events: { array_contains: event },
+        },
+        select: { id: true },
       });
+    } catch (err: any) {
+      // Une erreur de lecture des webhooks ne doit JAMAIS faire échouer l'opération
+      // métier qui a déclenché l'événement (ex. transition de livraison déjà committée).
+      return;
     }
+
+    // Fire-and-forget : chaque livraison est lancée sans attendre (Promise.allSettled,
+    // pas de rejet propagé). AVANT, dispatch() était `await`ée par l'appelant — une
+    // webhook lente (jusqu'à 10 s de timeout) bloquait la réponse HTTP de la transition
+    // de livraison, et une erreur (ex. webhookDelivery.create) faisait échouer le statut.
+    // Le résultat de chaque tentative est PERSISTÉ (webhookDelivery) : le retry
+    // (WebhookRetryProcessor, cron 5 min) relance les échecs avec backoff.
+    void Promise.allSettled(
+      webhooks.map((webhook) =>
+        this.deliver(webhook.id, event, {
+          event,
+          timestamp: new Date().toISOString(),
+          data: payload,
+        }),
+      ),
+    );
   }
 
   private async deliver(

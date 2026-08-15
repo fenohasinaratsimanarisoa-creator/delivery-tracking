@@ -143,12 +143,27 @@ export class NotificationsService {
     return notification;
   }
 
+  // Échappe le HTML des champs utilisateur (title/message/link) injectés dans l'email :
+  // sans cela, un titre de livraison ou un message contenant du HTML (<script>, <img onerror>…)
+  // était injecté tel quel dans le corps de l'email critique (XSS par contenu utilisateur).
+  private escapeHtml(value: unknown): string {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   private async sendCriticalEmail(companyId: string, notification: any, data: any) {
+    const title = this.escapeHtml(notification.title);
+    const message = this.escapeHtml(notification.message);
+    const link = notification.link ? this.escapeHtml(notification.link) : null;
     const html = `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#111827">${notification.title}</h2>
-        <p style="color:#6b7280;line-height:1.5">${notification.message}</p>
-        ${notification.link ? `<a href="${this.emailService['appUrl'] || 'http://localhost:5173'}${notification.link}" style="display:inline-block;padding:12px 24px;background:#dc2626;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;margin:16px 0">Voir les détails</a>` : ''}
+        <h2 style="color:#111827">${title}</h2>
+        <p style="color:#6b7280;line-height:1.5">${message}</p>
+        ${link ? `<a href="${this.emailService['appUrl'] || 'http://localhost:5173'}${link}" style="display:inline-block;padding:12px 24px;background:#dc2626;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;margin:16px 0">Voir les détails</a>` : ''}
       </div>`;
 
     const targetEmail = data.userId

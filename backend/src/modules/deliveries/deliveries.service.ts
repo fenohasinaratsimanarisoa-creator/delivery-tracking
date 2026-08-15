@@ -651,26 +651,33 @@ export class DeliveriesService {
   }
 
   private async dispatchWebhook(companyId: string, delivery: any, status: DeliveryStatus) {
-    await this.webhooks.dispatch('delivery.status_changed', {
-      deliveryId: delivery.id,
-      companyId,
-      title: delivery.title,
-      status,
-      pickupAddress: delivery.pickupAddress,
-      deliveryAddress: delivery.deliveryAddress,
-      driverName: delivery.driver
-        ? `${delivery.driver.firstName} ${delivery.driver.lastName}`
-        : null,
-    });
-
-    if (status === DeliveryStatus.delivered) {
-      await this.webhooks.dispatch('delivery.delivered', {
+    // try/catch défensif : un webhook (ou sa persistance) ne doit JAMAIS faire échouer
+    // la transition de livraison déjà committée (WebhooksService.dispatch est déjà
+    // non-bloquant, ce garde couvre les erreurs inattendues de l'appel lui-même).
+    try {
+      await this.webhooks.dispatch('delivery.status_changed', {
         deliveryId: delivery.id,
         companyId,
         title: delivery.title,
-        completedAt: new Date().toISOString(),
+        status,
+        pickupAddress: delivery.pickupAddress,
         deliveryAddress: delivery.deliveryAddress,
+        driverName: delivery.driver
+          ? `${delivery.driver.firstName} ${delivery.driver.lastName}`
+          : null,
       });
+
+      if (status === DeliveryStatus.delivered) {
+        await this.webhooks.dispatch('delivery.delivered', {
+          deliveryId: delivery.id,
+          companyId,
+          title: delivery.title,
+          completedAt: new Date().toISOString(),
+          deliveryAddress: delivery.deliveryAddress,
+        });
+      }
+    } catch (err: any) {
+      this.logger.warn(`Webhook dispatch failed for delivery ${delivery.id}: ${err?.message}`);
     }
   }
 
