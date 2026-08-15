@@ -7,7 +7,7 @@ import {
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
-import { NotificationType, NotificationPriority } from '@prisma/client';
+import { NotificationType, NotificationPriority, Prisma } from '@prisma/client';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -93,6 +93,33 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         ? Number(this.configService.get<string>('TRACKING_SILENCE_TRACKER_MIN', '10'))
         : Number(this.configService.get<string>('TRACKING_SILENCE_PHONE_MIN', '5'));
     return Number.isFinite(value) && value > 0 ? value : source === 'physical_tracker' ? 10 : 5;
+  }
+
+  /**
+   * Classifie la cause probable d'un silence de traceur physique à partir de la
+   * DERNIÈRE télémétrie stockée (attributes JSONB). Unités normalisées par
+   * tracker-telemetry.ts (power en volts, battery en %). Retourne un label humain
+   * pour le dashboard (valeur de contrôle), et null si aucune télémétrie stockée.
+   */
+  private classifyTrackerSilenceCause(attributes: unknown): string | null {
+    if (attributes === null || attributes === undefined) {
+      return 'Télémétrie non remontée par ce modèle — panne SIM/réseau ou matérielle à vérifier';
+    }
+    if (typeof attributes !== 'object') return null;
+    const a = attributes as Record<string, unknown>;
+    const power = typeof a.power === 'number' ? a.power : null;
+    const battery = typeof a.battery === 'number' ? a.battery : null;
+
+    if (power !== null && power <= 0.5) {
+      return 'Coupure électrique du véhicule (tension à zéro à la dernière position)';
+    }
+    if (battery !== null && battery > 0 && battery <= 20) {
+      return "Batterie interne du traceur critique (va cesser d'émettre)";
+    }
+    if (power === null && battery === null) {
+      return 'Télémétrie non remontée par ce modèle — panne SIM/réseau ou matérielle à vérifier';
+    }
+    return 'Panne SIM/matériel ou zone sans réseau (dernière télémétrie normale)';
   }
 
   /**
@@ -255,6 +282,17 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       );
       const delivery = vehicle.deliveries[0];
 
+      // Cause probable d'un silence de traceur physique, dérivée de la DERNIÈRE
+      // télémétrie stockée (attributes JSONB) : coupure électrique véhicule vs
+      // batterie traceur critique vs panne SIM/matériel. Affiche l'info côté
+      // dashboard pour orienter le diagnostic terrain sans deviner. Un modèle
+      // bas de gamme sans télémétrie est signalé explicitement (limite du matériel,
+      // pas un bug DelivTrack).
+      let probableSilenceCause: string | null = null;
+      if (source === 'physical_tracker' && lastPos) {
+        probableSilenceCause = this.classifyTrackerSilenceCause(lastPos.attributes);
+      }
+
       results.push({
         vehicleId: vehicle.id,
         licensePlate: vehicle.licensePlate,
@@ -279,6 +317,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         inSilence: elapsedMin !== null && elapsedMin > thresholdMin,
         neverConnected: elapsedMin === null,
         silenceStartedAt: journal?.startedAt ?? null,
+        probableSilenceCause,
       });
     }
 
@@ -391,6 +430,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         timestamp: true,
         speed: true,
         source: true,
+        attributes: true,
       },
     });
   }
@@ -700,6 +740,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     dto: UpdatePositionDto,
     companyId?: string,
     source: PositionSource = 'phone',
+    attributes?: Record<string, unknown> | null,
   ) {
     this.metrics.received++;
 
@@ -810,6 +851,10 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         vehicleId: dto.vehicleId,
         driverId,
         source,
+        attributes:
+          attributes && Object.keys(attributes).length > 0
+            ? (attributes as Prisma.InputJsonValue)
+            : undefined,
       },
     });
 

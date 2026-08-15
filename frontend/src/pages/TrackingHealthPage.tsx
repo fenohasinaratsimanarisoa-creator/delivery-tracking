@@ -18,6 +18,7 @@ interface SilenceEntry {
   inSilence: boolean;
   neverConnected: boolean;
   silenceStartedAt: string | null;
+  probableSilenceCause: string | null;
 }
 
 interface ReliabilityEntry {
@@ -157,6 +158,7 @@ export default function TrackingHealthPage() {
                     <th className={styles.tableHeadCell}>{t('trackingHealth.signalAge') || 'Ancienneté signal'}</th>
                     <th className={styles.tableHeadCell}>{t('trackingHealth.threshold') || 'Seuil'}</th>
                     <th className={styles.tableHeadCell}>{t('trackingHealth.status') || 'État'}</th>
+                    <th className={styles.tableHeadCell}>{t('trackingHealth.cause') || 'Cause probable (traceur)'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -193,6 +195,13 @@ export default function TrackingHealthPage() {
                               ? (t('trackingHealth.silent') || 'SILENCE')
                               : (t('trackingHealth.ok') || 'OK')}
                         </span>
+                      </td>
+                      <td className={styles.tableCell}>
+                        {s.source === 'physical_tracker' && s.probableSilenceCause ? (
+                          <span className={styles.causeText}>{s.probableSilenceCause}</span>
+                        ) : (
+                          <span className={styles.causeMuted}>—</span>
+                        )}
                       </td>
                     </tr>
                   ))}

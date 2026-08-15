@@ -259,6 +259,19 @@
   white-space: nowrap;
 }
 
+.causeText {
+  display: block;
+  max-width: 300px;
+  font-size: var(--text-xs, 0.625rem);
+  line-height: var(--lh-normal, 1.5);
+  color: var(--color-text-secondary, #4B5563);
+}
+
+.causeMuted {
+  font-size: var(--text-xs, 0.625rem);
+  color: var(--color-text-tertiary, #7A8BA3);
+}
+
 .statusPillOn {
   background: rgba(34, 197, 94, 0.12);
   color: #22c55e;

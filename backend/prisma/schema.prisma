@@ -490,6 +490,16 @@ model GpsPosition {
   timestamp DateTime
   createdAt DateTime @default(now()) @map("created_at")
 
+  // Télémétrie matériel (traceurs physiques via Traccar) : sous-ensemble normalisé
+  // de Position.attributes, stocké pour diagnostiquer les silences GPS (coupure
+  // électrique véhicule vs batterie interne critique vs panne SIM/matériel) sans
+  // devoir re-interroger Traccar. NULL pour les positions téléphone.
+  //   - power : tension d'alimentation (volts ou milli-volts selon le protocole,
+  //             normalisée en volts — valeur conservée telle quelle côté pont)
+  //   - battery : niveau batterie interne du traceur (0-100) si le protocole le remonte
+  //   - ignition : état du contact véhicule si le protocole le remonte
+  attributes Json?
+
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
 

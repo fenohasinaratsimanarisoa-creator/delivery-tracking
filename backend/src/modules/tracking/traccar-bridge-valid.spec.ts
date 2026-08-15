@@ -11,6 +11,12 @@ const mockRedis = {
   get: jest.fn(),
   del: jest.fn(),
   set: jest.fn(),
+  setex: jest.fn(),
+  lpush: jest.fn(),
+  ltrim: jest.fn(),
+  lrange: jest.fn(),
+  lrem: jest.fn(),
+  llen: jest.fn(),
 };
 const mockPrisma = {
   vehicle: { findMany: jest.fn(), findFirst: jest.fn() },
@@ -306,5 +312,94 @@ describe('TraccarBridgeService — Champ valid', () => {
 
     expect(toInsert).toHaveLength(0);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Backfill: position LBS rejetée'));
+  });
+
+  describe('télémétrie traceur — power/battery (diagnostic silences)', () => {
+    function mockMappedVehicle() {
+      mockPrisma.vehicle.findFirst.mockResolvedValue({
+        id: '00000000-0000-4000-a000-000000000001',
+        companyId: 'comp-1',
+        positionSource: 'physical_tracker',
+      });
+      mockPrisma.vehicleAssignmentHistory.findFirst.mockResolvedValue(null);
+      mockPrisma.driver.findUnique.mockResolvedValue({ user: null });
+      mockPrisma.delivery.findFirst.mockResolvedValue(null);
+    }
+
+    it('stocke attributes power/battery sur savePosition (normalisés)', async () => {
+      mockMappedVehicle();
+      mockTrackingService.savePosition.mockResolvedValue({ id: 'gps-1', suspect: false });
+      mockRedis.get.mockResolvedValue(null);
+      mockRedis.set.mockResolvedValue('OK');
+
+      await (service as any).handlePosition(
+        basePos({ id: 42, attributes: { power: 12400, battery: 85, ignition: true } }),
+      );
+
+      const [, , , , attributes] = mockTrackingService.savePosition.mock.calls[0];
+      expect(attributes).toEqual({ power: 12.4, battery: 85, ignition: true });
+    });
+
+    it('ne stocke PAS d’attributes si le modèle bas de gamme n’en remonte aucun', async () => {
+      mockMappedVehicle();
+      mockTrackingService.savePosition.mockResolvedValue({ id: 'gps-1', suspect: false });
+
+      await (service as any).handlePosition(basePos({ id: 42 }));
+
+      const [, , , , attributes] = mockTrackingService.savePosition.mock.calls[0];
+      // toJsonValue renvoie null quand aucun champ n'est disponible — jamais un objet vide.
+      expect(attributes).toBeNull();
+    });
+
+    it('émet une alerte critical quand power tombe sous le seuil (coupure électrique véhicule)', async () => {
+      mockMappedVehicle();
+      mockTrackingService.savePosition.mockResolvedValue({ id: 'gps-1', suspect: false });
+      mockRedis.get.mockResolvedValue(null);
+      mockRedis.set.mockResolvedValue('OK');
+
+      await (service as any).handlePosition(
+        basePos({ id: 42, attributes: { power: 0, battery: 100 } }),
+      );
+
+      expect(mockNotifications.create).toHaveBeenCalledWith(
+        'comp-1',
+        expect.objectContaining({
+          title: expect.stringContaining('Coupure électrique'),
+          priority: 'critical',
+        }),
+      );
+    });
+
+    it('émet une alerte high quand la batterie interne du traceur est critique', async () => {
+      mockMappedVehicle();
+      mockTrackingService.savePosition.mockResolvedValue({ id: 'gps-1', suspect: false });
+      mockRedis.get.mockResolvedValue(null);
+      mockRedis.set.mockResolvedValue('OK');
+
+      await (service as any).handlePosition(
+        basePos({ id: 42, attributes: { power: 12.4, battery: 15 } }),
+      );
+
+      expect(mockNotifications.create).toHaveBeenCalledWith(
+        'comp-1',
+        expect.objectContaining({
+          title: expect.stringContaining('Batterie interne'),
+          priority: 'high',
+        }),
+      );
+    });
+
+    it('respecte le cooldown Redis (1h) : pas d’alerte dupliquée au fix suivant', async () => {
+      mockMappedVehicle();
+      mockTrackingService.savePosition.mockResolvedValue({ id: 'gps-1', suspect: false });
+      // Redis renvoie une valeur existante → alerte NON réémise.
+      mockRedis.get.mockResolvedValue('1');
+
+      await (service as any).handlePosition(
+        basePos({ id: 42, attributes: { power: 0, battery: 100 } }),
+      );
+
+      expect(mockNotifications.create).not.toHaveBeenCalled();
+    });
   });
 });

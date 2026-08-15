@@ -2043,6 +2043,90 @@ describe('TrackingService', () => {
     });
   });
 
+  describe('getTrackingSilences — cause probable du silence traceur', () => {
+    const vehicle = {
+      id: 'v-1',
+      licensePlate: '1234 TBA',
+      brand: 'Toyota',
+      model: 'Hilux',
+      positionSource: 'physical_tracker',
+      driver: { id: 'd-1', firstName: 'John', lastName: 'Doe' },
+      deliveries: [],
+    };
+
+    beforeEach(() => {
+      mockPrisma.vehicle.findMany.mockResolvedValue([vehicle]);
+      mockCacheService.get.mockResolvedValue(null);
+    });
+
+    it('classe coupure électrique quand power ≤ 0.5V sur la dernière télémétrie', async () => {
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue({
+        id: 'p-1',
+        latitude: -18.87,
+        longitude: 47.5,
+        timestamp: new Date(Date.now() - 20 * 60 * 1000),
+        speed: 0,
+        source: 'physical_tracker',
+        attributes: { power: 0, battery: 100 },
+      });
+
+      const result = await service.getTrackingSilences('company-1');
+
+      expect(result[0].probableSilenceCause).toContain('Coupure électrique');
+      expect(result[0].inSilence).toBe(true);
+    });
+
+    it('classe batterie interne critique quand battery ≤ 20% sur la dernière télémétrie', async () => {
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue({
+        id: 'p-2',
+        latitude: -18.87,
+        longitude: 47.5,
+        timestamp: new Date(Date.now() - 20 * 60 * 1000),
+        speed: 0,
+        source: 'physical_tracker',
+        attributes: { power: 12.4, battery: 15 },
+      });
+
+      const result = await service.getTrackingSilences('company-1');
+
+      expect(result[0].probableSilenceCause).toContain('Batterie interne');
+      expect(result[0].inSilence).toBe(true);
+    });
+
+    it('signale télémétrie non remontée quand le modèle bas de gamme ne l’envoie pas', async () => {
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue({
+        id: 'p-3',
+        latitude: -18.87,
+        longitude: 47.5,
+        timestamp: new Date(Date.now() - 20 * 60 * 1000),
+        speed: 0,
+        source: 'physical_tracker',
+        attributes: null,
+      });
+
+      const result = await service.getTrackingSilences('company-1');
+
+      expect(result[0].probableSilenceCause).toContain('Télémétrie non remontée');
+    });
+
+    it('n’expose AUCUNE cause pour les véhicules phone (pas de télémétrie matériel)', async () => {
+      mockPrisma.vehicle.findMany.mockResolvedValue([{ ...vehicle, positionSource: 'phone' }]);
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue({
+        id: 'p-4',
+        latitude: -18.87,
+        longitude: 47.5,
+        timestamp: new Date(Date.now() - 20 * 60 * 1000),
+        speed: 0,
+        source: 'phone',
+        attributes: null,
+      });
+
+      const result = await service.getTrackingSilences('company-1');
+
+      expect(result[0].probableSilenceCause).toBeNull();
+    });
+  });
+
   describe('archivePositionsBefore — multi-tenant scope', () => {
     it('should filter by companyId using vehicles join', async () => {
       mockPrisma.$executeRawUnsafe = jest.fn().mockResolvedValue(5);

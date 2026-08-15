@@ -18,9 +18,17 @@ import { TrackingGateway } from '../tracking/tracking.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AlertService } from '../../common/alerting/alert.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
-import { NotificationType, NotificationPriority } from '@prisma/client';
+import { NotificationType, NotificationPriority, Prisma } from '@prisma/client';
 import { UpdatePositionDto } from '../tracking/dto/update-position.dto';
 import { evaluateTeleportation } from '../../common/geo/teleportation.utils';
+import {
+  extractTrackerTelemetry,
+  toJsonValue,
+  isPowerCut,
+  isBatteryCritical,
+  POWER_CUT_VOLTS,
+  BATTERY_CRITICAL_PCT,
+} from '../../common/geo/tracker-telemetry';
 
 interface TraccarPosition {
   id: number;
@@ -645,15 +653,117 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           await this.redis.setex(cooldownKey, Math.round(timeout * 60), '1');
         }
 
+        // Classification de la cause probable du silence via la DERNIÈRE télémétrie
+        // connue (attributes JSONB) : coupure électrique véhicule vs batterie traceur
+        // critique vs panne SIM/matériel (dernière télémétrie normale). Oriente le
+        // diagnostic terrain (dois-je vérifier la batterie du véhicule, la SIM, ou le
+        // boîtier) au lieu de laisser le développeur deviner.
+        const lastTelemetry = this.parseStoredTelemetry(lastPos.attributes);
+        const cause = this.classifySilenceCause(lastTelemetry);
+        let message = `Le traceur GPS du véhicule n'a pas envoyé de position depuis ${Math.round(elapsedMin)} minutes`;
+        if (cause === 'power_cut') {
+          message +=
+            '. Cause probable : coupure électrique du véhicule (tension à zéro à la dernière position — moteur coupé longtemps ou batterie véhicule déconnectée/volée). Vérifiez la batterie du véhicule.';
+        } else if (cause === 'battery_critical') {
+          message +=
+            '. Cause probable : batterie interne du traceur critique à la dernière position (le traceur a pu cesser d\u2019émettre). Vérifiez le boîtier / son alimentation.';
+        } else if (cause === 'power_or_battery_unknown') {
+          message +=
+            '. Cause probable : panne SIM/matériel ou zone sans réseau (le traceur ne remonte pas de télémétrie power/battery — modèle bas de gamme). Vérifiez la SIM et le boîtier.';
+        } else {
+          message +=
+            '. Cause probable : panne SIM/matériel ou zone sans réseau (dernière télémétrie normale). Vérifiez la SIM, le boîtier et la couverture réseau.';
+        }
+
         await this.notifications.create(vehicle.companyId, {
           type: NotificationType.device_offline,
           priority: NotificationPriority.medium,
           title: 'Traceur physique hors ligne',
-          message: `Le traceur GPS du véhicule n'a pas envoyé de position depuis ${Math.round(elapsedMin)} minutes`,
+          message,
           userId: vehicle.driver.userId,
         });
       }
     }
+  }
+
+  /**
+   * Alertes télémétrie TEMPS RÉEL (à chaque position reçue) :
+   *   - coupure électrique du véhicule (power ≤ seuil) → notification critical ;
+   *   - batterie interne du traceur critique → notification high.
+   * Cooldown Redis par device et par type (1 h) : jamais de spam à chaque fix.
+   * Sans Redis (mode single-instance sans cache), on loggue en debug uniquement.
+   */
+  private async evaluateTrackerTelemetryAlerts(
+    companyId: string,
+    vehicleId: string,
+    traccarDeviceId: number,
+    telemetry: { powerVolts: number | null; batteryPercent: number | null },
+  ) {
+    if (!this.redis) return;
+
+    const powerCut = isPowerCut(telemetry);
+    if (powerCut) {
+      const key = `tracker_alert:power_cut:${vehicleId}`;
+      const existing = await this.redis.get(key);
+      if (!existing) {
+        await this.redis.setex(key, 3600, '1');
+        await this.notifications.create(companyId, {
+          type: NotificationType.device_offline,
+          priority: NotificationPriority.critical,
+          title: 'Coupure électrique détectée (traceur)',
+          message: `Le traceur device ${traccarDeviceId} remonte une tension d'alimentation à ${telemetry.powerVolts}V — coupure électrique du véhicule probable (moteur coupé longtemps ou batterie déconnectée). Le traceur fonctionne sur sa batterie interne de secours.`,
+        });
+      }
+    }
+
+    const batteryCritical = isBatteryCritical(telemetry);
+    if (batteryCritical) {
+      const key = `tracker_alert:battery_critical:${vehicleId}`;
+      const existing = await this.redis.get(key);
+      if (!existing) {
+        await this.redis.setex(key, 3600, '1');
+        await this.notifications.create(companyId, {
+          type: NotificationType.device_offline,
+          priority: NotificationPriority.high,
+          title: 'Batterie interne du traceur critique',
+          message: `Le traceur device ${traccarDeviceId} remonte une batterie interne à ${telemetry.batteryPercent}% — il va bientôt cesser d'émettre si rien n'est fait. Vérifiez le boîtier / son alimentation.`,
+        });
+      }
+    }
+  }
+
+  private parseStoredTelemetry(attributes: unknown): {
+    powerVolts: number | null;
+    batteryPercent: number | null;
+  } {
+    if (!attributes || typeof attributes !== 'object') {
+      return { powerVolts: null, batteryPercent: null };
+    }
+    const a = attributes as Record<string, unknown>;
+    return {
+      powerVolts: typeof a.power === 'number' ? a.power : null,
+      batteryPercent: typeof a.battery === 'number' ? a.battery : null,
+    };
+  }
+
+  private classifySilenceCause(telemetry: {
+    powerVolts: number | null;
+    batteryPercent: number | null;
+  }): 'power_cut' | 'battery_critical' | 'power_or_battery_unknown' | 'normal_then_silence' {
+    if (telemetry.powerVolts !== null && telemetry.powerVolts <= POWER_CUT_VOLTS) {
+      return 'power_cut';
+    }
+    if (
+      telemetry.batteryPercent !== null &&
+      telemetry.batteryPercent > 0 &&
+      telemetry.batteryPercent <= BATTERY_CRITICAL_PCT
+    ) {
+      return 'battery_critical';
+    }
+    if (telemetry.powerVolts === null && telemetry.batteryPercent === null) {
+      return 'power_or_battery_unknown';
+    }
+    return 'normal_then_silence';
   }
 
   private async performSessionLogin(): Promise<
@@ -915,6 +1025,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             vehicleId: string;
             driverId: string | null;
             source: 'physical_tracker';
+            attributes?: Prisma.InputJsonValue;
           }> = [];
 
           // N+1 : avant, resolveDriverIdAtTimestamp faisait UNE requête
@@ -1002,6 +1113,11 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             const speedMs = (pos.speed || 0) * 0.514444;
             const { accuracy } = computeCombinedAccuracy(pos.accuracy, pos.attributes);
 
+            // Télémétrie stockée sur les positions backfillées aussi (historique) :
+            // la classification de silence utilisera la dernière télémétrie connue
+            // même si la coupure a précédé la reconnexion.
+            const backfillTelemetry = toJsonValue(extractTrackerTelemetry(pos.attributes));
+
             // MÊME décision de téléportation que le chemin temps réel
             // (evaluateTeleportation, source unique dans teleportation.utils) : la
             // détection du backfill recalculait un seuil 55.56 * max(1, accuracy/10) SANS
@@ -1047,6 +1163,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               // chauffeur gardent l'ANCIEN driverId, les postérieures le NOUVEAU.
               driverId: backfillDriverId,
               source: 'physical_tracker',
+              attributes: backfillTelemetry
+                ? (backfillTelemetry as Prisma.InputJsonValue)
+                : undefined,
             });
           }
 
@@ -1174,6 +1293,18 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       );
       this.logger.debug(`Traccar device ${pos.deviceId}: ${hdopInfo}`);
 
+      // Télémétrie matériel (power/battery/ignition) : extraite de façon
+      // protocolo-agnostique et stockée en JSONB. Servira à classer la cause
+      // d'un silence GPS et à alerter en temps réel (coupure électrique /
+      // batterie interne critique) — jamais supposée si le modèle ne la remonte pas.
+      const telemetry = extractTrackerTelemetry(pos.attributes);
+      const attributesJson = toJsonValue(telemetry);
+      if (attributesJson) {
+        this.logger.debug(
+          `Traccar device ${pos.deviceId} telemetry: power=${telemetry.powerVolts ?? 'n/a'}V battery=${telemetry.batteryPercent ?? 'n/a'}% ignition=${telemetry.ignition ?? 'n/a'}`,
+        );
+      }
+
       const updateDto = {
         latitude: pos.latitude,
         longitude: pos.longitude,
@@ -1203,6 +1334,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           vehicleMapping.companyId,
           // Le pont Traccar est toujours une source 'physical_tracker'.
           'physical_tracker',
+          attributesJson,
         );
 
         if (this.redis) {
@@ -1214,6 +1346,20 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         );
         await this.queuePendingPosition(pos);
         return;
+      }
+
+      // Alertes télémétrie temps réel (uniquement si le protocole remonte les champs) :
+      //   - power ≤ POWER_CUT_VOLTS V → coupure électrique du véhicule (moteur/batterie
+      //     déconnectée, vol) — le traceur passe sur sa batterie interne de secours.
+      //   - battery ≤ BATTERY_CRITICAL_PCT % → le traceur va bientôt cesser d'émettre.
+      // Cooldown Redis par device (1 h) pour ne pas spammer le dashboard à chaque fix.
+      if (position && attributesJson) {
+        await this.evaluateTrackerTelemetryAlerts(
+          vehicleMapping.companyId,
+          vehicleMapping.id,
+          pos.deviceId,
+          telemetry,
+        );
       }
 
       if (position) {

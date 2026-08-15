@@ -252,6 +252,65 @@ montre la configuration, l'authentification et les devices exposés par l'API Tr
 | rafale de positions (Teltonika) | aucune perte ni throttling (traitement séquentiel) |
 | deviceId non numérique | `String(deviceId)` — stocké STRING, matching stable |
 
+### 6.6 Télémétrie matériel du traceur (power / battery) — diagnostic des silences
+
+Le pont DelivTrack lit, quand le traceur les remonte, les champs `power` et `battery`
+de l'objet Position normalisé de Traccar et les **stocke** (JSONB `attributes` de
+`gps_positions`). Ils servent à **classer la cause probable d'un silence GPS** au lieu
+de laisser le développeur deviner :
+
+| Valeur stockée | Interprétation | Ce qu'elle déclenche |
+|---|---|---|
+| `power ≤ 0.5 V` | Coupure électrique du véhicule (moteur coupé longtemps, batterie déconnectée/volée) — le traceur fonctionne sur sa batterie interne | Alerte **critical** temps réel + cause « Coupure électrique » dans le dashboard silences |
+| `battery ≤ 20 %` | Batterie interne du traceur critique — il va cesser d'émettre | Alerte **high** temps réel + cause « Batterie interne critique » dans le dashboard |
+| power/battery **absents** | Modèle bas de gamme qui ne remonte pas cette télémétrie | Cause « Télémétrie non remontée par ce modèle » — **limite du matériel**, pas un bug DelivTrack |
+| power normal, silence brutal | Panne SIM/matériel ou zone sans réseau | Cause « Panne SIM/matériel ou zone sans réseau » |
+
+⚠️ **À vérifier pour CHAQUE nouveau modèle de traceur acheté** : le champ `power`/`battery`
+dans la fiche produit. Teltonika et la plupart des GT06 4G remontent `power` (volts) et
+`battery` (pourcentage). Certains modèles bas de gamme ne les remontent **pas du tout** —
+dans ce cas, la cause du silence reste non documentée (le dashboard le signale
+explicitement). Ne promettez jamais à un client une « détection de coupure » sur un
+modèle sans ce champ.
+
+> Unités gérées de façon protocolo-agnostique : `power` interprété en millivolts si
+> > 50 (÷1000), en volts sinon ; `battery` en pourcentage (0-100) si ≤ 100, en tension
+> interne (mV, plage 3.0-4.2V → %) sinon. Vérifiez quand même le format réel de votre
+> modèle la première fois (position → dashboard → colonne « Cause probable »).
+
+### 6.7 Supervision du process Traccar (auto-hébergé / VPS DigitalOcean)
+
+En production DelivTrack utilise Traccar Cloud (géré par Traccar, aucune supervision à
+faire). En **auto-hébergement sur VPS** (dev ou si vous passez hors Traccar Cloud),
+le process Traccar DOIT être relancé automatiquement en cas de crash — un process mort
+sans relance = traceurs muets sans aucune alerte.
+
+- **Docker** : `docker-compose.yml` → `restart: unless-stopped` (déjà configuré) —
+  Docker relance le conteneur après un crash/reboot du VPS.
+- **systemd** (service natif, sans Docker) :
+  ```ini
+  [Unit]
+  Description=Traccar GPS Server
+  After=network.target postgresql.service
+
+  [Service]
+  ExecStart=/opt/traccar/bin/traccar start
+  Restart=always
+  RestartSec=10
+  User=traccar
+
+  [Install]
+  WantedBy=multi-user.target
+  ```
+  `Restart=always` + `RestartSec=10` : relance automatique 10 s après tout crash, sans
+  limite de tentatives. Vérifier ensuite : `systemctl enable traccar && systemctl status traccar`.
+
+Côté DelivTrack, une **panne du process Traccar lui-même** (pas seulement une
+déconnexion websocket du bridge) est détectée et alertée : le pont ping
+`GET /api/server` de Traccar toutes les 5 minutes ; si la réponse échoue, il force une
+reconnexion propre (nouvelle session + backfill). Si Traccar reste injoignable plus de
+15 min, une alerte **critical** part au dashboard (« Pont Traccar hors ligne prolongé »).
+
 ## 7. Sécurité
 
 ### 7.1 Isolation multi-tenant
