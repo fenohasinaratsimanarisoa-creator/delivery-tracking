@@ -85,10 +85,16 @@ describe('MobileMoneyService', () => {
       expect(result).toBe(true);
     });
 
-    it('should return true for non-simulated transactions', async () => {
+    it('should NOT confirm a non-simulated transaction without real provider verification', async () => {
+      const loggerWarn = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
+
       const result = await service.verifyPayment('real_txn_12345', 'mvola');
 
-      expect(result).toBe(true);
+      // Une ref réelle ne peut pas être considérée payée sans vérification opérateur :
+      // seule la confirmation par webhook signé HMAC (handleWebhook) fait foi.
+      expect(result).toBe(false);
+      expect(loggerWarn).toHaveBeenCalled();
+      loggerWarn.mockRestore();
     });
 
     it('should randomly fail for simulated transactions', async () => {

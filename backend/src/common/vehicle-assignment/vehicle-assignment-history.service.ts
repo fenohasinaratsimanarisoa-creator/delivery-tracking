@@ -39,6 +39,17 @@ export class VehicleAssignmentHistoryService {
       where: { vehicleId: params.vehicleId, unassignedAt: null },
       select: { id: true, driverId: true },
     });
+    // NO-OP : le chauffeur demandé est DÉJÀ le conducteur de ce véhicule → AUCUNE écriture.
+    // Sans ce garde, chaque sauvegarde du formulaire chauffeur (drivers.service/users.service
+    // appellent assign() dès que dto.vehicleId est fourni, sans vérifier le changement)
+    // fermait la ligne ouverte du chauffeur et en recréait une à "now" : assignedAt d'origine
+    // perdu (source de vérité du backfill GPS) + 2 écritures inutiles par sauvegarde.
+    // L'invariant « au plus une ligne ouverte par chauffeur » (index unique partiel) garantit
+    // que si openForVehicle.driverId === params.driverId, le chauffeur n'a aucune autre ligne
+    // ouverte ailleurs : le return anticipé est sûr.
+    if (openForVehicle && openForVehicle.driverId === params.driverId) {
+      return;
+    }
     if (openForVehicle && openForVehicle.driverId !== params.driverId) {
       await tx.vehicleAssignmentHistory.update({
         where: { id: openForVehicle.id },

@@ -1062,7 +1062,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async handlePosition(pos: TraccarPosition, _isBackfill = false) {
+  private async handlePosition(pos: TraccarPosition) {
     try {
       const timestamp = this.parseTimestamp(pos);
       if (!this.isValidCoordinates(pos.latitude, pos.longitude)) {

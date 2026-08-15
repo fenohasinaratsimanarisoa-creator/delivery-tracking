@@ -1099,6 +1099,118 @@ describe('TrackingService', () => {
       expect(byTime.get(base + 10000)!.suspect).toBe(false);
       expect(byTime.get(base + 20000)!.suspect).toBe(false);
     });
+
+    it('calls checkProximity for the LAST point of EACH vehicle in the batch (B4)', async () => {
+      const positions = [
+        { latitude: 1, longitude: 2, timestamp: '2026-07-21T10:00:00.000Z', vehicleId: VID1 },
+        { latitude: 3, longitude: 4, timestamp: '2026-07-21T10:00:05.000Z', vehicleId: VID2 },
+      ];
+
+      mockPrisma.delivery.findMany.mockResolvedValue([]);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VID1 }, { id: VID2 }]);
+      // lastPositions : aucune position en base (flush d'une file offline vide côté DB)
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
+      mockPrisma.gpsPosition.createManyAndReturn.mockResolvedValueOnce([
+        {
+          id: 'gps-1',
+          vehicleId: VID1,
+          timestamp: new Date('2026-07-21T10:00:00.000Z'),
+          latitude: 1,
+          longitude: 2,
+          speed: null,
+          heading: null,
+          altitude: null,
+          accuracy: null,
+          suspect: false,
+          driverId: 'driver-1',
+          deliveryId: null,
+        },
+        {
+          id: 'gps-2',
+          vehicleId: VID2,
+          timestamp: new Date('2026-07-21T10:00:05.000Z'),
+          latitude: 3,
+          longitude: 4,
+          speed: null,
+          heading: null,
+          altitude: null,
+          accuracy: null,
+          suspect: false,
+          driverId: 'driver-1',
+          deliveryId: null,
+        },
+      ]);
+
+      await service.saveBatch('user-1', 'driver-1', positions as any, 'company-1');
+
+      expect(mockDeliveryProximityService.checkProximity).toHaveBeenCalledTimes(2);
+      expect(mockDeliveryProximityService.checkProximity).toHaveBeenCalledWith(
+        'driver-1',
+        VID1,
+        'company-1',
+        1,
+        2,
+        expect.any(Date),
+      );
+      expect(mockDeliveryProximityService.checkProximity).toHaveBeenCalledWith(
+        'driver-1',
+        VID2,
+        'company-1',
+        3,
+        4,
+        expect.any(Date),
+      );
+    });
+
+    it('calls checkProximity exactly once for a single-vehicle batch (no regression)', async () => {
+      const positions = [
+        { latitude: 1, longitude: 2, timestamp: '2026-07-21T10:00:00.000Z', vehicleId: VID1 },
+        {
+          latitude: 1.001,
+          longitude: 2.001,
+          timestamp: '2026-07-21T10:00:05.000Z',
+          vehicleId: VID1,
+        },
+      ];
+
+      mockPrisma.delivery.findMany.mockResolvedValue([]);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VID1 }]);
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
+      mockPrisma.gpsPosition.createManyAndReturn.mockResolvedValueOnce([
+        {
+          id: 'gps-1',
+          vehicleId: VID1,
+          timestamp: new Date('2026-07-21T10:00:00.000Z'),
+          latitude: 1,
+          longitude: 2,
+          speed: null,
+          heading: null,
+          altitude: null,
+          accuracy: null,
+          suspect: false,
+          driverId: 'driver-1',
+          deliveryId: null,
+        },
+        {
+          id: 'gps-2',
+          vehicleId: VID1,
+          timestamp: new Date('2026-07-21T10:00:05.000Z'),
+          latitude: 1.001,
+          longitude: 2.001,
+          speed: null,
+          heading: null,
+          altitude: null,
+          accuracy: null,
+          suspect: false,
+          driverId: 'driver-1',
+          deliveryId: null,
+        },
+      ]);
+
+      await service.saveBatch('user-1', 'driver-1', positions as any, 'company-1');
+
+      expect(mockDeliveryProximityService.checkProximity).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ─── Point 3 — Équivalence du champ `suspect` entre savePosition et saveBatch ───

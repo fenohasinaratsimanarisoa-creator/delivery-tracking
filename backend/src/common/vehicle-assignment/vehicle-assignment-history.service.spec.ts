@@ -193,4 +193,41 @@ describe('VehicleAssignmentHistory — invariant de réaffectation', () => {
     expect(driverACurrent.vehicleId).toBeNull();
     expect(driverBCurrent.vehicleId).toBe('V');
   });
+
+  it('NO-OP : réaffecter un chauffeur au MÊME véhicule ne crée AUCUNE écriture et conserve assignedAt', async () => {
+    // 1. Driver A affecté au véhicule V → 1 ligne ouverte.
+    const driverA = await driversService.create(companyId, {
+      firstName: 'Alice',
+      lastName: 'A',
+      licenseNumber: 'LIC-A',
+      vehicleId: 'V',
+    });
+    expect(driverA.vehicleId).toBe('V');
+    const rowsBefore = (await mockPrisma.vehicleAssignmentHistory.findMany({
+      where: { vehicleId: 'V' },
+    })) as HistoryRow[];
+    expect(rowsBefore).toHaveLength(1);
+    const originalAssignedAt = rowsBefore[0].assignedAt;
+
+    // Réinitialise les compteurs d'appels : la création ci-dessus appelle déjà
+    // assign() → create(). Seul le no-op qui suit doit être mesuré.
+    jest.clearAllMocks();
+
+    // 2. Sauvegarde du formulaire avec le MÊME véhicule (no-op) — avant le correctif,
+    // la ligne était fermée puis recréée à "now" (assignedAt perdu + 2 écritures).
+    await driversService.update(companyId, driverA.id, { vehicleId: 'V' } as any);
+
+    // 3. Toujours exactement 1 ligne, ouverte, même chauffeur, assignedAt d'origine intact.
+    const rowsAfter = (await mockPrisma.vehicleAssignmentHistory.findMany({
+      where: { vehicleId: 'V' },
+    })) as HistoryRow[];
+    expect(rowsAfter).toHaveLength(1);
+    expect(rowsAfter[0].driverId).toBe(driverA.id);
+    expect(rowsAfter[0].unassignedAt).toBeNull();
+    expect(rowsAfter[0].assignedAt.getTime()).toBe(originalAssignedAt.getTime());
+
+    // 4. Aucune écriture de fermeture/création n'a eu lieu.
+    expect(mockPrisma.vehicleAssignmentHistory.update).not.toHaveBeenCalled();
+    expect(mockPrisma.vehicleAssignmentHistory.create).not.toHaveBeenCalled();
+  });
 });

@@ -889,18 +889,28 @@ export class TrackingService {
       });
     }
 
-    if (companyId && inserted.length > 0) {
-      const last = inserted[inserted.length - 1];
-      this.deliveryProximityService
-        .checkProximity(
-          driverId,
-          last.vehicleId,
-          companyId,
-          last.latitude,
-          last.longitude,
-          last.timestamp,
-        )
-        .catch((err) => this.logger.error(`Proximity check failed: ${err}`));
+    // Proximité : évaluée sur le DERNIER point de CHAQUE véhicule présent dans le lot
+    // (pas seulement le dernier point global). Après un rattrapage réseau (flush
+    // IndexedDB), le point le plus récent du lot peut être loin de la destination alors
+    // que le chauffeur y est passé en milieu de lot — sans cette boucle, l'alerte
+    // « validez la livraison » (proximity) était perdue pour ce passage. checkProximity
+    // est idempotent côté serveur (clés Redis entered/snoozed) : aucun double-alert
+    // possible sur la même zone.
+    if (companyId && lastByVehicle.size > 0) {
+      for (const vehicleId of lastByVehicle.keys()) {
+        const last = inserted.find((r) => r.vehicleId === vehicleId);
+        if (!last) continue;
+        this.deliveryProximityService
+          .checkProximity(
+            driverId,
+            vehicleId,
+            companyId,
+            last.latitude,
+            last.longitude,
+            last.timestamp,
+          )
+          .catch((err) => this.logger.error(`Proximity check failed: ${err}`));
+      }
     }
 
     return saved;

@@ -100,7 +100,18 @@ export class MobileMoneyService {
       return !this.simulateFailure();
     }
 
-    return true;
+    // SÉCURITÉ : une transaction RÉELLE (hors sandbox) ne peut PAS être considérée
+    // payée sans vérification auprès de l'opérateur (MVola/Orange Money). Avant, la
+    // méthode retournait `true` inconditionnellement pour toute ref non-"sim_", ce qui
+    // permettait de considérer comme payé n'importe quel identifiant inventé. La
+    // confirmation d'un paiement réel passe UNIQUEMENT par le webhook signé HMAC
+    // (handleWebhook → confirmMobileMoney) : tant que la vérification d'état par API
+    // opérateur n'est pas intégrée (feature flag PAYMENT_VERIFY_REAL), on refuse ici
+    // d'affirmer le paiement — logger.warn explicite pour l'audit terrain.
+    this.logger.warn(
+      `verifyPayment: no real provider verification for ${provider} transaction ${transactionRef} — refusing to confirm payment (use the signed webhook flow)`,
+    );
+    return false;
   }
 
   async handleWebhook(

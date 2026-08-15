@@ -389,6 +389,12 @@ export class DeliveriesService {
       // l'app (findMyDeliveries / updateDriverStatus) alors qu'il n'est plus affecté.
       updateData.assignedDriverId = driver.userId ?? null;
     }
+    // Réaffectation du chauffeur via PATCH /deliveries/:id (SANS changement de statut) :
+    // mêmes effets de bord que bulkAction('assignDriver') — webhook delivery.driver_assigned
+    // + broadcast dataUpdate. Avant, un changement de chauffeur seul était silencieux :
+    // l'app du chauffeur et les intégrations webhook n'étaient jamais informées (contrairement
+    // au chemin bulkAction qui, lui, émettait les deux).
+    const driverChanged = dto.driverId !== undefined && dto.driverId !== delivery.driverId;
     let statusChanged = false;
     if (dto.status && dto.status !== delivery.status) {
       const allowed = TRANSITION_MATRIX[delivery.status];
@@ -440,6 +446,24 @@ export class DeliveriesService {
         entity: 'delivery',
         action: dto.status,
         payload: { id },
+      });
+    }
+
+    // Réaffectation du chauffeur seule (sans statut) : émission du webhook + broadcast
+    // (aligné sur bulkAction assignDriver, mêmes payloads). Pas de notification ici :
+    // le changement de statut (si présent) a déjà sa propre notification ci-dessus.
+    if (driverChanged && dto.driverId) {
+      await this.webhooks.dispatch('delivery.driver_assigned', companyId, {
+        deliveryId: id,
+        companyId,
+        title: updated.title,
+        driverId: dto.driverId,
+      });
+      this.dataUpdateBus.emitUpdate({
+        companyId,
+        entity: 'delivery',
+        action: 'assigned',
+        payload: { id, driverId: dto.driverId },
       });
     }
 

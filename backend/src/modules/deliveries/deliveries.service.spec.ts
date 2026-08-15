@@ -25,6 +25,7 @@ import { DataUpdateBus } from '../../common/events/data-update.bus';
 describe('DeliveriesService - State Machine', () => {
   let service: DeliveriesService;
   let prisma: PrismaService;
+  let module: TestingModule;
 
   const mockPrisma = {
     delivery: {
@@ -66,7 +67,7 @@ describe('DeliveriesService - State Machine', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         DeliveriesService,
         { provide: PrismaService, useValue: mockPrisma },
@@ -584,6 +585,87 @@ describe('DeliveriesService - State Machine', () => {
       );
       expect(result.driverId).toBe('driver-2');
       expect(result.assignedDriverId).toBe('user-456');
+    });
+
+    it('should emit driver_assigned webhook + broadcast when driverId changes via update (no status change)', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce({
+        id: 'del-reassign',
+        companyId: 'comp-1',
+        title: 'Test',
+        status: 'pending',
+        deletedAt: null,
+        driverId: 'driver-1',
+        vehicle: null,
+        driver: null,
+        deliveryLat: null,
+        deliveryLng: null,
+        assignedDriverId: 'user-111',
+        clientId: null,
+      });
+      const driver = { id: 'driver-2', userId: 'user-456', companyId: 'comp-1', deletedAt: null };
+      mockPrisma.driver.findFirst.mockResolvedValueOnce(driver);
+      mockPrisma.delivery.update.mockResolvedValueOnce({
+        id: 'del-reassign',
+        title: 'Test',
+        driverId: 'driver-2',
+        assignedDriverId: 'user-456',
+        status: 'pending',
+        companyId: 'comp-1',
+      });
+
+      const dataUpdateBus = module.get<DataUpdateBus>(DataUpdateBus);
+      await service.update('comp-1', 'del-reassign', { driverId: 'driver-2' } as any);
+
+      expect(mockWebhooks.dispatch).toHaveBeenCalledWith(
+        'delivery.driver_assigned',
+        'comp-1',
+        expect.objectContaining({ deliveryId: 'del-reassign', driverId: 'driver-2' }),
+      );
+      expect(dataUpdateBus.emitUpdate).toHaveBeenCalledWith({
+        companyId: 'comp-1',
+        entity: 'delivery',
+        action: 'assigned',
+        payload: { id: 'del-reassign', driverId: 'driver-2' },
+      });
+    });
+
+    it('should NOT emit driver_assigned when driverId is unchanged via update', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValueOnce({
+        id: 'del-same',
+        companyId: 'comp-1',
+        title: 'Test',
+        status: 'pending',
+        deletedAt: null,
+        driverId: 'driver-1',
+        vehicle: null,
+        driver: null,
+        deliveryLat: null,
+        deliveryLng: null,
+        assignedDriverId: 'user-111',
+        clientId: null,
+      });
+      mockPrisma.driver.findFirst.mockResolvedValueOnce({
+        id: 'driver-1',
+        userId: 'user-111',
+        companyId: 'comp-1',
+        deletedAt: null,
+      });
+      mockPrisma.delivery.update.mockResolvedValueOnce({
+        id: 'del-same',
+        title: 'Test',
+        driverId: 'driver-1',
+        assignedDriverId: 'user-111',
+        status: 'pending',
+        companyId: 'comp-1',
+      });
+
+      await service.update('comp-1', 'del-same', { driverId: 'driver-1' } as any);
+
+      expect(mockWebhooks.dispatch).not.toHaveBeenCalledWith(
+        'delivery.driver_assigned',
+        expect.anything(),
+        expect.anything(),
+      );
     });
   });
 
