@@ -223,13 +223,16 @@ jobs:
       - name: Run backend tracking reliability tests
         # NB : rootDir jest = src (package.json) → les patterns sont relatifs à src,
         # sans préfixe src/ (un pattern src/... ne matche jamais et fait échouer le job).
+        # Bloc littéral | obligatoire : sans lui YAML replie les lignes en espaces et
+        # les backslashes de continuation cassent les patterns (0 match).
         working-directory: ./backend
-        run: npx jest --silent \
-          modules/tracking/trip-fidelity.spec.ts \
-          modules/tracking/traccar-outage-recovery.spec.ts \
-          modules/tracking/traccar-backfill.spec.ts \
-          modules/tracking/tracking.service.spec.ts \
-          modules/tracking/tracking.gateway.spec.ts
+        run: |
+          npx jest --silent \
+            modules/tracking/trip-fidelity.spec.ts \
+            modules/tracking/traccar-outage-recovery.spec.ts \
+            modules/tracking/traccar-backfill.spec.ts \
+            modules/tracking/tracking.service.spec.ts \
+            modules/tracking/tracking.gateway.spec.ts
 
       - name: Setup Node.js (frontend)
         uses: actions/setup-node@v4
@@ -244,12 +247,13 @@ jobs:
 
       - name: Run frontend tracking reliability tests
         working-directory: ./frontend
-        run: npx vitest run \
-          src/services/tracking/tracking-reliability.spec.ts \
-          src/services/tracking/deadReckoning.spec.ts \
-          src/services/offlineQueue.spec.ts \
-          src/services/socket/socket.spec.ts \
-          src/hooks/useDriverTracking.spec.ts
+        run: |
+          npx vitest run \
+            src/services/tracking/tracking-reliability.spec.ts \
+            src/services/tracking/deadReckoning.spec.ts \
+            src/services/offlineQueue.spec.ts \
+            src/services/socket/socket.spec.ts \
+            src/hooks/useDriverTracking.spec.ts
 
   # Build APK release + publication GitHub Release — LE verrou anti-obsolescence.
   # À CHAQUE push sur main : build assembleRelease signé, version incrémentée
@@ -280,6 +284,23 @@ jobs:
 
       - name: Gradle cache
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      # capacitor-cordova-android-plugins/ est gitignoré et généré par cap sync :
+      # sans cette étape, le build échoue (cordova.variables.gradle absent en CI).
+      - name: Sync Capacitor plugins
+        working-directory: ./frontend
+        run: npx cap sync android
 
       - name: Compute next version
         id: version
