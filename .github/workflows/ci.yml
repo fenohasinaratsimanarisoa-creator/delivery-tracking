@@ -363,6 +363,15 @@ jobs:
           APKSIGNER=$ANDROID_HOME/build-tools/*/apksigner
           $APKSIGNER verify --print-certs app/build/outputs/apk/release/app-release.apk | head -5
 
+      # Nom d'asset FIXE demandé par le backend (GET /api/mobile-app/latest cherche
+      # l'asset « deliverytrack.apk ») : AGP produit app-release.apk, on le renomme
+      # pour que l'URL de téléchargement soit stable entre les versions.
+      - name: Rename APK asset
+        working-directory: ./frontend/android
+        run: |
+          mkdir -p release-assets
+          cp app/build/outputs/apk/release/app-release.apk release-assets/deliverytrack.apk
+
       - name: Compute SHA-256 and build manifest.json
         id: sha
         working-directory: ./frontend/android
@@ -371,7 +380,7 @@ jobs:
           VERSION_CODE: ${{ steps.version.outputs.version_code }}
           LAST_TAG: ${{ steps.version.outputs.last_tag }}
         run: |
-          SHA256=$(sha256sum app/build/outputs/apk/release/app-release.apk | awk '{print $1}')
+          SHA256=$(sha256sum release-assets/deliverytrack.apk | awk '{print $1}')
           BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           # Changelog : commits depuis le dernier tag (ou tout l'historique au 1er build).
           if [ "$LAST_TAG" != "v0.0.0" ]; then
@@ -404,7 +413,7 @@ jobs:
             - **SHA-256** : ${{ steps.sha.outputs.sha256 }}
             - **Date de build** : ${{ steps.sha.outputs.build_date }}
           files: |
-            frontend/android/app/build/outputs/apk/release/app-release.apk
+            frontend/android/release-assets/deliverytrack.apk
             frontend/android/manifest.json
           fail_on_unmatched_files: true
 
