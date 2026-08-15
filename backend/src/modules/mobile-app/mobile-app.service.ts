@@ -36,7 +36,10 @@ export class MobileAppService {
     private readonly cacheService: CacheService,
   ) {
     // Défauts = repo de production ; surchargeable via env (tests, fork).
-    this.owner = this.configService.get<string>('GITHUB_REPO_OWNER', 'fenohasinaratsimanarisoa-creator');
+    this.owner = this.configService.get<string>(
+      'GITHUB_REPO_OWNER',
+      'fenohasinaratsimanarisoa-creator',
+    );
     this.repo = this.configService.get<string>('GITHUB_REPO_NAME', 'delivery-tracking');
   }
 

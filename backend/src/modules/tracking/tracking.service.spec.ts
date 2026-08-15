@@ -557,7 +557,7 @@ describe('TrackingService', () => {
       );
     });
 
-    it('Scenario 5 — accuracy aberrante (100m) d\'un traceur inconnu : la téléportation reste DÉTECTÉE (scale accuracy plafonné)', async () => {
+    it("Scenario 5 — accuracy aberrante (100m) d'un traceur inconnu : la téléportation reste DÉTECTÉE (scale accuracy plafonné)", async () => {
       setupLastPos(0, 0, 5);
       mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-cap', suspect: true });
 
@@ -1682,7 +1682,12 @@ describe('TrackingService', () => {
     it('agrège la couverture par véhicule sur la période', async () => {
       const base = Date.parse('2026-07-21T10:00:00.000Z');
       mockPrisma.delivery.findMany.mockResolvedValue([
-        { id: 'delivery-1', vehicleId: 'vehicle-1', driverId: 'driver-1', completedAt: new Date(base) },
+        {
+          id: 'delivery-1',
+          vehicleId: 'vehicle-1',
+          driverId: 'driver-1',
+          completedAt: new Date(base),
+        },
       ]);
       // Positions sans trou pour ce trajet.
       mockPrisma.gpsPosition.findMany.mockResolvedValue(
@@ -1712,20 +1717,41 @@ describe('TrackingService', () => {
     it('classe un véhicule à couverture faible en bas du tri (problème récurrent visible)', async () => {
       const base = Date.parse('2026-07-21T10:00:00.000Z');
       mockPrisma.delivery.findMany.mockResolvedValue([
-        { id: 'delivery-1', vehicleId: 'vehicle-good', driverId: null, completedAt: new Date(base) },
+        {
+          id: 'delivery-1',
+          vehicleId: 'vehicle-good',
+          driverId: null,
+          completedAt: new Date(base),
+        },
         { id: 'delivery-2', vehicleId: 'vehicle-bad', driverId: null, completedAt: new Date(base) },
       ]);
       // Bon véhicule : trajet sans trou → 100 %.
       mockPrisma.gpsPosition.findMany
-        .mockResolvedValueOnce(Array.from({ length: 20 }, (_, i) => ({ timestamp: new Date(base + i * 3000) })))
+        .mockResolvedValueOnce(
+          Array.from({ length: 20 }, (_, i) => ({ timestamp: new Date(base + i * 3000) })),
+        )
         // Mauvais véhicule : 2 points + un trou de 10 min → couverture faible.
         .mockResolvedValueOnce([
           { timestamp: new Date(base) },
           { timestamp: new Date(base + 600 * 1000) },
         ]);
       mockPrisma.vehicle.findMany.mockResolvedValue([
-        { id: 'vehicle-good', licensePlate: 'GOOD', brand: null, model: null, positionSource: 'phone', driver: null },
-        { id: 'vehicle-bad', licensePlate: 'BAD', brand: null, model: null, positionSource: 'phone', driver: null },
+        {
+          id: 'vehicle-good',
+          licensePlate: 'GOOD',
+          brand: null,
+          model: null,
+          positionSource: 'phone',
+          driver: null,
+        },
+        {
+          id: 'vehicle-bad',
+          licensePlate: 'BAD',
+          brand: null,
+          model: null,
+          positionSource: 'phone',
+          driver: null,
+        },
       ]);
 
       const result = await service.getTrackingReliability('company-1', 30);
@@ -1738,7 +1764,7 @@ describe('TrackingService', () => {
   });
 
   describe('reportTrackingInterruption', () => {
-    it('crée une notification dashboard immédiate quand le marqueur d\'interruption est présent', async () => {
+    it("crée une notification dashboard immédiate quand le marqueur d'interruption est présent", async () => {
       mockPrisma.driver.findUnique.mockResolvedValue({
         id: 'driver-1',
         firstName: 'Jean',
@@ -1765,7 +1791,7 @@ describe('TrackingService', () => {
       );
     });
 
-    it('ne fait rien (reported: false) si le user n\'est pas un chauffeur', async () => {
+    it("ne fait rien (reported: false) si le user n'est pas un chauffeur", async () => {
       mockPrisma.driver.findUnique.mockResolvedValue(null);
       const result = await service.reportTrackingInterruption('user-1', {});
       expect(result.reported).toBe(false);
@@ -1818,7 +1844,7 @@ describe('TrackingService', () => {
       );
     });
 
-    it('n\'enregistre PAS de position pour un véhicule physical_tracker (isolation des sources)', async () => {
+    it("n'enregistre PAS de position pour un véhicule physical_tracker (isolation des sources)", async () => {
       mockPrisma.driver.findUnique.mockResolvedValue({
         id: 'driver-1',
         firstName: 'Jean',

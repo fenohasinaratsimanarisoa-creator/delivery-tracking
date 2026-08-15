@@ -1232,9 +1232,7 @@ export class FuelConsumptionService {
    * la période est donc pénalisé. Retourne 1 quand on ne peut pas calculer (moins de 2
    * fixes ou timestamps absents) : dans ce cas le cross-check ratio se comporte comme avant.
    */
-  private computeGpsCoverageFraction(
-    positions: Array<{ timestamp?: Date | null }>,
-  ): number {
+  private computeGpsCoverageFraction(positions: Array<{ timestamp?: Date | null }>): number {
     if (positions.length < 2) return 1;
     const firstTs = positions[0].timestamp;
     const lastTs = positions[positions.length - 1].timestamp;

@@ -221,13 +221,15 @@ jobs:
         run: npm run prisma:generate
 
       - name: Run backend tracking reliability tests
+        # NB : rootDir jest = src (package.json) → les patterns sont relatifs à src,
+        # sans préfixe src/ (un pattern src/... ne matche jamais et fait échouer le job).
         working-directory: ./backend
         run: npx jest --silent \
-          src/modules/tracking/trip-fidelity.spec.ts \
-          src/modules/tracking/traccar-outage-recovery.spec.ts \
-          src/modules/tracking/traccar-backfill.spec.ts \
-          src/modules/tracking/tracking.service.spec.ts \
-          src/modules/tracking/tracking.gateway.spec.ts
+          modules/tracking/trip-fidelity.spec.ts \
+          modules/tracking/traccar-outage-recovery.spec.ts \
+          modules/tracking/traccar-backfill.spec.ts \
+          modules/tracking/tracking.service.spec.ts \
+          modules/tracking/tracking.gateway.spec.ts
 
       - name: Setup Node.js (frontend)
         uses: actions/setup-node@v4

@@ -166,14 +166,16 @@ export class TrackingController {
   @Roles('driver')
   @ApiBearerAuth()
   @ApiOperation({
-    summary: "Signaler une interruption non volontaire du tracking (app tuée / fermée manuellement)",
+    summary:
+      'Signaler une interruption non volontaire du tracking (app tuée / fermée manuellement)',
     description:
       "Appelé par l'app mobile au lancement quand le marqueur natif d'interruption est présent (service tué par le système, force-stop partiel détecté par le watchdog). Crée une notification dashboard immédiate 'Chauffeur X : tracking interrompu à HH:MM' — jamais un silence découvert a posteriori.",
   })
   @Post('report-interruption')
   reportInterruption(
     @CurrentUser('id') userId: string,
-    @Body() body: { interruptedAt?: string; reason?: string; deliveryId?: string; vehicleId?: string },
+    @Body()
+    body: { interruptedAt?: string; reason?: string; deliveryId?: string; vehicleId?: string },
   ) {
     return this.trackingService.reportTrackingInterruption(userId, body);
   }
@@ -189,7 +191,14 @@ export class TrackingController {
   @Post('report-battery-critical')
   reportBatteryCritical(
     @CurrentUser('id') userId: string,
-    @Body() body: { level?: number; vehicleId?: string; deliveryId?: string; latitude?: number; longitude?: number },
+    @Body()
+    body: {
+      level?: number;
+      vehicleId?: string;
+      deliveryId?: string;
+      latitude?: number;
+      longitude?: number;
+    },
   ) {
     return this.trackingService.reportBatteryCritical(userId, body);
   }
@@ -208,7 +217,10 @@ export class TrackingController {
     @Query('days') days?: string,
   ) {
     const d = days ? parseInt(days, 10) : 30;
-    return this.trackingService.getTrackingReliability(companyId, Number.isFinite(d) && d > 0 ? d : 30);
+    return this.trackingService.getTrackingReliability(
+      companyId,
+      Number.isFinite(d) && d > 0 ? d : 30,
+    );
   }
 
   @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)

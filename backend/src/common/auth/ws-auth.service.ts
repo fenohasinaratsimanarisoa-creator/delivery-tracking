@@ -60,9 +60,7 @@ export class WsAuthService {
             throw new WsAuthError('Token has been revoked', 'TOKEN_INVALID');
           }
           if (payload.sessionId) {
-            const sessionRevokedAt = await this.redis.get(
-              `revoked:session:${payload.sessionId}`,
-            );
+            const sessionRevokedAt = await this.redis.get(`revoked:session:${payload.sessionId}`);
             if (sessionRevokedAt && payload.iat < parseInt(sessionRevokedAt, 10)) {
               throw new WsAuthError('Token has been revoked', 'TOKEN_INVALID');
             }

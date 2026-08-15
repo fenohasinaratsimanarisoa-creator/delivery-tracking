@@ -20,9 +20,9 @@ export class MobileAppController {
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Public()
   @ApiOperation({
-    summary: 'Dernière version de l\'app mobile (APK)',
+    summary: "Dernière version de l'app mobile (APK)",
     description:
-      'Public, rate-limité. Retourne la version actuelle, l\'URL de téléchargement du dernier APK, le hash SHA-256, la date de build et le changelog. 404 si aucun build n\'a encore été publié.',
+      "Public, rate-limité. Retourne la version actuelle, l'URL de téléchargement du dernier APK, le hash SHA-256, la date de build et le changelog. 404 si aucun build n'a encore été publié.",
   })
   async getLatest() {
     const release = await this.mobileAppService.getLatestRelease();

@@ -16,7 +16,12 @@ describe('WsAuthService', () => {
     jest.clearAllMocks();
     jwtService = new JwtService({ secret: 'test-secret' });
     configService = { get: jest.fn().mockReturnValue('test-secret') } as any;
-    service = new WsAuthService(jwtService, configService, mockPrisma as unknown as PrismaService, null);
+    service = new WsAuthService(
+      jwtService,
+      configService,
+      mockPrisma as unknown as PrismaService,
+      null,
+    );
   });
 
   const makeClient = (auth?: string) =>

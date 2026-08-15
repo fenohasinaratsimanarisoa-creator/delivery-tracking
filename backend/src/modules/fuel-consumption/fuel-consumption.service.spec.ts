@@ -608,7 +608,7 @@ describe('FuelConsumptionService', () => {
       expect(mockNotifications.create).not.toHaveBeenCalled();
     });
 
-    it('GATE COUVERTURE : un trou GPS (app fermée) marque NON VÉRIFIABLE au lieu d\'une fausse anomalie', async () => {
+    it("GATE COUVERTURE : un trou GPS (app fermée) marque NON VÉRIFIABLE au lieu d'une fausse anomalie", async () => {
       // Période de 12 h entre deux pleins, mais les fixes ne couvrent que 2 × 5 min
       // (2 trous de 6 h) → couverture ≈ 300+300 / 43200 ≈ 1.4% << 40%. La distance GPS
       // (2 km) est un sous-comptage massif du kilométrage réel : le ratio manuel/GPS
@@ -627,9 +627,27 @@ describe('FuelConsumptionService', () => {
       });
       // Fix 1 (00h00) → 1 km ; fix 2 (06h00, app fermée entre-temps) → +0 km ; fix 3 (12h00) → +1 km.
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([
-        { latitude: 0, longitude: 0, accuracy: null, speed: null, timestamp: new Date('2026-07-25T00:00:00.000Z') },
-        { latitude: 0, longitude: 0.00899, accuracy: null, speed: null, timestamp: new Date('2026-07-25T06:00:00.000Z') },
-        { latitude: 0, longitude: 0.01798, accuracy: null, speed: null, timestamp: new Date('2026-07-25T12:00:00.000Z') },
+        {
+          latitude: 0,
+          longitude: 0,
+          accuracy: null,
+          speed: null,
+          timestamp: new Date('2026-07-25T00:00:00.000Z'),
+        },
+        {
+          latitude: 0,
+          longitude: 0.00899,
+          accuracy: null,
+          speed: null,
+          timestamp: new Date('2026-07-25T06:00:00.000Z'),
+        },
+        {
+          latitude: 0,
+          longitude: 0.01798,
+          accuracy: null,
+          speed: null,
+          timestamp: new Date('2026-07-25T12:00:00.000Z'),
+        },
       ]);
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
@@ -654,7 +672,7 @@ describe('FuelConsumptionService', () => {
       );
     });
 
-    it('GATE COUVERTURE : couverture suffisante (fixes réguliers) → le ratio anomalie s\'applique normalement', async () => {
+    it("GATE COUVERTURE : couverture suffisante (fixes réguliers) → le ratio anomalie s'applique normalement", async () => {
       const fuelLog = {
         id: 'fuel-log-covered',
         vehicleId: 'vehicle-a',
@@ -669,9 +687,27 @@ describe('FuelConsumptionService', () => {
       // Fixes réguliers (10 min d'écart, couverture 100%) mais distance GPS faible :
       // ratio 150/2 = 75x → vraie anomalie détectée.
       mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([
-        { latitude: 0, longitude: 0, accuracy: null, speed: null, timestamp: new Date('2026-07-25T00:00:00.000Z') },
-        { latitude: 0, longitude: 0.00899, accuracy: null, speed: null, timestamp: new Date('2026-07-25T00:10:00.000Z') },
-        { latitude: 0, longitude: 0.01798, accuracy: null, speed: null, timestamp: new Date('2026-07-25T00:20:00.000Z') },
+        {
+          latitude: 0,
+          longitude: 0,
+          accuracy: null,
+          speed: null,
+          timestamp: new Date('2026-07-25T00:00:00.000Z'),
+        },
+        {
+          latitude: 0,
+          longitude: 0.00899,
+          accuracy: null,
+          speed: null,
+          timestamp: new Date('2026-07-25T00:10:00.000Z'),
+        },
+        {
+          latitude: 0,
+          longitude: 0.01798,
+          accuracy: null,
+          speed: null,
+          timestamp: new Date('2026-07-25T00:20:00.000Z'),
+        },
       ]);
       mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({ crossCheckThreshold: 1.3 });
 

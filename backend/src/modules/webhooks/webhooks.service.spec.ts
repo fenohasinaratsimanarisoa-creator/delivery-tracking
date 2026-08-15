@@ -219,10 +219,7 @@ describe('WebhooksService', () => {
     });
 
     it('delivers to every active webhook of THE SAME COMPANY subscribed to the event (fire-and-forget)', async () => {
-      mockPrisma.webhook.findMany.mockResolvedValueOnce([
-        { id: 'webhook-1' },
-        { id: 'webhook-2' },
-      ]);
+      mockPrisma.webhook.findMany.mockResolvedValueOnce([{ id: 'webhook-1' }, { id: 'webhook-2' }]);
 
       await service.dispatch('delivery.status_changed', 'company-1', { deliveryId: 'del-1' });
       // dispatch() ne bloque pas sur les livraisons (Promise.allSettled non attendu) :
@@ -251,7 +248,7 @@ describe('WebhooksService', () => {
       );
     });
 
-    it('ne sélectionne que l\'id des webhooks actifs de la company et NE REJETTE JAMAIS (une erreur de lecture ne casse pas l\'appelant)', async () => {
+    it("ne sélectionne que l'id des webhooks actifs de la company et NE REJETTE JAMAIS (une erreur de lecture ne casse pas l'appelant)", async () => {
       mockPrisma.webhook.findMany.mockRejectedValueOnce(new Error('DB down'));
 
       await expect(

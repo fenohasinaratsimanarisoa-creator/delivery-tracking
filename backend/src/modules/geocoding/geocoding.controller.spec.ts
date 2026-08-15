@@ -18,11 +18,9 @@ describe('GeocodingController — rate limiting (proxy API externes coûteuses)'
     // Il doit écraser le défaut global pour TOUTES les routes du controller (public,
     // proxy Google Places facturé + Nominatim 1 req/s).
     const limit = Reflect.getMetadata(THROTTLER_LIMIT + 'default', GeocodingController) as
-      | number
-      | undefined;
+      number | undefined;
     const ttl = Reflect.getMetadata(THROTTLER_TTL + 'default', GeocodingController) as
-      | number
-      | undefined;
+      number | undefined;
 
     expect(limit).toBe(20);
     expect(ttl).toBe(60000);

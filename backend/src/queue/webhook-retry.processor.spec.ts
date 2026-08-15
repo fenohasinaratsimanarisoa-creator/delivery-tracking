@@ -29,10 +29,7 @@ describe('WebhookRetryProcessor', () => {
       text: jest.fn().mockResolvedValue('server error'),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
-    processor = new WebhookRetryProcessor(
-      mockPrisma as unknown as PrismaService,
-      mockQueue as any,
-    );
+    processor = new WebhookRetryProcessor(mockPrisma as unknown as PrismaService, mockQueue as any);
   });
 
   describe('process — garde-fou entreprise supprimée', () => {

@@ -78,12 +78,16 @@ async function bootstrap() {
     if (jwtAccessSecret === jwtRefreshSecret) {
       app
         .get(Logger)
-        .warn('[STARTUP] JWT_ACCESS_SECRET and JWT_REFRESH_SECRET are IDENTICAL — use distinct secrets');
+        .warn(
+          '[STARTUP] JWT_ACCESS_SECRET and JWT_REFRESH_SECRET are IDENTICAL — use distinct secrets',
+        );
     }
   } else if (!jwtAccessSecret || !jwtRefreshSecret) {
-    app.get(Logger).warn(
-      '[STARTUP] JWT_ACCESS_SECRET / JWT_REFRESH_SECRET not set — JWT signing will fail. Set them in .env.',
-    );
+    app
+      .get(Logger)
+      .warn(
+        '[STARTUP] JWT_ACCESS_SECRET / JWT_REFRESH_SECRET not set — JWT signing will fail. Set them in .env.',
+      );
   }
 
   app.use(

@@ -1260,16 +1260,11 @@ describe('DeliveriesService - State Machine', () => {
         locationMismatch: true,
       });
 
-      await service.updateDriverStatus(
-        'comp-1',
-        'del-1',
-        'user-1',
-        {
-          status: DeliveryStatus.delivered,
-          latitude: proofLat,
-          longitude: proofLng,
-        } as any,
-      );
+      await service.updateDriverStatus('comp-1', 'del-1', 'user-1', {
+        status: DeliveryStatus.delivered,
+        latitude: proofLat,
+        longitude: proofLng,
+      } as any);
 
       // La preuve est pourtant acceptée (livraison marquée delivered)...
       const updateArg = mockPrisma.delivery.update.mock.calls[0][0] as any;
@@ -1300,16 +1295,11 @@ describe('DeliveriesService - State Machine', () => {
         locationMismatch: false,
       });
 
-      await service.updateDriverStatus(
-        'comp-1',
-        'del-1',
-        'user-1',
-        {
-          status: DeliveryStatus.delivered,
-          latitude: proofLat,
-          longitude: proofLng,
-        } as any,
-      );
+      await service.updateDriverStatus('comp-1', 'del-1', 'user-1', {
+        status: DeliveryStatus.delivered,
+        latitude: proofLat,
+        longitude: proofLng,
+      } as any);
 
       const updateArg = mockPrisma.delivery.update.mock.calls[0][0] as any;
       expect(updateArg.data.locationMismatch).toBe(false);
@@ -1330,16 +1320,11 @@ describe('DeliveriesService - State Machine', () => {
       });
 
       await expect(
-        service.updateDriverStatus(
-          'comp-1',
-          'del-1',
-          'user-1',
-          {
-            status: DeliveryStatus.delivered,
-            latitude: DELIVERY_LAT,
-            longitude: DELIVERY_LNG,
-          } as any,
-        ),
+        service.updateDriverStatus('comp-1', 'del-1', 'user-1', {
+          status: DeliveryStatus.delivered,
+          latitude: DELIVERY_LAT,
+          longitude: DELIVERY_LNG,
+        } as any),
       ).resolves.toBeDefined();
 
       const updateArg = mockPrisma.delivery.update.mock.calls[0][0] as any;

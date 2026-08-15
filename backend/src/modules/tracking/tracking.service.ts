@@ -249,9 +249,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         vehicle.positionSource === 'physical_tracker' ? 'physical_tracker' : 'phone';
       const thresholdMin = this.getSilenceThresholdMin(source);
       const lastPos = await this.getLastPosition(vehicle.id, false);
-      const elapsedMin = lastPos
-        ? (Date.now() - lastPos.timestamp.getTime()) / 60000
-        : null;
+      const elapsedMin = lastPos ? (Date.now() - lastPos.timestamp.getTime()) / 60000 : null;
       const journal = await this.cacheService.get<{ startedAt: string }>(
         this.silenceJournalKey(vehicle.id),
       );
@@ -1328,9 +1326,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     if (positions.length < 2) {
       return { coveragePct: 100, totalSec: 0, coveredSec: 0, gapCount: 0 };
     }
-    const sorted = [...positions].sort(
-      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
-    );
+    const sorted = [...positions].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     const first = sorted[0].timestamp.getTime();
     const last = sorted[sorted.length - 1].timestamp.getTime();
     const totalSec = Math.max(0, (last - first) / 1000);
@@ -1345,8 +1341,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       }
     }
     const coveredSec = Math.max(0, totalSec - uncoveredSec);
-    const coveragePct =
-      totalSec > 0 ? Math.round((coveredSec / totalSec) * 1000) / 10 : 100;
+    const coveragePct = totalSec > 0 ? Math.round((coveredSec / totalSec) * 1000) / 10 : 100;
     return { coveragePct, totalSec, coveredSec, gapCount };
   }
 
@@ -1361,7 +1356,10 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       totalDurationSec: 0,
       stopCount: 0,
       positionCount: 0,
-      postgisDistance: { meters: 0, kilometers: 0 } as { meters: number; kilometers: number } | null,
+      postgisDistance: { meters: 0, kilometers: 0 } as {
+        meters: number;
+        kilometers: number;
+      } | null,
       signalGaps: [] as Array<{
         fromTimestamp: string;
         toTimestamp: string;
@@ -1418,9 +1416,8 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     const gapThresholdMin = Number(
       this.configService.get<string>('TRACKING_GAP_THRESHOLD_MIN', '3'),
     );
-    const gapThresholdSec = (Number.isFinite(gapThresholdMin) && gapThresholdMin > 0
-      ? gapThresholdMin
-      : 3) * 60;
+    const gapThresholdSec =
+      (Number.isFinite(gapThresholdMin) && gapThresholdMin > 0 ? gapThresholdMin : 3) * 60;
     const signalGaps: typeof emptyReport.signalGaps = [];
     for (let i = 1; i < positions.length; i++) {
       const prev = positions[i - 1];
@@ -1477,9 +1474,8 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     const gapThresholdMin = Number(
       this.configService.get<string>('TRACKING_GAP_THRESHOLD_MIN', '3'),
     );
-    const gapThresholdSec = (Number.isFinite(gapThresholdMin) && gapThresholdMin > 0
-      ? gapThresholdMin
-      : 3) * 60;
+    const gapThresholdSec =
+      (Number.isFinite(gapThresholdMin) && gapThresholdMin > 0 ? gapThresholdMin : 3) * 60;
 
     const deliveries = await this.prisma.delivery.findMany({
       where: {
@@ -1537,7 +1533,10 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       agg.coveredSec += coverage.coveredSec;
       agg.gaps += coverage.gapCount;
       agg.positions += positions.length;
-      if (delivery.completedAt && (!agg.lastDeliveryCompletedAt || delivery.completedAt > agg.lastDeliveryCompletedAt)) {
+      if (
+        delivery.completedAt &&
+        (!agg.lastDeliveryCompletedAt || delivery.completedAt > agg.lastDeliveryCompletedAt)
+      ) {
         agg.lastDeliveryCompletedAt = delivery.completedAt;
       }
       byVehicle.set(delivery.vehicleId, agg);
@@ -1647,7 +1646,13 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
    */
   async reportBatteryCritical(
     userId: string,
-    body: { level?: number; vehicleId?: string; deliveryId?: string; latitude?: number; longitude?: number },
+    body: {
+      level?: number;
+      vehicleId?: string;
+      deliveryId?: string;
+      latitude?: number;
+      longitude?: number;
+    },
   ) {
     const driver = await this.prisma.driver.findUnique({
       where: { userId },

@@ -152,7 +152,12 @@ const assignmentHistory = [
   },
 ];
 
-const isNullCond = (cond: unknown) => cond === null || (typeof cond === 'object' && cond !== null && 'not' in cond && (cond as { not: unknown }).not === null);
+const isNullCond = (cond: unknown) =>
+  cond === null ||
+  (typeof cond === 'object' &&
+    cond !== null &&
+    'not' in cond &&
+    (cond as { not: unknown }).not === null);
 
 const matchPos = (row: PosRow, where: any): boolean => {
   if (!where) return true;
@@ -206,7 +211,11 @@ const mockPrisma: any = {
     findFirst: jest.fn(async ({ where }: { where: any }) => {
       const isD1 = where.id === DRIVER_D1 || where.userId === USER_D1;
       const isD2 = where.id === DRIVER_D2 || where.userId === USER_D2;
-      return isD1 ? { id: DRIVER_D1, userId: USER_D1 } : isD2 ? { id: DRIVER_D2, userId: USER_D2 } : null;
+      return isD1
+        ? { id: DRIVER_D1, userId: USER_D1 }
+        : isD2
+          ? { id: DRIVER_D2, userId: USER_D2 }
+          : null;
     }),
   },
   vehicle: {
@@ -232,9 +241,10 @@ const mockPrisma: any = {
         if (where?.status?.in && !where.status.in.includes(d.status)) return false;
         if (where?.driverId?.in && !where.driverId.in.includes(d.driverId)) return false;
         if (where?.OR) {
-          const ok = where.OR.some((o: any) =>
-            (o.assignedDriverId && d.assignedDriverId === o.assignedDriverId) ||
-            (o.driverId && d.driverId === o.driverId),
+          const ok = where.OR.some(
+            (o: any) =>
+              (o.assignedDriverId && d.assignedDriverId === o.assignedDriverId) ||
+              (o.driverId && d.driverId === o.driverId),
           );
           if (!ok) return false;
         }
@@ -267,14 +277,17 @@ const mockPrisma: any = {
         }
         rows = [...byV.values()];
       }
-      if (orderBy?.timestamp === 'asc') rows.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-      else if (orderBy?.timestamp === 'desc') rows.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      if (orderBy?.timestamp === 'asc')
+        rows.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      else if (orderBy?.timestamp === 'desc')
+        rows.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
       if (take) rows = rows.slice(0, take);
       return rows;
     }),
     findFirst: jest.fn(async ({ where, orderBy }: any) => {
-      let rows = posStore.filter((r) => matchPos(r, where));
-      if (orderBy?.timestamp === 'desc') rows.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      const rows = posStore.filter((r) => matchPos(r, where));
+      if (orderBy?.timestamp === 'desc')
+        rows.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
       else rows.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
       return rows[0] ?? null;
     }),
@@ -319,7 +332,10 @@ describe('E2E fidélité du trajet — coupure mobile 5 min, coupure serveur 10 
     broadcastDataUpdate: jest.fn(),
     sendToDriver: jest.fn(),
   } as any;
-  const mockGeofence = { checkGeofences: jest.fn().mockResolvedValue([]), findForDelivery: jest.fn() } as any;
+  const mockGeofence = {
+    checkGeofences: jest.fn().mockResolvedValue([]),
+    findForDelivery: jest.fn(),
+  } as any;
 
   const config = {
     get: jest.fn((key: string, d?: string) => {
@@ -399,7 +415,7 @@ describe('E2E fidélité du trajet — coupure mobile 5 min, coupure serveur 10 
     global.fetch = originalFetch;
   });
 
-  it('restaure l\'INTÉGRALITÉ du trajet (mobile + traceur), dans l\'ordre, sans perte ni doublon, avec le bon chauffeur par segment', async () => {
+  it("restaure l'INTÉGRALITÉ du trajet (mobile + traceur), dans l'ordre, sans perte ni doublon, avec le bon chauffeur par segment", async () => {
     // ------------------------------------------------------------------ PHONE
     // Partie 1 (chauffeur D1) : 30 positions en temps réel, 3 s.
     const part1 = Array.from({ length: 30 }, (_, i) => phoneDto(i, DRIVER_D1));

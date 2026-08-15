@@ -83,7 +83,7 @@ describe('MobileAppService', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('renvoie null (→ 404) si aucune release n\'a jamais été publiée', async () => {
+  it("renvoie null (→ 404) si aucune release n'a jamais été publiée", async () => {
     (global.fetch as jest.Mock).mockImplementation(async () => ({
       ok: false,
       status: 404,
@@ -97,14 +97,17 @@ describe('MobileAppService', () => {
   it('renvoie null si la release est incomplète (asset APK manquant)', async () => {
     // Release sans l'asset deliverytrack.apk → ne JAMAIS servir de version "à jour".
     mockFetch([
-      { ...release, assets: [{ name: 'manifest.json', browser_download_url: 'https://x/manifest.json' }] },
+      {
+        ...release,
+        assets: [{ name: 'manifest.json', browser_download_url: 'https://x/manifest.json' }],
+      },
     ]);
 
     const result = await service.getLatestRelease();
     expect(result).toBeNull();
   });
 
-  it('renvoie null si l\'API GitHub est injoignable (jamais une version périmée)', async () => {
+  it("renvoie null si l'API GitHub est injoignable (jamais une version périmée)", async () => {
     (global.fetch as jest.Mock).mockRejectedValue(new Error('network down'));
 
     const result = await service.getLatestRelease();

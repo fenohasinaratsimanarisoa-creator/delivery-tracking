@@ -20,7 +20,6 @@ import { AlertService } from '../../common/alerting/alert.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { NotificationType, NotificationPriority } from '@prisma/client';
 import { UpdatePositionDto } from '../tracking/dto/update-position.dto';
-import { haversineDistance } from '../../common/geo/geo.utils';
 import { evaluateTeleportation } from '../../common/geo/teleportation.utils';
 
 interface TraccarPosition {

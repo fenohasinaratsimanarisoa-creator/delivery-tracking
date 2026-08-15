@@ -59,11 +59,7 @@ describe('TraccarBridgeService — reprise après coupure serveur : backfill SAN
 
   /** Génère les positions Traccar que le serveur a tamponnées pendant la coupure :
    *  une par minute sur TOUTE la fenêtre [T_START+1min, T_END], fixTime = heure GPS. */
-  const positionsForOutageWindow = (
-    startMs: number,
-    endMs: number,
-    stepMs = 60 * 1000,
-  ) => {
+  const positionsForOutageWindow = (startMs: number, endMs: number, stepMs = 60 * 1000) => {
     const positions = [];
     for (let t = startMs + stepMs; t <= endMs; t += stepMs) {
       positions.push({
@@ -89,10 +85,7 @@ describe('TraccarBridgeService — reprise après coupure serveur : backfill SAN
     insertedByDriver = new Map();
     // La base contient la dernière position AVANT la coupure.
     dbTimestamps = [T_OUTAGE_START];
-    redisStore.set(
-      `traccar:last_position:${DEVICE_ID}`,
-      new Date(T_OUTAGE_START).toISOString(),
-    );
+    redisStore.set(`traccar:last_position:${DEVICE_ID}`, new Date(T_OUTAGE_START).toISOString());
 
     const config = {
       get: jest.fn((key: string, d?: string) => {

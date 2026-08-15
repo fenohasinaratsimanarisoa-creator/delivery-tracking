@@ -83,9 +83,7 @@ export class AuthService {
     try {
       const count = await this.redis.get(this.loginFailKey(email));
       if (count && parseInt(count, 10) >= this.loginFailMaxAttempts) {
-        throw new UnauthorizedException(
-          'Too many failed login attempts. Please try again later.',
-        );
+        throw new UnauthorizedException('Too many failed login attempts. Please try again later.');
       }
     } catch (err) {
       if (err instanceof UnauthorizedException) throw err;

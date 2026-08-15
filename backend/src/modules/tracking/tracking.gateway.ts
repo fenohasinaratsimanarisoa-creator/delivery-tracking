@@ -401,7 +401,8 @@ export class TrackingGateway
   @SubscribeMessage('batteryCritical')
   async handleBatteryCritical(
     @ConnectedSocket() client: Socket,
-    @MessageBody() body: {
+    @MessageBody()
+    body: {
       vehicleId?: string;
       deliveryId?: string;
       level?: number;
@@ -421,7 +422,9 @@ export class TrackingGateway
         longitude: body?.longitude,
       });
     } catch (err) {
-      this.logger.warn(`Battery critical report failed (driver=${user.id}): ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.warn(
+        `Battery critical report failed (driver=${user.id}): ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 

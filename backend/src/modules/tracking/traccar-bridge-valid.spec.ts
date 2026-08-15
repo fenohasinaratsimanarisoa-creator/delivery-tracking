@@ -198,7 +198,7 @@ describe('TraccarBridgeService — Champ valid', () => {
     };
   }
 
-  it('should ACCEPT a position whose valid field is undefined (protocoles qui ne l\'envoient jamais)', async () => {
+  it("should ACCEPT a position whose valid field is undefined (protocoles qui ne l'envoient jamais)", async () => {
     mockMappedVehicle();
     const pos = basePos();
     delete (pos as any).valid;
@@ -226,9 +226,7 @@ describe('TraccarBridgeService — Champ valid', () => {
   it('should ignore an implausible hdop (garbage from low-end tracker) and keep device accuracy', async () => {
     mockMappedVehicle();
 
-    await (service as any).handlePosition(
-      basePos({ accuracy: 5, attributes: { hdop: 250 } }),
-    );
+    await (service as any).handlePosition(basePos({ accuracy: 5, attributes: { hdop: 250 } }));
 
     expect(mockTrackingService.savePosition).toHaveBeenCalledTimes(1);
     const dto = mockTrackingService.savePosition.mock.calls[0][1];
