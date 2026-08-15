@@ -267,6 +267,10 @@ jobs:
     name: Android - Build & Publish APK
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # GITHUB_TOKEN par défaut n'a PAS le droit de créer une GitHub Release :
+    # permission contents:write requise pour publier l'APK + manifest.json.
+    permissions:
+      contents: write
     steps:
       - name: Checkout code (full history + tags)
         uses: actions/checkout@v4
