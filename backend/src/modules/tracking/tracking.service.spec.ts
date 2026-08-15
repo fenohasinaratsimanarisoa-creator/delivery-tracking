@@ -1544,6 +1544,68 @@ describe('TrackingService', () => {
       expect(report.totalDistance.meters).toBeGreaterThan(sparseReport.totalDistance.meters);
       expect(report.positionCount).toBeGreaterThan(sparseReport.positionCount);
     });
+
+    it('détecte et signale un trou GPS réel (> seuil 3 min) au lieu de tracer une ligne droite silencieuse', async () => {
+      const base = Date.parse('2026-07-21T10:00:00.000Z');
+      const positions: any[] = [];
+      // 10 positions à 3 s d'intervalle (0..27 s)…
+      for (let i = 0; i < 10; i++) {
+        positions.push({
+          latitude: 48.85 + i * 0.001,
+          longitude: 2.35,
+          speed: 10,
+          heading: 90,
+          altitude: null,
+          accuracy: 10,
+          suspect: false,
+          timestamp: new Date(base + i * 3000),
+          driverId: 'driver-1',
+        });
+      }
+      // … puis TROU RÉEL de 5 minutes (aucune position reçue)…
+      const gapStart = base + 9 * 3000;
+      const afterGap = gapStart + 5 * 60 * 1000;
+      // … puis 5 positions à 3 s.
+      for (let i = 0; i < 5; i++) {
+        positions.push({
+          latitude: 48.855 + i * 0.001,
+          longitude: 2.36,
+          speed: 10,
+          heading: 90,
+          altitude: null,
+          accuracy: 10,
+          suspect: false,
+          timestamp: new Date(afterGap + i * 3000),
+          driverId: 'driver-1',
+        });
+      }
+
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(positions);
+      mockPrisma.delivery.findFirst.mockResolvedValue({
+        id: 'delivery-gap',
+        title: 'Gap',
+        status: 'in_progress',
+        pickupAddress: 'A',
+        deliveryAddress: 'B',
+        pickupLat: null,
+        pickupLng: null,
+        deliveryLat: null,
+        deliveryLng: null,
+        scheduledDate: new Date(),
+        publicTrackingRevokedAt: null,
+      });
+
+      const report = await service.getTripReport('delivery-gap', 'company-1');
+
+      expect(report.positionCount).toBe(15);
+      expect(report.signalInterrupted).toBe(true);
+      expect(report.signalGaps).toHaveLength(1);
+      // Le trou est localisé précisément (bornes du fixTime GPS, pas l'heure serveur).
+      expect(new Date(report.signalGaps[0].fromTimestamp).getTime()).toBe(gapStart);
+      expect(new Date(report.signalGaps[0].toTimestamp).getTime()).toBe(afterGap);
+      expect(report.signalGaps[0].durationSec).toBe(300);
+      expect(report.uniqueDriverCount).toBe(1);
+    });
   });
 
   describe('revokePublicToken', () => {

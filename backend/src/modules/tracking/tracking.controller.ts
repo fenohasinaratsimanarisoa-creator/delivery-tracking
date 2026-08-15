@@ -150,6 +150,19 @@ export class TrackingController {
   }
 
   @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin', 'dispatcher')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'List vehicles currently in GPS silence (no position for > threshold)',
+    description:
+      "Vue temps réel de TOUS les véhicules actifs avec leur durée de silence GPS (depuis la dernière position reçue), le seuil d'alerte par source (phone 5 min / traceur 10 min), et la dernière position connue. Permet de vérifier d'un coup d'œil si un véhicule ne transmet plus — alerte détectée automatiquement par le moniteur serveur (notification dashboard + journal).",
+  })
+  @Get('silences')
+  getTrackingSilences(@CurrentUser('companyId') companyId: string) {
+    return this.trackingService.getTrackingSilences(companyId);
+  }
+
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
   @Roles('admin')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Archiver les positions GPS avant une date' })

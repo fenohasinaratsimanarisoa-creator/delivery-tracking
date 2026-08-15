@@ -940,6 +940,34 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             return null;
           };
 
+          // FIDÉLITÉ DU TRAJET (correction) : handlePosition (temps réel) rattache la
+          // livraison active via deliveryId, mais performBackfill enregistrait les
+          // positions rattrapées avec deliveryId null → elles DISPARAÎSSAIENT du rapport
+          // de trajet de la livraison (trou après une coupure serveur). On rattache donc
+          // chaque position backfillée à la livraison DU VÉHICULE dont la fenêtre
+          // (createdAt .. completedAt|null) couvre l'instant du fix GPS — la résolution
+          // est temporelle (même logique que le chauffeur), PAS basée sur l'état courant :
+          // une livraison réaffectée en cours de trajet garde ses positions attachées.
+          const vehicleDeliveries = await this.prisma.delivery.findMany({
+            where: {
+              vehicleId: vehicle.id,
+              deletedAt: null,
+              status: { in: ['in_progress', 'delivered', 'assigned'] },
+            },
+            select: { id: true, createdAt: true, completedAt: true },
+          });
+          const resolveDeliveryId = (timestamp: Date): string | null => {
+            // Dernière livraison du véhicule dont la fenêtre couvre le fix.
+            for (let i = vehicleDeliveries.length - 1; i >= 0; i--) {
+              const d = vehicleDeliveries[i];
+              if (d.createdAt.getTime() > timestamp.getTime()) continue;
+              if (d.completedAt === null || d.completedAt.getTime() >= timestamp.getTime()) {
+                return d.id;
+              }
+            }
+            return null;
+          };
+
           let lastBackfillPos: { latitude: number; longitude: number; timestamp: Date } | null =
             null;
           if (this.redis) {
@@ -968,6 +996,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               );
               continue;
             }
+
+            // Driver résolu AU MOMENT du fix (pas l'affectation courante).
+            const backfillDriverId = resolveDriver(timestamp);
 
             const speedMs = (pos.speed || 0) * 0.514444;
             const { accuracy } = computeCombinedAccuracy(pos.accuracy, pos.attributes);
@@ -1007,12 +1038,15 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               location: `POINT(${pos.longitude} ${pos.latitude})`,
               timestamp,
               companyId: vehicle.companyId,
-              deliveryId: null,
+              // Livraison active AU MOMENT du fix (fenêtre createdAt..completedAt), pour
+              // que les positions rattrapées après coupure apparaissent dans le rapport
+              // de trajet de la bonne livraison.
+              deliveryId: resolveDeliveryId(timestamp),
               vehicleId: vehicle.id,
               // DriverId au moment de CE fix GPS (pas l'affectation courante) :
               // sur un backfill, les positions antérieures à un changement de
               // chauffeur gardent l'ANCIEN driverId, les postérieures le NOUVEAU.
-              driverId: resolveDriver(timestamp),
+              driverId: backfillDriverId,
               source: 'physical_tracker',
             });
           }

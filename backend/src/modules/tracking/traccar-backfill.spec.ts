@@ -52,7 +52,7 @@ describe('TraccarBridgeService — performBackfill déduplication', () => {
 
   const mockPrisma = {
     vehicle: { findMany: jest.fn(), findFirst: jest.fn() },
-    delivery: { findFirst: jest.fn() },
+    delivery: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     gpsPosition: {
       findFirst: jest.fn(),
       findMany: jest.fn(),

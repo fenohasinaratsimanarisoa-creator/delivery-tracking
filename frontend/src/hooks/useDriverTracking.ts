@@ -438,6 +438,28 @@ export function useDriverTracking() {
     return payload;
   }, [vehicleId]);
 
+  // Mise en file locale UNIFIÉE : stocke la position (IndexedDB persistante) et
+  // SIGNALE explicitement toute éviction (file pleine à 5000 entrées) via une alerte
+  // critique — jamais de perte silencieuse de données de trajet.
+  const queuePosition = useCallback(async (payload: Record<string, unknown>) => {
+    try {
+      const res = await enqueuePosition(payload);
+      if (res.droppedOldest) {
+        addAlert({
+          type: 'queue_full',
+          title: 'File de positions saturée',
+          message: 'La file locale a atteint sa limite (5000 positions) : les positions les plus anciennes ont été remplacées. Vérifiez la connexion réseau dès que possible pour éviter toute perte de trajet.',
+          urgency: 'critical',
+        });
+      }
+    } catch {
+      // Échec IndexedDB (stockage plein) : non bloquant, la position sera re-tentée
+      // au prochain tick — on ne casse pas le pipeline GPS pour un enregistrement local.
+    } finally {
+      refreshQueueCount();
+    }
+  }, [addAlert, refreshQueueCount]);
+
   const sendPosition = useCallback(() => {
     const p = posRef.current;
     if (!p) return;
@@ -448,7 +470,7 @@ export function useDriverTracking() {
     // distance jusqu'à 80-90% quand l'ACK n'arrivait jamais). Elle est mise en
     // file locale (IndexedDB) et sera retentée par drainQueue.
     const queueAndSkip = (pos: DriverPosition) => {
-      enqueuePosition(buildPositionPayload(pos)).then(() => { refreshQueueCount(); });
+      void queuePosition(buildPositionPayload(pos));
     };
 
     if (isSendingRef.current) {
@@ -515,12 +537,12 @@ export function useDriverTracking() {
           isSendingRef.current = false;
           return;
         }
-        enqueuePosition(payload).then(() => { refreshQueueCount(); isSendingRef.current = false; });
+        void queuePosition(payload).then(() => { isSendingRef.current = false; });
       });
     } else {
-      enqueuePosition(payload).then(() => { refreshQueueCount(); isSendingRef.current = false; });
+      void queuePosition(payload).then(() => { isSendingRef.current = false; });
     }
-  }, [vehicleId, refreshQueueCount, drainQueue, buildPositionPayload]);
+  }, [vehicleId, refreshQueueCount, drainQueue, buildPositionPayload, queuePosition]);
 
   const recalcInterval = useCallback((speed: number | undefined, accuracy?: number, stationary?: boolean) => {
     const now = Date.now();

@@ -4,6 +4,8 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  OnModuleInit,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import { NotificationType, NotificationPriority } from '@prisma/client';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
@@ -28,6 +30,20 @@ const SPEED_SMOOTHING_WINDOW = 5; // nombre de positions pour lisser la vitesse 
 // Avec INTERVAL_FAST=3000 côté frontend, les 3s de battement passent sans être rejetées.
 const DEDUP_CLOCK_SKEW_S = 1;
 
+// --- Surveillance du silence GPS (Partie 1 du durcissement) ---
+// Le monitor couvre TOUS les véhicules actifs (phone ET physical_tracker) assignés
+// à une livraison in_progress/assigned : si aucun signal depuis plus de X minutes,
+// une alerte explicite part au dashboard (notification company, push temps réel via
+// NotificationsGateway pour priority high) + entrée dans le journal dédié
+// (cacheService, clé tracking_silence:{vehicleId}) — le dispatcher ne découvre plus
+// un problème en regardant une carte figée sans le savoir.
+const SILENCE_CHECK_INTERVAL_MS = 60_000; // cadence du monitor
+// Délai de grâce avant d'alerter un véhicule qui n'a JAMAIS émis (même logique que
+// checkNeverConnectedDevices du pont Traccar pour les traceurs).
+const NEVER_CONNECTED_GRACE_MS = 30 * 60 * 1000;
+// TTL du journal de silence dans le cache (au-delà, une re-détection recrée l'entrée).
+const SILENCE_JOURNAL_TTL_S = 24 * 3600;
+
 // Source d'émission d'une position GPS. Utilisée par savePosition() pour isoler
 // strictement les flux : un véhicule 'physical_tracker' ne doit recevoir que des
 // positions du pont Traccar (source='physical_tracker'), jamais de l'app mobile
@@ -35,8 +51,10 @@ const DEDUP_CLOCK_SKEW_S = 1;
 export type PositionSource = 'phone' | 'physical_tracker';
 
 @Injectable()
-export class TrackingService {
+export class TrackingService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TrackingService.name);
+
+  private silenceTimer: ReturnType<typeof setInterval> | null = null;
 
   private metrics = {
     received: 0,
@@ -47,6 +65,229 @@ export class TrackingService {
     rateLimited: 0,
     lastReportTime: Date.now(),
   };
+
+  /**
+   * Démarre le monitor de silence GPS (une fois par minute). Le seuil d'alerte
+   * dépend de la source : 5 min pour l'app mobile (cadence 3 s), 10 min pour un
+   * traceur physique (cadence variable, réseau SIM) — configurable via env.
+   */
+  async onModuleInit() {
+    this.silenceTimer = setInterval(() => {
+      this.checkSilentVehicles().catch((err) =>
+        this.logger.error(`Silence monitor error: ${err.message}`),
+      );
+    }, SILENCE_CHECK_INTERVAL_MS);
+  }
+
+  async onModuleDestroy() {
+    if (this.silenceTimer) {
+      clearInterval(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+  }
+
+  /** Seuil de silence (min) selon la source du véhicule. */
+  private getSilenceThresholdMin(source: PositionSource): number {
+    const value =
+      source === 'physical_tracker'
+        ? Number(this.configService.get<string>('TRACKING_SILENCE_TRACKER_MIN', '10'))
+        : Number(this.configService.get<string>('TRACKING_SILENCE_PHONE_MIN', '5'));
+    return Number.isFinite(value) && value > 0 ? value : source === 'physical_tracker' ? 10 : 5;
+  }
+
+  /**
+   * Journal dédié "silences de tracking" : état par véhicule (début du silence,
+   * livraison concernée, source) stocké dans le cache (Redis, ou mémoire si
+   * Redis indisponible). La trace DURABLE est la notification en base (table
+   * notifications, visible dans le dashboard). Le journal sert à connaître
+   * l'instant de début du silence pour la vue admin temps réel.
+   */
+  private silenceJournalKey(vehicleId: string): string {
+    return `tracking_silence:${vehicleId}`;
+  }
+
+  /**
+   * Moniteur de silence GPS — TOUS les véhicules actifs (phone + physical_tracker)
+   * ayant un chauffeur actif ET une livraison in_progress/assigned. Pour chaque
+   * véhicule dont la dernière position date de plus du seuil (ou jamais reçue),
+   * émet une alerte dashboard (une fois par période de seuil, cooldown Redis) et
+   * inscrit/clôture l'entrée du journal dédié.
+   */
+  async checkSilentVehicles(): Promise<void> {
+    const vehicles = await this.prisma.vehicle.findMany({
+      where: {
+        isActive: true,
+        deletedAt: null,
+        driver: { isActive: true, deletedAt: null },
+        deliveries: {
+          some: { status: { in: ['in_progress', 'assigned'] }, deletedAt: null },
+        },
+      },
+      select: {
+        id: true,
+        companyId: true,
+        licensePlate: true,
+        positionSource: true,
+        createdAt: true,
+        driver: { select: { id: true, userId: true } },
+        deliveries: {
+          where: { status: { in: ['in_progress', 'assigned'] }, deletedAt: null },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    });
+
+    for (const vehicle of vehicles) {
+      const source: PositionSource =
+        vehicle.positionSource === 'physical_tracker' ? 'physical_tracker' : 'phone';
+      const thresholdMin = this.getSilenceThresholdMin(source);
+      const cooldownKey = `silence_alert:${vehicle.id}`;
+      const journalKey = this.silenceJournalKey(vehicle.id);
+      const deliveryId = vehicle.deliveries[0]?.id;
+      const driverUserId = vehicle.driver?.userId ?? undefined;
+
+      // Une position suspecte prouve quand même que le dispositif émet : on s'appuie
+      // sur la DERNIÈRE position reçue quelle qu'elle soit (excludeSuspect=false).
+      const lastPos = await this.getLastPosition(vehicle.id, false);
+
+      if (!lastPos) {
+        // Jamais émis : on n'alerte qu'après le délai de grâce (un véhicule tout
+        // juste assigné n'a pas encore démarré le tracking).
+        const creationAgeMin = (Date.now() - vehicle.createdAt.getTime()) / 60000;
+        if (creationAgeMin < NEVER_CONNECTED_GRACE_MS / 60000) continue;
+
+        const notified = await this.cacheService.get<string>(cooldownKey);
+        if (notified) continue;
+        await this.cacheService.set(cooldownKey, '1', thresholdMin * 60);
+        await this.notifications.create(vehicle.companyId, {
+          type: NotificationType.device_offline,
+          priority: NotificationPriority.high,
+          title: 'Silence GPS — aucun signal reçu',
+          message: `Le véhicule ${vehicle.licensePlate} (${source === 'physical_tracker' ? 'traceur physique' : 'app chauffeur'}) n'a encore envoyé AUCUNE position alors qu'une livraison est active. Vérifiez l'app/traceur du chauffeur.`,
+          link: deliveryId ? `/tracking/${deliveryId}` : undefined,
+          deliveryId,
+          userId: driverUserId,
+        });
+        continue;
+      }
+
+      const elapsedMin = (Date.now() - lastPos.timestamp.getTime()) / 60000;
+
+      if (elapsedMin <= thresholdMin) {
+        // Le véhicule est (re)devenu audible : on clôt le silence du journal s'il
+        // était ouvert (pas de notification de résolution — trop bruitée).
+        await this.cacheService.invalidate(`${journalKey}*`);
+        continue;
+      }
+
+      // En silence : ouvre/confirme le journal (startedAt conservé au premier passage).
+      const existingJournal = await this.cacheService.get<{ startedAt: string }>(journalKey);
+      if (!existingJournal) {
+        await this.cacheService.set(
+          journalKey,
+          {
+            startedAt: new Date().toISOString(),
+            deliveryId: deliveryId ?? null,
+            source,
+            licensePlate: vehicle.licensePlate,
+          },
+          SILENCE_JOURNAL_TTL_S,
+        );
+      }
+
+      // Alerte une fois par période de seuil (pas de spam : à 5 min de seuil, une
+      // notification toutes les 5 min tant que le silence dure).
+      const notified = await this.cacheService.get<string>(cooldownKey);
+      if (notified) continue;
+      await this.cacheService.set(cooldownKey, '1', Math.max(300, thresholdMin * 60));
+
+      await this.notifications.create(vehicle.companyId, {
+        type: NotificationType.device_offline,
+        priority: NotificationPriority.high,
+        title: 'Silence GPS — véhicule sans position',
+        message: `Le véhicule ${vehicle.licensePlate} (${source === 'physical_tracker' ? 'traceur physique' : 'app chauffeur'}) n'a pas envoyé de position depuis ${Math.round(elapsedMin)} min. Dernière position reçue : ${lastPos.timestamp.toISOString()}.`,
+        link: deliveryId ? `/tracking/${deliveryId}` : undefined,
+        deliveryId,
+        userId: driverUserId,
+      });
+    }
+  }
+
+  /**
+   * Vue admin temps réel : TOUS les véhicules actifs de la compagnie avec leur
+   * état de silence (durée depuis la dernière position, seuil, en silence ou non,
+   * jamais connecté). Permet au dispatcher de vérifier d'un coup d'œil s'il y a
+   * un souci, sans tester chaque véhicule manuellement.
+   */
+  async getTrackingSilences(companyId: string) {
+    const vehicles = await this.prisma.vehicle.findMany({
+      where: {
+        companyId,
+        isActive: true,
+        deletedAt: null,
+        driver: { isActive: true, deletedAt: null },
+      },
+      select: {
+        id: true,
+        licensePlate: true,
+        brand: true,
+        model: true,
+        positionSource: true,
+        driver: { select: { id: true, firstName: true, lastName: true } },
+        deliveries: {
+          where: { status: { in: ['in_progress', 'assigned'] }, deletedAt: null },
+          select: { id: true, title: true },
+          take: 1,
+        },
+      },
+    });
+
+    const results = [];
+    for (const vehicle of vehicles) {
+      const source: PositionSource =
+        vehicle.positionSource === 'physical_tracker' ? 'physical_tracker' : 'phone';
+      const thresholdMin = this.getSilenceThresholdMin(source);
+      const lastPos = await this.getLastPosition(vehicle.id, false);
+      const elapsedMin = lastPos
+        ? (Date.now() - lastPos.timestamp.getTime()) / 60000
+        : null;
+      const journal = await this.cacheService.get<{ startedAt: string }>(
+        this.silenceJournalKey(vehicle.id),
+      );
+      const delivery = vehicle.deliveries[0];
+
+      results.push({
+        vehicleId: vehicle.id,
+        licensePlate: vehicle.licensePlate,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        source,
+        driverId: vehicle.driver?.id ?? null,
+        driverName: vehicle.driver
+          ? `${vehicle.driver.firstName} ${vehicle.driver.lastName}`
+          : null,
+        deliveryId: delivery?.id ?? null,
+        deliveryTitle: delivery?.title ?? null,
+        lastPosition: lastPos
+          ? {
+              latitude: lastPos.latitude,
+              longitude: lastPos.longitude,
+              timestamp: lastPos.timestamp,
+            }
+          : null,
+        silenceMin: elapsedMin === null ? null : Math.round(elapsedMin * 10) / 10,
+        thresholdMin,
+        inSilence: elapsedMin !== null && elapsedMin > thresholdMin,
+        neverConnected: elapsedMin === null,
+        silenceStartedAt: journal?.startedAt ?? null,
+      });
+    }
+
+    // Les plus longs silences en premier (null = jamais connecté, mis en bas).
+    results.sort((a, b) => (b.silenceMin ?? -1) - (a.silenceMin ?? -1));
+    return results;
+  }
 
   constructor(
     private prisma: PrismaService,
@@ -959,14 +1200,16 @@ export class TrackingService {
       delivery: { companyId },
       ...(excludeSuspect ? { suspect: false } : {}),
     };
-    const total = await this.prisma.gpsPosition.count({ where });
-    if (total > 10000) {
-      this.logger.warn(`Delivery ${deliveryId} has ${total} positions — truncating to 10000`);
-    }
+    // AUCUNE troncature silencieuse : le rapport de trajet (getTripReport / PDF) et le
+    // calcul de distance/durée doivent reposer sur TOUTES les positions GPS réelles de
+    // la livraison, sans échantillonnage ni LIMIT arbitraire qui fausserait distance ou
+    // durée. Une livraison de 24 h à la cadence minimale de 3 s ≈ 28 800 lignes — chargé
+    // en mémoire sans risque (une ligne ~100 octets). Tri par timestamp (fixTime GPS réel,
+    // pas l'heure d'arrivée serveur) : un backfill/retry arrivé en retard garde sa place
+    // chronologique exacte.
     return this.prisma.gpsPosition.findMany({
       where,
       orderBy: { timestamp: 'asc' },
-      take: 10000,
     });
   }
 
@@ -1075,16 +1318,28 @@ export class TrackingService {
     const positions = await this.getAllPositionsByDelivery(deliveryId, companyId);
     const delivery = await this.getDeliveryInfo(deliveryId, companyId);
 
+    const emptyReport = {
+      delivery,
+      totalDistance: { meters: 0, kilometers: 0 },
+      avgSpeedKmh: 0,
+      totalDurationSec: 0,
+      stopCount: 0,
+      positionCount: 0,
+      postgisDistance: { meters: 0, kilometers: 0 } as { meters: number; kilometers: number } | null,
+      signalGaps: [] as Array<{
+        fromTimestamp: string;
+        toTimestamp: string;
+        durationSec: number;
+        fromLatitude: number;
+        fromLongitude: number;
+        toLatitude: number;
+        toLongitude: number;
+      }>,
+      signalInterrupted: false,
+      uniqueDriverCount: 0,
+    };
     if (positions.length === 0) {
-      return {
-        delivery,
-        totalDistance: { meters: 0, kilometers: 0 },
-        avgSpeedKmh: 0,
-        totalDurationSec: 0,
-        stopCount: 0,
-        positionCount: 0,
-        postgisDistance: { meters: 0, kilometers: 0 },
-      };
+      return emptyReport;
     }
 
     const totalDistance = await this.calculateDistance(deliveryId, companyId);
@@ -1115,6 +1370,42 @@ export class TrackingService {
       }
     }
 
+    // Détection de trous dans le trajet (gap detection) : tout écart de temps anormal
+    // entre deux positions CONSÉCUTIVES (au-delà du seuil, défaut 3 min) est signalé
+    // explicitement dans le rapport au lieu de tracer une ligne droite silencieuse
+    // qui donnerait une fausse impression de trajet continu. Seuil configurable via
+    // TRACKING_GAP_THRESHOLD_MIN (min). Un écart plus court que la cadence normale est
+    // ignoré (arrêt à quai, cadence ralentie à l'arrêt = 20 s).
+    const gapThresholdMin = Number(
+      this.configService.get<string>('TRACKING_GAP_THRESHOLD_MIN', '3'),
+    );
+    const gapThresholdSec = (Number.isFinite(gapThresholdMin) && gapThresholdMin > 0
+      ? gapThresholdMin
+      : 3) * 60;
+    const signalGaps: typeof emptyReport.signalGaps = [];
+    for (let i = 1; i < positions.length; i++) {
+      const prev = positions[i - 1];
+      const curr = positions[i];
+      const gapSec = (curr.timestamp.getTime() - prev.timestamp.getTime()) / 1000;
+      if (gapSec > gapThresholdSec) {
+        signalGaps.push({
+          fromTimestamp: prev.timestamp.toISOString(),
+          toTimestamp: curr.timestamp.toISOString(),
+          durationSec: Math.round(gapSec),
+          fromLatitude: prev.latitude,
+          fromLongitude: prev.longitude,
+          toLatitude: curr.latitude,
+          toLongitude: curr.longitude,
+        });
+      }
+    }
+
+    // Nombre de chauffeurs distincts ayant émis sur ce trajet (change de chauffeur
+    // en cours de route = segments attribués au bon conducteur, cf. VehicleAssignmentHistory).
+    const uniqueDrivers = new Set(
+      positions.map((p) => p.driverId).filter((id): id is string => !!id),
+    );
+
     return {
       delivery,
       totalDistance,
@@ -1123,6 +1414,9 @@ export class TrackingService {
       stopCount,
       positionCount: positions.length,
       postgisDistance,
+      signalGaps,
+      signalInterrupted: signalGaps.length > 0,
+      uniqueDriverCount: uniqueDrivers.size,
     };
   }
 
@@ -1346,6 +1640,30 @@ export class TrackingService {
     field('Duration', `${mins}m ${secs}s`);
     field('Stops', `${report.stopCount}`);
     field('Positions', `${report.positionCount}`);
+
+    // Section "signal GPS interrompu" : les trous détectés sont listés explicitement
+    // (jamais une ligne droite silencieuse entre deux points éloignés dans le temps).
+    if (report.signalGaps && report.signalGaps.length > 0) {
+      y -= 12;
+      title('Signal GPS interrompu', 12);
+      y -= 4;
+      const listedGaps = report.signalGaps.slice(0, 10);
+      for (const gap of listedGaps) {
+        const from = new Date(gap.fromTimestamp).toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const to = new Date(gap.toTimestamp).toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const mins = Math.round(gap.durationSec / 60);
+        field(`Signal coupé ${from} → ${to}`, `${mins} min`);
+      }
+      if (report.signalGaps.length > 10) {
+        field('…', `+${report.signalGaps.length - 10} autre(s) trou(s)`);
+      }
+    }
 
     const buf = await doc.save();
     return Buffer.from(buf);

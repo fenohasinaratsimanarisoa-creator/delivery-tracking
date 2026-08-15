@@ -2,7 +2,13 @@ const DB_NAME = 'delivery-tracking';
 const STORE_NAME = 'position-queue';
 const DB_VERSION = 1;
 
-const QUEUE_MAX_SIZE = 500;
+// Capacité de la file locale (IndexedDB, persistante sur disque — survit à un kill
+// de l'app par l'OS). 5000 positions à la cadence de 3 s ≈ 4 h de coupure réseau
+// couvertes SANS perte. L'ancienne limite de 500 (~25 min) écrasait silencieusement
+// les positions les plus anciennes au-delà — inacceptable pour la fidélité du trajet
+// enregistré pendant une coupure prolongée. Au-delà de 5000, l'éviction du plus ancien
+// est désormais SIGNALÉE (droppedOldest → alerte explicite dans l'app), jamais silencieuse.
+const QUEUE_MAX_SIZE = 5000;
 const LATENCY_THRESHOLD_MS = 3000;
 
 let isFlushing = false;
@@ -22,10 +28,27 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
+// Connexion IndexedDB PARTAGÉE et réutilisée (une seule ouverture, pas une par
+// position) : chaque enqueuePosition/queueSize ouvrait une nouvelle connexion —
+// inutile sur mobile (coût mémoire/CPU à chaque fix GPS) et bloquant sur de
+// longs rattrapages (5000 positions = 5000 ouvertures).
+let dbPromise: Promise<IDBDatabase> | null = null;
+function getDB(): Promise<IDBDatabase> {
+  if (!dbPromise) {
+    dbPromise = openDB();
+    // Si la connexion échoue (storage indisponible), on permet une nouvelle
+    // tentative au prochain appel plutôt que de rester sur la promesse rejetée.
+    dbPromise.catch(() => {
+      dbPromise = null;
+    });
+  }
+  return dbPromise;
+}
+
 export async function checkLatency(): Promise<number> {
   const start = Date.now();
   try {
-    const db = await openDB();
+    const db = await getDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
     await new Promise((resolve, reject) => {
       const req = tx.objectStore(STORE_NAME).count();
@@ -48,23 +71,41 @@ export function shouldQueueDueToLatency(): Promise<boolean> {
   });
 }
 
-export async function enqueuePosition(pos: Record<string, unknown>): Promise<void> {
-  const db = await openDB();
+export interface EnqueueResult {
+  /** true si la position a été stockée dans la file locale. */
+  queued: boolean;
+  /** true si la file était pleine et qu'une position plus ancienne a dû être évincée. */
+  droppedOldest: boolean;
+}
+
+/**
+ * Stocke une position dans la file locale (IndexedDB, persistante sur disque).
+ * Ne perd JAMAIS une position silencieusement : si la capacité maximale est
+ * atteinte, la position la plus ANCIENNE est évincée et l'appelant est informé
+ * via droppedOldest (l'app affiche alors une alerte explicite) — en dessous de
+ * 5000 entrées (~4 h de coupure), AUCUNE perte n'a lieu.
+ */
+export async function enqueuePosition(
+  pos: Record<string, unknown>,
+): Promise<EnqueueResult> {
+  const db = await getDB();
   const size = await queueSize();
+  let droppedOldest = false;
   if (size >= QUEUE_MAX_SIZE) {
     const oldest = await dequeueOldest();
-    if (!oldest) return;
+    if (!oldest) return { queued: false, droppedOldest };
+    droppedOldest = true;
   }
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).add({ ...pos, queuedAt: new Date().toISOString() });
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => resolve({ queued: true, droppedOldest });
     tx.onerror = () => reject(tx.error);
   });
 }
 
 export async function dequeueAllPositions(): Promise<Record<string, unknown>[]> {
-  const db = await openDB();
+  const db = await getDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const req = tx.objectStore(STORE_NAME).getAll();
@@ -74,7 +115,7 @@ export async function dequeueAllPositions(): Promise<Record<string, unknown>[]> 
 }
 
 async function dequeueOldest(): Promise<Record<string, unknown> | null> {
-  const db = await openDB();
+  const db = await getDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
@@ -94,7 +135,7 @@ async function dequeueOldest(): Promise<Record<string, unknown> | null> {
 }
 
 export async function clearQueue(): Promise<void> {
-  const db = await openDB();
+  const db = await getDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).clear();
@@ -104,7 +145,7 @@ export async function clearQueue(): Promise<void> {
 }
 
 export async function queueSize(): Promise<number> {
-  const db = await openDB();
+  const db = await getDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const req = tx.objectStore(STORE_NAME).count();
@@ -114,7 +155,7 @@ export async function queueSize(): Promise<number> {
 }
 
 async function deletePositions(ids: number[]): Promise<void> {
-  const db = await openDB();
+  const db = await getDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
