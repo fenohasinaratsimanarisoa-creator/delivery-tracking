@@ -201,7 +201,15 @@ export class UsersService {
   }
 
   async findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+    // Unicité GLOBALE de l'email : le middleware tenant injecterait companyId dans
+    // le where d'un findUnique, ce qui ferait manquer un email déjà utilisé par une
+    // AUTRE entreprise (→ P2002 → 500 au create). Même pattern que create()/update()/
+    // updateEmail() et invitations.service.ts : on désactive le contexte pour cette
+    // requête précise (méthode actuellement utilisée hors flux HTTP — cohérence
+    // conservée pour tout futur appel depuis une route scopée).
+    return CompanyScopedContext.run(null, () =>
+      this.prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } }),
+    );
   }
 
   async getPreferences(userId: string) {
