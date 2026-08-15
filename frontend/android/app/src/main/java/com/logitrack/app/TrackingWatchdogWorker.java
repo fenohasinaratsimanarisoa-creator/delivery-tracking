@@ -51,6 +51,14 @@ public class TrackingWatchdogWorker extends Worker {
     public static final String PREFS_NAME = "logitrack_tracking";
     public static final String PREF_TRACKING_ACTIVE = "tracking_should_be_active";
 
+    /** Marqueur d'interruption NON volontaire du tracking : lue par le JS au
+     *  prochain lancement (getInterruptionInfo) pour signaler au backend qu'un
+     *  tracking actif a été interrompu (notification dashboard). Écrit par le
+     *  watchdog quand il détecte le service mort, et par le service lui-même en
+     *  onDestroy non-volontaire. */
+    public static final String PREF_TRACKING_INTERRUPTED_AT = "tracking_interrupted_at";
+    public static final String PREF_TRACKING_INTERRUPTED_REASON = "tracking_interrupted_reason";
+
     /** Compteur d'échecs consécutifs de redémarrage du service. */
     public static final String PREF_RESTART_FAILURES = "tracking_restart_failures";
     /** Seuil au-delà duquel le chauffeur est notifié (3 échecs consécutifs). */
@@ -96,6 +104,15 @@ public class TrackingWatchdogWorker extends Worker {
             != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             return Result.success();
         }
+
+        // Le service est MORT alors qu'un tracking devrait être actif : c'est une
+        // interruption subie (mort du process par le système, ou force-stop partiel
+        // non détectable en temps réel). On la MARQUE explicitement — jamais
+        // silencieuse : le JS la signalera au backend au prochain lancement
+        // (getInterruptionInfo → POST /tracking/report-interruption). Le redémarrage
+        // ci-dessous est tenté, et le marqueur subsiste même si le process meurt à
+        // nouveau avant que le JS n'ait pu le lire.
+        LocationForegroundService.markTrackingInterrupted(context, "watchdog_detected_dead");
 
         try {
             Intent intent = new Intent(context, LocationForegroundService.class);

@@ -7,11 +7,15 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.location.Location;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.Looper;
@@ -19,6 +23,9 @@ import android.os.PowerManager;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
+import androidx.work.ExistingWorkPolicy;
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.WorkManager;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
@@ -29,6 +36,7 @@ import com.google.android.gms.location.Priority;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Service foreground de type "location" : il maintient le process vivant
@@ -94,7 +102,93 @@ public class LocationForegroundService extends Service {
         void onLocationUpdate(Location location);
     }
 
+    /** Récepteur d'alerte batterie critique (le plugin Capacitor s'y abonne). */
+    public interface BatteryCriticalSink {
+        void onBatteryCritical(int levelPercent, Location lastLocation);
+    }
+
     private static final List<LocationSink> LOCATION_SINKS = new CopyOnWriteArrayList<>();
+    private static final List<BatteryCriticalSink> BATTERY_SINKS = new CopyOnWriteArrayList<>();
+
+    /** true quand l'arrêt est VOLONTAIRE (ACTION_STOP) : onDestroy ne doit alors
+     *  ni marquer d'interruption, ni planifier de redémarrage. */
+    private static volatile boolean voluntarilyStopped = false;
+
+    /** Reçoit ACTION_BATTERY_LOW : avant extinction probable, capture la dernière
+     *  position et prévient le JS (plugin) qui enverra une dernière position + un
+     *  statut "batterie critique" au backend pour que le dispatcher voie la cause
+     *  probable de l'interruption au lieu d'un silence inexpliqué. */
+    private final BroadcastReceiver batteryLowReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            try {
+                int level = 0;
+                boolean isLow = false;
+                if (intent != null && intent.getAction() != null) {
+                    if (Intent.ACTION_BATTERY_LOW.equals(intent.getAction())) {
+                        isLow = true;
+                        level = 15;
+                    } else if (Intent.ACTION_BATTERY_CHANGED.equals(intent.getAction())) {
+                        level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+                        int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
+                        if (level >= 0 && scale > 0) level = Math.round(level * 100f / scale);
+                        // ACTION_BATTERY_CHANGED est sticky et reçu à CHAQUE variation :
+                        // on n'émet que sous le seuil critique réel (≤ 20 %), une fois par
+                        // palier de 5 % pour ne pas spammer le backend.
+                        isLow = level <= 20;
+                    }
+                }
+                if (!isLow) return;
+                Location last = latestLocation;
+                for (BatteryCriticalSink sink : BATTERY_SINKS) {
+                    sink.onBatteryCritical(level, last);
+                }
+                // Met à jour la notification : le chauffeur VOIT la cause probable
+                // (batterie critique) plutôt qu'une notification de suivi normale.
+                notificationStatusText = "⚠ Batterie critique (" + level + "%) — le suivi va s'interrompre";
+                LocationForegroundService instance = runningInstance;
+                if (instance != null) instance.refreshNotification();
+            } catch (Exception ignored) {
+                // Un échec ici ne doit jamais casser le service.
+            }
+        }
+    };
+
+    public static void addBatteryCriticalSink(BatteryCriticalSink sink) {
+        if (sink != null) {
+            BATTERY_SINKS.add(sink);
+        }
+    }
+
+    public static void removeBatteryCriticalSink(BatteryCriticalSink sink) {
+        if (sink != null) {
+            BATTERY_SINKS.remove(sink);
+        }
+    }
+
+    /**
+     * Marque une interruption NON volontaire du tracking dans SharedPreferences :
+     * lu par le JS au prochain lancement (getInterruptionInfo) qui le signale au
+     * backend → notification dashboard "tracking interrompu à HH:MM". Écrit par
+     * onDestroy (mort par le système) et par le watchdog (process déjà mort).
+     * Un force-stop UTILISATEUR tue le process sans aucun callback : seul le
+     * redémarrage suivant de l'app peut alors détecter l'interruption (marqueur
+     * d'âge dans start()) — c'est la limite documentée d'Android, aucune app ne
+     * peut recevoir d'événement pendant un force-stop.
+     */
+    public static void markTrackingInterrupted(Context context, String reason) {
+        try {
+            SharedPreferences prefs = context.getSharedPreferences(
+                TrackingWatchdogWorker.PREFS_NAME,
+                Context.MODE_PRIVATE
+            );
+            prefs.edit()
+                .putLong(TrackingWatchdogWorker.PREF_TRACKING_INTERRUPTED_AT, System.currentTimeMillis())
+                .putString(TrackingWatchdogWorker.PREF_TRACKING_INTERRUPTED_REASON, reason)
+                .apply();
+        } catch (Exception ignored) {
+        }
+    }
 
     /** Dernière position acquise, pour qu'un abonné tardif reçoive l'état courant. */
     private static volatile Location latestLocation = null;
@@ -151,12 +245,25 @@ public class LocationForegroundService extends Service {
         super.onCreate();
         createNotificationChannel();
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        // Batterie critique (ACTION_BATTERY_LOW) + sticky ACTION_BATTERY_CHANGED pour
+        // relire le niveau exact. Enregistrement dynamique : le receiver ne survit pas
+        // à un reboot (BOOT_COMPLETED repart de zéro — inutile de re-écouter avant).
+        try {
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(Intent.ACTION_BATTERY_LOW);
+            filter.addAction(Intent.ACTION_BATTERY_CHANGED);
+            registerReceiver(batteryLowReceiver, filter);
+        } catch (Exception e) {
+            // Receiver refusé (rare, Android 14+ contexte partiel) : on continue sans —
+            // la détection batterie est un bonus, pas un prérequis au tracking.
+        }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         runningInstance = this;
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+            voluntarilyStopped = true;
             stopLocationUpdates();
             releaseWakeLock();
             stopForeground(true);
@@ -165,6 +272,9 @@ public class LocationForegroundService extends Service {
             runningInstance = null;
             return START_NOT_STICKY;
         }
+        // Toute (ré)exécution avec ACTION_START = session de tracking légitime : un
+        // arrêt ultérieur (onDestroy) ne sera PAS marqué comme interruption volontaire.
+        voluntarilyStopped = false;
         startInForeground();
         acquireWakeLock();
         startLocationUpdates();
@@ -210,6 +320,24 @@ public class LocationForegroundService extends Service {
             if (am != null) {
                 am.set(AlarmManager.RTC, System.currentTimeMillis() + TASK_REMOVED_RESTART_DELAY_MS, pending);
             }
+
+            // 3) Secours WorkManager one-shot (~2 s, SANS contrainte réseau) : troisième
+            // chemin indépendant de redémarrage. WorkManager est persistant sur disque et
+            // fiabilisé par le système (même après une mort de process), contrairement à
+            // l'alarme (volatile) et au startService direct (restrictions de démarrage en
+            // arrière-plan Android 12+). La cascade complète : startService direct →
+            // AlarmManager 1 s → WorkManager 2 s → watchdog périodique 15 min.
+            OneTimeWorkRequest restartWork = new OneTimeWorkRequest.Builder(
+                ServiceRestartWorker.class
+            )
+                .setInitialDelay(TASK_REMOVED_RESTART_DELAY_MS + 1000L, TimeUnit.MILLISECONDS)
+                .build();
+            WorkManager.getInstance(this)
+                .enqueueUniqueWork(
+                    ServiceRestartWorker.RESTART_WORK_NAME,
+                    ExistingWorkPolicy.REPLACE,
+                    restartWork
+                );
         } catch (Exception e) {
             // Jamais bloquant : le watchdog WorkManager (15 min) reste le filet final.
         }
@@ -344,9 +472,17 @@ public class LocationForegroundService extends Service {
             .setSmallIcon(R.drawable.ic_stat_location)
             .setContentTitle(getString(R.string.location_notification_title))
             .setContentText(statusText)
+            // Texte dissuasif PERMANENT (visible en collapsed) : réduit le risque de
+            // fermeture manuelle accidentelle de l'app par le chauffeur.
+            .setSubText(getString(R.string.location_notification_subtext))
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            // Priorité haute : minimise le risque que le système classe ce service comme
+            // "à faible priorité, tuable en premier" sous pression mémoire. onlyAlertOnce
+            // évite le son/vibration à CHAQUE rafraîchissement de statut (le canal est
+            // IMPORTANCE_HIGH) — le service ne sonne qu'une fois, au démarrage du tracking.
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setContentIntent(contentIntent);
 
@@ -357,7 +493,7 @@ public class LocationForegroundService extends Service {
         NotificationChannel channel = new NotificationChannel(
             CHANNEL_ID,
             getString(R.string.location_notification_channel_name),
-            NotificationManager.IMPORTANCE_LOW
+            NotificationManager.IMPORTANCE_HIGH
         );
         channel.setDescription(getString(R.string.location_notification_channel_desc));
         channel.setShowBadge(false);
@@ -369,8 +505,45 @@ public class LocationForegroundService extends Service {
 
     @Override
     public void onDestroy() {
+        try {
+            unregisterReceiver(batteryLowReceiver);
+        } catch (Exception ignored) {
+            // Receiver déjà désinscrit (arrêt multiple) — non bloquant.
+        }
         stopLocationUpdates();
         releaseWakeLock();
+
+        // Interruption NON volontaire du tracking (mort par le système sous pression
+        // mémoire, redémarrage, ou kill partiel) : on le MARQUE pour que le JS le
+        // signale au backend au prochain lancement (notification dashboard). Si un
+        // tracking était en cours et que l'arrêt n'est pas un ACTION_STOP, c'est une
+        // interruption subie — jamais silencieuse.
+        if (!voluntarilyStopped) {
+            SharedPreferences prefs = getSharedPreferences(
+                TrackingWatchdogWorker.PREFS_NAME,
+                Context.MODE_PRIVATE
+            );
+            if (prefs.getBoolean(TrackingWatchdogWorker.PREF_TRACKING_ACTIVE, false)) {
+                markTrackingInterrupted(this, "service_killed");
+            }
+            // Et on planifie un redémarrage en cascade (WorkManager one-shot) : si le
+            // système a tué le service MAIS pas le process, le tracking reprend vite.
+            OneTimeWorkRequest restartWork = new OneTimeWorkRequest.Builder(
+                ServiceRestartWorker.class
+            )
+                .setInitialDelay(2_000L, TimeUnit.MILLISECONDS)
+                .build();
+            try {
+                WorkManager.getInstance(this)
+                    .enqueueUniqueWork(
+                        ServiceRestartWorker.RESTART_WORK_NAME,
+                        ExistingWorkPolicy.REPLACE,
+                        restartWork
+                    );
+            } catch (Exception ignored) {
+            }
+        }
+
         isRunning = false;
         runningInstance = null;
         super.onDestroy();

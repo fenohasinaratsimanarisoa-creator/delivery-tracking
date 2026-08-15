@@ -40,6 +40,7 @@ vi.mock('../services/socket/socket', () => ({
 vi.mock('../services/api/client', () => ({
   default: {
     get: vi.fn().mockResolvedValue({ data: null }),
+    post: vi.fn().mockResolvedValue({ data: null }),
   },
 }));
 
@@ -78,6 +79,8 @@ vi.mock('../services/tracking/backgroundLocation', () => ({
   updateNativeTrackingStatus: vi.fn().mockResolvedValue(undefined),
   startBackgroundLocation: vi.fn().mockResolvedValue(true),
   stopBackgroundLocation: vi.fn().mockResolvedValue(true),
+  getNativeInterruptionInfo: vi.fn().mockResolvedValue({ interruptedAt: null, reason: null }),
+  subscribeToNativeBatteryCritical: vi.fn().mockResolvedValue({ unsubscribe: vi.fn() }),
   subscribeToNativeLocations: vi.fn((handler: (pos: any) => void) => {
     nativeLocationHandler.current = handler;
     const sub = { unsubscribe: vi.fn() };

@@ -1314,6 +1314,42 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     return { status: 'ok', service: 'tracking' };
   }
 
+  /**
+   * Taux de couverture GPS réel d'un trajet : % du temps (entre la première et la
+   * dernière position) pendant lequel des positions valides ont été reçues. Les
+   * trous au-delà du seuil de gap (défaut 3 min, TRACKING_GAP_THRESHOLD_MIN) sont
+   * du temps NON couvert. Permet de mesurer objectivement la fiabilité obtenue
+   * (chauffeur/téléphone/traceur) au lieu de promettre une fiabilité théorique.
+   */
+  computeCoverage(
+    positions: Array<{ timestamp: Date }>,
+    gapThresholdSec: number,
+  ): { coveragePct: number; totalSec: number; coveredSec: number; gapCount: number } {
+    if (positions.length < 2) {
+      return { coveragePct: 100, totalSec: 0, coveredSec: 0, gapCount: 0 };
+    }
+    const sorted = [...positions].sort(
+      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
+    );
+    const first = sorted[0].timestamp.getTime();
+    const last = sorted[sorted.length - 1].timestamp.getTime();
+    const totalSec = Math.max(0, (last - first) / 1000);
+    if (totalSec <= 0) return { coveragePct: 100, totalSec: 0, coveredSec: 0, gapCount: 0 };
+    let uncoveredSec = 0;
+    let gapCount = 0;
+    for (let i = 1; i < sorted.length; i++) {
+      const gapSec = (sorted[i].timestamp.getTime() - sorted[i - 1].timestamp.getTime()) / 1000;
+      if (gapSec > gapThresholdSec) {
+        uncoveredSec += gapSec;
+        gapCount++;
+      }
+    }
+    const coveredSec = Math.max(0, totalSec - uncoveredSec);
+    const coveragePct =
+      totalSec > 0 ? Math.round((coveredSec / totalSec) * 1000) / 10 : 100;
+    return { coveragePct, totalSec, coveredSec, gapCount };
+  }
+
   async getTripReport(deliveryId: string, companyId: string) {
     const positions = await this.getAllPositionsByDelivery(deliveryId, companyId);
     const delivery = await this.getDeliveryInfo(deliveryId, companyId);
@@ -1337,6 +1373,9 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       }>,
       signalInterrupted: false,
       uniqueDriverCount: 0,
+      // Couverture GPS du trajet (% du temps avec position valide reçue). 100 = aucun
+      // trou au-delà du seuil. Mesure réelle de la fiabilité du tracking pour ce trajet.
+      trackingCoveragePct: 100,
     };
     if (positions.length === 0) {
       return emptyReport;
@@ -1406,6 +1445,10 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       positions.map((p) => p.driverId).filter((id): id is string => !!id),
     );
 
+    // Couverture GPS = temps couvert / temps total (les gaps > seuil sont du temps
+    // non couvert). Mesure la fiabilité RÉELLE du tracking sur ce trajet.
+    const coverage = this.computeCoverage(positions, gapThresholdSec);
+
     return {
       delivery,
       totalDistance,
@@ -1417,7 +1460,260 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       signalGaps,
       signalInterrupted: signalGaps.length > 0,
       uniqueDriverCount: uniqueDrivers.size,
+      trackingCoveragePct: coverage.coveragePct,
     };
+  }
+
+  /**
+   * Rapport de fiabilité du tracking par véhicule/chauffeur sur la période : % du
+   * temps de livraison avec position GPS valide reçue (couverture moyenne pondérée
+   * par la durée de chaque livraison), + nombre de trous signalés. Permet au
+   * dispatcher de savoir objectivement si un chauffeur/téléphone particulier pose
+   * problème récurrent (mauvais téléphone, habitude de fermer l'app) plutôt que
+   * d'accuser le système à tort.
+   */
+  async getTrackingReliability(companyId: string, days = 30) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const gapThresholdMin = Number(
+      this.configService.get<string>('TRACKING_GAP_THRESHOLD_MIN', '3'),
+    );
+    const gapThresholdSec = (Number.isFinite(gapThresholdMin) && gapThresholdMin > 0
+      ? gapThresholdMin
+      : 3) * 60;
+
+    const deliveries = await this.prisma.delivery.findMany({
+      where: {
+        companyId,
+        deletedAt: null,
+        status: { in: ['delivered', 'failed'] },
+        createdAt: { gte: since },
+      },
+      select: {
+        id: true,
+        vehicleId: true,
+        driverId: true,
+        completedAt: true,
+      },
+    });
+
+    // Par véhicule (les positions sont rattachées au véhicule, pas au chauffeur).
+    const byVehicle = new Map<
+      string,
+      {
+        vehicleId: string;
+        deliveries: number;
+        totalSec: number;
+        coveredSec: number;
+        gaps: number;
+        positions: number;
+        source: PositionSource;
+        lastDeliveryCompletedAt: Date | null;
+      }
+    >();
+
+    for (const delivery of deliveries) {
+      if (!delivery.vehicleId) continue;
+      const positions = await this.prisma.gpsPosition.findMany({
+        where: {
+          vehicleId: delivery.vehicleId,
+          deliveryId: delivery.id,
+          suspect: false,
+        },
+        select: { timestamp: true },
+      });
+      const coverage = this.computeCoverage(positions, gapThresholdSec);
+      const agg = byVehicle.get(delivery.vehicleId) ?? {
+        vehicleId: delivery.vehicleId,
+        deliveries: 0,
+        totalSec: 0,
+        coveredSec: 0,
+        gaps: 0,
+        positions: 0,
+        source: 'phone' as PositionSource,
+        lastDeliveryCompletedAt: null,
+      };
+      agg.deliveries += 1;
+      agg.totalSec += coverage.totalSec;
+      agg.coveredSec += coverage.coveredSec;
+      agg.gaps += coverage.gapCount;
+      agg.positions += positions.length;
+      if (delivery.completedAt && (!agg.lastDeliveryCompletedAt || delivery.completedAt > agg.lastDeliveryCompletedAt)) {
+        agg.lastDeliveryCompletedAt = delivery.completedAt;
+      }
+      byVehicle.set(delivery.vehicleId, agg);
+    }
+
+    const vehicles = await this.prisma.vehicle.findMany({
+      where: {
+        id: { in: [...byVehicle.keys()] },
+        companyId,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        licensePlate: true,
+        brand: true,
+        model: true,
+        positionSource: true,
+        driver: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+      },
+    });
+    const vehicleMap = new Map(vehicles.map((v) => [v.id, v]));
+
+    const rows = [...byVehicle.entries()].map(([vehicleId, agg]) => {
+      const vehicle = vehicleMap.get(vehicleId);
+      const coveragePct =
+        agg.totalSec > 0 ? Math.round((agg.coveredSec / agg.totalSec) * 1000) / 10 : 100;
+      return {
+        vehicleId,
+        licensePlate: vehicle?.licensePlate ?? null,
+        brand: vehicle?.brand ?? null,
+        model: vehicle?.model ?? null,
+        source: (vehicle?.positionSource as PositionSource) ?? agg.source,
+        driverId: vehicle?.driver?.id ?? null,
+        driverName: vehicle?.driver
+          ? `${vehicle.driver.firstName} ${vehicle.driver.lastName}`
+          : null,
+        deliveries: agg.deliveries,
+        positions: agg.positions,
+        // Couverture moyenne pondérée par la durée de chaque livraison : un long trajet
+        // fiable pèse plus qu'un court trajet avec un trou.
+        coveragePct,
+        coverageLabel:
+          coveragePct >= 98
+            ? 'excellent'
+            : coveragePct >= 90
+              ? 'bon'
+              : coveragePct >= 75
+                ? 'moyen'
+                : 'faible',
+        gaps: agg.gaps,
+        lastDeliveryCompletedAt: agg.lastDeliveryCompletedAt,
+      };
+    });
+
+    rows.sort((a, b) => a.coveragePct - b.coveragePct);
+    return { days, periodSince: since, vehicles: rows };
+  }
+
+  /**
+   * Signalement (par le JS de l'app mobile, au lancement) d'une interruption NON
+   * volontaire du tracking détectée nativement (service tué / force-stop partiel).
+   * Crée une notification dashboard immédiate pour que l'interruption soit visible
+   * côté entreprise plutôt que découverte a posteriori.
+   */
+  async reportTrackingInterruption(
+    userId: string,
+    body: { interruptedAt?: string; reason?: string; deliveryId?: string; vehicleId?: string },
+  ) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+      select: { id: true, firstName: true, lastName: true, companyId: true },
+    });
+    if (!driver) return { reported: false, reason: 'driver_not_found' };
+
+    const interruptedAt = body.interruptedAt ? new Date(body.interruptedAt) : new Date();
+    const timeLabel = interruptedAt.toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const reasonLabel =
+      body.reason === 'watchdog_detected_dead'
+        ? 'app tuée par le système'
+        : body.reason === 'service_killed'
+          ? 'app fermée manuellement ou tuée par le système'
+          : 'raison inconnue';
+
+    const driverName = `${driver.firstName} ${driver.lastName}`;
+    const message = `Le suivi du chauffeur ${driverName} a été interrompu à ${timeLabel} (${reasonLabel}). L'app a dû être rouverte.`;
+
+    const notification = await this.notifications.create(driver.companyId, {
+      type: NotificationType.system,
+      priority: NotificationPriority.high,
+      title: 'Tracking interrompu',
+      message,
+      link: body.deliveryId ? `/tracking/${body.deliveryId}` : undefined,
+      deliveryId: body.deliveryId,
+    });
+    return { reported: true, notificationId: notification.id };
+  }
+
+  /**
+   * Batterie critique (niveau ≤ 20 %, signalé par le foreground service natif avant
+   * extinction probable) : le dispatcher voit la cause probable de l'interruption
+   * au lieu d'un silence inexpliqué.
+   */
+  async reportBatteryCritical(
+    userId: string,
+    body: { level?: number; vehicleId?: string; deliveryId?: string; latitude?: number; longitude?: number },
+  ) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+      select: { id: true, firstName: true, lastName: true, companyId: true, vehicleId: true },
+    });
+    if (!driver) return { reported: false, reason: 'driver_not_found' };
+
+    const level = typeof body.level === 'number' ? Math.round(body.level) : null;
+    const vehicleId = body.vehicleId || driver.vehicleId;
+    const vehicle = vehicleId
+      ? await this.prisma.vehicle.findUnique({
+          where: { id: vehicleId },
+          select: { licensePlate: true },
+        })
+      : null;
+
+    const levelLabel = level !== null ? `Batterie critique (${level}%)` : 'Batterie critique';
+    const message =
+      `Le téléphone du chauffeur ${driver.firstName} ${driver.lastName}` +
+      (vehicle ? ` (véhicule ${vehicle.licensePlate})` : '') +
+      ` signale un niveau de batterie critique. Le suivi peut s'interrompre si le téléphone s'éteint.`;
+
+    const notification = await this.notifications.create(driver.companyId, {
+      type: NotificationType.device_offline,
+      priority: NotificationPriority.high,
+      title: levelLabel,
+      message,
+      link: body.deliveryId ? `/tracking/${body.deliveryId}` : undefined,
+      deliveryId: body.deliveryId,
+    });
+
+    // Sauvegarde la dernière position connue comme position finale (avec la batterie
+    // en contexte) : le dispatcher voit où était le véhicule au moment du signal.
+    // Isolation des sources conservée : uniquement pour les véhicules 'phone' (un
+    // véhicule physical_tracker ne doit pas recevoir une position de l'app mobile).
+    if (vehicleId && typeof body.latitude === 'number' && typeof body.longitude === 'number') {
+      try {
+        const targetVehicle = await this.prisma.vehicle.findUnique({
+          where: { id: vehicleId },
+          select: { positionSource: true },
+        });
+        if (targetVehicle && targetVehicle.positionSource !== 'physical_tracker') {
+          await this.prisma.gpsPosition.create({
+            data: {
+              latitude: body.latitude,
+              longitude: body.longitude,
+              speed: null,
+              heading: null,
+              altitude: null,
+              accuracy: null,
+              suspect: false,
+              location: `POINT(${body.longitude} ${body.latitude})`,
+              timestamp: new Date(),
+              companyId: driver.companyId,
+              deliveryId: body.deliveryId ?? null,
+              vehicleId,
+              driverId: driver.id,
+              source: 'phone',
+            },
+          });
+        }
+      } catch {
+        // Non bloquant : la notification reste l'essentiel.
+      }
+    }
+    return { reported: true, notificationId: notification.id };
   }
 
   async calculateDistancePostGIS(
@@ -1640,6 +1936,9 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     field('Duration', `${mins}m ${secs}s`);
     field('Stops', `${report.stopCount}`);
     field('Positions', `${report.positionCount}`);
+    if (report.trackingCoveragePct !== undefined) {
+      field('Couverture GPS', `${report.trackingCoveragePct}%`);
+    }
 
     // Section "signal GPS interrompu" : les trous détectés sont listés explicitement
     // (jamais une ligne droite silencieuse entre deux points éloignés dans le temps).

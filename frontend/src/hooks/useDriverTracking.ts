@@ -9,11 +9,13 @@ import {
   getBackgroundLocationStatus,
   getBatteryOptimizationStatus,
   getDeviceOemInfo,
+  getNativeInterruptionInfo,
   openOemBatterySettings,
   requestBackgroundLocationPermissions,
   requestBatteryOptimizationExemption,
   startBackgroundLocation,
   stopBackgroundLocation,
+  subscribeToNativeBatteryCritical,
   subscribeToNativeLocations,
   updateNativeTrackingStatus,
   type DeviceOemInfo,
@@ -82,7 +84,7 @@ export interface DriverPosition {
 }
 
 export interface DriverAlert {
-  type: 'proximity' | 'cascade' | 'geofence' | 'poor_accuracy' | 'queue_full' | 'geo_denied' | 'background_continued';
+  type: 'proximity' | 'cascade' | 'geofence' | 'poor_accuracy' | 'queue_full' | 'geo_denied' | 'background_continued' | 'battery_critical';
   title: string;
   message: string;
   deliveryId?: string;
@@ -147,6 +149,7 @@ export function useDriverTracking() {
   const rawPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const watchRef = useRef<number | null>(null);
   const nativeSubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+  const batterySubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hiddenSinceRef = useRef<number>(0);
   const visibilityHandlerRef = useRef<(() => void) | null>(null);
@@ -720,6 +723,43 @@ export function useDriverTracking() {
         console.warn('[tracking] native background status check failed:', err);
       });
 
+    // DÉTECTION D'INTERRUPTION RÉSIDUELLE (force-stop, service tué) : le marqueur
+    // natif (SharedPreferences, écrit par le watchdog ou onDestroy non-volontaire)
+    // est lu au lancement. Si un tracking actif a été interrompu pendant une
+    // livraison, on le signale IMMÉDIATEMENT au backend → notification dashboard
+    // "Chauffeur X : tracking interrompu à HH:MM" (jamais un silence découvert
+    // a posteriori). Le marqueur est effacé côté natif à la lecture : chaque
+    // interruption n'est signalée qu'une fois.
+    getNativeInterruptionInfo()
+      .then((interruption) => {
+        if (!interruption.interruptedAt || !deliveryIdRef.current) return;
+        const dId = deliveryIdRef.current;
+        const vId = vehicleId;
+        api.post('/tracking/report-interruption', {
+          interruptedAt: new Date(interruption.interruptedAt).toISOString(),
+          reason: interruption.reason ?? 'unknown',
+          deliveryId: dId,
+          ...(vId ? { vehicleId: vId } : {}),
+        })
+          .then(() => {
+            const time = new Date(interruption.interruptedAt!).toLocaleTimeString('fr-FR', {
+              hour: '2-digit', minute: '2-digit',
+            });
+            addAlert({
+              type: 'background_continued',
+              title: 'Tracking interrompu puis relancé',
+              message: `Le suivi a été interrompu à ${time} (app fermée manuellement ou tuée par le système). Le dispatcher en a été informé.`,
+              urgency: 'high',
+            });
+          })
+          .catch(() => {
+            // Échec réseau au lancement : le marqueur natif est déjà effacé, on ne
+            // peut pas re-tenter sans le conserver — cas rare, le moniteur de
+            // silence serveur (5 min) couvre la détection de toute façon.
+          });
+      })
+      .catch(() => {});
+
     // Request notification permission when driver starts tracking (non-intrusive)
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
@@ -757,6 +797,37 @@ export function useDriverTracking() {
     })
       .then((sub) => {
         nativeSubscriptionRef.current = sub;
+      })
+      .catch(() => {});
+
+    // BATTERIE CRITIQUE (niveau ≤ 20 %, émis par le foreground service natif) :
+    // avant extinction probable, on envoie au backend une dernière position + un
+    // statut explicite, pour que le dispatcher voie la CAUSE probable de
+    // l'interruption au lieu d'un silence inexpliqué. Alerte aussi le chauffeur.
+    subscribeToNativeBatteryCritical((batteryEvent) => {
+      const socket = getSocket();
+      const vId = vehicleId;
+      const dId = deliveryIdRef.current;
+      if (vId && socket.connected) {
+        socket.emit('batteryCritical', {
+          vehicleId: vId,
+          ...(dId ? { deliveryId: dId } : {}),
+          level: batteryEvent.level,
+          latitude: batteryEvent.latitude,
+          longitude: batteryEvent.longitude,
+          timestamp: batteryEvent.timestamp ?? Date.now(),
+        });
+      }
+      addAlert({
+        type: 'battery_critical',
+        title: 'Batterie critique',
+        message: `Batterie à ${batteryEvent.level}%. Le suivi va s'interrompre si le téléphone s'éteint. Le dispatcher en a été informé.`,
+        urgency: 'critical',
+      });
+      updateNativeTrackingStatus(`⚠ Batterie ${batteryEvent.level}% — suivi va s'interrompre`).catch(() => {});
+    })
+      .then((sub) => {
+        batterySubscriptionRef.current = sub;
       })
       .catch(() => {});
 
@@ -822,6 +893,10 @@ export function useDriverTracking() {
       nativeSubscriptionRef.current.unsubscribe();
       nativeSubscriptionRef.current = null;
     }
+    if (batterySubscriptionRef.current) {
+      batterySubscriptionRef.current.unsubscribe();
+      batterySubscriptionRef.current = null;
+    }
     stopBackgroundLocation().catch(() => {});
     // Réinitialise le statut de la notification (le service s'arrête de toute façon,
     // mais on s'assure qu'aucun texte périmé ne traîne si un redémarrage survient).
@@ -877,6 +952,10 @@ export function useDriverTracking() {
       if (nativeSubscriptionRef.current) {
         nativeSubscriptionRef.current.unsubscribe();
         nativeSubscriptionRef.current = null;
+      }
+      if (batterySubscriptionRef.current) {
+        batterySubscriptionRef.current.unsubscribe();
+        batterySubscriptionRef.current = null;
       }
       socket.off('connect', updateConnState);
       socket.off('disconnect', updateConnState);

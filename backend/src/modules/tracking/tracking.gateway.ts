@@ -393,6 +393,38 @@ export class TrackingGateway
    * Les clients mobiles qui n'envoient pas ce message gardent un comportement
    * fonctionnel (alertes réémises), juste moins optimisé.
    */
+  /**
+   * Batterie critique (niveau ≤ 20 %) signalée par l'app mobile (foreground service
+   * natif) : crée une notification dashboard + enregistre la dernière position, pour
+   * que le dispatcher voie la cause probable d'une interruption plutôt qu'un silence.
+   */
+  @SubscribeMessage('batteryCritical')
+  async handleBatteryCritical(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: {
+      vehicleId?: string;
+      deliveryId?: string;
+      level?: number;
+      latitude?: number;
+      longitude?: number;
+      timestamp?: number;
+    },
+  ) {
+    const user = client.data.user;
+    if (!user || user.role !== 'driver') return;
+    try {
+      await this.trackingService.reportBatteryCritical(user.id, {
+        level: body?.level,
+        vehicleId: body?.vehicleId,
+        deliveryId: body?.deliveryId,
+        latitude: body?.latitude,
+        longitude: body?.longitude,
+      });
+    } catch (err) {
+      this.logger.warn(`Battery critical report failed (driver=${user.id}): ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   @SubscribeMessage('snoozeProximityAlert')
   async handleSnoozeProximityAlert(
     @ConnectedSocket() client: Socket,

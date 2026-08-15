@@ -8,6 +8,9 @@
     <string name="location_notification_channel_desc">Notification persistante indiquant que la localisation est active pendant la livraison.</string>
     <string name="location_notification_title">Livraison en cours</string>
     <string name="location_notification_text">Localisation active</string>
+    <!-- Texte dissuasif affiché en permanence dans la notification du service : réduit
+         le risque de fermeture manuelle accidentelle de l'app pendant une livraison. -->
+    <string name="location_notification_subtext">Suivi de livraison actif — ne pas fermer l\'application</string>
     <string name="watchdog_alert_title">Suivi GPS perturbé</string>
     <string name="watchdog_alert_text">Le suivi GPS a rencontré un problème, veuillez rouvrir l\'application.</string>
 </resources>

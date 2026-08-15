@@ -56,6 +56,23 @@ export interface BackgroundLocationStatus {
   permissions: BackgroundLocationPermissions;
 }
 
+/** Marqueur d'interruption NON volontaire du tracking (service tué / force-stop). */
+export interface TrackingInterruptionInfo {
+  /** Epoch ms de l'interruption, ou null si aucune interruption depuis le dernier lancement. */
+  interruptedAt: number | null;
+  /** Raison normalisée : 'service_killed' | 'watchdog_detected_dead' | 'unknown'. */
+  reason: string | null;
+}
+
+/** Alerte batterie critique émise par le foreground service (niveau ≤ 20 %). */
+export interface BatteryCriticalEvent {
+  level: number;
+  latitude?: number;
+  longitude?: number;
+  timestamp?: number;
+  accuracy?: number;
+}
+
 interface BackgroundLocationNative {
   start(): Promise<BackgroundLocationStatus>;
   stop(): Promise<BackgroundLocationStatus>;
@@ -66,9 +83,10 @@ interface BackgroundLocationNative {
   getDeviceInfo(): Promise<DeviceOemInfo>;
   openOemBatterySettings(): Promise<{ opened: string }>;
   updateTrackingStatus(options: { status: string }): Promise<void>;
+  getInterruptionInfo(): Promise<TrackingInterruptionInfo>;
   addListener(
-    eventName: 'locationUpdate',
-    listenerFunc: (data: NativeLocationUpdate) => void,
+    eventName: 'locationUpdate' | 'batteryCritical',
+    listenerFunc: (data: NativeLocationUpdate | BatteryCriticalEvent) => void,
   ): Promise<PluginListenerHandle> & PluginListenerHandle;
 }
 
@@ -218,6 +236,45 @@ export async function updateNativeTrackingStatus(status: string): Promise<void> 
 }
 
 /**
+ * Lit (et efface côté natif) le marqueur d'interruption NON volontaire du tracking.
+ * À appeler au lancement du tracking : si un tracking actif a été interrompu (service
+ * tué par le système, force-stop partiel détecté par le watchdog), le résultat est
+ * signalé au backend → notification dashboard "Chauffeur X : tracking interrompu".
+ */
+export async function getNativeInterruptionInfo(): Promise<TrackingInterruptionInfo> {
+  const p = resolvePlugin();
+  if (!p) return { interruptedAt: null, reason: null };
+  try {
+    return await p.getInterruptionInfo();
+  } catch {
+    return { interruptedAt: null, reason: null };
+  }
+}
+
+/**
+ * S'abonne aux alertes batterie critique (niveau ≤ 20 %) émises par le foreground
+ * service natif. Le JS enverra alors une dernière position + un statut au backend.
+ */
+export async function subscribeToNativeBatteryCritical(
+  handler: (event: BatteryCriticalEvent) => void,
+): Promise<NativeLocationSubscription | null> {
+  const p = resolvePlugin();
+  if (!p) return null;
+  try {
+    const handle = await p.addListener('batteryCritical', (data) => handler(data as BatteryCriticalEvent));
+    return {
+      unsubscribe: () => {
+        try {
+          void handle.remove();
+        } catch {}
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * S'abonne aux positions acquises nativement par LocationForegroundService
  * (FusedLocationProviderClient, indépendant du cycle de vie de la WebView).
  *
@@ -231,7 +288,7 @@ export async function subscribeToNativeLocations(
   const p = resolvePlugin();
   if (!p) return null;
   try {
-    const handle = await p.addListener('locationUpdate', (data) => handler(data));
+    const handle = await p.addListener('locationUpdate', (data) => handler(data as NativeLocationUpdate));
     return {
       unsubscribe: () => {
         try {

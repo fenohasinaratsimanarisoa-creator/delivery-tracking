@@ -1605,6 +1605,240 @@ describe('TrackingService', () => {
       expect(new Date(report.signalGaps[0].toTimestamp).getTime()).toBe(afterGap);
       expect(report.signalGaps[0].durationSec).toBe(300);
       expect(report.uniqueDriverCount).toBe(1);
+      // Couverture GPS : trajet = 339 s (27 s + trou 300 s + 12 s), trou non couvert =
+      // 300 s → coverage = 39/339 ≈ 11.5 %. Le trou EST lourdement pénalisé dans la
+      // couverture (jamais une ligne droite silencieuse qui donnerait une fausse
+      // impression de 100 %).
+      expect(report.trackingCoveragePct).toBeGreaterThan(5);
+      expect(report.trackingCoveragePct).toBeLessThan(20);
+    });
+
+    it('calcule trackingCoveragePct = 100 quand aucun trou au-delà du seuil', async () => {
+      const base = Date.parse('2026-07-21T10:00:00.000Z');
+      const positions: any[] = [];
+      // 20 positions à 3 s d'intervalle (57 s de trajet, aucun trou).
+      for (let i = 0; i < 20; i++) {
+        positions.push({
+          latitude: 48.85 + i * 0.001,
+          longitude: 2.35,
+          speed: 10,
+          heading: 90,
+          altitude: null,
+          accuracy: 10,
+          suspect: false,
+          timestamp: new Date(base + i * 3000),
+          driverId: 'driver-1',
+        });
+      }
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(positions);
+      mockPrisma.delivery.findFirst.mockResolvedValue({
+        id: 'delivery-dense',
+        title: 'Dense',
+        status: 'delivered',
+        pickupAddress: 'A',
+        deliveryAddress: 'B',
+        pickupLat: null,
+        pickupLng: null,
+        deliveryLat: null,
+        deliveryLng: null,
+        scheduledDate: new Date(),
+        publicTrackingRevokedAt: null,
+      });
+
+      const report = await service.getTripReport('delivery-dense', 'company-1');
+      expect(report.signalInterrupted).toBe(false);
+      expect(report.trackingCoveragePct).toBe(100);
+    });
+  });
+
+  describe('computeCoverage', () => {
+    it('renvoie 100% pour un trajet sans trou', () => {
+      const base = Date.parse('2026-07-21T10:00:00.000Z');
+      const positions = Array.from({ length: 20 }, (_, i) => ({
+        timestamp: new Date(base + i * 3000),
+      }));
+      const c = service.computeCoverage(positions, 180);
+      expect(c.coveragePct).toBe(100);
+      expect(c.gapCount).toBe(0);
+    });
+
+    it('pénalise la couverture quand un trou dépasse le seuil', () => {
+      const base = Date.parse('2026-07-21T10:00:00.000Z');
+      const positions = [
+        { timestamp: new Date(base) },
+        { timestamp: new Date(base + 10 * 1000) },
+        // Trou de 5 min (> seuil 3 min)
+        { timestamp: new Date(base + 10 * 1000 + 300 * 1000) },
+        { timestamp: new Date(base + 10 * 1000 + 300 * 1000 + 10 * 1000) },
+      ];
+      const c = service.computeCoverage(positions, 180);
+      // 320 s de trajet, 300 s non couvertes → ~6.2 % de couverture.
+      expect(c.coveragePct).toBeLessThan(10);
+      expect(c.gapCount).toBe(1);
+    });
+  });
+
+  describe('getTrackingReliability', () => {
+    it('agrège la couverture par véhicule sur la période', async () => {
+      const base = Date.parse('2026-07-21T10:00:00.000Z');
+      mockPrisma.delivery.findMany.mockResolvedValue([
+        { id: 'delivery-1', vehicleId: 'vehicle-1', driverId: 'driver-1', completedAt: new Date(base) },
+      ]);
+      // Positions sans trou pour ce trajet.
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(
+        Array.from({ length: 20 }, (_, i) => ({ timestamp: new Date(base + i * 3000) })),
+      );
+      mockPrisma.vehicle.findMany.mockResolvedValue([
+        {
+          id: 'vehicle-1',
+          licensePlate: '1234 TAB',
+          brand: 'Toyota',
+          model: 'Hilux',
+          positionSource: 'phone',
+          driver: { id: 'driver-1', firstName: 'Jean', lastName: 'Rakoto' },
+        },
+      ]);
+
+      const result = await service.getTrackingReliability('company-1', 30);
+      expect(result.vehicles).toHaveLength(1);
+      expect(result.vehicles[0].vehicleId).toBe('vehicle-1');
+      expect(result.vehicles[0].licensePlate).toBe('1234 TAB');
+      expect(result.vehicles[0].driverName).toBe('Jean Rakoto');
+      expect(result.vehicles[0].coveragePct).toBe(100);
+      expect(result.vehicles[0].coverageLabel).toBe('excellent');
+      expect(result.vehicles[0].deliveries).toBe(1);
+    });
+
+    it('classe un véhicule à couverture faible en bas du tri (problème récurrent visible)', async () => {
+      const base = Date.parse('2026-07-21T10:00:00.000Z');
+      mockPrisma.delivery.findMany.mockResolvedValue([
+        { id: 'delivery-1', vehicleId: 'vehicle-good', driverId: null, completedAt: new Date(base) },
+        { id: 'delivery-2', vehicleId: 'vehicle-bad', driverId: null, completedAt: new Date(base) },
+      ]);
+      // Bon véhicule : trajet sans trou → 100 %.
+      mockPrisma.gpsPosition.findMany
+        .mockResolvedValueOnce(Array.from({ length: 20 }, (_, i) => ({ timestamp: new Date(base + i * 3000) })))
+        // Mauvais véhicule : 2 points + un trou de 10 min → couverture faible.
+        .mockResolvedValueOnce([
+          { timestamp: new Date(base) },
+          { timestamp: new Date(base + 600 * 1000) },
+        ]);
+      mockPrisma.vehicle.findMany.mockResolvedValue([
+        { id: 'vehicle-good', licensePlate: 'GOOD', brand: null, model: null, positionSource: 'phone', driver: null },
+        { id: 'vehicle-bad', licensePlate: 'BAD', brand: null, model: null, positionSource: 'phone', driver: null },
+      ]);
+
+      const result = await service.getTrackingReliability('company-1', 30);
+      // Tri croissant : le véhicule à problème récurrent apparaît EN PREMIER.
+      expect(result.vehicles[0].vehicleId).toBe('vehicle-bad');
+      expect(result.vehicles[0].coveragePct).toBeLessThan(50);
+      expect(result.vehicles[1].vehicleId).toBe('vehicle-good');
+      expect(result.vehicles[1].coveragePct).toBe(100);
+    });
+  });
+
+  describe('reportTrackingInterruption', () => {
+    it('crée une notification dashboard immédiate quand le marqueur d\'interruption est présent', async () => {
+      mockPrisma.driver.findUnique.mockResolvedValue({
+        id: 'driver-1',
+        firstName: 'Jean',
+        lastName: 'Rakoto',
+        companyId: 'company-1',
+      });
+      mockNotifications.create.mockResolvedValue({ id: 'notif-1' });
+
+      const result = await service.reportTrackingInterruption('user-1', {
+        interruptedAt: '2026-07-21T09:32:00.000Z',
+        reason: 'watchdog_detected_dead',
+        deliveryId: 'delivery-1',
+      });
+
+      expect(result.reported).toBe(true);
+      expect(mockNotifications.create).toHaveBeenCalledWith(
+        'company-1',
+        expect.objectContaining({
+          type: 'system',
+          priority: 'high',
+          title: 'Tracking interrompu',
+          deliveryId: 'delivery-1',
+        }),
+      );
+    });
+
+    it('ne fait rien (reported: false) si le user n\'est pas un chauffeur', async () => {
+      mockPrisma.driver.findUnique.mockResolvedValue(null);
+      const result = await service.reportTrackingInterruption('user-1', {});
+      expect(result.reported).toBe(false);
+      expect(mockNotifications.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reportBatteryCritical', () => {
+    it('crée une notification + enregistre la dernière position pour un véhicule phone', async () => {
+      mockPrisma.driver.findUnique.mockResolvedValue({
+        id: 'driver-1',
+        firstName: 'Jean',
+        lastName: 'Rakoto',
+        companyId: 'company-1',
+        vehicleId: 'vehicle-1',
+      });
+      mockPrisma.vehicle.findUnique
+        .mockResolvedValueOnce({ licensePlate: '1234 TAB' })
+        .mockResolvedValueOnce({ positionSource: 'phone' });
+      mockNotifications.create.mockResolvedValue({ id: 'notif-1' });
+      mockPrisma.gpsPosition.create.mockResolvedValue({ id: 'pos-1' });
+
+      const result = await service.reportBatteryCritical('user-1', {
+        level: 12,
+        vehicleId: 'vehicle-1',
+        deliveryId: 'delivery-1',
+        latitude: -18.8792,
+        longitude: 47.5079,
+      });
+
+      expect(result.reported).toBe(true);
+      expect(mockNotifications.create).toHaveBeenCalledWith(
+        'company-1',
+        expect.objectContaining({
+          type: 'device_offline',
+          priority: 'high',
+          title: 'Batterie critique (12%)',
+          deliveryId: 'delivery-1',
+        }),
+      );
+      expect(mockPrisma.gpsPosition.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            vehicleId: 'vehicle-1',
+            latitude: -18.8792,
+            longitude: 47.5079,
+            source: 'phone',
+          }),
+        }),
+      );
+    });
+
+    it('n\'enregistre PAS de position pour un véhicule physical_tracker (isolation des sources)', async () => {
+      mockPrisma.driver.findUnique.mockResolvedValue({
+        id: 'driver-1',
+        firstName: 'Jean',
+        lastName: 'Rakoto',
+        companyId: 'company-1',
+        vehicleId: 'vehicle-1',
+      });
+      mockPrisma.vehicle.findUnique
+        .mockResolvedValueOnce({ licensePlate: 'TRK' })
+        .mockResolvedValueOnce({ positionSource: 'physical_tracker' });
+      mockNotifications.create.mockResolvedValue({ id: 'notif-1' });
+
+      await service.reportBatteryCritical('user-1', {
+        level: 8,
+        vehicleId: 'vehicle-1',
+        latitude: -18.8792,
+        longitude: 47.5079,
+      });
+
+      expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
     });
   });
 

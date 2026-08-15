@@ -71,6 +71,9 @@ public class BackgroundLocationPlugin extends Plugin {
     /** Sink enregistré auprès du service pour recevoir les positions natives. */
     private LocationForegroundService.LocationSink locationSink;
     private boolean locationSinkRegistered = false;
+    /** Sink batterie critique (ACTION_BATTERY_LOW / niveau ≤ 20 %). */
+    private LocationForegroundService.BatteryCriticalSink batterySink;
+    private boolean batterySinkRegistered = false;
 
     @PluginMethod
     public void start(PluginCall call) {
@@ -82,6 +85,7 @@ public class BackgroundLocationPlugin extends Plugin {
         // S'abonne AVANT de démarrer le service pour ne rater aucune position.
         // Le sink est statique : il survivra à la (ré)création du service.
         subscribeToLocations();
+        subscribeToBattery();
         Intent intent = new Intent(context, LocationForegroundService.class);
         intent.setAction(LocationForegroundService.ACTION_START);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -177,6 +181,70 @@ public class BackgroundLocationPlugin extends Plugin {
             locationSink = null;
         }
         locationSinkRegistered = false;
+        if (batterySink != null) {
+            LocationForegroundService.removeBatteryCriticalSink(batterySink);
+            batterySink = null;
+        }
+        batterySinkRegistered = false;
+    }
+
+    /**
+     * S'abonne aux alertes batterie critique émises par LocationForegroundService
+     * (ACTION_BATTERY_LOW ou niveau ≤ 20 % via le sticky ACTION_BATTERY_CHANGED) et
+     * les transmet au JS via notifyListeners("batteryCritical", ...). Le JS enverra
+     * alors une DERNIÈRE position + un statut "batterie critique" au backend pour que
+     * le dispatcher voie la cause probable d'une interruption au lieu d'un silence
+     * inexpliqué.
+     */
+    private void subscribeToBattery() {
+        if (batterySinkRegistered) return;
+        batterySink = new LocationForegroundService.BatteryCriticalSink() {
+            @Override
+            public void onBatteryCritical(int levelPercent, android.location.Location lastLocation) {
+                JSObject data = new JSObject();
+                data.put("level", levelPercent);
+                if (lastLocation != null) {
+                    data.put("latitude", lastLocation.getLatitude());
+                    data.put("longitude", lastLocation.getLongitude());
+                    data.put("timestamp", lastLocation.getTime());
+                    data.put("accuracy", lastLocation.hasAccuracy() ? lastLocation.getAccuracy() : JSObject.NULL);
+                }
+                notifyListeners("batteryCritical", data);
+            }
+        };
+        LocationForegroundService.addBatteryCriticalSink(batterySink);
+        batterySinkRegistered = true;
+    }
+
+    /**
+     * Lit (et EFFACE) le marqueur d'interruption NON volontaire du tracking : si un
+     * tracking actif a été interrompu (service tué par le système, force-stop partiel
+     * détecté par le watchdog), le JS le signale au backend au lancement → notification
+     * dashboard "Chauffeur X : tracking interrompu à HH:MM" au lieu d'un silence.
+     * Retourne { interruptedAt, reason } ou { interruptedAt: null }.
+     */
+    @PluginMethod
+    public void getInterruptionInfo(PluginCall call) {
+        android.content.SharedPreferences prefs = getContext().getSharedPreferences(
+            TrackingWatchdogWorker.PREFS_NAME,
+            Context.MODE_PRIVATE
+        );
+        long interruptedAt = prefs.getLong(TrackingWatchdogWorker.PREF_TRACKING_INTERRUPTED_AT, 0L);
+        String reason = prefs.getString(TrackingWatchdogWorker.PREF_TRACKING_INTERRUPTED_REASON, null);
+        // Efface le marqueur : il n'est signalé qu'UNE fois par interruption.
+        prefs.edit()
+            .remove(TrackingWatchdogWorker.PREF_TRACKING_INTERRUPTED_AT)
+            .remove(TrackingWatchdogWorker.PREF_TRACKING_INTERRUPTED_REASON)
+            .apply();
+        JSObject ret = new JSObject();
+        if (interruptedAt > 0) {
+            ret.put("interruptedAt", interruptedAt);
+            ret.put("reason", reason != null ? reason : "unknown");
+        } else {
+            ret.put("interruptedAt", JSObject.NULL);
+            ret.put("reason", JSObject.NULL);
+        }
+        call.resolve(ret);
     }
 
     private void emitLocation(Location location) {

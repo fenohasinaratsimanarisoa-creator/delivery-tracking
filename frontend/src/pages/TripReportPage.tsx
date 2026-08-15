@@ -13,6 +13,8 @@ interface TripReport {
   stopCount: number;
   positionCount: number;
   postgisDistance: { meters: number; kilometers: number } | null;
+  signalGaps?: { fromTimestamp: string; toTimestamp: string; durationSec: number }[];
+  trackingCoveragePct?: number;
 }
 
 export default function TripReportPage() {
@@ -115,7 +117,28 @@ export default function TripReportPage() {
             <div className={styles.reportItem}><strong>Avg Speed:</strong> {report.avgSpeedKmh} km/h</div>
             <div className={styles.reportItem}><strong>Duration:</strong> {formatDuration(report.totalDurationSec)}</div>
             <div className={styles.reportItem}><strong>Stops:</strong> {report.stopCount}</div>
+            {report.trackingCoveragePct !== undefined && (
+              <div className={styles.reportItem}>
+                <strong>Couverture GPS:</strong>{' '}
+                <span style={{ color: report.trackingCoveragePct >= 95 ? 'var(--color-teal)' : report.trackingCoveragePct >= 75 ? 'var(--color-accent)' : 'var(--color-red)' }}>
+                  {report.trackingCoveragePct}%
+                </span>
+              </div>
+            )}
           </div>
+
+          {report.signalGaps && report.signalGaps.length > 0 && (
+            <div className={styles.reportGaps}>
+              <strong>Signal GPS interrompu :</strong>
+              <ul>
+                {report.signalGaps.slice(0, 5).map((gap, i) => {
+                  const from = new Date(gap.fromTimestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                  const to = new Date(gap.toTimestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                  return <li key={i}>⚠ {from} → {to} ({Math.round(gap.durationSec / 60)} min sans signal)</li>;
+                })}
+              </ul>
+            </div>
+          )}
 
           <div className={styles.reportFooter}>
             <div><strong>Pickup:</strong> {report.delivery.pickupAddress}</div>
