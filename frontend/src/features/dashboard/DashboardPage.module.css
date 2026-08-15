@@ -112,6 +112,9 @@
   font-size: var(--text-xs, 0.625rem);
   color: var(--color-text-tertiary, #7A8BA3);
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  /* Lisibilité sur la carte (le texte flotte au-dessus des tuiles) : halo sombre
+     discret dans les deux thèmes, comme le titre de page. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 .topBarRight {

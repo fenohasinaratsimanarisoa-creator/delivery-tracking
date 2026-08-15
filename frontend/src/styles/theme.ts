@@ -70,7 +70,9 @@ export const colors = {
     borderSubtle: 'rgba(22, 24, 29, 0.05)',
     text: '#16181D',
     textSecondary: '#4B5563',
-    textTertiary: '#8A929E',
+    // Tertiaire assez foncé pour rester AA (≥4.5 sur fond blanc : #6B7280 = 4.9)
+    // — l'ancien #8A929E tombait à ~3.1 (date du dashboard illisible sur la carte).
+    textTertiary: '#6B7280',
     accent: '#2F6B4F',
     accentHover: '#275A43',
     accentMuted: 'rgba(47, 107, 79, 0.10)',
