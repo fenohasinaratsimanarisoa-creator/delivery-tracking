@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
-import { DeliveryStatus } from '@prisma/client';
+import { DeliveryStatus, NotificationType } from '@prisma/client';
 
 class MockPrismaClientKnownRequestError extends Error {
   code: string;
@@ -43,6 +43,9 @@ describe('DeliveriesService - State Machine', () => {
     vehicle: {
       findFirst: jest.fn(),
     },
+    gpsPosition: {
+      findFirst: jest.fn(),
+    },
   };
 
   const mockNotifications = {
@@ -69,7 +72,18 @@ describe('DeliveriesService - State Machine', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: NotificationsService, useValue: mockNotifications },
         { provide: WebhooksService, useValue: mockWebhooks },
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('false') } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockImplementation((key: string, d?: string) => {
+              // Valeurs par défaut réalistes (le mock global renvoyait 'false' partout,
+              // ce qui cassait les calculs numériques type GPS_PROOF_WINDOW_MIN).
+              if (key === 'GPS_PROOF_WINDOW_MIN') return '30';
+              if (key === 'LOCATION_MISMATCH_THRESHOLD_M') return '200';
+              return d ?? null;
+            }),
+          },
+        },
         {
           provide: DataUpdateBus,
           useValue: { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() },
@@ -893,7 +907,16 @@ describe('DeliveriesService - State Machine', () => {
           { provide: PrismaService, useValue: mockPrisma },
           { provide: NotificationsService, useValue: mockNotifications },
           { provide: WebhooksService, useValue: mockWebhooks },
-          { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('false') } },
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn().mockImplementation((key: string, d?: string) => {
+                if (key === 'GPS_PROOF_WINDOW_MIN') return '30';
+                if (key === 'LOCATION_MISMATCH_THRESHOLD_M') return '200';
+                return d ?? null;
+              }),
+            },
+          },
           {
             provide: DataUpdateBus,
             useValue: { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() },
@@ -1112,6 +1135,138 @@ describe('DeliveriesService - State Machine', () => {
       await service.importExcel('comp-1', buffer as unknown as Buffer, 'Entrepôt', 'upsert');
       const updateArg = mockPrisma.delivery.update.mock.calls[0][0];
       expect(updateArg.data.status).toBeUndefined();
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // Cross-check preuve vs trace GPS (anti-fraude à la complétion)
+  // ----------------------------------------------------------------
+  describe('verifyDeliveryLocation — cross-check preuve vs trace GPS', () => {
+    const DELIVERY_LAT = -18.8792;
+    const DELIVERY_LNG = 47.5079;
+    const deliveryAtDest = {
+      id: 'del-1',
+      companyId: 'comp-1',
+      title: 'Test',
+      status: DeliveryStatus.in_progress,
+      deletedAt: null,
+      vehicle: null,
+      driver: null,
+      deliveryLat: DELIVERY_LAT,
+      deliveryLng: DELIVERY_LNG,
+      deliveryAddress: 'Ivato',
+      assignedDriverId: 'user-1',
+      clientId: null,
+      driverId: 'driver-1',
+    };
+
+    it('signale un mismatch quand la preuve est loin de la DERNIÈRE POSITION GPS enregistrée', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValue(deliveryAtDest);
+      // Le chauffeur PRÉTEND être sur place (à 50m de la destination)...
+      const proofLat = DELIVERY_LAT + 0.00045;
+      const proofLng = DELIVERY_LNG + 0.00045;
+      // ...mais la dernière position GPS réellement enregistrée pour cette livraison
+      // est à ~5 km de là (le véhicule n'était pas sur place au moment de la preuve).
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue({
+        latitude: DELIVERY_LAT + 0.045,
+        longitude: DELIVERY_LNG + 0.045,
+        timestamp: new Date(),
+      });
+      mockPrisma.delivery.update.mockResolvedValue({
+        ...deliveryAtDest,
+        status: 'delivered',
+        locationMismatch: true,
+      });
+
+      await service.updateDriverStatus(
+        'comp-1',
+        'del-1',
+        'user-1',
+        {
+          status: DeliveryStatus.delivered,
+          latitude: proofLat,
+          longitude: proofLng,
+        } as any,
+      );
+
+      // La preuve est pourtant acceptée (livraison marquée delivered)...
+      const updateArg = mockPrisma.delivery.update.mock.calls[0][0] as any;
+      expect(updateArg.data.status).toBe('delivered');
+      // ...MAIS le mismatch est signalé et notifié pour résolution admin.
+      expect(updateArg.data.locationMismatch).toBe(true);
+      expect(updateArg.data.deliveryProofLat).toBe(proofLat);
+      expect(updateArg.data.deliveryProofLng).toBe(proofLng);
+      expect(mockNotifications.create).toHaveBeenCalledWith(
+        'comp-1',
+        expect.objectContaining({ type: NotificationType.location_mismatch }),
+      );
+    });
+
+    it('ne signale PAS de mismatch quand la preuve est cohérente avec la trace GPS', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValue(deliveryAtDest);
+      const proofLat = DELIVERY_LAT + 0.00045;
+      const proofLng = DELIVERY_LNG + 0.00045;
+      // Dernier fix GPS à ~50m de la preuve (cohérent, sous le seuil de 200m).
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue({
+        latitude: proofLat + 0.0002,
+        longitude: proofLng + 0.0002,
+        timestamp: new Date(),
+      });
+      mockPrisma.delivery.update.mockResolvedValue({
+        ...deliveryAtDest,
+        status: 'delivered',
+        locationMismatch: false,
+      });
+
+      await service.updateDriverStatus(
+        'comp-1',
+        'del-1',
+        'user-1',
+        {
+          status: DeliveryStatus.delivered,
+          latitude: proofLat,
+          longitude: proofLng,
+        } as any,
+      );
+
+      const updateArg = mockPrisma.delivery.update.mock.calls[0][0] as any;
+      expect(updateArg.data.locationMismatch).toBe(false);
+      expect(mockNotifications.create).not.toHaveBeenCalledWith(
+        'comp-1',
+        expect.objectContaining({ type: NotificationType.location_mismatch }),
+      );
+    });
+
+    it('accepte la complétion SANS preuve GPS récente (log warning, pas de blocage)', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValue(deliveryAtDest);
+      // Aucune position GPS récente non suspecte pour cette livraison.
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
+      mockPrisma.delivery.update.mockResolvedValue({
+        ...deliveryAtDest,
+        status: 'delivered',
+        locationMismatch: false,
+      });
+
+      await expect(
+        service.updateDriverStatus(
+          'comp-1',
+          'del-1',
+          'user-1',
+          {
+            status: DeliveryStatus.delivered,
+            latitude: DELIVERY_LAT,
+            longitude: DELIVERY_LNG,
+          } as any,
+        ),
+      ).resolves.toBeDefined();
+
+      const updateArg = mockPrisma.delivery.update.mock.calls[0][0] as any;
+      // Distance à la destination ~0m → aucun mismatch.
+      expect(updateArg.data.locationMismatch).toBe(false);
+      expect(mockNotifications.create).not.toHaveBeenCalledWith(
+        'comp-1',
+        expect.objectContaining({ type: NotificationType.location_mismatch }),
+      );
     });
   });
 });

@@ -37,6 +37,8 @@ const TRANSITION_MATRIX: Record<DeliveryStatus, DeliveryStatus[]> = {
 
 @Injectable()
 export class DeliveriesService {
+  private readonly logger = new Logger(DeliveriesService.name);
+
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
@@ -579,7 +581,52 @@ export class DeliveriesService {
     proofData.deliveryProofDistance = distance;
 
     const threshold = this.configService.get<number>('LOCATION_MISMATCH_THRESHOLD_M', 200);
-    if (distance > threshold) {
+    let mismatch = distance > threshold;
+    // Distance effective signalée (destination OU trace GPS — celle qui a déclenché).
+    let mismatchDistance = distance;
+
+    // CROSS-CHECK PREUVE vs TRACE GPS (anti-fraude à la complétion) : les coordonnées
+    // de preuve envoyées par le chauffeur ne sont JAMAIS recoupées avec les positions
+    // GPS réellement enregistrées pour cette livraison — un chauffeur pouvait marquer
+    // « livré » depuis n'importe où en prétendant être sur place (les positions GPS
+    // enregistrées par le gateway prouvent le contraire). On compare la preuve à la
+    // DERNIÈRE position non suspecte de la livraison (fenêtre récente) : si elle est
+    // trop éloignée, c'est une incohérence à signaler (même flag locationMismatch,
+    // résolu par l'admin via resolve-mismatch). Si la trace GPS est absente ou trop
+    // ancienne, on ne bloque pas (pas de preuve → pas d'accusation) mais on le signale
+    // en log pour l'audit terrain.
+    try {
+      const gpsWindow = Number(this.configService.get<string>('GPS_PROOF_WINDOW_MIN', '30')) || 30;
+      const lastGps = await this.prisma.gpsPosition.findFirst({
+        where: {
+          deliveryId: delivery.id,
+          suspect: false,
+          timestamp: { gte: new Date(Date.now() - gpsWindow * 60 * 1000) },
+        },
+        orderBy: { timestamp: 'desc' },
+        select: { latitude: true, longitude: true, timestamp: true },
+      });
+      if (lastGps) {
+        const gpsDistance = Math.round(
+          haversineDistance(dto.latitude, dto.longitude, lastGps.latitude, lastGps.longitude),
+        );
+        if (gpsDistance > threshold) {
+          mismatch = true;
+          mismatchDistance = gpsDistance;
+          this.logger.warn(
+            `Delivery ${delivery.id}: proof ${dto.latitude.toFixed(6)},${dto.longitude.toFixed(6)} is ${gpsDistance}m from last GPS fix ${lastGps.latitude.toFixed(6)},${lastGps.longitude.toFixed(6)} (${lastGps.timestamp.toISOString()}) — mismatch`,
+          );
+        }
+      } else {
+        this.logger.warn(
+          `Delivery ${delivery.id}: no recent non-suspect GPS position for this delivery — proof not cross-checked`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.warn(`Delivery ${delivery.id}: GPS cross-check failed — ${err?.message}`);
+    }
+
+    if (mismatch) {
       proofData.locationMismatch = true;
       proofData.mismatchResolved = false;
 
@@ -589,8 +636,8 @@ export class DeliveriesService {
         title: t('delivery.notification.mismatchTitle', lang),
         message: t('delivery.notification.mismatchMessage', lang, {
           title: delivery.title,
-          distance: (distance / 1000).toFixed(1),
-          meters: distance,
+          distance: (mismatchDistance / 1000).toFixed(1),
+          meters: mismatchDistance,
         }),
         link: `/deliveries/${delivery.id}`,
         deliveryId: delivery.id,
