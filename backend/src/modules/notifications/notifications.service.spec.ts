@@ -201,23 +201,57 @@ describe('NotificationsService', () => {
     expect(escaped).not.toContain('<script>');
   });
 
-  it('groups digest notifications by priority', async () => {
-    const notifications = [
-      { id: 'n1', priority: NotificationPriority.critical },
-      { id: 'n2', priority: NotificationPriority.high },
+  it('EXCLUT du digest les notifications critical/high déjà poussées en temps réel (anti double-signalement)', async () => {
+    // La base contient des critical/high (déjà envoyées via websocket/email) ET des
+    // medium/low (jamais poussées) : seule la requête sait les distinguer — le mock
+    // renvoie ce que la requête filtrante sélectionnerait (ici medium/low uniquement).
+    mockPrisma.notification.findMany.mockResolvedValueOnce([
       { id: 'n3', priority: NotificationPriority.medium },
       { id: 'n4', priority: NotificationPriority.low },
+    ]);
+
+    const result = await service.getDigestNotifications(
+      'company-1',
+      new Date('2026-07-21T00:00:00.000Z'),
+    );
+
+    expect(result.critical).toHaveLength(0);
+    expect(result.high).toHaveLength(0);
+    expect(result.medium).toHaveLength(1);
+    expect(result.low).toHaveLength(1);
+    expect(result.total).toBe(2);
+  });
+
+  it('groups digest notifications by priority', async () => {
+    // Seules les notifications digest-éligibles (jamais poussées en temps réel :
+    // digestOnly OU medium/low) sont renvoyées par le digest.
+    const notifications = [
+      { id: 'n1', priority: NotificationPriority.critical, digestOnly: false },
+      { id: 'n2', priority: NotificationPriority.high, digestOnly: false },
+      { id: 'n3', priority: NotificationPriority.medium, digestOnly: false },
+      { id: 'n4', priority: NotificationPriority.low, digestOnly: false },
     ];
     mockPrisma.notification.findMany.mockResolvedValueOnce(notifications);
 
-    await expect(
-      service.getDigestNotifications('company-1', new Date('2026-07-21T00:00:00.000Z'), 'user-1'),
-    ).resolves.toEqual({
-      critical: [notifications[0]],
-      high: [notifications[1]],
-      medium: [notifications[2]],
-      low: [notifications[3]],
-      total: 4,
+    const result = await service.getDigestNotifications(
+      'company-1',
+      new Date('2026-07-21T00:00:00.000Z'),
+      'user-1',
+    );
+
+    // La requête exclut bien les critical/high non digestOnly (déjà poussées en temps réel).
+    const callArgs = mockPrisma.notification.findMany.mock.calls[0][0] as any;
+    expect(callArgs.where).toMatchObject({
+      companyId: 'company-1',
+      digestSentAt: null,
+      AND: [
+        { OR: [{ digestOnly: true }, { priority: { in: ['medium', 'low'] } }] },
+        { OR: [{ userId: 'user-1' }, { userId: null }] },
+      ],
     });
+    // Le service de regroupement renvoie tels quels les enregistrements sélectionnés
+    // (c'est la requête qui filtre) — le groupement par priorité reste fonctionnel.
+    expect(result.total).toBe(4);
+    expect(result.medium).toHaveLength(1);
   });
 });

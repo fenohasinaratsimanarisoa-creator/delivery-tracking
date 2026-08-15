@@ -198,12 +198,20 @@ export class NotificationsService {
   }
 
   async getDigestNotifications(companyId: string, since: Date, userId?: string) {
+    // Seules les notifications PAS encore délivrées en temps réel appartiennent au
+    // digest : `digestOnly` (jamais poussées) OU priorité medium/low (jamais poussées
+    // — create() ne pousse que critical/high). AVANT, les notifications critical/high
+    // déjà poussées (websocket + email immédiat) étaient comptées DANS le digest ET
+    // marquées digestSentAt → double signalement dans l'email récapitulatif.
     const where: any = {
       companyId,
       createdAt: { gte: since },
       digestSentAt: null,
+      AND: [{ OR: [{ digestOnly: true }, { priority: { in: ['medium', 'low'] } }] }],
     };
-    if (userId) where.OR = [{ userId }, { userId: null }];
+    if (userId) {
+      where.AND.push({ OR: [{ userId }, { userId: null }] });
+    }
 
     const notifications = await this.prisma.notification.findMany({
       where,
