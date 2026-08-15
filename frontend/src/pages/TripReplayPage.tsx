@@ -7,13 +7,13 @@ import 'leaflet/dist/leaflet.css';
 import api from '../services/api/client';
 import Button from '../components/Button';
 import { Play, Square, Map } from 'lucide-react';
+import { enableRetinaDefaultMarker } from '../features/map/markerIcons';
+import { TILE_PROVIDERS } from '../features/map/tileProviders';
 import type { Delivery } from '../types';
 import styles from './TripReplayPage.module.css';
 
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
-L.Marker.prototype.options.icon = DefaultIcon;
+// Marqueur par défaut (ReplayMarker) en version @2x sur écrans HiDPI.
+enableRetinaDefaultMarker();
 
 // Leaflet applique la couleur de la polyligne via un attribut SVG ("stroke"), qui ne
 // supporte pas les var() CSS : on résout les tokens --color-accent/--color-teal à
@@ -151,7 +151,7 @@ export default function TripReplayPage() {
       {positions.length > 0 && (
         <>
           <div className={styles.mapArea}>
-            <MapContainer center={center} zoom={14} style={{ height: '100%', width: '100%' }}>
+            <MapContainer center={center} zoom={14} maxZoom={Math.max(...Object.values(TILE_PROVIDERS).map((p) => p.maxZoom))} style={{ height: '100%', width: '100%' }}>
               <MapLayerSwitcher />
               {path.length > 1 && (
                 <Polyline positions={path} color={themeColor('--color-accent', '#F2A93C')} weight={3} opacity={0.6} />

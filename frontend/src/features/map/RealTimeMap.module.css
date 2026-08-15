@@ -216,52 +216,54 @@
   font-family: var(--font-mono);
 }
 
-:global(.dt-marker-moving),
-:global(.dt-marker-static),
-:global(.dt-marker-focused) {
+:global(.dt-marker-vehicle) {
   background: none !important;
   border: none !important;
   z-index: 10000 !important;
   position: relative !important;
 }
 
-:global(.dt-marker-halo) {
+/* Halo de confiance : géométrie/couleurs pilotées en JS (syncVehicleMarker)
+   via styles inline (la confiance module taille/opacité/épaisseur de bordure).
+   Ici uniquement la structure + les états mouvement / arrêt / focus. */
+:global(.dt-marker-vehicle .dt-marker-halo) {
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 46px;
-  height: 46px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--color-status-moving) 18%, transparent);
-  border: 3px solid var(--color-status-moving);
 }
 
-:global(.dt-marker-halo-static) {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--color-status-static) 14%, transparent);
-  border: 3px solid var(--color-status-static);
+:global(.dt-marker-vehicle.dt-marker-moving .dt-marker-halo) {
+  animation: dt-pulse-moving 2s ease-in-out infinite;
+}
+
+:global(.dt-marker-vehicle.dt-marker-static .dt-marker-halo) {
   opacity: 0.7;
 }
 
-:global(.dt-marker-emoji) {
+/* Flèche directionnelle vectorielle : nette à toute taille/zoom et sur tout
+   écran (SVG, pas d'emoji ni de raster). La rotation (cap) et la couleur
+   (statut) sont appliquées en JS sur l'élément. */
+:global(.dt-marker-icon) {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 36px;
-  height: 36px;
+  top: 9px;
+  left: 9px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.3s ease;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
 }
 
-:global(.dt-marker-halo.dt-marker-focus),
-:global(.dt-marker-halo-static.dt-marker-focus) {
+:global(.dt-marker-icon svg) {
+  width: 26px;
+  height: 26px;
+  display: block;
+}
+
+:global(.dt-marker-vehicle.dt-marker-focus .dt-marker-halo) {
   box-shadow: 0 0 0 4px var(--color-accent-muted);
 }
 
@@ -295,11 +297,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :global(.dt-marker-halo) {
+  :global(.dt-marker-vehicle .dt-marker-halo) {
     animation: none !important;
   }
 
-  :global(.dt-marker-halo.dt-marker-focus) {
+  :global(.dt-marker-vehicle.dt-marker-focus .dt-marker-halo) {
     animation: none !important;
     opacity: 0.5 !important;
   }

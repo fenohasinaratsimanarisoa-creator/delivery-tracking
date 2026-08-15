@@ -2,22 +2,20 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MapContainer, Marker, Popup, Polyline } from 'react-leaflet';
-import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../../services/api/client';
 import ResilientTileLayer from './ResilientTileLayer';
+import { enableRetinaDefaultMarker, createPinIcon } from './markerIcons';
+import { TILE_PROVIDERS } from './tileProviders';
 import type { DeliveryInfo } from '../../types';
 import styles from './PublicTrackingPage.module.css';
 
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
-L.Marker.prototype.options.icon = DefaultIcon;
+// Marqueur par défaut en version @2x sur écrans HiDPI (Retina/4K).
+enableRetinaDefaultMarker();
 
-const deliveryIcon = L.icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-  shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41],
-});
+// Point pickup/livraison : pin SVG vectoriel (remplace le PNG raster hébergé
+// sur GitHub, 25×41 sans variante @2x) — net sur tout écran, sans dépendance externe.
+const deliveryIcon = createPinIcon('var(--color-red)');
 
 interface Position {
   latitude: number;
@@ -92,7 +90,7 @@ export default function PublicTrackingPage() {
         {currentPos?.speed !== undefined && currentPos?.speed !== null && <p>Current speed: {(currentPos.speed * 3.6).toFixed(1)} km/h</p>}
       </div>
       <div className={styles.mapContainer}>
-        <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
+        <MapContainer center={center} zoom={13} maxZoom={Math.max(...Object.values(TILE_PROVIDERS).map((p) => p.maxZoom))} style={{ height: '100%', width: '100%' }}>
           <ResilientTileLayer />
           <Polyline positions={path} color="blue" weight={3} opacity={0.6} />
           {currentPos && (

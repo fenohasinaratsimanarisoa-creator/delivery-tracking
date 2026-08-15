@@ -10,12 +10,11 @@ import { getApiBaseUrl } from '../services/api/config'
 import type { GeocodingResult } from '../services/geocoding/types'
 import { MG_COMMUNES } from '../services/geocoding/mg-communes'
 import { TILE_PROVIDERS } from '../features/map/tileProviders'
+import { enableRetinaDefaultMarker } from '../features/map/markerIcons'
 import styles from './LocationSearchInput.module.css'
 
-import icon from 'leaflet/dist/images/marker-icon.png'
-import iconShadow from 'leaflet/dist/images/marker-shadow.png'
-const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] })
-L.Marker.prototype.options.icon = DefaultIcon
+// Marqueur draggable en version @2x sur écrans HiDPI (Retina/4K).
+enableRetinaDefaultMarker()
 
 const localDb: GeocodingResult[] = MG_COMMUNES.map(([name, lat, lng]) => ({
   lat: lat as number, lng: lng as number,
@@ -191,7 +190,7 @@ export default memo(function LocationSearchInput({
       )}
       {showMap && (
         <div className={styles.mapContainer}>
-          <MapContainer center={mapPos} zoom={16} style={{ height: '100%', width: '100%' }} zoomControl={true}>
+          <MapContainer center={mapPos} zoom={16} maxZoom={TILE_PROVIDERS.plan.maxZoom} style={{ height: '100%', width: '100%' }} zoomControl={true}>
             <TileLayer
               attribution={TILE_PROVIDERS.plan.attribution}
               url={TILE_PROVIDERS.plan.url}

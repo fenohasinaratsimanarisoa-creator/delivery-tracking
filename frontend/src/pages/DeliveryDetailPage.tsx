@@ -1,7 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
-import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ArrowLeft, MapPin, Package, Clock, User, Truck, StickyNote } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -10,12 +9,11 @@ import { formatAriary } from '../services/formatAriary';
 import api from '../services/api/client';
 import type { Delivery } from '../types';
 import { TILE_PROVIDERS } from '../features/map/tileProviders';
+import { enableRetinaDefaultMarker } from '../features/map/markerIcons';
 import styles from './DeliveryDetailPage.module.css';
 
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
-L.Marker.prototype.options.icon = DefaultIcon;
+// Marqueurs pickup/livraison (défaut Leaflet) en version @2x sur écrans HiDPI.
+enableRetinaDefaultMarker();
 
 // Couleurs des statuts alignées sur les tokens du thème (--color-*) au lieu de
 // valeurs hex hardcodées hors palette (ex. #3b82f6 était utilisé en dur). Le fond
@@ -108,7 +106,7 @@ export default function DeliveryDetailPage() {
 
       {hasCoords && (
         <div className={styles.mapContainer}>
-          <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
+          <MapContainer center={center} zoom={13} maxZoom={TILE_PROVIDERS.plan.maxZoom} style={{ height: '100%', width: '100%' }}>
             <TileLayer
               attribution={TILE_PROVIDERS.plan.attribution}
               url={TILE_PROVIDERS.plan.url}

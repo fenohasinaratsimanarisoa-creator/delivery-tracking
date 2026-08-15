@@ -13,56 +13,81 @@ import { getDirections, formatDistance } from '../../services/routing/routingSer
 import { predictPosition, maxDeadReckonTime } from '../../services/tracking/deadReckoning';
 import { computeAnimationDuration, FALLBACK_ANIMATION_MS } from './animationTiming';
 
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-
 import MapLayerSwitcher from '../../components/MapLayerSwitcher';
+import { enableRetinaDefaultMarker } from './markerIcons';
 import styles from './RealTimeMap.module.css';
 
-const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
-L.Marker.prototype.options.icon = DefaultIcon;
+// Marqueur Leaflet par défaut (utilisé par les popups/marqueurs sans icône
+// explicite) en version @2x sur écrans HiDPI — plus de PNG 1x étiré en flou.
+enableRetinaDefaultMarker();
 
-// Marqueur véhicule = icône SVG inline (pas d'emoji, pas de dépendance) :
-// icône lucide « truck » encodée en SVG brut pour les divIcon Leaflet.
-const TRUCK_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>`;
+// Flèche directionnelle vue du dessus (type Google Maps) : SVG VECTORIEL, net à
+// toute taille/zoom et sur tout écran (pas d'emoji → rendu identique sur tous
+// les OS, anticrénelage maîtrisé). Rotation native selon le cap du véhicule via
+// `transform: rotate(...)` appliqué sur l'élément. Contour blanc + ombre portée
+// pour rester lisible sur toute couche de tuiles (clair/sombre/satellite).
+const VEHICLE_ARROW_PATH = 'M12 1.5 L20.1 11.9 L14.2 11 L14.2 22.5 L9.8 22.5 L9.8 11 L3.9 11.9 Z';
+const VEHICLE_ARROW_SVG = `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="${VEHICLE_ARROW_PATH}" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/><path d="${VEHICLE_ARROW_PATH}" fill="currentColor"/></svg>`;
+
+// Les couleurs de polyligne passent par un attribut SVG (`stroke`), qui ne
+// résout PAS les var() CSS : on résout le token à l'exécution (même pattern
+// que TripReplayPage/DeliveryDetailPage), fallback sur les anciens hex.
+function themeColor(varName: string, fallback: string): string {
+  try {
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;
+  } catch {
+    return fallback;
+  }
+}
 const ROUTE_RECALC_MIN_DELAY_MS = 15000;
 const ROUTE_RECALC_MIN_DISTANCE_M = 200;
 const ROUTE_RECALC_INTERVAL_MS = 30000;
 
-function haloStyle(confidence: number, isMoving: boolean): string {
+// Icône véhicule UNIQUE et statique : la structure (halo + flèche) ne change
+// jamais. Toutes les variations (rotation, couleur, confiance, mouvement/arrêt,
+// focus) sont appliquées par syncVehicleMarker sur l'élément existant (styles
+// inline + classes) — sans recréer l'icône, ce qui redémarrait l'animation CSS
+// du halo à chaque fix GPS (scintillement visuel).
+function createVehicleIcon(): L.DivIcon {
+  return L.divIcon({
+    className: 'dt-marker-vehicle',
+    html: `<div class="dt-marker-halo"></div><div class="dt-marker-icon">${VEHICLE_ARROW_SVG}</div>`,
+    iconSize: [52, 52],
+    iconAnchor: [26, 26],
+  });
+}
+
+function syncVehicleMarker(marker: L.Marker, vehicle: VehicleData, focused: boolean) {
+  const el = marker.getElement();
+  if (!el) return;
+
+  const isMoving = vehicle.status === 'moving';
+  const confidence = vehicle.confidence ?? 1;
   // Couleurs pilotées par les tokens (var(--color-status-moving/static)) via
   // color-mix : le halo suit le thème clair/sombre/field sans hex en dur.
   const statusVar = isMoving ? 'var(--color-status-moving)' : 'var(--color-status-static)';
   const opacity = Math.max(0.15, Math.min(0.5, confidence * 0.5));
   const scale = 1 + (1 - confidence) * 0.5;
-  return `width:${46 * scale}px;height:${46 * scale}px;border-radius:50%;background:color-mix(in srgb, ${statusVar} ${Math.round(opacity * 50)}%, transparent);border:${2 + confidence * 1}px solid color-mix(in srgb, ${statusVar} ${Math.round(opacity * 100)}%, transparent);`;
+
+  el.classList.toggle('dt-marker-moving', isMoving);
+  el.classList.toggle('dt-marker-static', !isMoving);
+  el.classList.toggle('dt-marker-focus', focused);
+
+  const halo = el.querySelector<HTMLElement>('.dt-marker-halo');
+  if (halo) {
+    halo.style.width = `${46 * scale}px`;
+    halo.style.height = `${46 * scale}px`;
+    halo.style.background = `color-mix(in srgb, ${statusVar} ${Math.round(opacity * 50)}%, transparent)`;
+    halo.style.border = `${2 + confidence}px solid color-mix(in srgb, ${statusVar} ${Math.round(opacity * 100)}%, transparent)`;
+    halo.style.animationDuration = `${2 - confidence * 0.5}s`;
+  }
+
+  const iconEl = el.querySelector<HTMLElement>('.dt-marker-icon');
+  if (iconEl) {
+    iconEl.style.color = statusVar;
+    iconEl.style.transform = `rotate(${vehicle.heading ?? 0}deg)`;
+  }
 }
-
-function createMovingIcon(rotation = 0, focused = false, confidence = 1) {
-  return L.divIcon({
-    className: 'dt-marker-vehicle',
-    html: `
-      <div class="dt-marker-halo${focused ? ' dt-marker-focus' : ''}" style="${haloStyle(confidence, true)};animation: dt-pulse-moving ${2 - confidence * 0.5}s ease-in-out infinite;"></div>
-      <div class="dt-marker-emoji" style="transform: rotate(${rotation}deg);color:var(--color-status-moving);">${TRUCK_SVG}</div>
-    `,
-    iconSize: [52, 52],
-    iconAnchor: [26, 26],
-  });
-}
-
-function createStaticIcon(rotation = 0, focused = false, confidence = 1) {
-  return L.divIcon({
-    className: 'dt-marker-vehicle',
-    html: `
-      <div class="dt-marker-halo-static${focused ? ' dt-marker-focus' : ''}" style="${haloStyle(confidence, false)}"></div>
-      <div class="dt-marker-emoji" style="transform: rotate(${rotation}deg);color:var(--color-status-static);">${TRUCK_SVG}</div>
-    `,
-    iconSize: [52, 52],
-    iconAnchor: [26, 26],
-  });
-}
-
-
 
 interface SearchResult {
   id: string;
@@ -82,14 +107,6 @@ interface SearchResult {
 
 import type { VehicleData } from './vehicleMap';
 import { mergePositionUpdate, mergeBootstrapPositions } from './vehicleMap';
-
-function buildIcon(vehicle: VehicleData, focused: boolean) {
-  const rotation = vehicle.heading ?? 0;
-  const conf = vehicle.confidence ?? 1;
-  return vehicle.status === 'moving'
-    ? createMovingIcon(rotation, focused, conf)
-    : createStaticIcon(rotation, focused, conf);
-}
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -119,8 +136,11 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
   vehicleRef.current = vehicle;
 
   useEffect(() => {
-    const icon = buildIcon(vehicle, !!focused);
-    const marker = L.marker([vehicle.lat, vehicle.lng], { icon, zIndexOffset: focused ? 1000 : 0 }).addTo(map);
+    // Icône unique et statique — créée UNE fois : le rendu (halo, flèche,
+    // rotation, couleur, confiance, focus) est ensuite piloté par
+    // syncVehicleMarker sur l'élément existant, sans recréation d'icône.
+    const marker = L.marker([vehicle.lat, vehicle.lng], { icon: createVehicleIcon(), zIndexOffset: focused ? 1000 : 0 }).addTo(map);
+    syncVehicleMarker(marker, vehicle, !!focused);
 
     const popupContent = document.createElement('div');
     popupContent.style.minWidth = '180px';
@@ -135,16 +155,20 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       map.removeLayer(marker);
       markerRef.current = null;
     };
-  }, [vehicle.id, map, focused]);
+  }, [vehicle.id, map]);
 
   useEffect(() => {
     const marker = markerRef.current;
     if (!marker) return;
 
-    const icon = buildIcon(vehicle, !!focused);
-
     cancelAnimationFrame(animRef.current);
     cancelAnimationFrame(drRef.current);
+
+    // Rotation / couleur / confiance / mouvement-arrêt / focus : appliqués sur
+    // l'élément existant (pas de setIcon → pas de redémarrage de l'animation
+    // CSS du halo = pas de scintillement à chaque fix GPS).
+    syncVehicleMarker(marker, vehicle, !!focused);
+    marker.setZIndexOffset(focused ? 1000 : 0);
 
     const now = Date.now();
     lastUpdateRef.current = now;
@@ -159,7 +183,6 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     const from = fromRef.current;
     if (!from || disableAnimation) {
       marker.setLatLng([vehicle.lat, vehicle.lng]);
-      marker.setIcon(icon);
       fromRef.current = { lat: vehicle.lat, lng: vehicle.lng };
       return;
     }
@@ -168,8 +191,6 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     const startLng = from.lng;
     const endLat = vehicle.lat;
     const endLng = vehicle.lng;
-
-    marker.setIcon(icon);
 
     const dLat = endLat - startLat;
     const dLng = endLng - startLng;
@@ -194,7 +215,13 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       const t = Math.min(elapsed / durationRef.current, 1);
       const ease = 1 - Math.pow(1 - t, 3);
 
-      marker!.setLatLng([startLat + dLat * ease, startLng + dLng * ease]);
+      const lat = startLat + dLat * ease;
+      const lng = startLng + dLng * ease;
+      marker!.setLatLng([lat, lng]);
+      // La position courante interpolée devient le point de départ de la
+      // prochaine animation : un update reçu en plein vol continue depuis ICI
+      // au lieu de faire revenir le marqueur en arrière (« saut » visuel).
+      fromRef.current = { lat, lng };
 
       if (t < 1) {
         animRef.current = requestAnimationFrame(animate);
@@ -205,7 +232,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     }
 
     animRef.current = requestAnimationFrame(animate);
-  }, [vehicle.lat, vehicle.lng, vehicle.id, disableAnimation, vehicle.status, vehicle.heading, vehicle.suspect]);
+  }, [vehicle.lat, vehicle.lng, vehicle.id, disableAnimation, vehicle.status, vehicle.heading, vehicle.suspect, focused]);
 
   // Dead reckoning: extrapolate position when GPS update is delayed
   useEffect(() => {
@@ -233,6 +260,9 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       );
 
       marker.setLatLng([predicted.lat, predicted.lng]);
+      // Le point prédit devient la base de la prochaine animation : continuité
+      // visuelle entre dead reckoning et interpolation (pas de saut en arrière).
+      fromRef.current = { lat: predicted.lat, lng: predicted.lng };
     }, 200);
 
     return () => clearInterval(interval);
@@ -871,19 +901,25 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
       {routePath.length > 1 && (
         <Polyline
           positions={routePath}
-          color="var(--color-accent, #F2A93C)"
+          color={themeColor('--color-accent', '#F2A93C')}
           weight={3}
           opacity={0.5}
           dashArray="8 4"
+          // Points GPS denses : simplification douce pour garder le tracé fidèle
+          // à la route au zoom serré (pas d'escalier), sans coût de rendu.
+          smoothFactor={0.5}
         />
       )}
 
       {routingPolyline.length > 1 && (
         <Polyline
           positions={routingPolyline}
-          color="var(--color-teal, #3FA796)"
+          color={themeColor('--color-teal', '#3FA796')}
           weight={4}
           opacity={0.8}
+          // Itinéraire long (des centaines de points OSRM) : on garde la
+          // simplification par défaut pour rester fluide pendant le déplacement.
+          smoothFactor={1}
         />
       )}
 

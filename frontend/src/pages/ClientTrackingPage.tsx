@@ -2,28 +2,21 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
-import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
 import { Package, User, Truck, Zap } from 'lucide-react';
 import api from '../services/api/client';
 import { TILE_PROVIDERS } from '../features/map/tileProviders';
+import { enableRetinaDefaultMarker, createPinIcon } from '../features/map/markerIcons';
 import styles from './ClientTrackingPage.module.css';
 
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
-L.Marker.prototype.options.icon = DefaultIcon;
+// Marqueur par défaut en version @2x sur écrans HiDPI (Retina/4K).
+enableRetinaDefaultMarker();
 
-const pickupIcon = L.icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-  shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41],
-});
-
-const deliveryIcon = L.icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-  shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41],
-});
+// Points pickup/livraison : pins SVG vectoriels (remplacent les PNG raster
+// GitHub 25×41 sans variante @2x) — nets sur tout écran, sans dépendance externe.
+const pickupIcon = createPinIcon('var(--color-teal)');
+const deliveryIcon = createPinIcon('var(--color-red)');
 
 interface GpsPosition {
   latitude: number;
@@ -165,7 +158,7 @@ export default function ClientTrackingPage() {
         </div>
       )}
       <div className={styles.mapArea}>
-        <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
+        <MapContainer center={center} zoom={13} maxZoom={Math.max(...Object.values(TILE_PROVIDERS).map((p) => p.maxZoom))} style={{ height: '100%', width: '100%' }}>
           <TileLayer
             attribution={TILE_PROVIDERS.plan.attribution}
             url={TILE_PROVIDERS.plan.url}
