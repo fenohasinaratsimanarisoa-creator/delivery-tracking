@@ -61,7 +61,7 @@
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--color-accent), #1e40af);
+  background: var(--color-accent);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -36,7 +36,7 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: rgba(232, 117, 60, 0.15);
+  background: color-mix(in srgb, var(--color-orange, #E8753C) 15%, transparent);
   color: var(--color-orange, #E8753C);
 }
 

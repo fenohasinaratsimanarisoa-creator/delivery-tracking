@@ -6,6 +6,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../services/api/client';
 import Button from '../components/Button';
+import { Play, Square, Map } from 'lucide-react';
 import type { Delivery } from '../types';
 import styles from './TripReplayPage.module.css';
 
@@ -167,7 +168,7 @@ export default function TripReplayPage() {
               onClick={() => setPlaying(!playing)}
               className={`${styles.playBtn} ${playing ? styles.playBtnPlaying : styles.playBtnStopped}`}
             >
-              {playing ? '⏹ Stop' : '▶ Play'}
+              {playing ? <><Square size={14} /> Stop</> : <><Play size={14} /> Play</>}
             </button>
 
             {[1, 2, 4].map((s) => (
@@ -186,7 +187,7 @@ export default function TripReplayPage() {
               onClick={applyMapMatching}
               disabled={matchingLoading || positions.length < 2}
             >
-              🗺️ {matchingLoading ? 'Correspondance…' : `Aligner sur route${matchedPath ? ' ✓' : ''}`}
+              <Map size={14} /> {matchingLoading ? 'Correspondance…' : `Aligner sur route${matchedPath ? ' ✓' : ''}`}
             </Button>
 
             {matchConfidence > 0 && (

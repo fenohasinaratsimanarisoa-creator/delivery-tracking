@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
+import { Package, User, Truck, Zap } from 'lucide-react';
 import api from '../services/api/client';
 import { TILE_PROVIDERS } from '../features/map/tileProviders';
 import styles from './ClientTrackingPage.module.css';
@@ -124,7 +125,7 @@ export default function ClientTrackingPage() {
                   {o.status === 'in_progress' ? t('clientTracking.status.in_progress') : t('clientTracking.status.assigned')}
                 </span>
                 <div className={styles.orderAddress}>
-                  📦 {o.deliveryAddress}
+                  <Package size={14} /> {o.deliveryAddress}
                 </div>
               </div>
             ))}
@@ -154,11 +155,11 @@ export default function ClientTrackingPage() {
         <div className={styles.deliveryInfo}>
           <h2 className={styles.deliveryTitle}>{delivery.title}</h2>
           <div className={styles.deliveryDetails}>
-            <div>📦 {delivery.deliveryAddress}</div>
-            {delivery.driver && <div>👤 {t('clientTracking.driver')} : {delivery.driver.firstName} {delivery.driver.lastName}</div>}
-            {delivery.vehicle && <div>🚛 {t('clientTracking.vehicle')} : {delivery.vehicle.brand} {delivery.vehicle.model} ({delivery.vehicle.licensePlate})</div>}
+            <div><Package size={14} /> {delivery.deliveryAddress}</div>
+            {delivery.driver && <div><User size={14} /> {t('clientTracking.driver')} : {delivery.driver.firstName} {delivery.driver.lastName}</div>}
+            {delivery.vehicle && <div><Truck size={14} /> {t('clientTracking.vehicle')} : {delivery.vehicle.brand} {delivery.vehicle.model} ({delivery.vehicle.licensePlate})</div>}
             {currentPos?.speed != null && (
-              <div>⚡ {t('clientTracking.speed')} : {(currentPos.speed * 3.6).toFixed(1)} km/h</div>
+              <div><Zap size={14} /> {t('clientTracking.speed')} : {(currentPos.speed * 3.6).toFixed(1)} km/h</div>
             )}
           </div>
         </div>

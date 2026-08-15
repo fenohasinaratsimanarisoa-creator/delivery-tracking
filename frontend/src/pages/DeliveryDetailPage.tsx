@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { ArrowLeft, MapPin, Package, Clock, User, Truck } from 'lucide-react';
+import { ArrowLeft, MapPin, Package, Clock, User, Truck, StickyNote } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '../services/i18n/formatDate';
 import { formatAriary } from '../services/formatAriary';
@@ -102,7 +102,7 @@ export default function DeliveryDetailPage() {
 
       {d.notes && (
         <div className={styles.notes}>
-          📝 {d.notes}
+          <StickyNote size={14} /> {d.notes}
         </div>
       )}
 

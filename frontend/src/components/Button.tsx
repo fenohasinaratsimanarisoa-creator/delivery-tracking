@@ -82,15 +82,11 @@ export default function Button({
       }}
       onMouseEnter={(e) => {
         if (!disabled && !loading) {
-          e.currentTarget.style.transform = 'translateY(-1px)';
           if (variant === 'primary') {
-            e.currentTarget.style.boxShadow = 'var(--shadow-glow, 0 0 12px rgba(242,169,60,0.35))';
+            e.currentTarget.style.background = 'var(--color-accent-hover, #1F4A37)';
           } else if (variant === 'success') {
-            e.currentTarget.style.boxShadow = 'var(--shadow-md, 0 4px 12px rgba(0,0,0,0.4))';
-          } else if (variant === 'danger') {
-            e.currentTarget.style.boxShadow = 'var(--shadow-glow-danger, 0 0 12px rgba(232,84,76,0.35))';
+            e.currentTarget.style.background = 'var(--color-teal-hover, #256B52)';
           } else if (variant === 'secondary') {
-            e.currentTarget.style.boxShadow = 'var(--shadow-md, 0 4px 12px rgba(0,0,0,0.4))';
             e.currentTarget.style.background = 'var(--color-surface-hover, #1E2A45)';
           } else if (variant === 'outline') {
             e.currentTarget.style.background = 'var(--color-accent-muted, rgba(242,169,60,0.15))';
@@ -101,9 +97,7 @@ export default function Button({
       }}
       onMouseLeave={(e) => {
         if (!disabled && !loading) {
-          e.currentTarget.style.transform = '';
-          e.currentTarget.style.boxShadow = variantMap[variant]?.boxShadow || '';
-          if (variant === 'secondary') e.currentTarget.style.background = 'var(--color-surface-alt, #182339)';
+          e.currentTarget.style.background = String(variantMap[variant]?.background || '');
           if (variant === 'outline') e.currentTarget.style.background = 'transparent';
           if (variant === 'ghost') e.currentTarget.style.background = 'transparent';
         }

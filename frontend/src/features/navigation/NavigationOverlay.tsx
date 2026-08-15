@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { MapPin, RefreshCw, Volume2, VolumeX, Clock, Route, Signal } from 'lucide-react';
 import type { RouteStep } from '../../services/routing/types';
 import i18n from '../../services/i18n/i18n';
 import { getLanguage } from '../../services/i18n/i18n';
@@ -260,7 +261,7 @@ export default function NavigationOverlay({
     return (
       <div className={styles.arrivedOverlay}>
         <div className={styles.arrivedCard}>
-          <div className={styles.arrivedEmoji}>📍</div>
+          <div className={styles.arrivedEmoji}><MapPin size={40} /></div>
           <h2 className={styles.arrivedTitle}>
 {i18n.t('navigation.arrived')}
           </h2>
@@ -288,7 +289,7 @@ export default function NavigationOverlay({
 
       {lastRecalcNotification && (
         <div className={styles.recalcBanner} style={{ top: networkOk ? 0 : 22 }}>
-          🔄 {lastRecalcNotification}
+          <RefreshCw size={13} /> {lastRecalcNotification}
         </div>
       )}
 
@@ -313,7 +314,7 @@ export default function NavigationOverlay({
                 className={`${styles.muteBtn} ${muted ? styles.muteBtnMuted : styles.muteBtnUnmuted}`}
                 title={muted ? i18n.t('navigation.unmuteTooltip') : i18n.t('navigation.muteTooltip')}
               >
-                {muted ? '🔇' : '🔊'}
+                {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
               </button>
             </div>
           </div>
@@ -335,13 +336,13 @@ export default function NavigationOverlay({
         <div className={styles.bottomRow}>
           <div className={styles.infoBar}>
             <span className={styles.infoItem}>
-              🕐 {remainingTime}
+              <Clock size={13} /> {remainingTime}
             </span>
             <span className={styles.infoItemSecondary}>
-              🛣️ {routingDistance >= 1000 ? `${(routingDistance / 1000).toFixed(1)} km` : `${Math.round(routingDistance)} m`}
+              <Route size={13} /> {routingDistance >= 1000 ? `${(routingDistance / 1000).toFixed(1)} km` : `${Math.round(routingDistance)} m`}
             </span>
             <span className={styles.infoItemSecondary}>
-              📍 {distToDest < 1000 ? `${Math.round(distToDest)} m` : `${(distToDest / 1000).toFixed(1)} km`}
+              <MapPin size={13} /> {distToDest < 1000 ? `${Math.round(distToDest)} m` : `${(distToDest / 1000).toFixed(1)} km`}
             </span>
             {onToggleDataSaver && (
               <button
@@ -349,7 +350,7 @@ export default function NavigationOverlay({
                 className={`${styles.dataSaverBtn} ${dataSaver ? styles.dataSaverBtnOn : styles.dataSaverBtnOff}`}
                 title={dataSaver ? i18n.t('navigation.dataSaverTooltipOn') : i18n.t('navigation.dataSaverTooltipOff')}
               >
-                📶 {dataSaver ? i18n.t('navigation.dataSaverOn') : i18n.t('navigation.dataSaverOff')}
+                <Signal size={13} /> {dataSaver ? i18n.t('navigation.dataSaverOn') : i18n.t('navigation.dataSaverOff')}
               </button>
             )}
           </div>

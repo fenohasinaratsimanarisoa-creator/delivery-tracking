@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Ban } from 'lucide-react';
 import { useAuth } from '../hooks/AuthContext';
 import styles from './AccessDeniedPage.module.css';
 
@@ -18,7 +18,7 @@ export default function AccessDeniedPage() {
   const home = (user && ROLE_HOME[user.role]) || '/dashboard';
   return (
     <div className={styles.container}>
-      <div className={styles.emoji}>🚫</div>
+      <div className={styles.emoji}><Ban size={36} /></div>
       <h2 className={styles.heading}>
         {t('errors.403.heading')}
       </h2>

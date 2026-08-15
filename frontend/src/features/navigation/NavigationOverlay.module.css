@@ -15,7 +15,10 @@
   animation: dt-fade-in-up 0.4s ease-out;
 }
 .arrivedEmoji {
-  font-size: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-teal, #3FA796);
   margin-bottom: var(--space-lg, 16px);
 }
 .arrivedTitle {
@@ -57,6 +60,10 @@
   left: 0;
   right: 0;
   z-index: 2001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   background: var(--color-teal, #3FA796);
   color: #fff;
   text-align: center;
@@ -79,10 +86,9 @@
 .instructionCard {
   background: var(--color-glass, rgba(18,27,46,0.92));
   border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
-  border-radius: var(--radius-xl, 12px);
+  border-radius: var(--radius-lg, 12px);
   padding: var(--space-lg, 16px);
-  backdrop-filter: blur(12px);
-  box-shadow: var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5));
+  box-shadow: var(--shadow-md, 0 4px 20px rgba(0,0,0,0.4));
   pointer-events: auto;
 }
 .instructionTopRow {
@@ -169,21 +175,29 @@
   border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
   border-radius: var(--radius-lg, 8px);
   padding: 8px 12px;
-  backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: var(--text-xs, 0.625rem);
 }
 .infoItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--color-teal, #3FA796);
   font-weight: 700;
   font-family: var(--font-mono);
 }
 .infoItemSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--color-text-secondary, #9BA6B9);
 }
 .dataSaverBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -227,5 +241,5 @@
   border-radius: var(--radius-full, 9999px);
   font-size: var(--text-sm, 0.75rem);
   font-weight: 700;
-  box-shadow: 0 4px 20px rgba(232,84,76,0.4);
+  box-shadow: var(--shadow-md, 0 4px 20px rgba(232,84,76,0.4));
 }

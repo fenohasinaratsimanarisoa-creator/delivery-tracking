@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Package } from 'lucide-react';
+import { Package, CalendarDays, StickyNote } from 'lucide-react';
 import api from '../services/api/client';
 import { formatDate } from '../services/i18n/formatDate';
 import type { Delivery } from '../types';
@@ -159,7 +159,7 @@ export default function MyOrdersPage() {
               <div>{d.deliveryAddress}</div>
               {d.scheduledDate && (
                 <div style={{ color: 'var(--color-accent, #F2A93C)', marginTop: 2 }}>
-                  📅 {formatDate(d.scheduledDate)}
+                  <CalendarDays size={13} /> {formatDate(d.scheduledDate)}
                 </div>
               )}
               {d.notes && (
@@ -171,7 +171,7 @@ export default function MyOrdersPage() {
                   fontSize: 'var(--text-xs, 0.75rem)',
                   whiteSpace: 'pre-wrap',
                 }}>
-                  📝 {d.notes}
+                  <StickyNote size={13} /> {d.notes}
                 </div>
               )}
               {d.driver && <div style={{ marginTop: 2 }}>{t('myOrders.driver')} : {d.driver.firstName} {d.driver.lastName}</div>}

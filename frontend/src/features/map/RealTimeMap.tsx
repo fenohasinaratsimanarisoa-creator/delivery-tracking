@@ -22,24 +22,28 @@ import styles from './RealTimeMap.module.css';
 const DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const EMOJI = '🚗';
+// Marqueur véhicule = icône SVG inline (pas d'emoji, pas de dépendance) :
+// icône lucide « truck » encodée en SVG brut pour les divIcon Leaflet.
+const TRUCK_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>`;
 const ROUTE_RECALC_MIN_DELAY_MS = 15000;
 const ROUTE_RECALC_MIN_DISTANCE_M = 200;
 const ROUTE_RECALC_INTERVAL_MS = 30000;
 
 function haloStyle(confidence: number, isMoving: boolean): string {
-  const baseColor = isMoving ? '242,169,60' : '63,167,150';
+  // Couleurs pilotées par les tokens (var(--color-status-moving/static)) via
+  // color-mix : le halo suit le thème clair/sombre/field sans hex en dur.
+  const statusVar = isMoving ? 'var(--color-status-moving)' : 'var(--color-status-static)';
   const opacity = Math.max(0.15, Math.min(0.5, confidence * 0.5));
   const scale = 1 + (1 - confidence) * 0.5;
-  return `width:${46 * scale}px;height:${46 * scale}px;border-radius:50%;background:rgba(${baseColor},${opacity * 0.5});border:${2 + confidence * 1}px solid rgba(${baseColor},${opacity});`;
+  return `width:${46 * scale}px;height:${46 * scale}px;border-radius:50%;background:color-mix(in srgb, ${statusVar} ${Math.round(opacity * 50)}%, transparent);border:${2 + confidence * 1}px solid color-mix(in srgb, ${statusVar} ${Math.round(opacity * 100)}%, transparent);`;
 }
 
 function createMovingIcon(rotation = 0, focused = false, confidence = 1) {
   return L.divIcon({
     className: 'dt-marker-vehicle',
     html: `
-      <div class="dt-marker-halo" style="${haloStyle(confidence, true)};animation: dt-pulse-moving ${2 - confidence * 0.5}s ease-in-out infinite;"></div>
-      <div class="dt-marker-emoji" style="transform: rotate(${rotation}deg);${focused ? 'filter: drop-shadow(0 0 6px var(--color-accent));' : ''}">${EMOJI}</div>
+      <div class="dt-marker-halo${focused ? ' dt-marker-focus' : ''}" style="${haloStyle(confidence, true)};animation: dt-pulse-moving ${2 - confidence * 0.5}s ease-in-out infinite;"></div>
+      <div class="dt-marker-emoji" style="transform: rotate(${rotation}deg);color:var(--color-status-moving);">${TRUCK_SVG}</div>
     `,
     iconSize: [52, 52],
     iconAnchor: [26, 26],
@@ -50,8 +54,8 @@ function createStaticIcon(rotation = 0, focused = false, confidence = 1) {
   return L.divIcon({
     className: 'dt-marker-vehicle',
     html: `
-      <div class="dt-marker-halo-static" style="${haloStyle(confidence, false)}"></div>
-      <div class="dt-marker-emoji" style="transform: rotate(${rotation}deg);${focused ? 'filter: drop-shadow(0 0 6px var(--color-accent));' : ''}">${EMOJI}</div>
+      <div class="dt-marker-halo-static${focused ? ' dt-marker-focus' : ''}" style="${haloStyle(confidence, false)}"></div>
+      <div class="dt-marker-emoji" style="transform: rotate(${rotation}deg);color:var(--color-status-static);">${TRUCK_SVG}</div>
     `,
     iconSize: [52, 52],
     iconAnchor: [26, 26],
@@ -238,11 +242,12 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     const container = document.createElement('div');
     container.style.minWidth = '220px';
 
-    const emojiRow = document.createElement('div');
-    emojiRow.style.fontSize = '1.5rem';
-    emojiRow.style.marginBottom = '6px';
-    emojiRow.textContent = `${EMOJI} ${vehicle.name}`;
-    container.appendChild(emojiRow);
+    const nameRow = document.createElement('div');
+    nameRow.style.fontSize = '0.85rem';
+    nameRow.style.fontWeight = '600';
+    nameRow.style.marginBottom = '4px';
+    nameRow.textContent = vehicle.name;
+    container.appendChild(nameRow);
 
     const coords = document.createElement('div');
     coords.style.fontSize = '0.65rem';
@@ -263,7 +268,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       const row = document.createElement('div');
       row.style.fontSize = '0.75rem';
       row.style.color = 'var(--color-text-secondary, #9BA6B9)';
-      row.innerHTML = `⚡ ${speedKmh} km/h`;
+      row.textContent = `Vitesse · ${speedKmh} km/h`;
       detail.appendChild(row);
     }
 
@@ -271,7 +276,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       const row = document.createElement('div');
       row.style.fontSize = '0.7rem';
       row.style.color = 'var(--color-text-tertiary, #7A8BA3)';
-      row.innerHTML = `🎯 ±${Math.round(vehicle.accuracy)}m`;
+      row.textContent = `Précision · ±${Math.round(vehicle.accuracy)}m`;
       detail.appendChild(row);
     }
 
@@ -279,7 +284,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       const row = document.createElement('div');
       row.style.fontSize = '0.75rem';
       row.style.color = 'var(--color-text-secondary, #9BA6B9)';
-      row.innerHTML = `🧭 ${vehicle.heading.toFixed(0)}°`;
+      row.textContent = `Cap · ${vehicle.heading.toFixed(0)}°`;
       detail.appendChild(row);
     }
 
@@ -287,7 +292,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       const row = document.createElement('div');
       row.style.fontSize = '0.75rem';
       row.style.color = 'var(--color-text-secondary, #9BA6B9)';
-      row.innerHTML = `🛣️ ${formatDistance(vehicle.routeDistance)}`;
+      row.textContent = `Distance · ${formatDistance(vehicle.routeDistance)}`;
       detail.appendChild(row);
     }
 
@@ -296,7 +301,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       row.style.fontSize = '0.7rem';
       row.style.color = 'var(--color-status-moving, #F2A93C)';
       row.style.fontFamily = 'var(--font-mono, monospace)';
-      row.innerHTML = `🕐 ETA: ${vehicle.eta}`;
+      row.textContent = `ETA · ${vehicle.eta}`;
       detail.appendChild(row);
     }
 
@@ -307,7 +312,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     timeRow.style.color = 'var(--color-text-tertiary, #7A8BA3)';
     timeRow.style.marginBottom = '6px';
     const ts = new Date(vehicle.timestamp);
-    timeRow.innerHTML = `📡 ${formatDate(ts)} ${formatTime(ts)}`;
+    timeRow.textContent = `Dernière position · ${formatDate(ts)} ${formatTime(ts)}`;
     container.appendChild(timeRow);
 
     if (vehicle.suspect) {
@@ -323,7 +328,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       suspectBadge.style.color = 'var(--color-red, #E8544C)';
       suspectBadge.style.border = '1px solid var(--color-red-muted, rgba(232,84,76,0.15))';
       suspectBadge.style.marginBottom = '4px';
-      suspectBadge.textContent = '⚠️ SIGNAL GPS INSTABLE';
+      suspectBadge.textContent = 'SIGNAL GPS INSTABLE';
       container.appendChild(suspectBadge);
     }
 
@@ -339,17 +344,17 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       badge.style.background = 'var(--color-purple-muted, rgba(139,92,246,0.15))';
       badge.style.color = 'var(--color-purple, #8b5cf6)';
       badge.style.border = '1px solid var(--color-purple-muted, rgba(139,92,246,0.15))';
-      badge.textContent = vehicle.status === 'moving' ? '🟡 DÉPLACEMENT (NON CONFIRMÉ)' : '🟢 ARRÊT (NON CONFIRMÉ)';
+      badge.textContent = vehicle.status === 'moving' ? 'DÉPLACEMENT (NON CONFIRMÉ)' : 'ARRÊT (NON CONFIRMÉ)';
     } else if (vehicle.status === 'moving') {
       badge.style.background = 'var(--color-accent-muted, rgba(242,169,60,0.15))';
       badge.style.color = 'var(--color-status-moving, #F2A93C)';
       badge.style.border = '1px solid var(--color-accent-muted, rgba(242,169,60,0.15))';
-      badge.textContent = '🟡 EN MOUVEMENT';
+      badge.textContent = 'EN MOUVEMENT';
     } else {
       badge.style.background = 'var(--color-teal-muted, rgba(63,167,150,0.15))';
       badge.style.color = 'var(--color-status-static, #3FA796)';
       badge.style.border = '1px solid var(--color-teal-muted, rgba(63,167,150,0.15))';
-      badge.textContent = '🟢 À L\'ARRÊT';
+      badge.textContent = 'À L\'ARRÊT';
     }
     container.appendChild(badge);
 
@@ -781,7 +786,12 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                   }}
                   className={`${styles.searchResultItem}${v.isOffline ? ` ${styles.searchResultItemOffline}` : ''}`}
                 >
-                  <span className={styles.searchResultIcon}>{v.isOffline ? '⏸️' : '🚗'}</span>
+                  <span
+                    className={styles.searchResultIcon}
+                    style={{ color: v.isOffline ? 'var(--color-text-tertiary)' : 'var(--color-accent)' }}
+                  >
+                    {v.isOffline ? '—' : '•'}
+                  </span>
                   <div>
                     <div className={styles.searchResultName}>{v.name}</div>
                     <div className={styles.searchResultSub}>
@@ -806,7 +816,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
             position: 'absolute', bottom: 20, right: 10, zIndex: 1000,
           }} className={styles.driverCard}>
             <div className={styles.driverCardHeader}>
-              <div className={styles.driverCardTitle}>🚗 {selectedDriver.name}</div>
+              <div className={styles.driverCardTitle}>{selectedDriver.name}</div>
               <button
                 onClick={() => setSelectedDriver(null)}
                 className={styles.driverCardClose}
@@ -851,7 +861,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
 
             {(!selectedDriver.timestamp || Date.now() - new Date(selectedDriver.timestamp).getTime() > 120_000) && (
               <div className={styles.warningBanner}>
-                ⚠️ Position non actualisée depuis plus de 2 minutes
+                Position non actualisée depuis plus de 2 minutes
               </div>
             )}
           </div>
@@ -887,15 +897,13 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
           zIndex: 1000,
         }} className={styles.etaBanner}>
           <span className={styles.etaText}>
-            🕐 ETA: {routingETA}
+            ETA · {routingETA}
           </span>
           <span className={styles.etaDistance}>
-            🛣️ {formatDistance(routingDistance)}
+            {formatDistance(routingDistance)}
           </span>
           {routingLoading && (
-            <span className={styles.etaLoading}>
-              ↻
-            </span>
+            <span className={styles.etaLoading} aria-hidden="true" />
           )}
         </div>
       )}

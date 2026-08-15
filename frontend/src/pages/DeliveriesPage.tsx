@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   Plus, Search, ChevronDown, ChevronUp, Upload, Package, PackageOpen, MapPin,
-  Calendar, CalendarDays, AlertTriangle, Clock, CheckCircle2, Loader2, Truck,
+  Calendar, CalendarDays, AlertTriangle, Clock, CheckCircle2, Loader2, Truck, StickyNote,
 } from 'lucide-react';
 import Button from '../components/Button';
 import api from '../services/api/client';
@@ -169,7 +169,7 @@ function AmountCell({ amount }: { amount?: number }) {
 function DescriptionCell({ delivery }: { delivery: Delivery }) {
   const desc = delivery.productDescription || delivery.description;
   if (desc) return <span className={styles.descriptionText}>{desc}</span>;
-  if (delivery.notes) return <span className={styles.notesText}>📝 {delivery.notes.slice(0, 60)}</span>;
+  if (delivery.notes) return <span className={styles.notesText}><StickyNote size={13} /> {delivery.notes.slice(0, 60)}</span>;
   return <span className={styles.mutedText}>—</span>;
 }
 

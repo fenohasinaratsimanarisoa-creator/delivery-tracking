@@ -42,8 +42,8 @@
 .brandIcon {
   width: 36px;
   height: 36px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--color-accent), #c87f1e);
+  border-radius: 8px;
+  background: var(--color-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -241,7 +241,7 @@
 
 .checkbox:checked + .checkboxMark {
   border-color: var(--color-accent);
-  background: linear-gradient(135deg, var(--color-accent), #c87f1e);
+  background: var(--color-accent);
   box-shadow: 0 0 0 3px var(--color-accent-muted);
 }
 
@@ -286,18 +286,17 @@
 }
 
 .submitBtnActive {
-  background: linear-gradient(135deg, var(--color-accent), #c87f1e);
+  background: var(--color-accent);
   color: var(--color-bg);
-  box-shadow: 0 8px 24px rgba(242, 169, 60, 0.35);
+  box-shadow: var(--shadow-xs);
 }
 
 .submitBtnActive:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 32px rgba(242, 169, 60, 0.45);
+  background: var(--color-accent-hover);
 }
 
 .submitBtnActive:active {
-  transform: translateY(0);
+  background: var(--color-accent-hover);
 }
 
 .submitBtnDisabled {
@@ -307,14 +306,7 @@
 }
 
 .buttonShine {
-  position: absolute;
-  top: 0;
-  left: -80%;
-  width: 50%;
-  height: 100%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
-  transform: skewX(-20deg);
-  pointer-events: none;
+  display: none;
 }
 
 .submitBtnActive:hover .buttonShine {

@@ -7,13 +7,11 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: var(--color-glass, rgba(18,27,46,0.88));
-  border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
-  border-radius: var(--radius-md, 8px);
+  background: var(--color-glass);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-md);
   padding: 4px 10px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: var(--shadow-md, 0 4px 20px rgba(0,0,0,0.4));
+  box-shadow: var(--shadow-sm);
 }
 
 .searchIcon {
@@ -44,12 +42,10 @@
 .searchResults {
   max-height: 240px;
   overflow-y: auto;
-  background: var(--color-glass, rgba(18,27,46,0.88));
-  border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
-  border-radius: var(--radius-md, 8px);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5));
+  background: var(--color-glass);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
 }
 
 .searchResultEmpty {
@@ -95,13 +91,11 @@
   width: 300px;
   max-height: 400px;
   overflow-y: auto;
-  background: var(--color-glass, rgba(18,27,46,0.88));
-  border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
-  border-radius: var(--radius-lg, 12px);
+  background: var(--color-glass);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-lg);
   padding: 16px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5));
+  box-shadow: var(--shadow-md);
   font-size: 0.75rem;
   color: var(--color-text);
 }
@@ -146,19 +140,17 @@
 
 .etaBanner {
   padding: 8px 20px;
-  background: var(--color-glass, rgba(18,27,46,0.88));
-  border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
-  border-radius: var(--radius-xl, 12px);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--color-glass);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   gap: 16px;
   font-size: 0.8rem;
-  color: var(--color-text, #E8ECF3);
+  color: var(--color-text);
   pointer-events: none;
   white-space: nowrap;
-  box-shadow: var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5));
+  box-shadow: var(--shadow-sm);
 }
 
 .etaText {
@@ -172,8 +164,12 @@
 }
 
 .etaLoading {
-  color: var(--color-text-tertiary, #7A8BA3);
-  font-size: 0.65rem;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--color-border);
+  border-top-color: var(--color-text-tertiary);
+  animation: dt-spin 0.6s linear infinite;
 }
 
 .markerLimitNotice {
@@ -188,11 +184,11 @@
 
 .emptyState {
   padding: 6px 14px;
-  background: var(--color-glass, rgba(18,27,46,0.88));
-  border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
-  border-radius: var(--radius-md, 6px);
+  background: var(--color-glass);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-md);
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9BA6B9);
+  color: var(--color-text-secondary);
   pointer-events: none;
   white-space: nowrap;
 }
@@ -236,8 +232,8 @@
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: rgba(242,169,60,0.2);
-  border: 3px solid var(--color-status-moving, #F2A93C);
+  background: color-mix(in srgb, var(--color-status-moving) 18%, transparent);
+  border: 3px solid var(--color-status-moving);
 }
 
 :global(.dt-marker-halo-static) {
@@ -247,8 +243,8 @@
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: rgba(63,167,150,0.15);
-  border: 3px solid var(--color-status-static, #3FA796);
+  background: color-mix(in srgb, var(--color-status-static) 14%, transparent);
+  border: 3px solid var(--color-status-static);
   opacity: 0.7;
 }
 
@@ -261,8 +257,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
-  line-height: 1;
   transition: transform 0.3s ease;
 }
 
@@ -286,22 +280,18 @@
 }
 
 :global(.leaflet-popup-content-wrapper) {
-  background: var(--color-glass, rgba(18,27,46,0.88)) !important;
-  color: var(--color-text, #E8ECF3) !important;
-  border-radius: var(--radius-xl, 12px) !important;
-  border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15)) !important;
-  box-shadow: var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.5)) !important;
+  background: var(--color-glass) !important;
+  color: var(--color-text) !important;
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--color-glass-border) !important;
+  box-shadow: var(--shadow-md) !important;
   font-family: var(--font-body, Inter, sans-serif) !important;
   font-size: 0.8rem !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
 }
 
 :global(.leaflet-popup-tip) {
-  background: var(--color-glass, rgba(18,27,46,0.88)) !important;
-  border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15)) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
+  background: var(--color-glass) !important;
+  border: 1px solid var(--color-glass-border) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -323,10 +313,10 @@
 :global(.dt-destination-marker > div) {
   width: 20px;
   height: 20px;
-  background: var(--color-red, #E8544C);
-  border: 3px solid white;
+  background: var(--color-red);
+  border: 3px solid var(--color-surface);
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba(232,84,76,0.6);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Confort tactile (WCAG 2.5.5) : cibles ≥44px sur écrans tactiles uniquement. */

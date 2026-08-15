@@ -520,7 +520,7 @@
 }
 
 .actionPrimary:hover {
-  background: var(--color-accent-hover, #E89E2E);
+  background: var(--color-accent-hover, #275A43);
 }
 
 .actionSuccess {
@@ -529,7 +529,7 @@
 }
 
 .actionSuccess:hover {
-  background: var(--color-teal, #3FA796);
+  background: var(--color-teal-hover, #256B52);
 }
 
 .actionDanger {

@@ -23,6 +23,7 @@ import {
   RotateCcw,
   ArrowUpRight,
   ArrowDownRight,
+  Package,
 } from 'lucide-react';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
@@ -365,7 +366,7 @@ export default function AlertsPage() {
                     <span className={styles.metaTime}>{formatDateTime(r.createdAt)}</span>
                     {r.delivery && (
                       <Link to={`/deliveries/${r.delivery.id}`} onClick={(e) => e.stopPropagation()} className={styles.deliveryChip}>
-                        📦 {r.delivery.title}
+                        <Package size={14} /> {r.delivery.title}
                       </Link>
                     )}
                     {r.resolved ? (

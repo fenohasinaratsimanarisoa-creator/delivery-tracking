@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, Loader2, FileText } from 'lucide-react';
+import { Check, Loader2, FileText, CreditCard, Smartphone, Truck, Zap, Building2, Package } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { formatDate } from '../../services/i18n/formatDate';
 import { isNativeApp } from '../../services/native/nativeAuth';
@@ -11,11 +11,11 @@ import EntityDialog, { DialogSubmitBar } from '../../components/EntityDialog';
 import type { BillingPlan, Subscription } from '../../types';
 import styles from './PlansPage.module.css';
 
-const PLAN_ICONS: Record<string, string> = {
-  free: '🟢',
-  starter: '🔵',
-  pro: '🟣',
-  enterprise: '⚫',
+const PLAN_ICONS: Record<string, React.ReactNode> = {
+  free: <Package size={26} />,
+  starter: <Truck size={26} />,
+  pro: <Zap size={26} />,
+  enterprise: <Building2 size={26} />,
 };
 
 const getPlanHighlight = (tier: string) => {
@@ -154,8 +154,8 @@ export default function PlansPage() {
                     {t('billing.plans.current')}
                   </div>
                 )}
-                <div className={styles.planIcon}>
-                  {PLAN_ICONS[plan.tier] || '📦'}
+                <div className={styles.planIcon} style={{ color: getPlanHighlight(plan.tier) }}>
+                  {PLAN_ICONS[plan.tier] || <Package size={26} />}
                 </div>
                 <h3 className={styles.planName}>
                   {plan.name}
@@ -229,7 +229,9 @@ export default function PlansPage() {
             }}
             className={styles.paymentMethodBtn}
           >
-            <span className={styles.paymentMethodIcon}>💳</span>
+            <span className={styles.paymentMethodIcon} style={{ color: 'var(--color-accent)' }}>
+              <CreditCard size={20} />
+            </span>
             <div>
               <p className={styles.paymentMethodTitle}>
                 {t('billing.plans.creditCard')}
@@ -246,7 +248,9 @@ export default function PlansPage() {
             }}
             className={styles.paymentMethodBtn}
           >
-            <span className={styles.paymentMethodIcon}>📱</span>
+            <span className={styles.paymentMethodIcon} style={{ color: 'var(--color-teal)' }}>
+              <Smartphone size={20} />
+            </span>
             <div>
               <p className={styles.paymentMethodTitle}>
                 {t('billing.plans.mvola')}
@@ -263,7 +267,9 @@ export default function PlansPage() {
             }}
             className={styles.paymentMethodBtn}
           >
-            <span className={styles.paymentMethodIcon}>📱</span>
+            <span className={styles.paymentMethodIcon} style={{ color: 'var(--color-warning)' }}>
+              <Smartphone size={20} />
+            </span>
             <div>
               <p className={styles.paymentMethodTitle}>
                 {t('billing.plans.orangeMoney')}
