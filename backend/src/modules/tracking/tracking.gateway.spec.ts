@@ -431,6 +431,54 @@ describe('TrackingGateway — cross-tenant security', () => {
       expect(client.emit).toHaveBeenCalledWith('positionRejected', { reason: 'vehicle_mismatch' });
     });
 
+    it('STRIP les champs extrapolés (dead-reckoning) — une position inventée ne peut jamais atteindre la base', async () => {
+      // FIDÉLITÉ DU TRAJET (Partie 2, point 1) : dead reckoning = affichage UNIQUEMENT.
+      // Un client malveillant (ou un futur bug de l'app) qui enverrait une position
+      // EXTRAPOLÉE (predictPosition → predictedLat/predictedLng/confidence…) ne doit
+      // jamais la voir persister : le whitelist (whitelist: true + DTO sans ces
+      // champs) la STRIP avant savePosition. La base ne contient que des fixes GPS
+      // réels — c'est le trajet officiel d'une livraison.
+      const client = setupDriverClient('company-a');
+      trackingService.assertVehicleOwnership.mockResolvedValueOnce(undefined);
+      trackingService.savePosition.mockResolvedValueOnce({
+        id: 'pos-ok',
+        speed: 10,
+        latitude: -18.8792,
+        longitude: 47.5079,
+        heading: 90,
+        altitude: 100,
+        accuracy: 10,
+        suspect: false,
+        timestamp: new Date(),
+        deliveryId: null,
+        vehicleId: '11111111-1111-4111-8111-111111111111',
+      });
+
+      await gateway.handlePosition(
+        client,
+        positionDto({
+          vehicleId: '11111111-1111-4111-8111-111111111111',
+          // Champs INVENTÉS qu'aucun vrai fix GPS ne produit :
+          predictedLat: 48.85,
+          predictedLng: 2.35,
+          confidence: 0.9,
+          extrapolated: true,
+          smoothLat: -18.88,
+        }),
+      );
+
+      expect(trackingService.savePosition).toHaveBeenCalled();
+      const savedDto = trackingService.savePosition.mock.calls[0][1];
+      expect(savedDto).not.toHaveProperty('predictedLat');
+      expect(savedDto).not.toHaveProperty('predictedLng');
+      expect(savedDto).not.toHaveProperty('confidence');
+      expect(savedDto).not.toHaveProperty('extrapolated');
+      expect(savedDto).not.toHaveProperty('smoothLat');
+      // Seules les coordonnées GPS RÉELLES arrivent en base.
+      expect(savedDto.latitude).toBe(-18.8792);
+      expect(savedDto.longitude).toBe(47.5079);
+    });
+
     it('persists the recalculated fallback speed when dto.speed is missing', async () => {
       trackingService.getLastPosition.mockResolvedValue({
         latitude: -18.8792,

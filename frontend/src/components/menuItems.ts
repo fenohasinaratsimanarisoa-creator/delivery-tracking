@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Truck, Users, MapPin, Fuel, FileText, Settings, UserCog,
-  Package, ClipboardList, Eye, Bell, BellRing, CreditCard,
+  Package, ClipboardList, Eye, Bell, BellRing, CreditCard, Activity,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Role } from '../types';
@@ -24,6 +24,7 @@ const allMenuItems: MenuItem[] = [
   { labelKey: 'nav.settings', icon: Settings, path: '/settings', roles: ['admin'] },
   { labelKey: 'nav.billing', icon: CreditCard, path: '/billing', roles: ['admin'] },
   { labelKey: 'nav.alerts', icon: Bell, path: '/alerts', roles: ['admin', 'dispatcher', 'driver'] },
+  { labelKey: 'nav.trackingHealth', icon: Activity, path: '/tracking-health', roles: ['admin', 'dispatcher'] },
   { labelKey: 'nav.deliveryProofs', icon: Bell, path: '/delivery-proofs', roles: ['admin', 'dispatcher'] },
   { labelKey: 'nav.myDeliveries', icon: ClipboardList, path: '/my-deliveries', roles: ['driver'] },
   { labelKey: 'nav.myVehicle', icon: Truck, path: '/my-vehicle', roles: ['driver'] },

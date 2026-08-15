@@ -192,6 +192,63 @@ jobs:
           flags: frontend
           fail_ci_if_error: false
 
+  # Filet de sécurité permanent — fiabilité du tracking GPS (non-régression).
+  # Ce job exécute EN UN SEUL RUN toutes les suites dédiées aux invariants
+  # critiques du tracking (coupures réseau, backfill Traccar, dead-reckoning
+  # jamais en base, session 8h sans fuite, changement de chauffeur). Si un
+  # futur changement de code casse l'un de ces comportements, ce job échoue
+  # et le build est rouge — AUCUNE régression silencieuse possible.
+  tracking-reliability:
+    name: Tracking Reliability (non-régression)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (backend)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Generate Prisma Client
+        working-directory: ./backend
+        run: npm run prisma:generate
+
+      - name: Run backend tracking reliability tests
+        working-directory: ./backend
+        run: npx jest --silent \
+          src/modules/tracking/trip-fidelity.spec.ts \
+          src/modules/tracking/traccar-outage-recovery.spec.ts \
+          src/modules/tracking/traccar-backfill.spec.ts \
+          src/modules/tracking/tracking.service.spec.ts \
+          src/modules/tracking/tracking.gateway.spec.ts
+
+      - name: Setup Node.js (frontend)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run frontend tracking reliability tests
+        working-directory: ./frontend
+        run: npx vitest run \
+          src/services/tracking/tracking-reliability.spec.ts \
+          src/services/tracking/deadReckoning.spec.ts \
+          src/services/offlineQueue.spec.ts \
+          src/services/socket/socket.spec.ts \
+          src/hooks/useDriverTracking.spec.ts
+
   # Docker Build Jobs
   build-backend-image:
     name: Build Backend Docker Image
@@ -283,6 +340,7 @@ jobs:
       - backend-e2e-tests
       - frontend-lint
       - frontend-tests
+      - tracking-reliability
       - build-backend-image
       - build-frontend-image
     if: always()
@@ -294,6 +352,7 @@ jobs:
           echo "Backend E2E Tests: ${{ needs.backend-e2e-tests.result }}"
           echo "Frontend Lint: ${{ needs.frontend-lint.result }}"
           echo "Frontend Tests: ${{ needs.frontend-tests.result }}"
+          echo "Tracking Reliability: ${{ needs.tracking-reliability.result }}"
           echo "Backend Build: ${{ needs.build-backend-image.result }}"
           echo "Frontend Build: ${{ needs.build-frontend-image.result }}"
           
@@ -302,6 +361,7 @@ jobs:
              [[ "${{ needs.backend-e2e-tests.result }}" != "success" ]] ||
              [[ "${{ needs.frontend-lint.result }}" != "success" ]] ||
              [[ "${{ needs.frontend-tests.result }}" != "success" ]] ||
+             [[ "${{ needs.tracking-reliability.result }}" != "success" ]] ||
              [[ "${{ needs.build-backend-image.result }}" != "success" ]] ||
              [[ "${{ needs.build-frontend-image.result }}" != "success" ]]; then
             echo "::error::Some CI jobs failed"

@@ -44,6 +44,7 @@ const ClientTrackingPage = lazy(() => import('./pages/ClientTrackingPage'));
 const TripReplayPage = lazy(() => import('./pages/TripReplayPage'));
 const TripReportPage = lazy(() => import('./pages/TripReportPage'));
 const AlertsPage = lazy(() => import('./pages/AlertsPage'));
+const TrackingHealthPage = lazy(() => import('./pages/TrackingHealthPage'));
 const NotificationsPage = lazy(() => import('./features/notifications/NotificationsPage'));
 const DeliveryDetailPage = lazy(() => import('./pages/DeliveryDetailPage'));
 const DeliveryProofsPage = lazy(() => import('./pages/DeliveryProofsPage'));
@@ -192,6 +193,11 @@ export default function App() {
               <Route path="/alerts" element={
                 <ProtectedRoute roles={['admin', 'dispatcher', 'driver']}>
                   <AppLayout><SuspenseWrapper><AlertsPage /></SuspenseWrapper></AppLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/tracking-health" element={
+                <ProtectedRoute roles={['admin', 'dispatcher']}>
+                  <AppLayout><SuspenseWrapper><TrackingHealthPage /></SuspenseWrapper></AppLayout>
                 </ProtectedRoute>
               } />
               <Route path="/delivery-proofs" element={
