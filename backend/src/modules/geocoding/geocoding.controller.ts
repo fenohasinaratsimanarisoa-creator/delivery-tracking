@@ -1,9 +1,17 @@
 import { Controller, Get, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { GeocodingService } from './geocoding.service';
 import { Public } from '../../common/decorators/public.decorator';
 import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
 import type { GeocodingResult } from './geocoding.service';
 
+// Throttle STRICT : ce controller est public et fait office de proxy vers des API
+// externes coûteuses/limitées — Google Places (facturé par requête, GOOGLE_MAPS_API_KEY)
+// et Nominatim OSM (usage policy : max 1 req/s, bannissement d'IP sinon). Le throttle
+// global (100 req/min par IP) laissait un attaquant épuiser le budget Google Places ou
+// faire bannir l'IP serveur par OSM (→ tout le geocoding de l'app tombait). Un utilisateur
+// légitime tape quelques adresses par minute, 20 req/min par IP est amplement suffisant.
+@Throttle({ default: { limit: 20, ttl: 60000 } })
 @Controller('geocoding')
 @Public()
 @SkipCsrf()
