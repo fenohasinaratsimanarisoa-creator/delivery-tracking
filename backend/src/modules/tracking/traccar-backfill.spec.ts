@@ -59,7 +59,7 @@ describe('TraccarBridgeService — performBackfill déduplication', () => {
       create: jest.fn(),
       createMany: jest.fn(),
     },
-    vehicleAssignmentHistory: { findFirst: jest.fn() },
+    vehicleAssignmentHistory: { findFirst: jest.fn(), findMany: jest.fn() },
   };
 
   const mockTrackingService = {
@@ -118,6 +118,8 @@ describe('TraccarBridgeService — performBackfill déduplication', () => {
         driver: { id: DRIVER_ID },
       },
     ]);
+    // Aucun historique d'affectation par défaut (résolution driverId = null).
+    mockPrisma.vehicleAssignmentHistory.findMany.mockResolvedValue([]);
     mockTrackingService.getLastPosition.mockResolvedValue({
       timestamp: new Date(P1_TIME),
       latitude: -18.87,
@@ -190,18 +192,27 @@ describe('TraccarBridgeService — performBackfill déduplication', () => {
     ]);
     mockTrackingService.getLastPosition.mockResolvedValue(null);
     mockPrisma.gpsPosition.findMany.mockResolvedValue([]); // aucun doublon
+    // Par défaut aucun historique d'affectation (résolution null hors scénario dédié).
+    mockPrisma.vehicleAssignmentHistory.findMany.mockResolvedValue([]);
     mockPrisma.gpsPosition.createMany.mockImplementation(({ data }: any) =>
       Promise.resolve({ count: data.length }),
     );
 
     // Deux lignes VehicleAssignmentHistory se chevauchent avec le batch :
-    // driver OLD couvre [.., SWITCH[, driver NEW couvre [SWITCH, ..].
-    mockPrisma.vehicleAssignmentHistory.findFirst.mockImplementation(async ({ where }: any) => {
-      const fixTime = where.assignedAt.lte as Date;
-      return fixTime.getTime() < SWITCH_TIME.getTime()
-        ? { driverId: OLD_DRIVER }
-        : { driverId: NEW_DRIVER };
-    });
+    // driver OLD couvre [.., SWITCH[, driver NEW couvre [SWITCH, ..]. Le backfill charge
+    // l'historique en UNE requête (findMany) puis résout chaque fix en mémoire.
+    mockPrisma.vehicleAssignmentHistory.findMany.mockResolvedValue([
+      {
+        driverId: OLD_DRIVER,
+        assignedAt: new Date(0),
+        unassignedAt: SWITCH_TIME,
+      },
+      {
+        driverId: NEW_DRIVER,
+        assignedAt: SWITCH_TIME,
+        unassignedAt: null,
+      },
+    ]);
 
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,

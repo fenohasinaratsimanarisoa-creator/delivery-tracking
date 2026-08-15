@@ -21,6 +21,7 @@ import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { NotificationType, NotificationPriority } from '@prisma/client';
 import { UpdatePositionDto } from '../tracking/dto/update-position.dto';
 import { haversineDistance } from '../../common/geo/geo.utils';
+import { evaluateTeleportation } from '../../common/geo/teleportation.utils';
 
 interface TraccarPosition {
   id: number;
@@ -513,8 +514,25 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         if (!response.ok) {
           this.logger.warn(`Traccar health check failed: HTTP ${response.status}`);
         }
+        // Session morte (cookie expiré / invalidé côté Traccar) alors que le socket est
+        // toujours "connecté" : AVANT, on attendait passivement le timer de renouvellement
+        // (30 min) — le pont restait aveugle sans recevoir aucune position pendant 30 min.
+        // On déclenche une reconnexion proactive (nouvelle session + re-backfill).
+        if (!response.ok && this.connected) {
+          this.logger.warn('Traccar health check failed — forcing reconnection');
+          // disconnect() ferme le socket + libère la session AVANT de replanifier
+          // (sinon connect() ouvrirait un 2e socket pendant que l'ancien est encore là).
+          this.disconnect();
+          this.scheduleReconnect();
+        }
       } catch (err: any) {
         this.logger.warn(`Traccar health check: Traccar serveur injoignable — ${err.message}`);
+        // Serveur injoignable : on force aussi une reconnexion (backoff exponentiel) pour
+        // rétablir le flux dès que Traccar revient, au lieu d'attendre le timer de session.
+        if (this.connected) {
+          this.disconnect();
+          this.scheduleReconnect();
+        }
       }
     }, TRACCAR_HEALTH_CHECK_INTERVAL_MS);
   }
@@ -858,6 +876,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           const url = `${this.traccarUrl}/api/positions?deviceId=${vehicle.traccarDeviceId}&from=${effectiveFrom.toISOString()}&to=${now.toISOString()}`;
           const response = await fetch(url, {
             headers: { Cookie: this.sessionCookie },
+            // Un serveur Traccar bloqué ne doit pas geler le backfill de TOUS les devices
+            // (le loop par véhicule s'arrêterait sur ce fetch sans timeout).
+            signal: AbortSignal.timeout(20000),
           });
 
           if (!response.ok) {
@@ -891,6 +912,28 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             source: 'physical_tracker';
           }> = [];
 
+          // N+1 : avant, resolveDriverIdAtTimestamp faisait UNE requête
+          // vehicleAssignmentHistory.findFirst PAR position backfillée (un device avec
+          // 500 positions tamponnées = 500 requêtes séquentielles, bloquant le pont). On
+          // charge UNE SEULE FOIS l'historique complet du véhicule (trié par assignedAt)
+          // puis on résout chaque fix en mémoire.
+          const assignments = await this.prisma.vehicleAssignmentHistory.findMany({
+            where: { vehicleId: vehicle.id },
+            orderBy: { assignedAt: 'asc' },
+            select: { driverId: true, assignedAt: true, unassignedAt: true },
+          });
+          const resolveDriver = (timestamp: Date): string | null => {
+            // Dernière affectation dont assignedAt <= fix_time ET (unassignedAt null ou >= fix_time).
+            for (let i = assignments.length - 1; i >= 0; i--) {
+              const a = assignments[i];
+              if (a.assignedAt.getTime() > timestamp.getTime()) continue;
+              if (a.unassignedAt === null || a.unassignedAt.getTime() >= timestamp.getTime()) {
+                return a.driverId;
+              }
+            }
+            return null;
+          };
+
           let lastBackfillPos: { latitude: number; longitude: number; timestamp: Date } | null =
             null;
           if (this.redis) {
@@ -923,22 +966,26 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             const speedMs = (pos.speed || 0) * 0.514444;
             const { accuracy } = computeCombinedAccuracy(pos.accuracy, pos.attributes);
 
+            // MÊME décision de téléportation que le chemin temps réel
+            // (evaluateTeleportation, source unique dans teleportation.utils) : la
+            // détection du backfill recalculait un seuil 55.56 * max(1, accuracy/10) SANS
+            // plafond, alors que le temps réel plafonne à x1.5 — un device à accuracy
+            // dégradée (50-100m) voyait son seuil gonflé jusqu'à x5-10 et des vrais sauts
+            // passaient suspects côté backfill mais pas côté temps réel (et inversement).
             let suspect = false;
             if (lastBackfillPos) {
-              const timeDiffSec =
-                (timestamp.getTime() - lastBackfillPos.timestamp.getTime()) / 1000;
-              if (timeDiffSec > 0) {
-                const distance = haversineDistance(
-                  lastBackfillPos.latitude,
-                  lastBackfillPos.longitude,
-                  pos.latitude,
-                  pos.longitude,
+              const evaluation = evaluateTeleportation(
+                lastBackfillPos,
+                pos.latitude,
+                pos.longitude,
+                timestamp,
+                accuracy,
+              );
+              suspect = evaluation.suspect;
+              if (suspect) {
+                this.logger.warn(
+                  `Backfill teleportation suspect (${evaluation.reason}): vehicle=${vehicle.id} distance=${Math.round(evaluation.distance)}m time=${evaluation.timeDiffSec.toFixed(1)}s speed=${(evaluation.speedMs * 3.6).toFixed(1)}km/h`,
                 );
-                const detectedSpeedMs = distance / timeDiffSec;
-                const accuracyScale = accuracy ? Math.max(1, accuracy / 10) : 1;
-                if (detectedSpeedMs > 55.56 * accuracyScale) {
-                  suspect = true;
-                }
               }
             }
             lastBackfillPos = { latitude: pos.latitude, longitude: pos.longitude, timestamp };
@@ -959,7 +1006,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               // DriverId au moment de CE fix GPS (pas l'affectation courante) :
               // sur un backfill, les positions antérieures à un changement de
               // chauffeur gardent l'ANCIEN driverId, les postérieures le NOUVEAU.
-              driverId: await this.resolveDriverIdAtTimestamp(vehicle.id, timestamp),
+              driverId: resolveDriver(timestamp),
               source: 'physical_tracker',
             });
           }
@@ -988,10 +1035,16 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               );
 
               if (this.redis) {
-                const lastTs = uniqueToInsert[uniqueToInsert.length - 1].timestamp;
+                // MAX des timestamps réellement insérés (pas forcément le dernier élément
+                // du tableau) : le filtre anti-doublons peut retirer des positions en fin
+                // de lot (déjà en base), et lastTs servirait alors à re-fetcher des
+                // positions déjà traitées à la prochaine reconnexion.
+                const maxTs = new Date(
+                  Math.max(...uniqueToInsert.map((p) => p.timestamp.getTime())),
+                );
                 await this.redis.set(
                   `traccar:last_position:${vehicle.traccarDeviceId}`,
-                  lastTs.toISOString(),
+                  maxTs.toISOString(),
                 );
               }
             } else {

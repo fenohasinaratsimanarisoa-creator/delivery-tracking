@@ -35,6 +35,24 @@ const DEFAULT_FUEL_PRICES: Record<string, number> = {
   hybrid: 3000,
 };
 
+// Couverture GPS minimale (fraction du temps entre deux pleins couverte par des fixes
+// valides) en dessous de laquelle le cross-check kilométrage saisi vs distance GPS n'est
+// PAS fiable. Un chauffeur dont l'app est fermée / en arrière-plan une partie de la
+// période roule réellement sans que le GPS ne l'enregistre : la distance GPS est alors
+// sous-estimée et le ratio manuel/GPS gonflé artificiellement. Sans ce garde-fou, ces
+// périodes à trous produisaient de FAUSSES anomalies « kilométrage surdéclaré » (le
+// cœur du projet carburant). En dessous du seuil, le plein est marqué « non vérifiable »
+// (gpsCoverageInsufficientFlag) au lieu d'être flaggé anomalie.
+const FUEL_COVERAGE_MIN_FRACTION = 0.4;
+// Tolérance par trou (s) : un gap <= 300 s (5 min, cohérent avec l'échantillonnage mobile
+// 3-20 s et la couverture des diagnostics GPS) est considéré couvert ; au-delà, seules
+// les 300 premières secondes comptent (le reste du trou = période sans donnée fiable).
+const FUEL_COVERAGE_GAP_TOLERANCE_S = 300;
+// En dessous de ce kilométrage saisi, on ne déclenche pas le garde-fou de couverture :
+// un trajet très court (ex. ~0 km, véhicule quasi immobile) peut légitimement avoir une
+// couverture faible sans que la distance soit fausse.
+const FUEL_COVERAGE_MIN_MANUAL_KM = 5;
+
 @Injectable()
 export class FuelConsumptionService {
   private readonly logger = new Logger(FuelConsumptionService.name);
@@ -1206,6 +1224,36 @@ export class FuelConsumptionService {
     });
   }
 
+  /**
+   * Fraction du temps couvert par des fixes GPS valides sur une période [premier fix,
+   * dernier fix] (même logique que getGpsDiagnostics, source unique de vérité) : la somme
+   * des gaps <= FUEL_COVERAGE_GAP_TOLERANCE_S est considérée couverte ; au-delà, seules
+   * les 300 premières secondes comptent. Un trou (app fermée / arrière-plan) au milieu de
+   * la période est donc pénalisé. Retourne 1 quand on ne peut pas calculer (moins de 2
+   * fixes ou timestamps absents) : dans ce cas le cross-check ratio se comporte comme avant.
+   */
+  private computeGpsCoverageFraction(
+    positions: Array<{ timestamp?: Date | null }>,
+  ): number {
+    if (positions.length < 2) return 1;
+    const firstTs = positions[0].timestamp;
+    const lastTs = positions[positions.length - 1].timestamp;
+    if (!firstTs || !lastTs) return 1;
+
+    const spanMs = lastTs.getTime() - firstTs.getTime();
+    if (spanMs <= 0) return 1;
+
+    let coveredMs = 0;
+    for (let i = 1; i < positions.length; i++) {
+      const a = positions[i - 1].timestamp;
+      const b = positions[i].timestamp;
+      if (!a || !b) continue;
+      const gapSec = (b.getTime() - a.getTime()) / 1000;
+      coveredMs += Math.min(gapSec, FUEL_COVERAGE_GAP_TOLERANCE_S) * 1000;
+    }
+    return Math.min(1, coveredMs / spanMs);
+  }
+
   private async crossCheckFuelLogWithGps(fuelLog: any, companyId: string) {
     if (!fuelLog.kilometers || fuelLog.kilometers <= 0) return;
 
@@ -1232,11 +1280,46 @@ export class FuelConsumptionService {
         suspect: false,
       },
       orderBy: { timestamp: 'asc' },
-      select: { latitude: true, longitude: true, accuracy: true, speed: true },
+      select: { latitude: true, longitude: true, accuracy: true, speed: true, timestamp: true },
     });
 
     const gpsKm = computeFilteredDistance(gpsPositions) / 1000;
     const manualKm = fuelLog.kilometers;
+
+    // COUVERTURE GPS : si la période entre les deux pleins contient des trous importants
+    // (app fermée / en arrière-plan / GPS coupé), la distance GPS est structurellement
+    // sous-estimée — le ratio manuel/GPS serait gonflé sans que le kilométrage saisi soit
+    // frauduleux. On marque le plein « non vérifiable » (gpsCoverageInsufficientFlag, le
+    // même signal que l'absence totale de GPS) au lieu de poser une fausse anomalie. Le
+    // flag est reset par update() quand la saisie change, et par ce check quand la
+    // couverture redevient suffisante.
+    if (gpsPositions.length >= 2) {
+      const coverage = this.computeGpsCoverageFraction(gpsPositions);
+      if (coverage < FUEL_COVERAGE_MIN_FRACTION && manualKm >= FUEL_COVERAGE_MIN_MANUAL_KM) {
+        const reason = `Couverture GPS insuffisante (${Math.round(coverage * 100)}% du temps couvert entre ${rawStart.toISOString().slice(0, 10)} et ${rawEnd.toISOString().slice(0, 10)}) — kilométrage saisi non vérifiable (${manualKm} km déclarés).`;
+        if (!fuelLog.gpsCoverageInsufficientFlag) {
+          await this.prisma.fuelLog.update({
+            where: { id: fuelLog.id },
+            data: {
+              gpsCoverageInsufficientFlag: true,
+              gpsCoverageInsufficientReason: reason,
+            },
+          });
+          await this.notifications.create(companyId, {
+            type: NotificationType.fuel_gps_coverage_missing,
+            priority: NotificationPriority.medium,
+            title: 'Couverture GPS insuffisante',
+            message:
+              `Vehicle ${fuelLog.vehicle?.licensePlate || fuelLog.vehicleId}: couverture GPS ${Math.round(coverage * 100)}% entre ` +
+              `${rawStart.toISOString().slice(0, 10)} et ${rawEnd.toISOString().slice(0, 10)} (${manualKm} km déclarés) — vérification impossible.`,
+            link: `/fuel-consumption`,
+            deliveryId: undefined,
+            userId: fuelLog.vehicle?.driver?.userId ?? undefined,
+          });
+        }
+        return;
+      }
+    }
 
     if (gpsKm <= 0) {
       // B3 : on distingue désormais « aucune position GPS » (vraie absence de couverture)

@@ -1,4 +1,4 @@
-import { IsNumber, IsString, IsOptional, Min } from 'class-validator';
+import { IsNumber, IsString, IsOptional, Min, IsDateString } from 'class-validator';
 
 export class CreateFuelLogDto {
   @IsNumber()
@@ -13,7 +13,10 @@ export class CreateFuelLogDto {
   @Min(0)
   cost: number;
 
-  @IsString()
+  // IsDateString (au lieu d'IsString) : une chaîne invalide ("2026-13-99"…) passait la
+  // validation puis produisait un Invalid Date envoyé à Prisma → 500. Le front envoie
+  // toujours un ISO (toISOString), et les dates "YYYY-MM-DD" sont aussi acceptées.
+  @IsDateString()
   fillDate: string;
 
   @IsString()

@@ -607,6 +607,84 @@ describe('FuelConsumptionService', () => {
       });
       expect(mockNotifications.create).not.toHaveBeenCalled();
     });
+
+    it('GATE COUVERTURE : un trou GPS (app fermée) marque NON VÉRIFIABLE au lieu d\'une fausse anomalie', async () => {
+      // Période de 12 h entre deux pleins, mais les fixes ne couvrent que 2 × 5 min
+      // (2 trous de 6 h) → couverture ≈ 300+300 / 43200 ≈ 1.4% << 40%. La distance GPS
+      // (2 km) est un sous-comptage massif du kilométrage réel : le ratio manuel/GPS
+      // (150/2 = 75x) dépasserait le seuil 1.3 → FAUSSE anomalie AVANT le correctif.
+      const fuelLog = {
+        id: 'fuel-log-gap',
+        vehicleId: 'vehicle-a',
+        kilometers: 150,
+        fillDate: new Date('2026-07-25T12:00:00.000Z'),
+        vehicle: { licensePlate: 'TRK-A' },
+        gpsCoverageInsufficientFlag: false,
+        gpsCoverageInsufficientReason: null,
+      };
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({
+        fillDate: new Date('2026-07-25T00:00:00.000Z'),
+      });
+      // Fix 1 (00h00) → 1 km ; fix 2 (06h00, app fermée entre-temps) → +0 km ; fix 3 (12h00) → +1 km.
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([
+        { latitude: 0, longitude: 0, accuracy: null, speed: null, timestamp: new Date('2026-07-25T00:00:00.000Z') },
+        { latitude: 0, longitude: 0.00899, accuracy: null, speed: null, timestamp: new Date('2026-07-25T06:00:00.000Z') },
+        { latitude: 0, longitude: 0.01798, accuracy: null, speed: null, timestamp: new Date('2026-07-25T12:00:00.000Z') },
+      ]);
+
+      await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
+
+      // NON vérifiable (couverture), PAS une anomalie de kilométrage :
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith({
+        where: { id: 'fuel-log-gap' },
+        data: expect.objectContaining({
+          gpsCoverageInsufficientFlag: true,
+          gpsCoverageInsufficientReason: expect.stringContaining('Couverture GPS insuffisante'),
+        }),
+      });
+      // Aucun flag d'anomalie GPS (le détecteur n'écrit QUE sa propre paire).
+      const updateData = mockPrisma.fuelLog.update.mock.calls[0][0].data;
+      expect(updateData.gpsAnomalyFlag).toBeUndefined();
+      expect(mockNotifications.create).toHaveBeenCalledWith(
+        'company-1',
+        expect.objectContaining({
+          type: 'fuel_gps_coverage_missing',
+          priority: 'medium',
+        }),
+      );
+    });
+
+    it('GATE COUVERTURE : couverture suffisante (fixes réguliers) → le ratio anomalie s\'applique normalement', async () => {
+      const fuelLog = {
+        id: 'fuel-log-covered',
+        vehicleId: 'vehicle-a',
+        kilometers: 150,
+        fillDate: new Date('2026-07-25T12:00:00.000Z'),
+        vehicle: { licensePlate: 'TRK-A' },
+        gpsCoverageInsufficientFlag: false,
+      };
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({
+        fillDate: new Date('2026-07-25T00:00:00.000Z'),
+      });
+      // Fixes réguliers (10 min d'écart, couverture 100%) mais distance GPS faible :
+      // ratio 150/2 = 75x → vraie anomalie détectée.
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([
+        { latitude: 0, longitude: 0, accuracy: null, speed: null, timestamp: new Date('2026-07-25T00:00:00.000Z') },
+        { latitude: 0, longitude: 0.00899, accuracy: null, speed: null, timestamp: new Date('2026-07-25T00:10:00.000Z') },
+        { latitude: 0, longitude: 0.01798, accuracy: null, speed: null, timestamp: new Date('2026-07-25T00:20:00.000Z') },
+      ]);
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({ crossCheckThreshold: 1.3 });
+
+      await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
+
+      // L'anomalie est bien posée (couverture 100% : le ratio est fiable).
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ gpsAnomalyFlag: true }),
+        }),
+      );
+      expect(mockNotifications.create).toHaveBeenCalled();
+    });
   });
 
   // ----------------------------------------------------------------
