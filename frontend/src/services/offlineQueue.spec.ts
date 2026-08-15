@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import { enqueuePosition, flushQueue, queueSize, clearQueue } from './offlineQueue';
 
@@ -61,7 +61,6 @@ describe('offlineQueue', () => {
 
   it('handles maximum capacity of 5000 positions (≈4h offline)', async () => {
     // 5000 écritures IndexedDB séquentielles > 5s sous charge parallèle : timeout dédié.
-    vi.setConfig({ testTimeout: 30000 });
     for (let i = 0; i < 5000; i++) {
       await enqueuePosition({ latitude: -18.87 + i * 0.001, index: i });
     }
@@ -73,10 +72,9 @@ describe('offlineQueue', () => {
 
     size = await queueSize();
     expect(size).toBe(5000);
-  });
+  }, 30_000);
 
   it('evicts oldest only beyond 5000, and signals it explicitly (droppedOldest=true — never silent)', async () => {
-    vi.setConfig({ testTimeout: 30000 });
     for (let i = 0; i < 5000; i++) {
       await enqueuePosition({ index: i });
     }
@@ -95,10 +93,9 @@ describe('offlineQueue', () => {
     expect(flushedIndices[0]).toBe(1);
     expect(flushedIndices[flushedIndices.length - 1]).toBe(5000);
     expect(flushedIndices).not.toContain(0);
-  });
+  }, 30_000);
 
   it('does NOT evict below the 5000 cap (fidelity during realistic outages)', async () => {
-    vi.setConfig({ testTimeout: 30000 });
     // 3000 positions ≈ 2h30 de coupure à la cadence 3s : AUCUNE perte, droppedOldest=false.
     for (let i = 0; i < 3000; i++) {
       const res = await enqueuePosition({ index: i });
@@ -106,7 +103,7 @@ describe('offlineQueue', () => {
     }
     const size = await queueSize();
     expect(size).toBe(3000);
-  });
+  }, 30_000);
 
   it('handles concurrent enqueue and size check', async () => {
     await Promise.all([

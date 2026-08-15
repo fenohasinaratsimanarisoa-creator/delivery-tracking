@@ -92,6 +92,22 @@ public class LocationForegroundService extends Service {
     private static final long LOCATION_INTERVAL_MS = 3000L;
     private static final long LOCATION_FASTEST_INTERVAL_MS = 2000L;
 
+    /**
+     * Cadence d'acquisition RALENTIE à l'arrêt (véhicule immobile depuis un moment —
+     * livraison en cours de déchargement, pause, stationnement). Le coût batterie d'un
+     * fix GPS haute précision est quasi constant PAR FIX : à l'arrêt, une position
+     * toutes les 3 s n'apporte aucune information utile (le véhicule ne bouge pas) mais
+     * consomme autant qu'en mouvement. On passe à 20 s après ARRÊT_PROLONGÉ (délai de
+     * stabilisation) pour tenir une journée de 8 h sans recharge. Dès que le véhicule
+     * repart (vitesse > seuil), on repasse immédiatement à 3 s.
+     */
+    private static final long LOCATION_INTERVAL_SLOW_MS = 20_000L;
+    private static final long LOCATION_FASTEST_SLOW_MS = 15_000L;
+    /** Vitesse sous laquelle le véhicule est considéré à l'arrêt (~0.5 m/s ≈ 1.8 km/h). */
+    private static final float STATIONARY_SPEED_THRESHOLD_MS = 0.5f;
+    /** Délai d'arrêt continu avant de passer en cadence lente (évite le flap aux feux rouges). */
+    private static final long STATIONARY_SWITCH_DELAY_MS = 90_000L;
+
     /** Délai du redémarrage de secours après un balayage des tâches récentes. */
     private static final long TASK_REMOVED_RESTART_DELAY_MS = 1000L;
 
@@ -239,6 +255,11 @@ public class LocationForegroundService extends Service {
     private FusedLocationProviderClient fusedLocationClient;
     private LocationRequest locationRequest;
     private LocationCallback locationCallback;
+
+    /** Cadence actuelle : true = mode lent (à l'arrêt), false = mode rapide (3 s). */
+    private boolean slowAcquisitionMode = false;
+    /** Dernier instant où le véhicule était en mouvement (pour le délai de stabilisation). */
+    private long lastMovingTimestamp = 0L;
 
     @Override
     public void onCreate() {
@@ -411,6 +432,13 @@ public class LocationForegroundService extends Service {
         if (locationCallback != null) {
             fusedLocationClient.removeLocationUpdates(locationCallback);
         }
+        // Référence de départ du compteur d'arrêt : un véhicule immobile DÈS le début
+        // (livraison en cours de chargement le matin) doit lui aussi passer en cadence
+        // lente après le délai de stabilisation — sans dernier mouvement connu, la
+        // condition lastMovingTimestamp > 0 resterait fausse et le mode lent ne
+        // s'activerait jamais.
+        lastMovingTimestamp = System.currentTimeMillis();
+        slowAcquisitionMode = false;
         locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, LOCATION_INTERVAL_MS)
             .setMinUpdateIntervalMillis(LOCATION_FASTEST_INTERVAL_MS)
             .build();
@@ -425,12 +453,55 @@ public class LocationForegroundService extends Service {
                     return;
                 }
                 latestLocation = location;
+                adaptAcquisitionInterval(location);
                 for (LocationSink sink : LOCATION_SINKS) {
                     sink.onLocationUpdate(location);
                 }
             }
         };
         fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
+    }
+
+    /**
+     * ACQUISITION ADAPTATIVE (économie batterie 8 h) : à l'arrêt prolongé (> 90 s sans
+     * déplacement), on ralentit la demande de fixes à 20 s (au lieu de 3 s) — le fix GPS
+     * coûte la même énergie à l'arrêt qu'en mouvement, mais n'apporte aucune information
+     * utile. Dès que le véhicule repart, retour immédiat à 3 s. La transition se fait en
+     * re-requestant FusedLocationProviderClient avec un nouveau LocationRequest : le
+     * même callback remplace la demande active (aucun callback dupliqué).
+     */
+    private void adaptAcquisitionInterval(Location location) {
+        boolean isMoving = location.hasSpeed() && location.getSpeed() > STATIONARY_SPEED_THRESHOLD_MS;
+        if (isMoving) {
+            lastMovingTimestamp = System.currentTimeMillis();
+        }
+        boolean shouldBeSlow =
+            !isMoving
+                && lastMovingTimestamp > 0
+                && (System.currentTimeMillis() - lastMovingTimestamp) > STATIONARY_SWITCH_DELAY_MS;
+
+        if (shouldBeSlow == slowAcquisitionMode) {
+            return; // aucun changement de cadence
+        }
+        slowAcquisitionMode = shouldBeSlow;
+        try {
+            locationRequest = new LocationRequest.Builder(
+                Priority.PRIORITY_HIGH_ACCURACY,
+                shouldBeSlow ? LOCATION_INTERVAL_SLOW_MS : LOCATION_INTERVAL_MS
+            )
+                .setMinUpdateIntervalMillis(
+                    shouldBeSlow ? LOCATION_FASTEST_SLOW_MS : LOCATION_FASTEST_INTERVAL_MS
+                )
+                .build();
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                Looper.getMainLooper()
+            );
+        } catch (Exception e) {
+            // Échec de re-request (rare) : on conserve la cadence précédente, le
+            // prochain fix retentera.
+        }
     }
 
     private void stopLocationUpdates() {

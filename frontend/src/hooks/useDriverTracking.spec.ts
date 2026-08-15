@@ -19,6 +19,11 @@ const socketEmits: Array<{ event: string; payload?: unknown }> = [];
 const emittedAt: number[] = [];
 const socketHandlers: Record<string, (data?: any) => void> = {};
 let socketConnected = false;
+// Compteurs de souscription : le test de session 8h vérifie qu'AUCUN listener
+// socket ne s'accumule au fil des heures (fuite mémoire = chaque re-render ou
+// chaque reconnexion qui re-souscrit SANS nettoyer).
+let socketOnCalls = 0;
+let socketOnceCalls = 0;
 
 // Fausse file IndexedDB observable : les tests B/C vérifient qu'aucune position
 // n'est perdue via queueSize() (positions mise en file pendant un envoi en cours).
@@ -31,9 +36,9 @@ vi.mock('../services/socket/socket', () => ({
       socketEmits.push({ event, payload });
       if (event === 'updatePosition') emittedAt.push(Date.now());
     },
-    on: (event: string, handler: (data?: any) => void) => { socketHandlers[event] = handler; },
+    on: (event: string, handler: (data?: any) => void) => { socketOnCalls++; socketHandlers[event] = handler; },
     off: vi.fn(),
-    once: (event: string, handler: (data?: any) => void) => { socketHandlers[event] = handler; },
+    once: (event: string, handler: (data?: any) => void) => { socketOnceCalls++; socketHandlers[event] = handler; },
   }),
 }));
 
@@ -97,6 +102,8 @@ describe('useDriverTracking core logic', () => {
     socketEmits.length = 0;
     emittedAt.length = 0;
     fakeQueue.length = 0;
+    socketOnCalls = 0;
+    socketOnceCalls = 0;
     nativeLocationHandler.current = null;
     nativeSubscriptions.length = 0;
     Object.keys(socketHandlers).forEach((k) => delete socketHandlers[k]);
@@ -497,6 +504,72 @@ describe('useDriverTracking core logic', () => {
     await act(async () => {});
     expect(offlineQueue.flushQueue).toHaveBeenCalled();
     expect(await offlineQueue.queueSize()).toBe(0);
+  });
+
+  it('Test 8h : session longue accélérée — AUCUNE fuite de listeners socket, positions continues de la 1ère à la 8ème heure', async () => {
+    vi.useRealTimers();
+    socketConnected = true;
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/drivers/profile') {
+        return Promise.resolve({
+          data: { id: 'd1', firstName: 'A', lastName: 'B', vehicle: { id: 'v1', brand: 'X', model: 'Y', licensePlate: 'Z', positionSource: 'phone' } },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 1600)); }); // startTracking
+
+    vi.useFakeTimers();
+    const nativeHandler = nativeLocationHandler.current!;
+    // Référence de fuite : les listeners PERSISTANTS (.on) enregistrés après le
+    // démarrage complet. Les .once('positionSaved') sont one-shot PAR ENVOI (un par
+    // position, auto-nettoyés par socket.io au déclenchement) — ce n'est pas une
+    // fuite, on ne les compte pas.
+    const onCallsAtStart = socketOnCalls;
+    // Nombre de positions émises : le pipeline doit être actif de la 1ère à la 8ème heure.
+    const updateEmits = () => socketEmits.filter((e) => e.event === 'updatePosition').length;
+    const emitsBefore = updateEmits();
+
+    // Session 8h simulée : une position native "en mouvement" toutes les 30 min
+    // (cadence réelle = 3s en mouvement, mais on échantillonne par paliers pour
+    // accélérer le test). Chaque position est acquittée par positionSaved.
+    for (let h = 0; h < 8; h++) {
+      act(() => {
+        nativeHandler({ latitude: -18.8792 + h * 0.001, longitude: 47.5079 + h * 0.001, speed: 12, heading: 0, altitude: 0, accuracy: 10 });
+      });
+      act(() => { socketHandlers['positionSaved']?.({ id: `pos-${h}`, suspect: false }); });
+      // 30 min simulées par palier (le throttle 2s est largement dépassé).
+      act(() => { vi.advanceTimersByTime(30 * 60 * 1000); });
+    }
+
+    // 1) AUCUNE fuite de listeners persistants : le hook n'a PAS re-souscrit aux
+    //    événements socket (.on) pendant 8h d'activité — chaque re-souscription non
+    //    nettoyée serait une accumulation mémoire (le cleanup du useEffect retire les
+    //    listeners au démontage ; un re-render ne doit pas les re-empiler).
+    expect(socketOnCalls).toBe(onCallsAtStart);
+    //    Aucune accumulation d'abonnements natifs non plus (le sink Capacitor n'est
+    //    enregistré qu'une fois, pas à chaque position).
+    expect(nativeSubscriptions.length).toBe(1);
+
+    // 2) Positions émises dès la 1ère heure simulée (la boucle ci-dessus a déjà
+    //    envoyé au moins la position native de la 1ère itération + les ticks
+    //    d'intervalle de 30 min simulées) : le pipeline n'est PAS resté muet.
+    expect(updateEmits()).toBeGreaterThan(emitsBefore);
+    // 3) La 8ème heure émet TOUJOURS (pas de dégradation de cadence) : une position
+    //    envoyée après 8h simulées part bien au serveur. Selon l'instant exact, elle
+    //    est soit émise immédiatement (throttle passé), soit mise en file locale
+    //    (throttle 2s actif) — dans les DEUX cas elle n'est JAMAIS perdue.
+    const emitsBeforeLast = updateEmits();
+    const queueBeforeLast = fakeQueue.length;
+    act(() => {
+      nativeHandler({ latitude: -18.89, longitude: 47.52, speed: 13, heading: 0, altitude: 0, accuracy: 10 });
+    });
+    const emittedNow = updateEmits() - emitsBeforeLast;
+    const queuedNow = fakeQueue.length - queueBeforeLast;
+    expect(emittedNow + queuedNow).toBeGreaterThanOrEqual(1);
   });
 
   it('Test cadence : 5 min simulées de positions natives (2s) → intervalle moyen entre positions émises ≤ 3s', async () => {
