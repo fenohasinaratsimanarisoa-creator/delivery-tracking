@@ -296,11 +296,16 @@ jobs:
         working-directory: ./frontend
         run: npm ci
 
-      # capacitor-cordova-android-plugins/ est gitignoré et généré par cap sync :
-      # sans cette étape, le build échoue (cordova.variables.gradle absent en CI).
+      # capacitor-cordova-android-plugins/ et app/src/main/assets/* sont gitignorés
+      # et générés par cap sync : sans cette étape le build échoue en CI
+      # (cordova.variables.gradle et capacitor.config.json absents). En mode
+      # server.url cap sync ne copie pas les web assets et n'écrit pas la config
+      # si le dossier assets n'existe pas — on le crée d'abord.
       - name: Sync Capacitor plugins
         working-directory: ./frontend
-        run: npx cap sync android
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx cap sync android
 
       - name: Compute next version
         id: version
