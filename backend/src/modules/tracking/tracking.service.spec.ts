@@ -556,6 +556,26 @@ describe('TrackingService', () => {
         }),
       );
     });
+
+    it('Scenario 5 — accuracy aberrante (100m) d\'un traceur inconnu : la téléportation reste DÉTECTÉE (scale accuracy plafonné)', async () => {
+      setupLastPos(0, 0, 5);
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'gps-cap', suspect: true });
+
+      // Saut ~500m en 5s ≈ 100 m/s : > seuil plafonné (55.56 × 1.5 = 83 m/s) mais
+      // < seuil NON plafonné (55.56 × 10 = 555 m/s pour accuracy 100m). Sans le cap
+      // GPS_NOISE_MAX_ACCURACY_SCALE, un vrai saut GPS passait suspect=false → faux négatif.
+      const result = await service.savePosition(DRIVER, {
+        latitude: 0.0045,
+        longitude: 0,
+        speed: 5,
+        timestamp: baseTs.toISOString(),
+        vehicleId: VID,
+        accuracy: 100,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.suspect).toBe(true);
+    });
   });
 
   describe('savePosition with alerts', () => {

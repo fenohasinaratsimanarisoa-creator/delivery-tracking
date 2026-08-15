@@ -1,4 +1,4 @@
-import { haversineDistance } from './geo.utils';
+import { haversineDistance, GPS_NOISE_MAX_ACCURACY_SCALE } from './geo.utils';
 
 // Constantes de détection de téléportation — SOURCE UNIQUE DE VÉRITÉ, partagée entre
 // le chemin temps réel (savePosition) et le chemin batch (saveBatch, rattrapage réseau
@@ -50,8 +50,17 @@ export function evaluateTeleportation(
   const speedMs = distance / timeDiffSec;
 
   // Si l'accuracy est dégradée, l'apparente téléportation peut être du bruit GPS :
-  // les seuils sont échelonnés par l'accuracy (même échelle que computeFilteredDistance).
-  const accuracyScale = accuracy ? Math.max(1, accuracy / 10) : 1;
+  // les seuils sont échelonnés par l'accuracy (même échelle que computeFilteredDistance),
+  // MAIS PLAFONNÉS (GPS_NOISE_MAX_ACCURACY_SCALE = 1.5 — cohérent avec le filtre de bruit
+  // geo.utils, source unique). Sans plafond, un traceur inconnu rapportant une accuracy
+  // aberrante (ex. 500m, ou le repli 50m de computeCombinedAccuracy pour un device sans
+  // accuracy) gonflait le seuil de vitesse à x5-50 (277-2778 m/s) → la détection de
+  // téléportation était désactivée EN PRATIQUE (faux négatifs : vrais sauts GPS non
+  // signalés). Le plafond 1.5 borne le seuil à 83 m/s (300 km/h) — jamais atteint par un
+  // véhicule réel (aucun faux positif), mais un vrai saut reste toujours détecté.
+  const accuracyScale = accuracy
+    ? Math.max(1, Math.min(accuracy / 10, GPS_NOISE_MAX_ACCURACY_SCALE))
+    : 1;
   const adjustedSpeedThreshold = TELEPORT_SPEED_THRESHOLD_MS * accuracyScale;
   const adjustedDistanceThreshold = TELEPORT_DISTANCE_THRESHOLD_M * accuracyScale;
 

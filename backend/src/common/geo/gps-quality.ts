@@ -1,5 +1,20 @@
 const HDOP_UERE = 5;
 
+// Plafond plausible d'un HDOP GPS réel : les valeurs typiques vont de 0,5 (excellent) à
+// ~10 (urbain dense / canyon). Certains traceurs bas de gamme renvoient dans `hdop` une
+// valeur non standard (puissance de signal, compteur, unité différente) qui peut atteindre
+// 100-1000 — l'interpréter comme un vrai HDOP gonflerait l'accuracy dérivée jusqu'à rejeter
+// la position par la validation DTO (accuracy @Max(1000)). Au-delà de 50, la valeur n'est
+// PAS un HDOP exploitable : on l'ignore (repli sur l'accuracy device/50).
+const MAX_PLAUSIBLE_HDOP = 50;
+
+// Plafond d'accuracy retournée, ALIGNÉ sur UpdatePositionDto.accuracy @Max(1000) : sans ce
+// clamp, une accuracy dérivée > 1000 (device ou hdop aberrant) faisait REJETER la position
+// par validateSync() dans handlePosition — un traceur inconnu perdait silencieusement ses
+// positions. La position est conservée avec accuracy=1000 (confiance minimale), jamais
+// rejetée pour cette raison.
+const MAX_ACCURACY_M = 1000;
+
 export function computeConfidence(
   accuracy: number | undefined,
   suspect: boolean,
@@ -46,16 +61,26 @@ export function computeCombinedAccuracy(
   if (attributes?.hdop !== undefined) {
     const hdop = Number(attributes.hdop);
     if (!isNaN(hdop) && hdop > 0 && isFinite(hdop)) {
-      const fromHdop = Math.round(hdop * HDOP_UERE);
-      hdopInfo += `, hdop=${hdop}→${fromHdop}m`;
+      if (hdop <= MAX_PLAUSIBLE_HDOP) {
+        const fromHdop = Math.round(hdop * HDOP_UERE);
+        hdopInfo += `, hdop=${hdop}→${fromHdop}m`;
 
-      if (fromHdop > accuracy) {
-        accuracy = fromHdop;
-        hdopInfo += ' (retenu)';
+        if (fromHdop > accuracy) {
+          accuracy = fromHdop;
+          hdopInfo += ' (retenu)';
+        } else {
+          hdopInfo += ' (device plus precis)';
+        }
       } else {
-        hdopInfo += ' (device plus precis)';
+        hdopInfo += `, hdop=${hdop} hors plage plausible (ignoré)`;
       }
     }
+  }
+
+  // Clamp final aligné sur le DTO (voir MAX_ACCURACY_M) : jamais d'accuracy > 1000.
+  if (accuracy > MAX_ACCURACY_M) {
+    accuracy = MAX_ACCURACY_M;
+    hdopInfo += ' (clamp 1000)';
   }
 
   return { accuracy, hdopInfo };

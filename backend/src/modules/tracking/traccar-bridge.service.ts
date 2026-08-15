@@ -51,6 +51,12 @@ const PENDING_POSITIONS_RETENTION_MS = 3600000;
 const SILENT_DEVICE_CHECK_INTERVAL_MS = 60000;
 const TRACCAR_HEALTH_CHECK_INTERVAL_MS = 300000;
 const NEVER_CONNECTED_GRACE_PERIOD_MS = 30 * 60 * 1000;
+// Tolérance de dérive d'horloge AVANCE (traceurs bon marché à RTC mal synchronisée) :
+// un fixTime dans le futur de plus de 300s est recadré sur l'heure serveur. Aligné sur
+// `filter.future=300` de traccar/traccar.xml (dev auto-hébergé) — mais PAS garanti actif
+// sur Traccar Cloud en production : le garde côté bridge est défense en profondeur, valable
+// quel que soit le protocole source (aucune hypothèse de marque).
+const TRACCAR_FUTURE_SKEW_TOLERANCE_MS = 5 * 60 * 1000; // 300s, aligné sur filter.future
 const LEADER_KEY = 'traccar:bridge:leader';
 const LEADER_TTL_S = 30;
 const LEADER_RENEW_INTERVAL_MS = 20000;
@@ -1230,6 +1236,21 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     if (isNaN(date.getTime())) {
       this.logger.warn(
         `Traccar device ${pos.deviceId}: invalid timestamp "${raw}" — using server time`,
+      );
+      return new Date();
+    }
+    // Dérive d'horloge AVANCE : un fixTime dans le futur de plus de
+    // TRACCAR_FUTURE_SKEW_TOLERANCE_MS est recadré sur l'heure serveur (le point est
+    // CONSERVÉ, seule sa date est corrigée — aucune perte). Sans ce garde :
+    //  - getLivePositions affiche minutes_ago négatif (véhicule « dans le futur » sur la carte) ;
+    //  - la détection offline (now - lastPos.timestamp) devient négative → le device n'est
+    //    JAMAIS signalé hors-ligne, même totalement silencieux ;
+    //  - quand l'horloge du device se resynchronise, les timestamps repassent en arrière →
+    //    chaque fix suivant est marqué suspect 'non_croissant' à tort.
+    const skewMs = date.getTime() - Date.now();
+    if (skewMs > TRACCAR_FUTURE_SKEW_TOLERANCE_MS) {
+      this.logger.warn(
+        `Traccar device ${pos.deviceId}: fixTime in the future by ${Math.round(skewMs / 1000)}s — clamping to server time`,
       );
       return new Date();
     }
