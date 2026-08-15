@@ -4,15 +4,18 @@ import {
   ConflictException,
   BadRequestException,
   Logger,
+  Inject,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import Redis from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { TotpService } from './totp.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Verify2faDto } from './dto/two-factor.dto';
@@ -25,6 +28,15 @@ export class AuthService {
   private readonly accessExpiration: jwt.SignOptions['expiresIn'];
   private readonly refreshExpiration: jwt.SignOptions['expiresIn'];
   private readonly tempTokenExpiration: jwt.SignOptions['expiresIn'] = '5m';
+  // Durée de vie des UserSession : alignée sur JWT_REFRESH_EXPIRATION (avant :
+  // 7 jours codés en dur, incohérents si la config changeait).
+  private readonly refreshExpirationSeconds: number;
+  // Verrouillage par compte (défense brute-force au-delà du throttle par IP) :
+  // N échecs de mot de passe dans une fenêtre → compte bloqué pour la fenêtre.
+  // Uniquement actif si Redis est disponible ; les échecs ne doivent JAMAIS
+  // lever d'erreur Redis (le login ne doit pas tomber à cause du lockout).
+  private readonly loginFailWindowSeconds = 15 * 60;
+  private readonly loginFailMaxAttempts = 15;
   private dummyHash: string | null = null;
 
   constructor(
@@ -33,6 +45,7 @@ export class AuthService {
     private configService: ConfigService,
     private emailService: EmailService,
     private totpService: TotpService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis | null,
   ) {
     this.accessExpiration = this.configService.get<string>(
       'JWT_ACCESS_EXPIRATION',
@@ -42,6 +55,64 @@ export class AuthService {
       'JWT_REFRESH_EXPIRATION',
       '7d',
     ) as jwt.SignOptions['expiresIn'];
+    this.refreshExpirationSeconds = this.parseExpirationSeconds(this.refreshExpiration);
+  }
+
+  private parseExpirationSeconds(expiration: string | number | undefined): number {
+    if (typeof expiration === 'number') return expiration;
+    if (typeof expiration !== 'string') return 7 * 24 * 60 * 60;
+    const match = /^(\d+)([smhd])$/.exec(expiration);
+    if (!match) return 7 * 24 * 60 * 60;
+    const value = parseInt(match[1], 10);
+    const multiplier: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+    return value * (multiplier[match[2]] || 60);
+  }
+
+  private loginFailKey(email: string): string {
+    // Email haché (PII) : la clé Redis ne contient jamais l'email en clair.
+    const hash = crypto.createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
+    return `login_fail:${hash.slice(0, 32)}`;
+  }
+
+  /**
+   * Refuse le login si le compte est déjà verrouillé (échecs répétés).
+   * Ne doit jamais échouer sur une erreur Redis : sans Redis, pas de lockout.
+   */
+  private async checkLoginLockout(email: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const count = await this.redis.get(this.loginFailKey(email));
+      if (count && parseInt(count, 10) >= this.loginFailMaxAttempts) {
+        throw new UnauthorizedException(
+          'Too many failed login attempts. Please try again later.',
+        );
+      }
+    } catch (err) {
+      if (err instanceof UnauthorizedException) throw err;
+      // Erreur Redis → on laisse passer (défense en profondeur, jamais bloquant).
+    }
+  }
+
+  private async recordLoginFailure(email: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const key = this.loginFailKey(email);
+      const count = await this.redis.incr(key);
+      if (count === 1) {
+        await this.redis.expire(key, this.loginFailWindowSeconds);
+      }
+    } catch {
+      // Erreur Redis → on ne bloque jamais le login pour ça.
+    }
+  }
+
+  private async clearLoginFailures(email: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      await this.redis.del(this.loginFailKey(email));
+    } catch {
+      // ignore
+    }
   }
 
   private getDummyHash(): string {
@@ -94,6 +165,12 @@ export class AuthService {
 
   async login(dto: LoginDto, ip?: string, userAgent?: string): Promise<TokenResponse> {
     dto.email = dto.email.toLowerCase().trim();
+
+    // Verrouillage par compte : vérifié AVANT le travail bcrypt (un compte
+    // verrouillé ne consomme même pas de CPU) et sans révéler l'existence du
+    // compte (le lockout est clé par email, y compris pour les emails inconnus).
+    await this.checkLoginLockout(dto.email);
+
     const user = await this.prisma.user.findFirst({
       where: { email: dto.email, deletedAt: null },
     });
@@ -105,8 +182,13 @@ export class AuthService {
       user?.passwordHash || this.getDummyHash(),
     );
     if (!user || !user.isActive || !isPasswordValid) {
+      // Comptabilise l'échec pour le lockout par compte (jamais bloquant).
+      await this.recordLoginFailure(dto.email);
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    // Mot de passe valide → on efface l'historique d'échecs de ce compte.
+    await this.clearLoginFailures(dto.email);
 
     if (user.totpEnabled) {
       const tempToken = this.jwtService.sign(
@@ -143,7 +225,7 @@ export class AuthService {
         userId: user.id,
         device: userAgent,
         ip,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + this.refreshExpirationSeconds * 1000),
       },
     });
 
@@ -185,7 +267,7 @@ export class AuthService {
         userId: user.id,
         device: userAgent,
         ip,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + this.refreshExpirationSeconds * 1000),
       },
     });
 
@@ -255,14 +337,13 @@ export class AuthService {
           // multi-onglets (celle-ci est couverte par previousRefreshTokenHash).
           // On ne révoque QUE CETTE session (avant : deleteMany sur userId, qui
           // révoquait TOUTES les sessions — y compris un appareil qui venait de
-          // se connecter légitimement). Une IP très différente de celle de la
-          // session est signalée pour investigation (replay suspect).
-          if (session.ip && ip && session.ip !== ip) {
-            this.logger.warn(
-              `[auth] refresh reuse suspect: session=${sessionId} user=${session.user.id} ` +
-                `ip=${ip} sessionIp=${session.ip}`,
-            );
-          }
+          // se connecter légitimement). Un rejeu est TOUJOURS signalé, même à
+          // IP identique (un voleur derrière le même NAT/proxy passerait sinon
+          // inaperçu) ; la comparaison d'IP est conservée pour le contexte.
+          this.logger.warn(
+            `[auth] refresh token REUSE detected (possible theft): session=${sessionId} ` +
+              `user=${session.user.id} ip=${ip || 'unknown'} sessionIp=${session.ip || 'unknown'}`,
+          );
           await tx.userSession.update({
             where: { id: sessionId },
             data: { refreshTokenHash: null, previousRefreshTokenHash: null },
@@ -551,7 +632,7 @@ export class AuthService {
         SET previous_refresh_token_hash = refresh_token_hash,
             refresh_token_hash = ${refreshTokenHash},
             last_activity = now(),
-            expires_at = GREATEST(expires_at, now() + interval '7 days')
+            expires_at = GREATEST(expires_at, now() + make_interval(secs => ${this.refreshExpirationSeconds}))
         WHERE id = ${sessionId}::uuid AND user_id = ${userId}::uuid
       `;
       if (rotated === 0) {
@@ -568,7 +649,7 @@ export class AuthService {
         data: {
           userId,
           refreshTokenHash,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          expiresAt: new Date(Date.now() + this.refreshExpirationSeconds * 1000),
         },
       });
     }

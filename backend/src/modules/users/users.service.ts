@@ -337,6 +337,11 @@ export class UsersService {
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.password) {
       data.passwordHash = await bcrypt.hash(dto.password, 10);
+      // Réinitialisation du mot de passe PAR UN ADMIN : on révoque TOUTES les
+      // sessions de l'utilisateur (refreshTokenHash purgé + lignes UserSession
+      // supprimées), sinon un compte compromis resterait connecté 7 jours après
+      // le changement — la même garantie que changePassword() (auto-service).
+      data.refreshTokenHash = null;
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -355,6 +360,12 @@ export class UsersService {
           createdAt: true,
         },
       });
+
+      // Mot de passe modifié → purge des sessions existantes (refresh tokens
+      // morts). Les access tokens meurent à leur expiration (≤ 15 min).
+      if (dto.password) {
+        await tx.userSession.deleteMany({ where: { userId: id } });
+      }
 
       if (targetRole === 'driver') {
         // On garantit l'existence d'un record Driver pour TOUT utilisateur passé

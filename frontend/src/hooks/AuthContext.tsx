@@ -49,6 +49,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (urlToken) {
       const u = userFromToken(urlToken);
       if (u) {
+        // Le token d'impersonation ne doit JAMAIS rester dans l'URL : l'historique
+        // du navigateur, un referrer ou un screenshot le conserveraient sinon.
+        // On le retire immédiatement après lecture (l'app reste fonctionnelle,
+        // le token est déjà en sessionStorage).
+        try {
+          const url = new URL(window.location.href);
+          if (url.searchParams.has('token')) {
+            url.searchParams.delete('token');
+            window.history.replaceState(null, '', url.toString());
+          }
+        } catch {
+          // ignore
+        }
         setAccessToken(urlToken);
         setUser(u);
         setIsInitializing(false);

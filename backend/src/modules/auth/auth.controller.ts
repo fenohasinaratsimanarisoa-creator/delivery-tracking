@@ -478,7 +478,12 @@ export class AuthController {
         const relayId = req.query && typeof req.query.state === 'string' ? req.query.state : null;
 
         const tokenParam = encodeURIComponent(user.accessToken);
-        res.cookie('refreshToken', user.refreshToken || '', refreshOpts);
+        // Cookie posé UNIQUEMENT si le refresh token existe réellement : un
+        // cookie vide provoquerait des erreurs « Refresh token not found »
+        // confuses côté client.
+        if (user.refreshToken) {
+          res.cookie('refreshToken', user.refreshToken, refreshOpts);
+        }
 
         const configuredSecret = this.configService.get<string>('CSRF_SECRET');
         const secret = configuredSecret || getDevFallbackSecret();

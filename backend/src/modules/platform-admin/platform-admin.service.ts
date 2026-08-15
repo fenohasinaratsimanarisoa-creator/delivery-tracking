@@ -17,6 +17,18 @@ export class PlatformAdminService {
   private readonly refreshExpiration: jwt.SignOptions['expiresIn'];
   private readonly tempTokenExpiration: jwt.SignOptions['expiresIn'] = '5m';
 
+  /**
+   * Secret des temp-tokens 2FA : même convention que le flux utilisateur
+   * (JWT_2FA_TEMP_SECRET, repli sur JWT_ACCESS_SECRET). Avant : JWT_ACCESS_SECRET
+   * en dur, ce qui signait des tokens de natures différentes avec le même secret.
+   */
+  private get2faTempSecret(): string {
+    return this.configService.get<string>(
+      'JWT_2FA_TEMP_SECRET',
+      this.configService.get<string>('JWT_ACCESS_SECRET')!,
+    )!;
+  }
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -72,7 +84,7 @@ export class PlatformAdminService {
     const tempToken = this.jwtService.sign(
       { sub: admin.id, scope: '2fa_pending' },
       {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
+        secret: this.get2faTempSecret(),
         expiresIn: this.tempTokenExpiration,
       },
     );
@@ -96,7 +108,7 @@ export class PlatformAdminService {
     let payload: { sub: string; scope: string };
     try {
       payload = this.jwtService.verify<{ sub: string; scope: string }>(dto.tempToken, {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
+        secret: this.get2faTempSecret(),
         algorithms: ['HS256'],
       });
     } catch {
@@ -521,7 +533,7 @@ export class PlatformAdminService {
     let payload: { sub: string; scope: string };
     try {
       payload = this.jwtService.verify<{ sub: string; scope: string }>(tempToken, {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
+        secret: this.get2faTempSecret(),
         algorithms: ['HS256'],
       });
     } catch {

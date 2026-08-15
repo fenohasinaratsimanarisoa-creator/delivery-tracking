@@ -1,4 +1,5 @@
 import { IsEmail, IsOptional, IsString, MinLength, MaxLength, Matches } from 'class-validator';
+import { MaxByteLength } from '../../../common/validators/max-byte-length';
 
 export class UpdateProfileDto {
   @IsString()
@@ -26,7 +27,7 @@ export class ChangePasswordDto {
 
   @IsString()
   @MinLength(12)
-  @MaxLength(128)
+  @MaxByteLength(72)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
     message:
       'Password must contain at least 12 characters, one uppercase, one lowercase, one number, and one special character',

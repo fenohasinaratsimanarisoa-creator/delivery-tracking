@@ -1,5 +1,6 @@
 import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 import { UserRole } from '@prisma/client';
+import { MaxByteLength } from '../../../common/validators/max-byte-length';
 
 export class UpdateUserDto {
   @IsEmail()
@@ -8,6 +9,7 @@ export class UpdateUserDto {
 
   @IsString()
   @MinLength(8)
+  @MaxByteLength(72)
   @IsOptional()
   password?: string;
 

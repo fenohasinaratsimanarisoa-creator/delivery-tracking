@@ -62,6 +62,30 @@ async function bootstrap() {
     );
   }
 
+  // Secrets JWT : même garde-fou que CSRF_SECRET / ENCRYPTION_KEY. Sans eux, le
+  // JwtModule s'enregistre avec un secret undefined et les premiers sign()
+  // échouent au runtime avec des erreurs cryptiques. En prod, échec au boot ;
+  // en dev, simple avertissement (valeurs par défaut tolérées).
+  const jwtAccessSecret = configService.get<string>('JWT_ACCESS_SECRET');
+  const jwtRefreshSecret = configService.get<string>('JWT_REFRESH_SECRET');
+  if (nodeEnv === 'production') {
+    if (!jwtAccessSecret || !jwtRefreshSecret) {
+      throw new Error(
+        'JWT_ACCESS_SECRET and JWT_REFRESH_SECRET are required in production. ' +
+          'Generate them with: openssl rand -hex 64',
+      );
+    }
+    if (jwtAccessSecret === jwtRefreshSecret) {
+      app
+        .get(Logger)
+        .warn('[STARTUP] JWT_ACCESS_SECRET and JWT_REFRESH_SECRET are IDENTICAL — use distinct secrets');
+    }
+  } else if (!jwtAccessSecret || !jwtRefreshSecret) {
+    app.get(Logger).warn(
+      '[STARTUP] JWT_ACCESS_SECRET / JWT_REFRESH_SECRET not set — JWT signing will fail. Set them in .env.',
+    );
+  }
+
   app.use(
     helmet({
       hsts: {

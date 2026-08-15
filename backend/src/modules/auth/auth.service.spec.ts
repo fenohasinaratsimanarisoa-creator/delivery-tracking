@@ -8,6 +8,7 @@ import { AuthService } from './auth.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { TotpService } from './totp.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Verify2faDto } from './dto/two-factor.dto';
@@ -109,6 +110,7 @@ describe('AuthService', () => {
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EmailService, useValue: mockEmailService },
         { provide: TotpService, useValue: mockTotpService },
+        { provide: REDIS_CLIENT, useValue: null },
       ],
     }).compile();
 
@@ -1176,6 +1178,101 @@ describe('AuthService', () => {
       // deleteMany(userId) tuait tous les appareils lors d'un vol de token).
       expect(mockTx.userSession.deleteMany).not.toHaveBeenCalled();
       expect(mockTx.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('login lockout (par compte, Redis)', () => {
+    const dto: LoginDto = { email: 'test@test.com', password: 'ValidPass123!' };
+
+    const buildServiceWithRedis = async (redis: any) => {
+      jest.clearAllMocks();
+      jest
+        .spyOn(crypto, 'randomBytes')
+        .mockReturnValue(
+          Buffer.from('6d6f636b5f746f6b656e5f70616464696e675f686572655f', 'hex') as any,
+        );
+      mockConfigService.get.mockImplementation((key: string, defaultValue?: string) => {
+        const config: Record<string, string> = {
+          JWT_ACCESS_SECRET: 'access-secret',
+          JWT_REFRESH_SECRET: 'refresh-secret',
+          JWT_2FA_TEMP_SECRET: 'temp-token-secret',
+          JWT_ACCESS_EXPIRATION: '15m',
+          JWT_REFRESH_EXPIRATION: '7d',
+        };
+        return config[key] ?? defaultValue;
+      });
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          AuthService,
+          { provide: PrismaService, useValue: mockPrisma },
+          { provide: JwtService, useValue: mockJwtService },
+          { provide: ConfigService, useValue: mockConfigService },
+          { provide: EmailService, useValue: mockEmailService },
+          { provide: TotpService, useValue: mockTotpService },
+          { provide: REDIS_CLIENT, useValue: redis },
+        ],
+      }).compile();
+      return module.get<AuthService>(AuthService);
+    };
+
+    it('refuse le login d’un compte verrouillé SANS bcrypt.compare ni accès DB', async () => {
+      const redis = {
+        get: jest.fn().mockResolvedValue('15'),
+        incr: jest.fn(),
+        expire: jest.fn(),
+        del: jest.fn(),
+      };
+      const svc = await buildServiceWithRedis(redis);
+
+      await expect(svc.login(dto)).rejects.toThrow(UnauthorizedException);
+      expect(bcrypt.compare).not.toHaveBeenCalled();
+      expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('comptabilise les échecs (incr + expire) puis déverrouille après un login réussi', async () => {
+      const redis = {
+        get: jest.fn().mockResolvedValue(null),
+        incr: jest.fn().mockResolvedValue(3),
+        expire: jest.fn(),
+        del: jest.fn().mockResolvedValue(1),
+      };
+      const svc = await buildServiceWithRedis(redis);
+
+      // Échec (compte inconnu) → incrémente le compteur clé par email HACHÉ.
+      mockPrisma.user.findFirst.mockResolvedValueOnce(null);
+      await expect(svc.login(dto)).rejects.toThrow(UnauthorizedException);
+      expect(redis.incr).toHaveBeenCalledWith(expect.stringMatching(/^login_fail:[0-9a-f]{32}$/));
+
+      // Succès → purge du compteur d'échecs.
+      mockPrisma.user.findFirst.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'test@test.com',
+        passwordHash: 'hashed_password',
+        firstName: 'John',
+        lastName: 'Doe',
+        role: 'admin',
+        companyId: 'comp-1',
+        isActive: true,
+        totpEnabled: false,
+        totpSecret: null,
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
+      mockPrisma.userSession.create.mockResolvedValueOnce({ id: 'session-1' });
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ firstName: 'John', lastName: 'Doe' })
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          email: 'test@test.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          role: 'admin',
+          companyId: 'comp-1',
+        });
+      mockJwtService.sign.mockReturnValueOnce('access_token').mockReturnValueOnce('refresh_token');
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_refresh');
+
+      await svc.login(dto);
+      expect(redis.del).toHaveBeenCalledWith(expect.stringMatching(/^login_fail:/));
     });
   });
 });
