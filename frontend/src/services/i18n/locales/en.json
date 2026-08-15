@@ -24,6 +24,21 @@
     "processing": "Processing...",
     "saveError": "Error saving data"
   },
+  "mobileApp": {
+    "banner": {
+      "ariaLabel": "Mobile app installation",
+      "title": "Install the DelivTrack driver app v{{version}} in the field",
+      "subtitle": "Background GPS tracking, even with the screen off. Available on Android.",
+      "download": "Download APK v{{version}}",
+      "haveIt": "I already have the app"
+    },
+    "update": {
+      "ariaLabel": "Mobile app update",
+      "title": "A new version (v{{version}}) is available",
+      "subtitle": "Update the app to get the latest fixes.",
+      "download": "Update — v{{version}}"
+    }
+  },
   "nav": {
     "dashboard": "Dashboard",
     "deliveries": "Deliveries",

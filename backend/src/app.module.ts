@@ -36,6 +36,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { RoutingModule } from './modules/routing/routing.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { GeocodingModule } from './modules/geocoding/geocoding.module';
+import { MobileAppModule } from './modules/mobile-app/mobile-app.module';
 import { RedisModule } from './common/redis/redis.module';
 import { CacheModule } from './common/cache/cache.module';
 import { DataUpdateModule } from './common/events/data-update.module';
@@ -136,6 +137,7 @@ import { TenantModule } from './common/tenant/tenant.module';
     RoutingModule,
     AlertsModule,
     GeocodingModule,
+    MobileAppModule,
   ],
   providers: [
     // Rate limiting is disabled in tests: e2e suites burst past the per-route

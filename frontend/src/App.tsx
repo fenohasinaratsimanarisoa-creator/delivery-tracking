@@ -9,6 +9,7 @@ import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
 import ProtectedRoute from './components/ProtectedRoute';
 import CookieConsentBanner from './components/CookieConsentBanner';
+import MobileAppBanner from './components/MobileAppBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useDataUpdates } from './hooks/useDataUpdates';
 import { useKeyboardHandling } from './hooks/useKeyboardHandling';
@@ -108,6 +109,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <BottomNav />
       <div className={styles.appLayoutContent}>
+        <MobileAppBanner />
         <div className={styles.appLayoutMain}>
           {children}
         </div>

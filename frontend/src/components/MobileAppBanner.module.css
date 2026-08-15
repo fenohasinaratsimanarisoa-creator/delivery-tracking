@@ -1,0 +1,75 @@
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  margin: 0 16px 12px;
+  border-radius: 10px;
+  background: var(--color-accent, #2563eb);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  font-size: 13px;
+}
+
+.content {
+  min-width: 0;
+  flex: 1;
+}
+
+.title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin: 2px 0 0;
+  opacity: 0.9;
+}
+
+.changelog {
+  margin: 4px 0 0;
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.downloadLink {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--color-accent, #2563eb);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.dismiss {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions {
+    justify-content: flex-end;
+  }
+}

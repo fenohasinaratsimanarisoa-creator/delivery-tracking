@@ -24,6 +24,21 @@
     "processing": "En cours...",
     "saveError": "Erreur lors de l'enregistrement"
   },
+  "mobileApp": {
+    "banner": {
+      "ariaLabel": "Installation de l'app mobile",
+      "title": "Installez l'app chauffeur DelivTrack v{{version}} sur le terrain",
+      "subtitle": "Suivi GPS en arrière-plan, même écran éteint. Disponible sur Android.",
+      "download": "Télécharger l'APK v{{version}}",
+      "haveIt": "J'ai déjà l'app"
+    },
+    "update": {
+      "ariaLabel": "Mise à jour de l'app mobile",
+      "title": "Une nouvelle version (v{{version}}) est disponible",
+      "subtitle": "Mettez à jour l'app pour bénéficier des dernières corrections.",
+      "download": "Mettre à jour — v{{version}}"
+    }
+  },
   "nav": {
     "dashboard": "Dashboard",
     "deliveries": "Livraisons",

@@ -4,6 +4,7 @@ import { TrackingContext } from '../../services/tracking/TrackingContext';
 import ProximityAlert from './ProximityAlert';
 import BatteryExemptionBanner from './BatteryExemptionBanner';
 import BatterySetupGuide from './BatterySetupGuide';
+import MobileUpdateBanner from './MobileUpdateBanner';
 
 export default function DriverTrackingWrapper({ children }: { children: ReactNode }) {
   const status = useDriverTracking();
@@ -15,6 +16,8 @@ export default function DriverTrackingWrapper({ children }: { children: ReactNod
       {/* Bannière persistante tant que l'exemption batterie n'est pas accordée. */}
       <BatteryExemptionBanner status={status} />
       <ProximityAlert status={status} />
+      {/* Détection d'app obsolète (native uniquement) — ferme la boucle « toujours à jour ». */}
+      <MobileUpdateBanner />
       {children}
     </TrackingContext.Provider>
   );

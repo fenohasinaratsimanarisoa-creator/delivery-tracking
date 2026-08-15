@@ -21,8 +21,12 @@ android {
         applicationId "com.logitrack.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Version injectée par la CI (job android-release) via -PversionCode/-PversionName :
+        // chaque push sur main produit un APK à la version incrémentée automatiquement,
+        // sans aucune discipline humaine ni modification du repo par la CI. Repli local
+        // (build manuel) : 1 / 1.0.
+        versionCode providers.gradleProperty('versionCode').map(String::trim).map(Integer::parseInt).getOrElse(1)
+        versionName providers.gradleProperty('versionName').getOrElse("1.0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

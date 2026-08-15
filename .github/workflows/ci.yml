@@ -249,6 +249,135 @@ jobs:
           src/services/socket/socket.spec.ts \
           src/hooks/useDriverTracking.spec.ts
 
+  # Build APK release + publication GitHub Release — LE verrou anti-obsolescence.
+  # À CHAQUE push sur main : build assembleRelease signé, version incrémentée
+  # automatiquement (versionCode = nombre de commits, versionName = patch+1 du
+  # dernier tag), SHA-256 calculé, et publication d'une release vX.Y.Z avec 2
+  # assets : deliverytrack.apk + manifest.json. L'endpoint backend
+  # GET /api/mobile-app/latest lit manifest.json de la dernière release → le
+  # fichier proposé correspond TOUJOURS au dernier build produit, jamais un
+  # vieux fichier oublié.
+  android-release:
+    name: Android - Build & Publish APK
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code (full history + tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compute next version
+        id: version
+        working-directory: ./frontend/android
+        run: |
+          # versionCode = nombre total de commits (strictement croissant, jamais
+          # de collision, aucune discipline humaine).
+          VERSION_CODE=$(git rev-list --count HEAD)
+          # versionName = dernier tag vX.Y.Z avec patch+1 ; 1.0.0 si aucun tag.
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          BASE=${LAST_TAG#v}
+          IFS='.' read -r MAJ MIN PATCH <<< "$BASE"
+          MAJ=${MAJ:-0}; MIN=${MIN:-0}; PATCH=${PATCH:-0}
+          VERSION_NAME="$MAJ.$MIN.$((PATCH + 1))"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "last_tag=$LAST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Next version: $VERSION_NAME (code $VERSION_CODE)"
+
+      - name: Restore signing keystore from secret
+        working-directory: ./frontend/android
+        run: |
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret missing — cannot sign a release APK. "
+            echo "::error::Un APK non signé ne doit JAMAIS être distribué. Ajoutez le secret "
+            echo "::error::(base64 du .jks) + ANDROID_KEYSTORE_PASSWORD/ANDROID_KEY_ALIAS/ANDROID_KEY_PASSWORD."
+            exit 1
+          fi
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > ci-keystore.jks
+          ls -la ci-keystore.jks
+
+      - name: Build signed release APK
+        working-directory: ./frontend/android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/frontend/android/ci-keystore.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease --console=plain \
+            -PversionCode=${{ steps.version.outputs.version_code }} \
+            -PversionName=${{ steps.version.outputs.version_name }}
+          ls -la app/build/outputs/apk/release/
+
+      - name: Verify APK is signed
+        working-directory: ./frontend/android
+        run: |
+          # apksigner: vérifie que l'APK est signé avec une vraie clé (pas debug).
+          APKSIGNER=$ANDROID_HOME/build-tools/*/apksigner
+          $APKSIGNER verify --print-certs app/build/outputs/apk/release/app-release.apk | head -5
+
+      - name: Compute SHA-256 and build manifest.json
+        id: sha
+        working-directory: ./frontend/android
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          LAST_TAG: ${{ steps.version.outputs.last_tag }}
+        run: |
+          SHA256=$(sha256sum app/build/outputs/apk/release/app-release.apk | awk '{print $1}')
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # Changelog : commits depuis le dernier tag (ou tout l'historique au 1er build).
+          if [ "$LAST_TAG" != "v0.0.0" ]; then
+            CHANGELOG=$(git log --oneline --no-merges "$LAST_TAG"..HEAD | head -30)
+          else
+            CHANGELOG=$(git log --oneline --no-merges | head -30)
+          fi
+          cat > manifest.json <<EOF
+          {
+            "version": "$VERSION_NAME",
+            "versionCode": $VERSION_CODE,
+            "sha256": "$SHA256",
+            "buildDate": "$BUILD_DATE",
+            "changelog": $(node -e "console.log(JSON.stringify(process.argv[1]))" "$CHANGELOG")
+          }
+          EOF
+          cat manifest.json
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version_name }}
+          name: "DeliveryTrack v${{ steps.version.outputs.version_name }}"
+          body: |
+            APK chauffeur — build automatique (push sur main).
+
+            - **Version** : v${{ steps.version.outputs.version_name }} (code ${{ steps.version.outputs.version_code }})
+            - **SHA-256** : ${{ steps.sha.outputs.sha256 }}
+            - **Date de build** : ${{ steps.sha.outputs.build_date }}
+          files: |
+            frontend/android/app/build/outputs/apk/release/app-release.apk
+            frontend/android/manifest.json
+          fail_on_unmatched_files: true
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f frontend/android/ci-keystore.jks
+
   # Docker Build Jobs
   build-backend-image:
     name: Build Backend Docker Image
