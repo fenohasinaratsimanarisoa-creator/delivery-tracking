@@ -103,10 +103,6 @@ public class LocationForegroundService extends Service {
      */
     private static final long LOCATION_INTERVAL_SLOW_MS = 20_000L;
     private static final long LOCATION_FASTEST_SLOW_MS = 15_000L;
-    /** Vitesse sous laquelle le véhicule est considéré à l'arrêt (~0.5 m/s ≈ 1.8 km/h). */
-    private static final float STATIONARY_SPEED_THRESHOLD_MS = 0.5f;
-    /** Délai d'arrêt continu avant de passer en cadence lente (évite le flap aux feux rouges). */
-    private static final long STATIONARY_SWITCH_DELAY_MS = 90_000L;
 
     /** Délai du redémarrage de secours après un balayage des tâches récentes. */
     private static final long TASK_REMOVED_RESTART_DELAY_MS = 1000L;
@@ -258,8 +254,14 @@ public class LocationForegroundService extends Service {
 
     /** Cadence actuelle : true = mode lent (à l'arrêt), false = mode rapide (3 s). */
     private boolean slowAcquisitionMode = false;
-    /** Dernier instant où le véhicule était en mouvement (pour le délai de stabilisation). */
-    private long lastMovingTimestamp = 0L;
+    /**
+     * Détecteur de mouvement à 3 états (MOVING_CONFIRMED / STATIONARY_CONFIRMED /
+     * UNKNOWN) : remplace la détection binaire hasSpeed() qui traitait à tort
+     * comme « arrêt » les fixes sans vitesse fiable (signal GPS dégradé : tunnel,
+     * canyon urbain, couvert dense) et basculait en cadence lente pendant un
+     * déplacement réel. PURE JAVA : testé par MotionStateDetectorTest.java.
+     */
+    private final MotionStateDetector motionDetector = new MotionStateDetector();
 
     @Override
     public void onCreate() {
@@ -437,7 +439,7 @@ public class LocationForegroundService extends Service {
         // lente après le délai de stabilisation — sans dernier mouvement connu, la
         // condition lastMovingTimestamp > 0 resterait fausse et le mode lent ne
         // s'activerait jamais.
-        lastMovingTimestamp = System.currentTimeMillis();
+        motionDetector.markStart(System.currentTimeMillis());
         slowAcquisitionMode = false;
         locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, LOCATION_INTERVAL_MS)
             .setMinUpdateIntervalMillis(LOCATION_FASTEST_INTERVAL_MS)
@@ -463,22 +465,38 @@ public class LocationForegroundService extends Service {
     }
 
     /**
-     * ACQUISITION ADAPTATIVE (économie batterie 8 h) : à l'arrêt prolongé (> 90 s sans
-     * déplacement), on ralentit la demande de fixes à 20 s (au lieu de 3 s) — le fix GPS
-     * coûte la même énergie à l'arrêt qu'en mouvement, mais n'apporte aucune information
-     * utile. Dès que le véhicule repart, retour immédiat à 3 s. La transition se fait en
-     * re-requestant FusedLocationProviderClient avec un nouveau LocationRequest : le
-     * même callback remplace la demande active (aucun callback dupliqué).
+     * ACQUISITION ADAPTATIVE (économie batterie 8 h) : à l'arrêt CONFIRMÉ et
+     * prolongé (> 90 s sans déplacement), on ralentit la demande de fixes à 20 s
+     * (au lieu de 3 s) — le fix GPS coûte la même énergie à l'arrêt qu'en
+     * mouvement, mais n'apporte aucune information utile. Dès que le véhicule
+     * repart, retour immédiat à 3 s. La transition se fait en re-requestant
+     * FusedLocationProviderClient avec un nouveau LocationRequest : le même
+     * callback remplace la demande active (aucun callback dupliqué).
+     *
+     * DÉTECTION À 3 ÉTATS (voir MotionStateDetector) : la détection binaire
+     * historique (isMoving = hasSpeed() && speed > seuil) considérait à tort un
+     * véhicule à l'arrêt quand le provider ne fournissait PAS de vitesse fiable
+     * pour un fix précis (signal GPS dégradé : tunnel, canyon urbain, couvert
+     * dense, cold-fix après un trou de signal). Après 90 s de ce type de fixes,
+     * le service basculait à tort en cadence lente (20 s) — précisément dans les
+     * zones où le risque de trou de trace est le plus élevé. Désormais :
+     *  - MOVING_CONFIRMED (vitesse fiable > seuil) rafraîchit lastMovingTimestamp ;
+     *  - STATIONARY_CONFIRMED (vitesse fiable ≈ 0, OU pas de vitesse mais position
+     *    immobile < 15 m sur ≥ 2 fixes consécutifs) est la SEULE condition qui
+     *    compte vers le mode lent ;
+     *  - UNKNOWN (pas de vitesse + déplacement, ou premier fix) NE déclenche
+     *    JAMAIS le mode lent : un signal durablement dégradé au point de ne
+     *    jamais confirmer l'arrêt est probablement synonyme de déplacement en
+     *    zone difficile, où la cadence rapide est justement la plus utile.
      */
     private void adaptAcquisitionInterval(Location location) {
-        boolean isMoving = location.hasSpeed() && location.getSpeed() > STATIONARY_SPEED_THRESHOLD_MS;
-        if (isMoving) {
-            lastMovingTimestamp = System.currentTimeMillis();
-        }
-        boolean shouldBeSlow =
-            !isMoving
-                && lastMovingTimestamp > 0
-                && (System.currentTimeMillis() - lastMovingTimestamp) > STATIONARY_SWITCH_DELAY_MS;
+        boolean shouldBeSlow = motionDetector.shouldBeSlow(
+            location.hasSpeed(),
+            location.hasSpeed() ? location.getSpeed() : 0f,
+            location.getLatitude(),
+            location.getLongitude(),
+            System.currentTimeMillis()
+        );
 
         if (shouldBeSlow == slowAcquisitionMode) {
             return; // aucun changement de cadence

@@ -14,7 +14,7 @@
 | 1 | Service de premier plan `START_STICKY` + notification persistante + WakeLock PARTIAL (écran éteint) + relance auto (AlarmManager 1s → WorkManager 2s → watchdog 15 min → BootReceiver après reboot) | `LocationForegroundService.java` (START_STICKY:302, PARTIAL_WAKE_LOCK:395, ongoing:549), `ServiceRestartWorker.java`, `TrackingWatchdogWorker.java`, `BootReceiver.java`, manifest | Compilé à chaque build Android (pas d'infra de test JVM — voir §5) |
 | 2 | Exemption d'optimisation batterie (Doze) demandée + détection/guidage OEM (Xiaomi, Huawei, Oppo, Vivo, OnePlus, realme) | `AndroidManifest.xml:83` (permission), `DeviceOemInfo.java:43-47,84`, guide UI `BatterySetupGuide.tsx` | Guide UI non testé (voir §5) |
 | 3 | Reconnexion WebSocket robuste : tentatives illimitées, backoff 1s→5s, refresh de session silencieux avant expiration, reconnexion forcée au retour de veille | `socket.ts:82-85` (reconnection), `:40-62` (refresh), `:106+` (visibility) | ✅ `socket.spec.ts` (5 tests) |
-| 4 | Fréquence GPS adaptative : 3s en mouvement / 20s à l'arrêt (>90s) pour tenir 8h de batterie | `LocationForegroundService.java:473` (adaptAcquisitionInterval) | Compilé (voir §5) |
+| 4 | Fréquence GPS adaptative : 3s en mouvement / 20s à l'arrêt (>90s) pour tenir 8h de batterie — détection à 3 états (un fix sans vitesse en signal dégradé ne bascule jamais à tort en cadence lente) | `LocationForegroundService.java` (adaptAcquisitionInterval), `MotionStateDetector.java` | ✅ `MotionStateDetectorTest.java` (7 tests JVM, voir §5) + compilé à chaque build |
 | 5 | Queue offline persistante (IndexedDB), cap 5000 (~4h), éviction du plus ancien TOUJOURS signalée (jamais silencieuse) | `offlineQueue.ts:11,19,93-97` | ✅ `offlineQueue.spec.ts` + `tracking-reliability.spec.ts` |
 | 6 | Dead reckoning STRICTEMENT côté affichage, jamais en base (whitelist serveur + aucune fonction d'envoi dans deadReckoning) | `deadReckoning.ts:9`, `tracking.gateway.ts:147` (whitelist), DTO sans champs extrapolés | ✅ `deadReckoning.spec.ts` (garde structurelle) + `tracking.gateway.spec.ts` (test STRIP) |
 | 7 | Rapport de trajet basé sur TOUTES les positions réelles, triées par fixTime, distance par segments réels, trous détectés et signalés | `tracking.service.ts:1197,1212,1424,1450` | ✅ `tracking.service.spec.ts` (88 tests) |
@@ -77,12 +77,18 @@ Tout changement de code qui casserait l'un de ces comportements fait échouer le
 
 ## 5. Limites connues (déclarées, pas cachées)
 
-- **Pas d'infrastructure de tests unitaires JVM/Android** dans ce projet : les
-  points 1, 2 (partie native), 4 (acquisition adaptative) sont **compilés à chaque
-  build** (`./gradlew assembleDebug` en CI via le Docker build) mais n'ont pas de
-  test automatisé qui échouerait sur une régression de comportement Java. Ils sont
-  couverts par le protocole de validation terrain (§6). Si un jour on ajoute
-  Robolectric, c'est là qu'il faudrait les verrouiller.
+- **Infrastructure de tests unitaires JVM minimale** : le module Android déclare
+  `junit:junit` et `./gradlew :app:testDebugUnitTest` s'exécute en JVM pure
+  (exécuté en local ; pas encore câblé au Docker build CI). La logique de
+  détection de mouvement (point 4, `MotionStateDetector.java`) est **pure Java**
+  et verrouillée par `MotionStateDetectorTest.java` (7 tests : déplacement en
+  signal faible sans vitesse → jamais de cadence lente ; arrêt nominal → mode
+  lent après 90 s ; arrêt confirmé par la position ; reprise après mouvement).
+  Les points 1, 2 (partie native) et le reste du point 4 (cadence effective)
+  restent **compilés à chaque build** (`./gradlew assembleDebug` en CI via le
+  Docker build) sans test automatisé de comportement ; ils sont couverts par le
+  protocole de validation terrain (§6). Un futur passage à Robolectric
+  permettrait de verrouiller le reste du service.
 - **Le guide UI (BatterySetupGuide.tsx)** n'a pas de test de composant — il est
   couvert par le test manuel de l'étape 1 du protocole.
 
