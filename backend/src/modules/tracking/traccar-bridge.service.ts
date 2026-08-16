@@ -223,6 +223,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private isLeader = false;
   private leaderRenewTimer: ReturnType<typeof setInterval> | null = null;
   private leaderRetryTimer: ReturnType<typeof setInterval> | null = null;
+  private consecutiveRenewFailures = 0;
 
   async onModuleInit() {
     this.logger.log(
@@ -339,6 +340,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
   private startLeaderRenew() {
     this.stopLeaderRenew();
+    this.consecutiveRenewFailures = 0;
     this.leaderRenewTimer = setInterval(async () => {
       if (!this.redis || !this.isLeader) return;
       try {
@@ -353,8 +355,22 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           return;
         }
         await this.redis.expire(LEADER_KEY, LEADER_TTL_S);
+        this.consecutiveRenewFailures = 0;
       } catch (err: any) {
-        this.logger.error(`Leader renewal failed: ${err.message}`);
+        this.consecutiveRenewFailures++;
+        // Un seul échec de renouvellement suffit à risquer l'expiration du verrou
+        // (retry toutes les 20s vs TTL 30s) : dès le premier échec on cède un
+        // leadership devenu INCERTAIN par prudence, au lieu de garder la connexion
+        // WebSocket ouverte pendant qu'une autre instance peut acquérir le lock.
+        this.logger.error(
+          `Leader renewal failed (échec consécutif #${this.consecutiveRenewFailures}): ${err.message}`,
+        );
+        this.isLeader = false;
+        this.logger.warn(
+          `Traccar bridge: leadership incertain (erreur Redis transitoire) — repli par prudence, on cède le lock (instance=${this.instanceId})`,
+        );
+        this.disconnect();
+        this.stopLeaderRenew();
       }
     }, LEADER_RENEW_INTERVAL_MS);
   }

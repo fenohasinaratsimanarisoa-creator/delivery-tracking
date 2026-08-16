@@ -166,6 +166,74 @@ describe('TraccarBridgeService — Leader Election', () => {
       disconnectSpy.mockRestore();
     });
 
+    it('should relinquish leadership on the FIRST renewal failure (redis.get rejects) and recover via tryBecomeLeader once Redis is back', async () => {
+      jest.useFakeTimers();
+      try {
+        const service = createService(mockRedis);
+        (service as any).isLeader = true;
+        const disconnectSpy = jest
+          .spyOn(service as any, 'disconnect')
+          .mockImplementation(() => {});
+
+        // Un seul échec transitoire (GET en erreur) suffit : le lock va expirer
+        // côté Redis (retry 20s vs TTL 30s) → repli par prudence immédiat.
+        mockRedis.get.mockRejectedValueOnce(new Error('redis connection timeout'));
+        (service as any).startLeaderRenew();
+        await jest.advanceTimersByTimeAsync(20000);
+
+        expect((service as any).isLeader).toBe(false);
+        expect((service as any).consecutiveRenewFailures).toBe(1);
+        expect(disconnectSpy).toHaveBeenCalled();
+        expect((service as any).leaderRenewTimer).toBeNull();
+
+        // Redis répond de nouveau : tryBecomeLeader reprend le leadership normalement
+        // (le leaderRetryTimer existant fait exactement ceci en production).
+        const connectSpy = jest.spyOn(service as any, 'connect').mockResolvedValue(undefined);
+        mockRedis.call.mockResolvedValueOnce('OK');
+        const recovered = await (service as any).tryBecomeLeader();
+        expect(recovered).toBe(true);
+        expect((service as any).isLeader).toBe(true);
+        expect(connectSpy).toHaveBeenCalled();
+
+        // Le cycle de renouvellement repart et un succès remet le compteur à zéro.
+        mockRedis.get.mockResolvedValueOnce((service as any).instanceId);
+        mockRedis.expire.mockResolvedValueOnce(1);
+        await jest.advanceTimersByTimeAsync(20000);
+        expect((service as any).isLeader).toBe(true);
+        expect((service as any).consecutiveRenewFailures).toBe(0);
+        expect(mockRedis.expire).toHaveBeenCalledWith('traccar:bridge:leader', 30);
+
+        disconnectSpy.mockRestore();
+        connectSpy.mockRestore();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should relinquish leadership when redis.expire rejects (GET ok, EXPIRE en erreur)', async () => {
+      jest.useFakeTimers();
+      try {
+        const service = createService(mockRedis);
+        (service as any).isLeader = true;
+        const disconnectSpy = jest
+          .spyOn(service as any, 'disconnect')
+          .mockImplementation(() => {});
+
+        mockRedis.get.mockResolvedValueOnce((service as any).instanceId);
+        mockRedis.expire.mockRejectedValueOnce(new Error('redis gone away'));
+
+        (service as any).startLeaderRenew();
+        await jest.advanceTimersByTimeAsync(20000);
+
+        expect(disconnectSpy).toHaveBeenCalled();
+        expect((service as any).isLeader).toBe(false);
+        expect((service as any).leaderRenewTimer).toBeNull();
+        disconnectSpy.mockRestore();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('should step down and release lock', async () => {
       const service = createService(mockRedis);
       (service as any).isLeader = true;
