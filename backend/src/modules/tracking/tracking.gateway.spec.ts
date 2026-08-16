@@ -1,4 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
+import { GATEWAY_OPTIONS } from '@nestjs/websockets/constants';
 import { TrackingGateway } from './tracking.gateway';
 
 const mockSocket = () => {
@@ -507,6 +508,96 @@ describe('TrackingGateway — cross-tenant security', () => {
       const savedDto = trackingService.savePosition.mock.calls[0][1];
       expect(savedDto.speed).toBeGreaterThan(5);
       expect(savedDto.speed).toBeLessThan(15);
+    });
+  });
+
+  describe('handleBatchPosition — rattrapage réseau volumineux (longue coupure)', () => {
+    const UUID = '22222222-2222-4222-8222-222222222222';
+
+    it('3000 positions (mélange valides/invalides) validées en parallèle < 3s, toutes les valides sauvegardées, ordre relatif conservé', async () => {
+      const client = mockSocket();
+      client.data.user = {
+        id: 'user-1',
+        role: 'driver',
+        companyId: 'company-a',
+        firstName: 'Test',
+        lastName: 'Driver',
+      };
+      trackingService.findDriverByUserId.mockResolvedValueOnce({ id: 'driver-1' });
+      // Retourne une position SAVED pour chaque position validée (la même
+      // transformation que le chemin réel — le nombre d'ACK = nb de valides).
+      trackingService.saveBatch.mockImplementation(
+        async (_userId: string, _driverId: string, positions: Array<{ latitude: number; timestamp: string }>) =>
+          positions.map((p, i) => ({
+            id: `saved-${i}`,
+            latitude: p.latitude,
+            longitude: 47.5,
+            speed: null,
+            heading: null,
+            altitude: null,
+            accuracy: null,
+            suspect: false,
+            timestamp: new Date(p.timestamp),
+            deliveryId: null,
+            vehicleId: UUID,
+          })),
+      );
+
+      // 3000 positions : 1 invalide sur 15 (lat hors bornes 999). Chaque
+      // valide a une latitude UNIQUE dérivée de son index — permet de vérifier
+      // que l'ordre relatif est conservé par la validation parallèle.
+      const positions: Array<Record<string, unknown>> = [];
+      for (let i = 0; i < 3000; i++) {
+        if (i % 15 === 0) {
+          positions.push({
+            latitude: 999,
+            longitude: 47.5,
+            timestamp: new Date(2026, 7, 15, 10, 0, i).toISOString(),
+            vehicleId: UUID,
+          });
+        } else {
+          positions.push({
+            latitude: -18 + i * 0.0001,
+            longitude: 47.5,
+            speed: 30,
+            heading: 90,
+            accuracy: 8,
+            timestamp: new Date(2026, 7, 15, 10, 0, i).toISOString(),
+            vehicleId: UUID,
+          });
+        }
+      }
+      expect(positions.length).toBe(3000);
+      const expectedValid = positions.filter((p) => p.latitude !== 999).length;
+
+      const t0 = Date.now();
+      await gateway.handleBatchPosition(client, { positions } as any);
+      const elapsed = Date.now() - t0;
+
+      // Budget de temps LARGE : la validation parallèle doit rester raisonnable
+      // même sur un lot de plusieurs milliers (la boucle séquentielle dépassait
+      // plusieurs secondes et faisait expirer le timeout d'ACK client).
+      expect(elapsed).toBeLessThan(3000);
+
+      // Toutes les valides partent en persistence, les invalides sont filtrées.
+      expect(trackingService.saveBatch).toHaveBeenCalledTimes(1);
+      const validated = trackingService.saveBatch.mock.calls[0][2] as Array<{ latitude: number }>;
+      expect(validated).toHaveLength(expectedValid);
+
+      // Ordre relatif CONSERVÉ (Promise.all préserve l'ordre d'entrée ; le tri
+      // chronologique final reste dans saveBatch, hors périmètre).
+      const expectedLatitudes = positions
+        .filter((p) => p.latitude !== 999)
+        .map((p) => p.latitude as number);
+      expect(validated.map((p) => p.latitude)).toEqual(expectedLatitudes);
+
+      // ACK explicite : le client est informé du nombre réellement persisté.
+      expect(client.emit).toHaveBeenCalledWith('positionsSaved', { count: expectedValid });
+    }, 30_000);
+
+    it('maxHttpBufferSize est configuré explicitement à 5 Mo (le défaut Engine.IO de 1 Mo pouvait rejeter un rattrapage volumineux)', () => {
+      const options = Reflect.getMetadata(GATEWAY_OPTIONS, TrackingGateway) ?? {};
+      expect(options.maxHttpBufferSize).toBe(5 * 1024 * 1024);
     });
   });
 

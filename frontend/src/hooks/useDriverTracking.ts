@@ -62,6 +62,12 @@ const SNOOZE_MS = 5 * 60 * 1000;
 const ESCALATION_AFTER_MS = 15 * 60 * 1000;
 const ESCALATION_SNOOZE_MS = 2 * 60 * 1000;
 const QUEUE_WARN_THRESHOLD = 50;
+// Taille maximale d'un chunk de positions envoyé par batchPosition. Longue
+// coupure réseau = plusieurs milliers de positions en file : un lot unique
+// surdimensionné dépassait le timeout d'ACK serveur (5s) et était rejoué en
+// boucle sans jamais être purgé. Chaque chunk est acquitté SÉPARÉMENT
+// (positionsSaved) avant l'envoi du suivant.
+const BATCH_CHUNK_SIZE = 250;
 
 function haversineDistanceM(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -389,20 +395,27 @@ export function useDriverTracking() {
           // actif 15s ; s'il ne se déclenchait jamais, il aurait pu résoudre une
           // promesse déjà rejetée). Ce handler retire le timeout puis résout.
           const onPositionsSaved = () => { clearTimeout(timeout); resolve(); };
+          // Timeout d'ACK PROPORTIONNEL à la taille du chunk envoyé (jamais un
+          // délai fixe) : un petit lot est traité vite côté serveur, un gros chunk
+          // mérite un budget plus large. Base 5s, +15ms par position — pour un
+          // chunk complet de 250, le budget est bien au-dessus du temps de
+          // traitement serveur (validation parallèle). Le timeout n'est qu'un
+          // filet de sécurité : en cas de déclenchement, l'échec remonte à
+          // flushQueue qui n'affiche rien de non-acquitté (reprise au tick suivant).
+          const timeoutMs = Math.max(5000, positions.length * 15);
           const timeout = setTimeout(() => {
             // Retire le listener restant : un 'positionsSaved' tardif (ex. d'un flush
             // suivant) ne doit pas résoudre une promesse déjà rejetée, ni fuiter.
             socket.off('positionsSaved', onPositionsSaved);
-            reject(new Error('flush timeout'));
+            reject(new Error(`flush timeout (${positions.length} positions)`));
             // Le backend émet désormais positionsSaved EXPLICITEMENT (acquittement
             // réel, sans callback ack côté client) : le timeout n'est plus qu'un filet
-            // de sécurité réseau, réduit de 15s à 5s. L'échec réel (timeout) ne
-            // supprime PAS les positions de la file IndexedDB : flushQueue ne les
-            // efface que si sendFn résout.
-          }, 5000);
+            // de sécurité réseau. L'échec réel (timeout) ne supprime PAS les positions
+            // de la file IndexedDB : flushQueue ne les efface que si sendFn résout.
+          }, timeoutMs);
           socket.once('positionsSaved', onPositionsSaved);
         });
-      });
+      }, { chunkSize: BATCH_CHUNK_SIZE });
     } catch (err) {
       console.warn('[drainQueue] flush failed:', err);
     }

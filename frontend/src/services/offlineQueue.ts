@@ -114,6 +114,35 @@ export async function dequeueAllPositions(): Promise<Record<string, unknown>[]> 
   });
 }
 
+/**
+ * Retourne au maximum `limit` positions, triées par ordre d'insertion (id
+ * auto-incrémenté = ordre FIFO), SANS les supprimer. La lecture en curseur
+ * évite de charger toute la file en mémoire : nécessaire pour le rattrapage
+ * par chunks de plusieurs milliers de positions (longue coupure réseau) — un
+ * seul lot surdimensionné dépassait le timeout d'ACK serveur et était rejoué
+ * en boucle. `limit = Infinity` lit toute la file (équivalent de
+ * dequeueAllPositions).
+ */
+export async function dequeuePositions(limit: number): Promise<Record<string, unknown>[]> {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const items: Record<string, unknown>[] = [];
+    const req = store.openCursor();
+    req.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+      if (cursor && items.length < limit) {
+        items.push(cursor.value);
+        cursor.continue();
+      } else {
+        resolve(items);
+      }
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
 async function dequeueOldest(): Promise<Record<string, unknown> | null> {
   const db = await getDB();
   return new Promise((resolve, reject) => {
@@ -165,15 +194,31 @@ async function deletePositions(ids: number[]): Promise<void> {
   });
 }
 
-export async function flushQueue(sendFn: (positions: Record<string, unknown>[]) => Promise<void>): Promise<void> {
+export async function flushQueue(
+  sendFn: (positions: Record<string, unknown>[]) => Promise<void>,
+  options?: { chunkSize?: number },
+): Promise<void> {
   if (isFlushing) return;
   isFlushing = true;
   try {
-    const positions = await dequeueAllPositions();
-    if (positions.length === 0) return;
-    const ids = positions.map((p) => p.id as number);
-    await sendFn(positions);
-    await deletePositions(ids);
+    const chunkSize = options?.chunkSize ?? Infinity;
+    // Rattrapage PAR CHUNKS : un lot de plusieurs milliers de positions (longue
+    // coupure réseau) ne doit JAMAIS partir en un seul emit — le traitement
+    // serveur dépassait le timeout d'ACK (5s) et rien n'était acquitté, la file
+    // n'était pas vidée et le même lot surdimensionné était rejoué en boucle.
+    // Chaque chunk n'est envoyé qu'APRÈS l'ACK du précédent (await sendFn), et
+    // n'est supprimé de la file QUE si sendFn a résolu : en cas d'échec
+    // explicite (timeout), on arrête la boucle et seuls les chunks déjà
+    // acquittés ont été purgés — le prochain tick de drainQueue reprend où la
+    // file en est, SANS perte silencieuse. Aucune position dont l'envoi n'a pas
+    // été explicitement acquitté n'est supprimée.
+    while (true) {
+      const positions = await dequeuePositions(chunkSize);
+      if (positions.length === 0) return;
+      const ids = positions.map((p) => p.id as number);
+      await sendFn(positions);
+      await deletePositions(ids);
+    }
   } finally {
     isFlushing = false;
   }

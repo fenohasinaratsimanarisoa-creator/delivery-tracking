@@ -36,6 +36,14 @@ import { getCorsOrigins } from '../../config/cors';
   // sont perçues comme des "déconnexions" par le dispatcher.
   pingInterval: 35_000,
   pingTimeout: 25_000,
+  // maxHttpBufferSize EXPLICITE : le défaut Engine.IO (1 Mo) suffit pour des
+  // positions individuelles mais peut rejeter un rattrapage réseau volumineux
+  // SANS diagnostic exploitable côté client. Le client découpe désormais en
+  // chunks de ≤250 positions (~40 Ko par chunk en pratique), mais on laisse
+  // une marge large pour les pics de taille de payload et les futures
+  // augmentations de chunk : 5 Mo >> 250 positions × ~1 Ko/payload, transport
+  // jamais rejeté pour cause de taille.
+  maxHttpBufferSize: 5 * 1024 * 1024,
 })
 @UseGuards(WsJwtGuard)
 @UseFilters(WsTrackingExceptionFilter)
@@ -304,16 +312,33 @@ export class TrackingGateway
         client.emit('positionsSaved', { count: 0 });
         return;
       }
+      // Validation PARALLÈLE (Promise.all) au lieu d'une boucle séquentielle
+      // `for...await validate()` : un rattrapage réseau peut compter plusieurs
+      // milliers de positions (longue coupure) et le coût réflexion de
+      // class-validator rendait la boucle séquentielle > 3s — au-delà du
+      // timeout d'ACK côté client, qui rejouait alors le même lot surdimensionné
+      // en boucle. Promise.all lance les validations en parallèle tout en
+      // CONSERVANT l'ordre relatif du tableau résultat (Promise.all préserve
+      // l'ordre d'entrée) ; le tri chronologique réel est fait dans
+      // tracking.service.saveBatch, inchangé.
+      const validationResults = await Promise.all(
+        rawPositions.map(async (raw) => {
+          const instance = plainToInstance(UpdatePositionDto, raw, {
+            exposeUnsetFields: false,
+            enableImplicitConversion: true,
+          });
+          const errors = await validate(instance, {
+            whitelist: true,
+            skipMissingProperties: false,
+          });
+          return { instance, errors };
+        }),
+      );
+
+      // Comportement individuel IDENTIQUE à l'ancienne boucle : une position
+      // corrompue est loggée en warning et exclue, sans invalider les autres.
       const validatedPositions: UpdatePositionDto[] = [];
-      for (const raw of rawPositions) {
-        const instance = plainToInstance(UpdatePositionDto, raw, {
-          exposeUnsetFields: false,
-          enableImplicitConversion: true,
-        });
-        const errors = await validate(instance, {
-          whitelist: true,
-          skipMissingProperties: false,
-        });
+      for (const { instance, errors } of validationResults) {
         if (errors.length > 0) {
           this.logger.warn(
             `Batch position invalid (driver=${user.id}): ${errors

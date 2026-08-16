@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
-import { enqueuePosition, flushQueue, queueSize, clearQueue } from './offlineQueue';
+import { enqueuePosition, flushQueue, queueSize, clearQueue, dequeuePositions } from './offlineQueue';
 
 beforeEach(async () => {
   await clearQueue();
@@ -122,4 +122,79 @@ describe('offlineQueue', () => {
     const size = await queueSize();
     expect(size).toBe(0);
   });
+
+  it('dequeuePositions returns at most N oldest positions in FIFO order without deleting them', async () => {
+    for (let i = 0; i < 5; i++) {
+      await enqueuePosition({ index: i });
+    }
+    // Lecture NON destructrice : les N positions les plus anciennes (FIFO).
+    const first = await dequeuePositions(2);
+    expect(first.map((p) => p.index)).toEqual([0, 1]);
+    expect(await queueSize()).toBe(5);
+    // Tant que rien n'a été supprimé, les N plus anciennes restent les mêmes.
+    expect(await dequeuePositions(3).then((p) => p.map((x) => x.index))).toEqual([0, 1, 2]);
+    // limit ≥ taille de la file → toute la file.
+    expect(await dequeuePositions(99).then((p) => p.map((x) => x.index))).toEqual([0, 1, 2, 3, 4]);
+    await clearQueue();
+  });
+
+  it('flushQueue with chunkSize: 250 sends 3000+ positions in chunks of ≤250, each acked separately, emptying progressively', async () => {
+    // Longue coupure réseau : plusieurs milliers de positions en file locale.
+    for (let i = 0; i < 3000; i++) {
+      await enqueuePosition({ index: i, latitude: -18.87 + i * 0.001 });
+    }
+    expect(await queueSize()).toBe(3000);
+
+    const chunkSizes: number[] = [];
+    const chunkIdRanges: Array<[number, number]> = [];
+    let sent = 0;
+    await flushQueue(async (positions) => {
+      chunkSizes.push(positions.length);
+      const idx = positions.map((p) => p.index as number);
+      chunkIdRanges.push([Math.min(...idx), Math.max(...idx)]);
+      sent += positions.length;
+      // Simule l'ACK serveur (positionsSaved) : résolution = chunk acquitté.
+    }, { chunkSize: 250 });
+
+    // 3000 positions → 12 chunks de 250, AUCUN chunk > 250.
+    expect(chunkSizes.length).toBe(12);
+    expect(Math.max(...chunkSizes)).toBeLessThanOrEqual(250);
+    expect(chunkSizes).toEqual(Array(12).fill(250));
+    expect(sent).toBe(3000);
+    // File vidée à la fin (tout ou rien interdit : purge PAR chunk acquitté).
+    expect(await queueSize()).toBe(0);
+    // Ordre FIFO préservé d'un chunk à l'autre : aucun chevauchement, aucune
+    // position réexpédiée ni oubliée.
+    for (let c = 0; c < chunkIdRanges.length; c++) {
+      const [lo, hi] = chunkIdRanges[c];
+      expect(lo).toBe(c * 250);
+      expect(hi).toBe(c * 250 + 249);
+    }
+    await clearQueue();
+  }, 30_000);
+
+  it('flushQueue never deletes positions whose send was NOT acked (chunk failing stops the loop, keeps the rest)', async () => {
+    await clearQueue();
+    for (let i = 0; i < 600; i++) {
+      await enqueuePosition({ index: i });
+    }
+    let calls = 0;
+    await expect(
+      flushQueue(async (positions) => {
+        calls++;
+        expect(positions.length).toBeLessThanOrEqual(250);
+        if (calls === 2) throw new Error('network down');
+      }, { chunkSize: 250 }),
+    ).rejects.toThrow('network down');
+
+    // Chunk 1 (250) acquitté → purgé. Chunk 2 (250) ÉCHOUÉ → conservé, chunk 3
+    // (100) jamais envoyé → conservé. Rien de non-acquitté n'est perdu.
+    expect(calls).toBe(2);
+    expect(await queueSize()).toBe(250 + 100);
+
+    // Reprise au tick suivant : le drain suivant purge le reste.
+    await flushQueue(async () => {});
+    expect(await queueSize()).toBe(0);
+    await clearQueue();
+  }, 30_000);
 });
