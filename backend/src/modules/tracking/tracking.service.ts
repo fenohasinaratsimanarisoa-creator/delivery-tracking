@@ -10,6 +10,7 @@ import {
 import { NotificationType, NotificationPriority, Prisma } from '@prisma/client';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { isUniqueConstraintViolation } from '../../common/prisma/unique-violation';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GeofenceService } from './geofence.service';
 import { DeliveryProximityService } from './delivery-proximity.service';
@@ -835,28 +836,46 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     // point précédent, PAS avec celui qu'on vient d'écrire).
     const prevPosition = await this.getLastPosition(dto.vehicleId, false);
 
-    const saved = await this.prisma.gpsPosition.create({
-      data: {
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-        speed: dto.speed,
-        heading: dto.heading,
-        altitude: dto.altitude,
-        accuracy: dto.accuracy,
-        suspect,
-        location: locationStr,
-        timestamp: ts,
-        companyId: resolvedCompanyId,
-        deliveryId: dto.deliveryId,
-        vehicleId: dto.vehicleId,
-        driverId,
-        source,
-        attributes:
-          attributes && Object.keys(attributes).length > 0
-            ? (attributes as Prisma.InputJsonValue)
-            : undefined,
-      },
-    });
+    let saved;
+    try {
+      saved = await this.prisma.gpsPosition.create({
+        data: {
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+          speed: dto.speed,
+          heading: dto.heading,
+          altitude: dto.altitude,
+          accuracy: dto.accuracy,
+          suspect,
+          location: locationStr,
+          timestamp: ts,
+          companyId: resolvedCompanyId,
+          deliveryId: dto.deliveryId,
+          vehicleId: dto.vehicleId,
+          driverId,
+          source,
+          attributes:
+            attributes && Object.keys(attributes).length > 0
+              ? (attributes as Prisma.InputJsonValue)
+              : undefined,
+        },
+      });
+    } catch (err: unknown) {
+      // Contrainte unique (vehicleId, timestamp) : filet anti-doublon de DERNIER
+      // recours. Le dédoublonnage temporel (fenêtre 1s) ci-dessus intercepte déjà
+      // les retransmissions, mais une P2002 peut encore survenir en course
+      // backfill/live multi-réplica : on la traite comme une position déjà présente
+      // (log debug, jamais d'erreur remontée à l'appelant — le client considérerait
+      // sinon sa position comme perdue et la remettrait en file).
+      if (isUniqueConstraintViolation(err)) {
+        this.metrics.deduped++;
+        this.logger.debug(
+          `Duplicate position rejected (unique constraint): vehicle=${dto.vehicleId} ts=${dto.timestamp}`,
+        );
+        return null;
+      }
+      throw err;
+    }
 
     this.metrics.saved++;
 
@@ -1136,10 +1155,39 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     // un autre batch concurrent, ou les positions temps réel du même véhicule,
     // pouvaient échanger des timestamps entre l'INSERT et la SELECT (timestamps
     // identiques sur le même véhicule), faussant l'ordre, voire omettant des lignes.
-    const inserted = await this.prisma.gpsPosition.createManyAndReturn({
-      data: toInsert,
-      skipDuplicates: false,
-    });
+    // skipDuplicates: true + P2002 capturée : filet de dernier recours de la
+    // contrainte unique (vehicleId, timestamp) — un doublon exact dans le lot (ou
+    // une course inter-réplicas) est ignoré proprement (ON CONFLICT DO NOTHING), les
+    // autres lignes du lot restent insérées, et createManyAndReturn ne renvoie que
+    // les lignes RÉELLEMENT insérées. Jamais d'erreur remontée à l'appelant pour
+    // une position déjà présente.
+    let inserted: Array<{
+      id: string;
+      latitude: number;
+      longitude: number;
+      speed: number | null;
+      heading: number | null;
+      altitude: number | null;
+      accuracy: number | null;
+      suspect: boolean;
+      timestamp: Date;
+      deliveryId: string | null;
+      vehicleId: string;
+    }> = [];
+    try {
+      inserted = await this.prisma.gpsPosition.createManyAndReturn({
+        data: toInsert,
+        skipDuplicates: true,
+      });
+    } catch (err: unknown) {
+      if (isUniqueConstraintViolation(err)) {
+        this.logger.debug(
+          `Batch positions already present (unique constraint): ${err instanceof Error ? err.message : 'P2002'} — treated as duplicates`,
+        );
+        return saved;
+      }
+      throw err;
+    }
 
     this.metrics.saved += inserted.length;
 

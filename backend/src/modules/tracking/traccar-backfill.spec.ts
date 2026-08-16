@@ -257,3 +257,208 @@ describe('TraccarBridgeService — performBackfill déduplication', () => {
     expect(byTime.get(P_NEW_TIME.getTime())).toBe(NEW_DRIVER);
   });
 });
+
+describe('TraccarBridgeService — sérialisation PAR DEVICE (backfill vs flux live)', () => {
+  let service: TraccarBridgeService;
+  const redisStore = new Map<string, string>();
+  const VEHICLE_ID2 = '00000000-0000-4000-a000-000000000003';
+  const originalFetch = global.fetch;
+
+  const mockPrisma = {
+    vehicle: { findMany: jest.fn(), findFirst: jest.fn() },
+    delivery: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+    gpsPosition: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      createMany: jest.fn(),
+    },
+    vehicleAssignmentHistory: { findFirst: jest.fn(), findMany: jest.fn() },
+  };
+
+  const mockTrackingService = {
+    savePosition: jest.fn().mockResolvedValue({ id: 'gps-1', suspect: false }),
+    getLastPosition: jest.fn().mockResolvedValue(null),
+    getCompanySettings: jest.fn(),
+  };
+
+  const mockGateway = { broadcastDataUpdate: jest.fn(), broadcastToCompany: jest.fn() };
+  const mockNotifications = { create: jest.fn() };
+
+  const mockRedis = {
+    call: jest.fn(),
+    expire: jest.fn(),
+    get: jest.fn(async (key: string) => redisStore.get(key) ?? null),
+    del: jest.fn(),
+    set: jest.fn(async (key: string, value: string) => {
+      redisStore.set(key, value);
+      return 'OK';
+    }),
+  };
+
+  const livePosition = (overrides: Record<string, unknown> = {}) => ({
+    deviceId: DEVICE_ID,
+    latitude: -18.8792,
+    longitude: 47.5079,
+    speed: 12,
+    course: 90,
+    altitude: 0,
+    accuracy: 8,
+    valid: true,
+    fixTime: new Date().toISOString(),
+    deviceTime: new Date().toISOString(),
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    redisStore.clear();
+
+    const config = {
+      get: jest.fn((key: string, d?: string) => {
+        const m: Record<string, string> = {
+          TRACCAR_URL: 'http://traccar-test:8082',
+          TRACCAR_USER: 't',
+          TRACCAR_PASSWORD: 't',
+        };
+        return m[key] ?? (d as any);
+      }),
+    };
+
+    service = new TraccarBridgeService(
+      config as unknown as ConfigService,
+      mockPrisma as unknown as PrismaService,
+      mockTrackingService as unknown as TrackingService,
+      mockGateway as unknown as TrackingGateway,
+      mockNotifications as unknown as NotificationsService,
+      null,
+      mockRedis as any,
+    );
+    (service as any).sessionCookie = 'test-cookie';
+
+    mockPrisma.vehicle.findMany.mockResolvedValue([
+      { id: VEHICLE_ID, traccarDeviceId: String(DEVICE_ID), companyId: 'c1' },
+    ]);
+    mockPrisma.vehicle.findFirst.mockResolvedValue({ id: VEHICLE_ID, companyId: 'c1' });
+    mockPrisma.vehicleAssignmentHistory.findMany.mockResolvedValue([]);
+    mockPrisma.vehicleAssignmentHistory.findFirst.mockResolvedValue(null);
+    mockPrisma.gpsPosition.findMany.mockResolvedValue([]);
+    mockPrisma.gpsPosition.createMany.mockResolvedValue({ count: 0 });
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [] });
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('backfill et position live pour le MÊME device ne s\'exécutent jamais en même temps (le live attend le backfill)', async () => {
+    const events: string[] = [];
+    let resolveFetch!: (v: any) => void;
+    // Le fetch REST du backfill reste en attente : le backfill tient le verrou
+    // du device pendant cette section critique (lecture → écriture).
+    global.fetch = jest.fn(
+      () => new Promise((resolve) => { resolveFetch = resolve; }),
+    ) as any;
+
+    mockPrisma.gpsPosition.createMany.mockImplementation(async ({ data }: any) => {
+      events.push(`backfill:createMany:${data.length}`);
+      return { count: data.length };
+    });
+    mockTrackingService.savePosition.mockImplementation(async () => {
+      events.push('live:savePosition');
+      return { id: 'gps-live', suspect: false };
+    });
+
+    const backfillPromise = (service as any).performBackfill();
+    await new Promise((r) => setTimeout(r, 10)); // le backfill entre dans le fetch (verrou tenu)
+
+    // Position live du MÊME device pendant que le backfill est en cours : le mutex
+    // par device doit la BLOQUER (lecture "dernière position" → écriture protégées).
+    const livePromise = (service as any).handlePosition(livePosition());
+    await new Promise((r) => setTimeout(r, 10));
+    expect(events).not.toContain('live:savePosition');
+
+    // Libère le fetch : le backfill finit (insertion) PUIS le live est traité.
+    resolveFetch({
+      ok: true,
+      json: async () => [
+        livePosition({ id: 1, deviceId: DEVICE_ID }),
+      ],
+    });
+    await backfillPromise;
+    await livePromise;
+
+    const ci = events.indexOf('backfill:createMany:1');
+    const li = events.indexOf('live:savePosition');
+    expect(ci).toBeGreaterThanOrEqual(0);
+    expect(li).toBeGreaterThan(ci);
+    // La même position physique (même timestamp) n'est donc JAMAIS insérée deux fois
+    // : les deux chemins sont sérialisés pour ce device.
+    expect(mockPrisma.gpsPosition.createMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('deux devices DIFFÉRENTS restent traités en parallèle (verrou par device, pas global)', async () => {
+    mockPrisma.vehicle.findMany.mockResolvedValue([
+      { id: VEHICLE_ID, traccarDeviceId: '42', companyId: 'c1' },
+      { id: VEHICLE_ID2, traccarDeviceId: '43', companyId: 'c1' },
+    ]);
+    mockPrisma.vehicle.findFirst.mockImplementation(({ where }: any) =>
+      Promise.resolve({
+        id: where.traccarDeviceId === '43' ? VEHICLE_ID2 : VEHICLE_ID,
+        companyId: 'c1',
+      }),
+    );
+
+    const events: string[] = [];
+    let releaseDevice42!: () => void;
+    mockTrackingService.savePosition.mockImplementation(async (_d: any, dto: any) => {
+      if (dto.vehicleId === VEHICLE_ID) {
+        events.push('d42:enter');
+        await new Promise<void>((resolve) => { releaseDevice42 = resolve; });
+        events.push('d42:exit');
+        return { id: 'gps-42', suspect: false };
+      }
+      events.push('d43:done');
+      return { id: 'gps-43', suspect: false };
+    });
+
+    // device 42 reste bloqué dans sa section critique (savePosition suspendue).
+    const p42 = (service as any).handlePosition(livePosition({ deviceId: 42 }));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(events).toContain('d42:enter');
+
+    // device 43 : ne doit PAS attendre device 42 (verrou par device).
+    const p43 = (service as any).handlePosition(livePosition({ deviceId: 43 }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(events).toContain('d43:done');
+
+    releaseDevice42();
+    await p42;
+    await p43;
+    expect(events).toContain('d42:exit');
+  });
+
+  it('garde statique : la contrainte unique (vehicleId, timestamp) est déclarée dans le schéma ET appliquée par la migration', () => {
+    const { readFileSync, readdirSync } = require('fs');
+    const { join } = require('path');
+    const root = join(__dirname, '..', '..', '..');
+
+    const schema = readFileSync(join(root, 'prisma', 'schema.prisma'), 'utf8');
+    const gpsBlock = schema.slice(
+      schema.indexOf('model GpsPosition {'),
+      schema.indexOf('model GpsPositionArchive {'),
+    );
+    expect(gpsBlock).toContain('@@unique([vehicleId, timestamp])');
+
+    const migrationsDir = join(root, 'prisma', 'migrations');
+    const migrationDirs = readdirSync(migrationsDir).filter((d: string) =>
+      d.includes('gps_position_unique_vehicle_timestamp'),
+    );
+    expect(migrationDirs.length).toBeGreaterThan(0);
+    const sql = readFileSync(join(migrationsDir, migrationDirs[0], 'migration.sql'), 'utf8');
+    // Dédup des doublons existants AVANT la création de l'index unique, sinon
+    // la migration échouerait sur une base de production déjà polluée.
+    expect(sql).toContain('DELETE FROM "gps_positions"');
+    expect(sql).toContain('CREATE UNIQUE INDEX "gps_positions_vehicle_id_timestamp_key"');
+  });
+});

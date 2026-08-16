@@ -527,7 +527,16 @@ model GpsPosition {
   @@index([deliveryId])
   @@index([vehicleId])
   @@index([timestamp])
-  @@index([vehicleId, timestamp])
+  // CONTRAINTE UNIQUE COMPOSITE (vehicleId, timestamp) : filet anti-doublon de
+  // DERNIER recours au niveau base. La course backfill/position live du pont
+  // Traccar est d'abord sérialisée PAR DEVICE (mutex en mémoire dans
+  // traccar-bridge.service.ts), mais une violation peut encore survenir en
+  // environnement multi-réplica ou après un redémarrage (clé Redis perdue). Une
+  // même position physique (même timestamp Traccar) ne doit JAMAIS exister deux
+  // fois pour le même véhicule — pollution des distances, rapports de trajet,
+  // carburant et alertes de proximité. Les insertions (savePosition, saveBatch,
+  // performBackfill) capturent la P2002 et la traitent comme "déjà présente".
+  @@unique([vehicleId, timestamp])
   @@index([deliveryId, timestamp])
   @@map("gps_positions")
 }

@@ -1,4 +1,5 @@
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TrackingService } from './tracking.service';
 import { FuelConsumptionService } from '../fuel-consumption/fuel-consumption.service';
@@ -194,6 +195,25 @@ describe('TrackingService', () => {
         service.savePosition('00000000-0000-4000-0000-000000000002', dto),
       ).resolves.toBeNull();
       expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
+    });
+
+    it('traite une violation P2002 (contrainte unique vehicleId+timestamp) comme une position déjà présente — aucune erreur remontée', async () => {
+      // Course backfill/position live multi-réplica : le dédoublonnage temporel
+      // (fenêtre 1s) n'a pas intercepté la retransmission, la contrainte unique
+      // est le filet de dernier recours. savePosition doit retourner null (position
+      // déjà présente, log debug) et NON lever : le client (app/pont) considérerait
+      // sinon sa position comme perdue et la remettrait en file en boucle.
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
+      const p2002 = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed on the fields: (`vehicleId`,`timestamp`)',
+        { code: 'P2002', clientVersion: 'test' },
+      );
+      mockPrisma.gpsPosition.create.mockRejectedValueOnce(p2002);
+
+      const result = await service.savePosition('00000000-0000-4000-0000-000000000002', dto);
+      expect(result).toBeNull();
+      // La position est comptée comme dédupliquée, pas comme un échec d'insertion.
+      expect((service as any).metrics.deduped).toBe(1);
     });
 
     it('accepts all positions in a 3s-interval sequence (INTERVAL_FAST scenario)', async () => {
@@ -1009,6 +1029,39 @@ describe('TrackingService', () => {
 
       expect(saved).toHaveLength(1);
       expect(mockPrisma.gpsPosition.createManyAndReturn).toHaveBeenCalledTimes(1);
+    });
+
+    it('passe skipDuplicates:true et traite une P2002 comme des positions déjà présentes (aucune erreur remontée)', async () => {
+      const positions = [
+        {
+          latitude: 1,
+          longitude: 2,
+          timestamp: '2026-07-21T10:00:00.000Z',
+          vehicleId: VID1,
+        },
+      ];
+
+      mockPrisma.delivery.findMany.mockResolvedValue([]);
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VID1 }]);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue([]); // aucune position en base
+
+      // La contrainte unique (vehicleId, timestamp) rejette le lot (course
+      // inter-réplicas malgré skipDuplicates) : défense en profondeur, le lot est
+      // traité comme déjà présent sans erreur remontée à l'appelant (gateway batch).
+      const p2002 = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed on the fields: (`vehicleId`,`timestamp`)',
+        { code: 'P2002', clientVersion: 'test' },
+      );
+      mockPrisma.gpsPosition.createManyAndReturn.mockRejectedValueOnce(p2002);
+
+      const saved = await service.saveBatch('user-1', 'driver-1', positions as any);
+
+      expect(saved).toEqual([]);
+      // skipDuplicates: true : les lignes en conflit du lot sont ignorées au niveau
+      // base (ON CONFLICT DO NOTHING), les autres restent insérées.
+      expect(mockPrisma.gpsPosition.createManyAndReturn).toHaveBeenCalledWith(
+        expect.objectContaining({ skipDuplicates: true }),
+      );
     });
 
     it('computes fallback speed in saveBatch when device speed is missing (offline queue flush scenario)', async () => {

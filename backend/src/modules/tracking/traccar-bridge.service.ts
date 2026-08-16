@@ -13,6 +13,7 @@ import Redis from 'ioredis';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { isUniqueConstraintViolation } from '../../common/prisma/unique-violation';
 import { TrackingService } from '../tracking/tracking.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -155,6 +156,46 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private reconnectAttempts = 0;
   private lastPositionReceivedAt: number | null = null;
   private sessionExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Mutex en mémoire PAR device Traccar : sérialise la séquence "lecture dernière
+   * position / doublons → écriture" entre le backfill (performBackfill) et le flux
+   * temps réel (handlePosition) pour le MÊME device. Sans lui, à chaque
+   * reconnexion performBackfill tournait EN PARALLÈLE des messages live sur une
+   * fenêtre temporelle qui se chevauche (le backfill va jusqu'à "maintenant" quand
+   * les positions live arrivent) : la MÊME position physique (même timestamp
+   * Traccar) pouvait être insérée deux fois avec deux id différents — pollution
+   * des distances, rapports de trajet, carburant et alertes de proximité.
+   * Le verrou est PAR device (Map<deviceId, Promise chaînée>) : des devices
+   * DIFFÉRENTS restent strictement parallèles (aucune régression de performance).
+   */
+  private readonly deviceLocks = new Map<string, Promise<unknown>>();
+
+  /**
+   * Pose le verrou du device pendant l'exécution de `task`, puis le libère —
+   * y compris en cas d'erreur (try/finally via la chaîne de promesses). Les
+   * appels concurrents pour le MÊME device sont chaînés (le suivant attend la
+   * fin du précédent) ; les devices différents ne s'attendent jamais.
+   */
+  private withDeviceLock<T>(deviceId: string, task: () => Promise<T>): Promise<T> {
+    const prev = this.deviceLocks.get(deviceId) ?? Promise.resolve();
+    const run = prev.then(() => task());
+    // L'entrée enregistrée résout une fois `run` terminé (succès OU échec) puis
+    // se retire de la Map si elle est toujours l'entrée courante (pas remplacée
+    // par un appel concurrent) — évite toute fuite mémoire sur les devices
+    // supprimés. `.then(.., ..)` (et non un simple `.catch`) : l'échec d'une
+    // tâche ne doit JAMAIS casser la chaîne du device.
+    const stored = run.then(
+      () => {
+        if (this.deviceLocks.get(deviceId) === stored) this.deviceLocks.delete(deviceId);
+      },
+      () => {
+        if (this.deviceLocks.get(deviceId) === stored) this.deviceLocks.delete(deviceId);
+      },
+    );
+    this.deviceLocks.set(deviceId, stored);
+    return run;
+  }
 
   constructor(
     private configService: ConfigService,
@@ -937,6 +978,10 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
   private async performBackfill() {
     if (!this.sessionCookie) return;
+    // Copie locale : le fetch ci-dessous est appelé depuis un CALLBACK async
+    // (withDeviceLock) où TypeScript perd le narrowing de this.sessionCookie
+    // (le champ peut changer entre la garde et l'exécution du callback).
+    const sessionCookie = this.sessionCookie;
 
     try {
       const vehiclesWithTrackers = await this.prisma.vehicle.findMany({
@@ -960,260 +1005,291 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       for (const vehicle of vehiclesWithTrackers) {
         if (!vehicle.traccarDeviceId) continue;
 
-        let lastTs: Date | null = null;
-        if (this.redis) {
-          const stored = await this.redis.get(`traccar:last_position:${vehicle.traccarDeviceId}`);
-          if (stored) lastTs = new Date(stored);
-        }
-
-        if (!lastTs) {
-          // Borne "from" du backfill : doit refléter la DERNIÈRE position STOCKÉE (même
-          // suspecte), sinon on re-fetchrait des positions déjà en base (doublons).
-          const lastPos = await this.trackingService.getLastPosition(vehicle.id, false);
-          if (lastPos) lastTs = lastPos.timestamp;
-        }
-
-        const rawFrom = lastTs || new Date(now.getTime() - BACKFILL_MAX_HOURS * 3600000);
-        // Marge anti-doublon : l'API /api/positions de Traccar traite `from` de façon
-        // INCLUSIVE (Condition.Between → SQL BETWEEN, fixTime >= from AND fixTime <= to,
-        // cf. source Traccar PositionUtil.getPositionsStream). Sans marge, lastTs (la
-        // dernière position déjà traitée) serait re-fetchée à chaque reconnexion et
-        // réinsérée en double. On décale donc la borne de +1s pour ne plus refetcher
-        // le dernier point déjà stocké.
-        const from = new Date(rawFrom.getTime() + 1000);
-
-        const fromLimit = new Date(now.getTime() - BACKFILL_MAX_HOURS * 3600000);
-        const effectiveFrom = from > fromLimit ? from : fromLimit;
-
-        if (effectiveFrom >= now) continue;
-
-        try {
-          const url = `${this.traccarUrl}/api/positions?deviceId=${vehicle.traccarDeviceId}&from=${effectiveFrom.toISOString()}&to=${now.toISOString()}`;
-          const response = await fetch(url, {
-            headers: { Cookie: this.sessionCookie },
-            // Un serveur Traccar bloqué ne doit pas geler le backfill de TOUS les devices
-            // (le loop par véhicule s'arrêterait sur ce fetch sans timeout).
-            signal: AbortSignal.timeout(20000),
-          });
-
-          if (!response.ok) {
-            this.logger.warn(
-              `Backfill fetch failed for device ${vehicle.traccarDeviceId}: HTTP ${response.status}`,
-            );
-            continue;
-          }
-
-          const positions: TraccarPosition[] = await response.json();
-          if (positions.length === 0) continue;
-
-          this.logger.log(
-            `Backfill: ${positions.length} positions for device ${vehicle.traccarDeviceId}`,
-          );
-
-          const toInsert: Array<{
-            latitude: number;
-            longitude: number;
-            speed: number;
-            heading: number;
-            altitude: number;
-            accuracy: number;
-            suspect: boolean;
-            location: string;
-            timestamp: Date;
-            companyId: string;
-            deliveryId: string | null | undefined;
-            vehicleId: string;
-            driverId: string | null;
-            source: 'physical_tracker';
-            attributes?: Prisma.InputJsonValue;
-          }> = [];
-
-          // N+1 : avant, resolveDriverIdAtTimestamp faisait UNE requête
-          // vehicleAssignmentHistory.findFirst PAR position backfillée (un device avec
-          // 500 positions tamponnées = 500 requêtes séquentielles, bloquant le pont). On
-          // charge UNE SEULE FOIS l'historique complet du véhicule (trié par assignedAt)
-          // puis on résout chaque fix en mémoire.
-          const assignments = await this.prisma.vehicleAssignmentHistory.findMany({
-            where: { vehicleId: vehicle.id },
-            orderBy: { assignedAt: 'asc' },
-            select: { driverId: true, assignedAt: true, unassignedAt: true },
-          });
-          const resolveDriver = (timestamp: Date): string | null => {
-            // Dernière affectation dont assignedAt <= fix_time ET (unassignedAt null ou >= fix_time).
-            for (let i = assignments.length - 1; i >= 0; i--) {
-              const a = assignments[i];
-              if (a.assignedAt.getTime() > timestamp.getTime()) continue;
-              if (a.unassignedAt === null || a.unassignedAt.getTime() >= timestamp.getTime()) {
-                return a.driverId;
-              }
-            }
-            return null;
-          };
-
-          // FIDÉLITÉ DU TRAJET (correction) : handlePosition (temps réel) rattache la
-          // livraison active via deliveryId, mais performBackfill enregistrait les
-          // positions rattrapées avec deliveryId null → elles DISPARAÎSSAIENT du rapport
-          // de trajet de la livraison (trou après une coupure serveur). On rattache donc
-          // chaque position backfillée à la livraison DU VÉHICULE dont la fenêtre
-          // (createdAt .. completedAt|null) couvre l'instant du fix GPS — la résolution
-          // est temporelle (même logique que le chauffeur), PAS basée sur l'état courant :
-          // une livraison réaffectée en cours de trajet garde ses positions attachées.
-          const vehicleDeliveries = await this.prisma.delivery.findMany({
-            where: {
-              vehicleId: vehicle.id,
-              deletedAt: null,
-              status: { in: ['in_progress', 'delivered', 'assigned'] },
-            },
-            select: { id: true, createdAt: true, completedAt: true },
-          });
-          const resolveDeliveryId = (timestamp: Date): string | null => {
-            // Dernière livraison du véhicule dont la fenêtre couvre le fix.
-            for (let i = vehicleDeliveries.length - 1; i >= 0; i--) {
-              const d = vehicleDeliveries[i];
-              if (d.createdAt.getTime() > timestamp.getTime()) continue;
-              if (d.completedAt === null || d.completedAt.getTime() >= timestamp.getTime()) {
-                return d.id;
-              }
-            }
-            return null;
-          };
-
-          let lastBackfillPos: { latitude: number; longitude: number; timestamp: Date } | null =
-            null;
+        // Sérialisation PAR DEVICE (see field deviceLocks) : un backfill et une
+        // position live pour le MÊME device ne peuvent jamais s'exécuter en même
+        // temps entre la lecture "dernière position / doublons" et l'écriture en
+        // base. performBackfill est lancé fire-and-forget à chaque connexion ;
+        // sans ce verrou, il rejouait en parallèle du flux live une fenêtre qui
+        // se chevauche (jusqu'à "maintenant") → mêmes positions insérées deux fois.
+        await this.withDeviceLock(String(vehicle.traccarDeviceId), async () => {
+          let lastTs: Date | null = null;
           if (this.redis) {
             const stored = await this.redis.get(`traccar:last_position:${vehicle.traccarDeviceId}`);
-            if (stored) {
-              // Référence de téléportation du backfill : dernier point FIABLE (exclut
-              // les positions suspectes), cohérent avec detectTeleportation — comparer
-              // contre un point déjà aberrant propagerait la fausse téléportation.
-              const lastDbPos = await this.trackingService.getLastPosition(vehicle.id);
-              if (lastDbPos) {
-                lastBackfillPos = {
-                  latitude: lastDbPos.latitude,
-                  longitude: lastDbPos.longitude,
-                  timestamp: lastDbPos.timestamp,
-                };
-              }
-            }
+            if (stored) lastTs = new Date(stored);
           }
 
-          for (const pos of positions) {
-            const timestamp = this.parseTimestamp(pos);
-            if (!this.isValidCoordinates(pos.latitude, pos.longitude)) continue;
-            if (pos.valid === false) {
+          if (!lastTs) {
+            // Borne "from" du backfill : doit refléter la DERNIÈRE position STOCKÉE (même
+            // suspecte), sinon on re-fetchrait des positions déjà en base (doublons).
+            const lastPos = await this.trackingService.getLastPosition(vehicle.id, false);
+            if (lastPos) lastTs = lastPos.timestamp;
+          }
+
+          const rawFrom = lastTs || new Date(now.getTime() - BACKFILL_MAX_HOURS * 3600000);
+          // Marge anti-doublon : l'API /api/positions de Traccar traite `from` de façon
+          // INCLUSIVE (Condition.Between → SQL BETWEEN, fixTime >= from AND fixTime <= to,
+          // cf. source Traccar PositionUtil.getPositionsStream). Sans marge, lastTs (la
+          // dernière position déjà traitée) serait re-fetchée à chaque reconnexion et
+          // réinsérée en double. On décale donc la borne de +1s pour ne plus refetcher
+          // le dernier point déjà stocké.
+          const from = new Date(rawFrom.getTime() + 1000);
+
+          const fromLimit = new Date(now.getTime() - BACKFILL_MAX_HOURS * 3600000);
+          const effectiveFrom = from > fromLimit ? from : fromLimit;
+
+          if (effectiveFrom >= now) return;
+
+          try {
+          const url = `${this.traccarUrl}/api/positions?deviceId=${vehicle.traccarDeviceId}&from=${effectiveFrom.toISOString()}&to=${now.toISOString()}`;
+          const response = await fetch(url, {
+            headers: { Cookie: sessionCookie },
+              // Un serveur Traccar bloqué ne doit pas geler le backfill de TOUS les devices
+              // (le loop par véhicule s'arrêterait sur ce fetch sans timeout).
+              signal: AbortSignal.timeout(20000),
+            });
+
+            if (!response.ok) {
               this.logger.warn(
-                `Backfill: position LBS rejetée (valid=false) pour device ${pos.deviceId}`,
+                `Backfill fetch failed for device ${vehicle.traccarDeviceId}: HTTP ${response.status}`,
               );
-              continue;
+              return;
             }
 
-            // Driver résolu AU MOMENT du fix (pas l'affectation courante).
-            const backfillDriverId = resolveDriver(timestamp);
+            const positions: TraccarPosition[] = await response.json();
+            if (positions.length === 0) return;
 
-            const speedMs = (pos.speed || 0) * 0.514444;
-            const { accuracy } = computeCombinedAccuracy(pos.accuracy, pos.attributes);
+            this.logger.log(
+              `Backfill: ${positions.length} positions for device ${vehicle.traccarDeviceId}`,
+            );
 
-            // Télémétrie stockée sur les positions backfillées aussi (historique) :
-            // la classification de silence utilisera la dernière télémétrie connue
-            // même si la coupure a précédé la reconnexion.
-            const backfillTelemetry = toJsonValue(extractTrackerTelemetry(pos.attributes));
+            const toInsert: Array<{
+              latitude: number;
+              longitude: number;
+              speed: number;
+              heading: number;
+              altitude: number;
+              accuracy: number;
+              suspect: boolean;
+              location: string;
+              timestamp: Date;
+              companyId: string;
+              deliveryId: string | null | undefined;
+              vehicleId: string;
+              driverId: string | null;
+              source: 'physical_tracker';
+              attributes?: Prisma.InputJsonValue;
+            }> = [];
 
-            // MÊME décision de téléportation que le chemin temps réel
-            // (evaluateTeleportation, source unique dans teleportation.utils) : la
-            // détection du backfill recalculait un seuil 55.56 * max(1, accuracy/10) SANS
-            // plafond, alors que le temps réel plafonne à x1.5 — un device à accuracy
-            // dégradée (50-100m) voyait son seuil gonflé jusqu'à x5-10 et des vrais sauts
-            // passaient suspects côté backfill mais pas côté temps réel (et inversement).
-            let suspect = false;
-            if (lastBackfillPos) {
-              const evaluation = evaluateTeleportation(
-                lastBackfillPos,
-                pos.latitude,
-                pos.longitude,
-                timestamp,
-                accuracy,
+            // N+1 : avant, resolveDriverIdAtTimestamp faisait UNE requête
+            // vehicleAssignmentHistory.findFirst PAR position backfillée (un device avec
+            // 500 positions tamponnées = 500 requêtes séquentielles, bloquant le pont). On
+            // charge UNE SEULE FOIS l'historique complet du véhicule (trié par assignedAt)
+            // puis on résout chaque fix en mémoire.
+            const assignments = await this.prisma.vehicleAssignmentHistory.findMany({
+              where: { vehicleId: vehicle.id },
+              orderBy: { assignedAt: 'asc' },
+              select: { driverId: true, assignedAt: true, unassignedAt: true },
+            });
+            const resolveDriver = (timestamp: Date): string | null => {
+              // Dernière affectation dont assignedAt <= fix_time ET (unassignedAt null ou >= fix_time).
+              for (let i = assignments.length - 1; i >= 0; i--) {
+                const a = assignments[i];
+                if (a.assignedAt.getTime() > timestamp.getTime()) continue;
+                if (a.unassignedAt === null || a.unassignedAt.getTime() >= timestamp.getTime()) {
+                  return a.driverId;
+                }
+              }
+              return null;
+            };
+
+            // FIDÉLITÉ DU TRAJET (correction) : handlePosition (temps réel) rattache la
+            // livraison active via deliveryId, mais performBackfill enregistrait les
+            // positions rattrapées avec deliveryId null → elles DISPARAÎSSAIENT du rapport
+            // de trajet de la livraison (trou après une coupure serveur). On rattache donc
+            // chaque position backfillée à la livraison DU VÉHICULE dont la fenêtre
+            // (createdAt .. completedAt|null) couvre l'instant du fix GPS — la résolution
+            // est temporelle (même logique que le chauffeur), PAS basée sur l'état courant :
+            // une livraison réaffectée en cours de trajet garde ses positions attachées.
+            const vehicleDeliveries = await this.prisma.delivery.findMany({
+              where: {
+                vehicleId: vehicle.id,
+                deletedAt: null,
+                status: { in: ['in_progress', 'delivered', 'assigned'] },
+              },
+              select: { id: true, createdAt: true, completedAt: true },
+            });
+            const resolveDeliveryId = (timestamp: Date): string | null => {
+              // Dernière livraison du véhicule dont la fenêtre couvre le fix.
+              for (let i = vehicleDeliveries.length - 1; i >= 0; i--) {
+                const d = vehicleDeliveries[i];
+                if (d.createdAt.getTime() > timestamp.getTime()) continue;
+                if (d.completedAt === null || d.completedAt.getTime() >= timestamp.getTime()) {
+                  return d.id;
+                }
+              }
+              return null;
+            };
+
+            let lastBackfillPos: { latitude: number; longitude: number; timestamp: Date } | null =
+              null;
+            if (this.redis) {
+              const stored = await this.redis.get(
+                `traccar:last_position:${vehicle.traccarDeviceId}`,
               );
-              suspect = evaluation.suspect;
-              if (suspect) {
+              if (stored) {
+                // Référence de téléportation du backfill : dernier point FIABLE (exclut
+                // les positions suspectes), cohérent avec detectTeleportation — comparer
+                // contre un point déjà aberrant propagerait la fausse téléportation.
+                const lastDbPos = await this.trackingService.getLastPosition(vehicle.id);
+                if (lastDbPos) {
+                  lastBackfillPos = {
+                    latitude: lastDbPos.latitude,
+                    longitude: lastDbPos.longitude,
+                    timestamp: lastDbPos.timestamp,
+                  };
+                }
+              }
+            }
+
+            for (const pos of positions) {
+              const timestamp = this.parseTimestamp(pos);
+              if (!this.isValidCoordinates(pos.latitude, pos.longitude)) continue;
+              if (pos.valid === false) {
                 this.logger.warn(
-                  `Backfill teleportation suspect (${evaluation.reason}): vehicle=${vehicle.id} distance=${Math.round(evaluation.distance)}m time=${evaluation.timeDiffSec.toFixed(1)}s speed=${(evaluation.speedMs * 3.6).toFixed(1)}km/h`,
+                  `Backfill: position LBS rejetée (valid=false) pour device ${pos.deviceId}`,
+                );
+                continue;
+              }
+
+              // Driver résolu AU MOMENT du fix (pas l'affectation courante).
+              const backfillDriverId = resolveDriver(timestamp);
+
+              const speedMs = (pos.speed || 0) * 0.514444;
+              const { accuracy } = computeCombinedAccuracy(pos.accuracy, pos.attributes);
+
+              // Télémétrie stockée sur les positions backfillées aussi (historique) :
+              // la classification de silence utilisera la dernière télémétrie connue
+              // même si la coupure a précédé la reconnexion.
+              const backfillTelemetry = toJsonValue(extractTrackerTelemetry(pos.attributes));
+
+              // MÊME décision de téléportation que le chemin temps réel
+              // (evaluateTeleportation, source unique dans teleportation.utils) : la
+              // détection du backfill recalculait un seuil 55.56 * max(1, accuracy/10) SANS
+              // plafond, alors que le temps réel plafonne à x1.5 — un device à accuracy
+              // dégradée (50-100m) voyait son seuil gonflé jusqu'à x5-10 et des vrais sauts
+              // passaient suspects côté backfill mais pas côté temps réel (et inversement).
+              let suspect = false;
+              if (lastBackfillPos) {
+                const evaluation = evaluateTeleportation(
+                  lastBackfillPos,
+                  pos.latitude,
+                  pos.longitude,
+                  timestamp,
+                  accuracy,
+                );
+                suspect = evaluation.suspect;
+                if (suspect) {
+                  this.logger.warn(
+                    `Backfill teleportation suspect (${evaluation.reason}): vehicle=${vehicle.id} distance=${Math.round(evaluation.distance)}m time=${evaluation.timeDiffSec.toFixed(1)}s speed=${(evaluation.speedMs * 3.6).toFixed(1)}km/h`,
+                  );
+                }
+              }
+              lastBackfillPos = { latitude: pos.latitude, longitude: pos.longitude, timestamp };
+
+              toInsert.push({
+                latitude: pos.latitude,
+                longitude: pos.longitude,
+                speed: speedMs,
+                heading: pos.course || 0,
+                altitude: pos.altitude || 0,
+                accuracy,
+                suspect,
+                location: `POINT(${pos.longitude} ${pos.latitude})`,
+                timestamp,
+                companyId: vehicle.companyId,
+                // Livraison active AU MOMENT du fix (fenêtre createdAt..completedAt), pour
+                // que les positions rattrapées après coupure apparaissent dans le rapport
+                // de trajet de la bonne livraison.
+                deliveryId: resolveDeliveryId(timestamp),
+                vehicleId: vehicle.id,
+                // DriverId au moment de CE fix GPS (pas l'affectation courante) :
+                // sur un backfill, les positions antérieures à un changement de
+                // chauffeur gardent l'ANCIEN driverId, les postérieures le NOUVEAU.
+                driverId: backfillDriverId,
+                source: 'physical_tracker',
+                attributes: backfillTelemetry
+                  ? (backfillTelemetry as Prisma.InputJsonValue)
+                  : undefined,
+              });
+            }
+
+            if (toInsert.length > 0) {
+              // Garde-fou anti-doublons, indépendant de la marge effectiveFrom : on charge
+              // en UNE requête groupée les timestamps déjà présents en base pour ce véhicule
+              // sur la fenêtre couverte par le lot, puis on filtre toInsert avant insertion.
+              // Couvre le cas où la marge +1s est insuffisante (ex: clé Redis perdue au
+              // redémarrage) et évite le problème N+1 (une requête par position) déjà
+              // identifié dans l'audit. On conserve le choix actuel de ne pas générer
+              // d'alertes sur les positions de backfill (donnée historique).
+              const windowStart = new Date(Math.min(...toInsert.map((p) => p.timestamp.getTime())));
+              const windowEnd = new Date(Math.max(...toInsert.map((p) => p.timestamp.getTime())));
+              const existing = await this.prisma.gpsPosition.findMany({
+                where: { vehicleId: vehicle.id, timestamp: { gte: windowStart, lte: windowEnd } },
+                select: { timestamp: true },
+              });
+              const existingTs = new Set(existing.map((e) => e.timestamp.getTime()));
+              const uniqueToInsert = toInsert.filter((p) => !existingTs.has(p.timestamp.getTime()));
+
+              if (uniqueToInsert.length > 0) {
+                try {
+                  // skipDuplicates : filet de dernier recours au niveau base (contrainte
+                  // unique (vehicleId, timestamp)) — si malgré le verrou par device et le
+                  // filtre ci-dessus un doublon exact subsiste (ex. course inter-réplicas),
+                  // le CREATE est toléré sans planter : les lignes en conflit sont ignorées,
+                  // les autres insérées. P2002 capturée en défense (log debug, jamais
+                  // d'erreur remontée) : la position est déjà présente, rien à rattraper.
+                  await this.prisma.gpsPosition.createMany({
+                    data: uniqueToInsert,
+                    skipDuplicates: true,
+                  });
+                } catch (insertErr: any) {
+                  if (isUniqueConstraintViolation(insertErr)) {
+                    this.logger.debug(
+                      `Backfill: positions déjà présentes (contrainte unique) pour device ${vehicle.traccarDeviceId}`,
+                    );
+                    return;
+                  }
+                  throw insertErr;
+                }
+                this.logger.log(
+                  `Backfill: inserted ${uniqueToInsert.length} positions for device ${vehicle.traccarDeviceId} (no alerts generated — historical data)`,
+                );
+
+                if (this.redis) {
+                  // MAX des timestamps réellement insérés (pas forcément le dernier élément
+                  // du tableau) : le filtre anti-doublons peut retirer des positions en fin
+                  // de lot (déjà en base), et lastTs servirait alors à re-fetcher des
+                  // positions déjà traitées à la prochaine reconnexion.
+                  const maxTs = new Date(
+                    Math.max(...uniqueToInsert.map((p) => p.timestamp.getTime())),
+                  );
+                  await this.redis.set(
+                    `traccar:last_position:${vehicle.traccarDeviceId}`,
+                    maxTs.toISOString(),
+                  );
+                }
+              } else {
+                this.logger.log(
+                  `Backfill: 0 new positions for device ${vehicle.traccarDeviceId} (${toInsert.length} filtered as duplicates)`,
                 );
               }
             }
-            lastBackfillPos = { latitude: pos.latitude, longitude: pos.longitude, timestamp };
-
-            toInsert.push({
-              latitude: pos.latitude,
-              longitude: pos.longitude,
-              speed: speedMs,
-              heading: pos.course || 0,
-              altitude: pos.altitude || 0,
-              accuracy,
-              suspect,
-              location: `POINT(${pos.longitude} ${pos.latitude})`,
-              timestamp,
-              companyId: vehicle.companyId,
-              // Livraison active AU MOMENT du fix (fenêtre createdAt..completedAt), pour
-              // que les positions rattrapées après coupure apparaissent dans le rapport
-              // de trajet de la bonne livraison.
-              deliveryId: resolveDeliveryId(timestamp),
-              vehicleId: vehicle.id,
-              // DriverId au moment de CE fix GPS (pas l'affectation courante) :
-              // sur un backfill, les positions antérieures à un changement de
-              // chauffeur gardent l'ANCIEN driverId, les postérieures le NOUVEAU.
-              driverId: backfillDriverId,
-              source: 'physical_tracker',
-              attributes: backfillTelemetry
-                ? (backfillTelemetry as Prisma.InputJsonValue)
-                : undefined,
-            });
+          } catch (err: any) {
+            this.logger.warn(
+              `Backfill error for device ${vehicle.traccarDeviceId}: ${err.message}`,
+            );
           }
-
-          if (toInsert.length > 0) {
-            // Garde-fou anti-doublons, indépendant de la marge effectiveFrom : on charge
-            // en UNE requête groupée les timestamps déjà présents en base pour ce véhicule
-            // sur la fenêtre couverte par le lot, puis on filtre toInsert avant insertion.
-            // Couvre le cas où la marge +1s est insuffisante (ex: clé Redis perdue au
-            // redémarrage) et évite le problème N+1 (une requête par position) déjà
-            // identifié dans l'audit. On conserve le choix actuel de ne pas générer
-            // d'alertes sur les positions de backfill (donnée historique).
-            const windowStart = new Date(Math.min(...toInsert.map((p) => p.timestamp.getTime())));
-            const windowEnd = new Date(Math.max(...toInsert.map((p) => p.timestamp.getTime())));
-            const existing = await this.prisma.gpsPosition.findMany({
-              where: { vehicleId: vehicle.id, timestamp: { gte: windowStart, lte: windowEnd } },
-              select: { timestamp: true },
-            });
-            const existingTs = new Set(existing.map((e) => e.timestamp.getTime()));
-            const uniqueToInsert = toInsert.filter((p) => !existingTs.has(p.timestamp.getTime()));
-
-            if (uniqueToInsert.length > 0) {
-              await this.prisma.gpsPosition.createMany({ data: uniqueToInsert });
-              this.logger.log(
-                `Backfill: inserted ${uniqueToInsert.length} positions for device ${vehicle.traccarDeviceId} (no alerts generated — historical data)`,
-              );
-
-              if (this.redis) {
-                // MAX des timestamps réellement insérés (pas forcément le dernier élément
-                // du tableau) : le filtre anti-doublons peut retirer des positions en fin
-                // de lot (déjà en base), et lastTs servirait alors à re-fetcher des
-                // positions déjà traitées à la prochaine reconnexion.
-                const maxTs = new Date(
-                  Math.max(...uniqueToInsert.map((p) => p.timestamp.getTime())),
-                );
-                await this.redis.set(
-                  `traccar:last_position:${vehicle.traccarDeviceId}`,
-                  maxTs.toISOString(),
-                );
-              }
-            } else {
-              this.logger.log(
-                `Backfill: 0 new positions for device ${vehicle.traccarDeviceId} (${toInsert.length} filtered as duplicates)`,
-              );
-            }
-          }
-        } catch (err: any) {
-          this.logger.warn(`Backfill error for device ${vehicle.traccarDeviceId}: ${err.message}`);
-        }
+        }); // fin du verrou par device (withDeviceLock)
       }
     } catch (err: any) {
       this.logger.error(`Backfill failed: ${err.message}`);
@@ -1238,115 +1314,145 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const vehicleMapping = await this.prisma.vehicle.findFirst({
-        where: {
-          traccarDeviceId: String(pos.deviceId),
-          positionSource: 'physical_tracker',
-          isActive: true,
-          deletedAt: null,
-        },
-        select: {
-          id: true,
-          companyId: true,
-        },
+      // Sérialisation PAR DEVICE (see field deviceLocks) : toute la séquence
+      // lecture→écriture pour CE device (lookup véhicule, résolution driver/livraison,
+      // dédup + insertion via savePosition) est protégée par le mutex. Un backfill
+      // concurrent pour le MÊME device (reconnexion) ne peut pas insérer en parallèle
+      // la même position physique (même timestamp Traccar) entre la lecture "dernière
+      // position" et l'écriture en base. Les alertes télémétrie et les broadcasts
+      // (hors verrou) n'écrivent pas dans gps_positions : aucune course possible.
+      const processed = await this.withDeviceLock(String(pos.deviceId), async () => {
+        const vehicleMapping = await this.prisma.vehicle.findFirst({
+          where: {
+            traccarDeviceId: String(pos.deviceId),
+            positionSource: 'physical_tracker',
+            isActive: true,
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            companyId: true,
+          },
+        });
+
+        if (!vehicleMapping) return null;
+
+        // Résolution du chauffeur AU MOMENT du fix GPS (VehicleAssignmentHistory),
+        // jamais l'affectation COURANTE (driver.vehicleId) : sur un backfill, un
+        // changement de chauffeur pendant la fenêtre ne doit pas faire hériter les
+        // positions antérieures du nouveau driverId. Si AUCUNE affectation ne couvre
+        // cet instant, la position est ENREGISTRÉE quand même avec driverId null
+        // (jamais perdue) — GpsPosition.driverId est nullable depuis la migration
+        // 20260805183000_gps_position_driver_id_nullable.
+        const driverId = await this.resolveDriverIdAtTimestamp(vehicleMapping.id, timestamp);
+
+        // Nom du chauffeur pour le broadcast : celui du driver RÉSOLU (au moment du
+        // fix), pas le chauffeur courant du véhicule.
+        let driverName = 'Traccar GPS';
+        if (driverId) {
+          const resolvedDriver = await this.prisma.driver.findUnique({
+            where: { id: driverId },
+            select: { user: { select: { firstName: true, lastName: true } } },
+          });
+          const driverUser = resolvedDriver?.user;
+          if (driverUser) {
+            driverName = `${driverUser.firstName} ${driverUser.lastName}`;
+          }
+        }
+
+        const currentDelivery = driverId
+          ? await this.prisma.delivery.findFirst({
+              where: {
+                driverId,
+                status: 'in_progress',
+                deletedAt: null,
+              },
+              select: { id: true },
+            })
+          : null;
+
+        const { accuracy: derivedAccuracy, hdopInfo } = computeCombinedAccuracy(
+          pos.accuracy,
+          pos.attributes,
+        );
+        this.logger.debug(`Traccar device ${pos.deviceId}: ${hdopInfo}`);
+
+        // Télémétrie matériel (power/battery/ignition) : extraite de façon
+        // protocolo-agnostique et stockée en JSONB. Servira à classer la cause
+        // d'un silence GPS et à alerter en temps réel (coupure électrique /
+        // batterie interne critique) — jamais supposée si le modèle ne la remonte pas.
+        const telemetry = extractTrackerTelemetry(pos.attributes);
+        const attributesJson = toJsonValue(telemetry);
+        if (attributesJson) {
+          this.logger.debug(
+            `Traccar device ${pos.deviceId} telemetry: power=${telemetry.powerVolts ?? 'n/a'}V battery=${telemetry.batteryPercent ?? 'n/a'}% ignition=${telemetry.ignition ?? 'n/a'}`,
+          );
+        }
+
+        const updateDto = {
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          speed: (pos.speed || 0) * 0.514444,
+          heading: pos.course || 0,
+          altitude: pos.altitude || 0,
+          accuracy: derivedAccuracy,
+          timestamp: timestamp.toISOString(),
+          vehicleId: vehicleMapping.id,
+          deliveryId: currentDelivery?.id,
+        };
+
+        const validated = plainToInstance(UpdatePositionDto, updateDto);
+        const errors = validateSync(validated, { whitelist: true, forbidNonWhitelisted: false });
+        if (errors.length > 0) {
+          this.logger.warn(
+            `Traccar position validation failed for device ${pos.deviceId}: ${errors.map((e) => e.toString()).join(', ')}`,
+          );
+          return null;
+        }
+
+        let position;
+        try {
+          position = await this.trackingService.savePosition(
+            driverId,
+            validated,
+            vehicleMapping.companyId,
+            // Le pont Traccar est toujours une source 'physical_tracker'.
+            'physical_tracker',
+            attributesJson,
+          );
+
+          if (this.redis) {
+            await this.redis.set(`traccar:last_position:${pos.deviceId}`, timestamp.toISOString());
+          }
+        } catch (saveErr: any) {
+          this.logger.error(
+            `Save position failed for device ${pos.deviceId}: ${saveErr.message} — queueing`,
+          );
+          await this.queuePendingPosition(pos);
+          return null;
+        }
+
+        return {
+          position,
+          vehicleMapping,
+          driverId,
+          driverName,
+          telemetry,
+          attributesJson,
+          updateDto,
+        };
       });
 
-      if (!vehicleMapping) return;
-
-      // Résolution du chauffeur AU MOMENT du fix GPS (VehicleAssignmentHistory),
-      // jamais l'affectation COURANTE (driver.vehicleId) : sur un backfill, un
-      // changement de chauffeur pendant la fenêtre ne doit pas faire hériter les
-      // positions antérieures du nouveau driverId. Si AUCUNE affectation ne couvre
-      // cet instant, la position est ENREGISTRÉE quand même avec driverId null
-      // (jamais perdue) — GpsPosition.driverId est nullable depuis la migration
-      // 20260805183000_gps_position_driver_id_nullable.
-      const driverId = await this.resolveDriverIdAtTimestamp(vehicleMapping.id, timestamp);
-
-      // Nom du chauffeur pour le broadcast : celui du driver RÉSOLU (au moment du
-      // fix), pas le chauffeur courant du véhicule.
-      let driverName = 'Traccar GPS';
-      if (driverId) {
-        const resolvedDriver = await this.prisma.driver.findUnique({
-          where: { id: driverId },
-          select: { user: { select: { firstName: true, lastName: true } } },
-        });
-        const driverUser = resolvedDriver?.user;
-        if (driverUser) {
-          driverName = `${driverUser.firstName} ${driverUser.lastName}`;
-        }
-      }
-
-      const currentDelivery = driverId
-        ? await this.prisma.delivery.findFirst({
-            where: {
-              driverId,
-              status: 'in_progress',
-              deletedAt: null,
-            },
-            select: { id: true },
-          })
-        : null;
-
-      const { accuracy: derivedAccuracy, hdopInfo } = computeCombinedAccuracy(
-        pos.accuracy,
-        pos.attributes,
-      );
-      this.logger.debug(`Traccar device ${pos.deviceId}: ${hdopInfo}`);
-
-      // Télémétrie matériel (power/battery/ignition) : extraite de façon
-      // protocolo-agnostique et stockée en JSONB. Servira à classer la cause
-      // d'un silence GPS et à alerter en temps réel (coupure électrique /
-      // batterie interne critique) — jamais supposée si le modèle ne la remonte pas.
-      const telemetry = extractTrackerTelemetry(pos.attributes);
-      const attributesJson = toJsonValue(telemetry);
-      if (attributesJson) {
-        this.logger.debug(
-          `Traccar device ${pos.deviceId} telemetry: power=${telemetry.powerVolts ?? 'n/a'}V battery=${telemetry.batteryPercent ?? 'n/a'}% ignition=${telemetry.ignition ?? 'n/a'}`,
-        );
-      }
-
-      const updateDto = {
-        latitude: pos.latitude,
-        longitude: pos.longitude,
-        speed: (pos.speed || 0) * 0.514444,
-        heading: pos.course || 0,
-        altitude: pos.altitude || 0,
-        accuracy: derivedAccuracy,
-        timestamp: timestamp.toISOString(),
-        vehicleId: vehicleMapping.id,
-        deliveryId: currentDelivery?.id,
-      };
-
-      const validated = plainToInstance(UpdatePositionDto, updateDto);
-      const errors = validateSync(validated, { whitelist: true, forbidNonWhitelisted: false });
-      if (errors.length > 0) {
-        this.logger.warn(
-          `Traccar position validation failed for device ${pos.deviceId}: ${errors.map((e) => e.toString()).join(', ')}`,
-        );
-        return;
-      }
-
-      let position;
-      try {
-        position = await this.trackingService.savePosition(
-          driverId,
-          validated,
-          vehicleMapping.companyId,
-          // Le pont Traccar est toujours une source 'physical_tracker'.
-          'physical_tracker',
-          attributesJson,
-        );
-
-        if (this.redis) {
-          await this.redis.set(`traccar:last_position:${pos.deviceId}`, timestamp.toISOString());
-        }
-      } catch (saveErr: any) {
-        this.logger.error(
-          `Save position failed for device ${pos.deviceId}: ${saveErr.message} — queueing`,
-        );
-        await this.queuePendingPosition(pos);
-        return;
-      }
+      if (!processed) return;
+      const {
+        position,
+        vehicleMapping,
+        driverId,
+        driverName,
+        telemetry,
+        attributesJson,
+        updateDto,
+      } = processed;
 
       // Alertes télémétrie temps réel (uniquement si le protocole remonte les champs) :
       //   - power ≤ POWER_CUT_VOLTS V → coupure électrique du véhicule (moteur/batterie
