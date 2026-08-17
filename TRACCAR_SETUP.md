@@ -3,29 +3,31 @@
 ## Architecture
 
 ```
-┌─────────────────┐     HTTPS/WebSocket     ┌──────────────────────┐
-│  GPS Trackers   │     (outbound)          │  Render Web Service  │
-│  (GT06, Teltonika,│──────────────────────▶│  deliverytrack-api   │
-│   TK103, H02)   │     (via Traccar)      │                      │
-│        │        │                         │  TraccarBridgeService│
-│        ▼        │                         │  (WebSocket client)  │
-│  ┌──────────┐   │                         │                      │
-│  │  Traccar  │   │                         │  POST /tracking/...  │
-│  │  Cloud    │   │                         │  └→ savePosition()  │
-│  │  (HTTPS)  │   │                         └──────────────────────┘
-│  │  :443     │   │
-│  │  API REST │   │
-│  └──────────┘   │
-└─────────────────┘
+┌─────────────────┐     TCP (GT06 etc.)     ┌──────────────────────┐
+│  GPS Trackers   │───────────────────────▶│  Fly.io              │
+│  (GT06, Teltonika,│     ports 5055-5065  │  Traccar dédié       │
+│   TK103, H02)   │                         │  deliverytrack-traccar│
+│        │        │                         └──────────┬───────────┘
+│        │        │                                      │ HTTPS/API
+│        │        │                         ┌──────────▼───────────┐
+│        │        │     HTTPS/WebSocket     │  Render Web Service  │
+│        └────────┼────────────────────────▶│  deliverytrack-api   │
+│                 │     (outbound)          │                      │
+│                 │                         │  TraccarBridgeService│
+│                 │                         │  (WebSocket client)  │
+│                 │                         │                      │
+│                 │                         │  POST /tracking/...  │
+│                 │                         │  └→ savePosition()  │
+└─────────────────┘                         └──────────────────────┘
 ```
 
-**Production :** DelivTrack utilise **Traccar Cloud** (`server.traccar.org`). Traccar Cloud reçoit les connexions TCP des traceurs GPS (GT06, Teltonika, etc.) via ses propres ports. Le `TraccarBridgeService` sur Render se connecte **en outbound** (HTTPS/WebSocket) vers Traccar Cloud pour récupérer les positions et les injecter dans `savePosition()`.
+**Production :** DelivTrack utilise une **instance Traccar dédiée sur Fly.io** (`deliverytrack-traccar.fly.dev`). Traccar reçoit les connexions TCP des traceurs GPS (GT06, Teltonika, etc.) via les ports 5055-5065. Le `TraccarBridgeService` sur Render se connecte **en outbound** (HTTPS/WebSocket) vers cette instance pour récupérer les positions et les injecter dans `savePosition()`.
 
-**Les ports des traceurs ne sont pas documentés ici** — ils sont fournis par Traccar Cloud lors de la création du device dans l'interface web (`https://server.traccar.org`). Voir section 2 pour la procédure.
+> ⚠️ **Pourquoi Fly.io ?** Render ne supporte PAS les ports TCP custom (uniquement HTTP/10000). Traccar a besoin de ports TCP pour les protocoles GPS. Voir `TRACCAR_FLY_IO_SETUP.md` pour le guide de déploiement complet.
 
 ---
 
-> ⚠️ **Note importante :** Les sections 1 et 3 ci-dessous (VPS, Docker, ports 5055-5065) concernent uniquement un environnement **Traccar auto-hébergé pour le développement local**. La production utilise exclusivement Traccar Cloud. Les ports du docker-compose local (5055-5065) ne correspondent PAS aux ports de Traccar Cloud.
+> ⚠️ **Note importante :** Les sections ci-dessous concernent le développement local (docker-compose) et la migration depuis l'ancien serveur de démo (`server.traccar.org`).
 
 ---
 

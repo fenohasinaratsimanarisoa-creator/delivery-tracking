@@ -167,9 +167,11 @@ envVarGroups:
       - key: ALERT_ON_ERROR
         value: 'true'
 
-      # ── Traccar GPS bridge ──
+      # ── Traccar GPS bridge (instance dédiée sur Fly.io) ──
+      # TRACCAR_URL doit pointer vers l'instance Fly.io déployée depuis traccar/fly.toml
+      # Après déploiement : fly info → copiez l'URL .fly.dev
       - key: TRACCAR_URL
-        value: https://server.traccar.org
+        value: https://deliverytrack-traccar.fly.dev
       - key: TRACCAR_USER
         sync: false
       - key: TRACCAR_PASSWORD

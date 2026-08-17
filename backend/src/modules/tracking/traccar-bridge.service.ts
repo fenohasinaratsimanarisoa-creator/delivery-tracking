@@ -454,7 +454,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       protocolPort: {
         exposedByApi: false,
         message:
-          "Le port d'écoute par protocole (ex: port GT06) n'est PAS exposé par l'API REST Traccar — à confirmer manuellement dans l'interface https://server.traccar.org lors de la création ou de la consultation du device.",
+          `Le port d'écoute par protocole (ex: port GT06) n'est PAS exposé par l'API REST Traccar — à confirmer manuellement dans l'interface d'administration Traccar (${this.traccarUrl}) lors de la création ou de la consultation du device.`,
         reference: 'RAPPORT_PORTS_TRACCAR.md — section « Traccar Cloud (production) »',
       },
     };

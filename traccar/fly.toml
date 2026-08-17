@@ -1,0 +1,135 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Traccar GPS Server — Fly.io Deployment
+# ═══════════════════════════════════════════════════════════════════════
+# Render ne supporte PAS les ports TCP custom (uniquement HTTP/10000).
+# Fly.io supporte les ports TCP/UDP arbitraires — idéal pour Traccar.
+#
+# Prérequis :
+#   1. flyctl installé (https://fly.io/docs/hands-on/install-flyctl/)
+#   2. fly auth login
+#   3. cd traccar/ && fly launch --no-deploy
+#   4. fly volumes create traccar_data --region fra (ou votre région)
+#   5. fly deploy
+#
+# Coût estimé : ~5-7$/mois (Machine shared-cpu-1x, 256MB RAM)
+# ═══════════════════════════════════════════════════════════════════════
+
+app = "deliverytrack-traccar"
+primary_region = "fra"
+
+[build]
+  image = "traccar/traccar:6.14"
+
+# ── Disque persistant pour la base H2 de Traccar ──
+[mounts]
+  source = "traccar_data"
+  destination = "/opt/traccar/data"
+
+# ── Web Admin Interface (HTTP) ──
+[http_service]
+  internal_port = 8082
+  force_https = false
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 250
+    soft_limit = 200
+
+# ── Ports TCP pour protocoles GPS ──
+# Chaque port GPS est exposé en TCP pass-through (pas de handler HTTP)
+# ⚠️ Nécessite une IPv4 dédiée : fly ips allocate-v4
+
+# GT06 / Concox / JM-VL03 (port principal pour vos appareils)
+[[services]]
+  internal_port = 5055
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 5055
+
+# Teltonika FMB / FM / TAVL / GH
+[[services]]
+  internal_port = 5056
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 5056
+
+# H02 (boîtiers économiques chinois)
+[[services]]
+  internal_port = 5057
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 5057
+
+# TK103 / TK102 / Coban / ST-901
+[[services]]
+  internal_port = 5058
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 5058
+
+# Meitrack (MVT-380 / MVT-600 / T1 / P99)
+[[services]]
+  internal_port = 5059
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 5059
+
+# OsmAnd (test smartphone)
+[[services]]
+  internal_port = 5060
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 5060
+
+# Lézard (EZ90 / EZ21 / EZ630 / Delta)
+[[services]]
+  internal_port = 5061
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 5061
+
+# WristWatch (montres / balises GPS)
+[[services]]
+  internal_port = 5062
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 5062
+
+# Naviset / Navtelecom
+[[services]]
+  internal_port = 5063
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 5063
+
+# Xexun / Sanav / GStar / GlobalSat
+[[services]]
+  internal_port = 5064
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 5064
+
+# AST (Falcom / AST)
+[[services]]
+  internal_port = 5065
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 5065
+
+# ── Variables d'environnement ──
+[env]
+  JAVA_OPTS = "-Xms256m -Xmx512m"

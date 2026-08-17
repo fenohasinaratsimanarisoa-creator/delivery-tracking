@@ -25,6 +25,7 @@
     <entry key='ast.port'>5065</entry>
 
     <entry key='logger.level'>ALL</entry>
+    <!-- ⚠️ CHANGEZ CES IDENTIFIANTS EN PRODUCTION -->
     <entry key='users.default'>admin:admin</entry>
 
     <entry key='filter.enable'>true</entry>

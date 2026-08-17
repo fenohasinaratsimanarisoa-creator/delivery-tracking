@@ -1,0 +1,9 @@
+# Traccar GPS Server — Dockerfile pour Fly.io
+# Utilise l'image officielle avec le fichier de config personnalisé
+FROM traccar/traccar:6.14
+
+# Copier la config personnalisée (remplace la config par défaut)
+COPY traccar.xml /opt/traccar/conf/traccar.xml
+
+# Les ports GPS sont déjà exposés dans l'image officielle :
+# 8082 (web), 5055-5065 (GPS protocols)
