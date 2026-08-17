@@ -284,7 +284,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     coords.style.fontFamily = 'var(--font-mono, monospace)';
     coords.style.color = 'var(--color-text-tertiary, #7A8BA3)';
     coords.style.marginBottom = '6px';
-    coords.textContent = `${vehicle.lat.toFixed(6)}, ${vehicle.lng.toFixed(6)}`;
+    coords.textContent = `${(vehicle.lat ?? 0).toFixed(6)}, ${(vehicle.lng ?? 0).toFixed(6)}`;
     container.appendChild(coords);
 
     const detail = document.createElement('div');
@@ -293,7 +293,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     detail.style.gap = '2px';
     detail.style.marginBottom = '6px';
 
-    if (vehicle.speed !== undefined) {
+    if (vehicle.speed != null) {
       const speedKmh = (vehicle.speed * 3.6).toFixed(1);
       const row = document.createElement('div');
       row.style.fontSize = '0.75rem';
@@ -310,7 +310,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       detail.appendChild(row);
     }
 
-    if (vehicle.heading !== undefined) {
+    if (vehicle.heading != null) {
       const row = document.createElement('div');
       row.style.fontSize = '0.75rem';
       row.style.color = 'var(--color-text-secondary, #9BA6B9)';
@@ -857,17 +857,17 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
 
             <div className={styles.driverCardBody}>
               <DetailRow label="Statut" value={selectedDriver.status === 'moving' ? 'En mouvement' : 'À l\'arrêt'} color={selectedDriver.status === 'moving' ? 'var(--color-accent)' : 'var(--color-teal)'} />
-              {selectedDriver.speed !== undefined && (
+              {selectedDriver.speed != null && (
                 <DetailRow label="Vitesse" value={`${(selectedDriver.speed * 3.6).toFixed(1)} km/h`} />
               )}
-              {selectedDriver.heading !== undefined && (
+              {selectedDriver.heading != null && (
                 <DetailRow label="Direction" value={`${selectedDriver.heading.toFixed(0)}°`} />
               )}
-              <DetailRow label="Position" value={`${selectedDriver.lat.toFixed(5)}, ${selectedDriver.lng.toFixed(5)}`} mono />
-              {selectedDriver.accuracy !== undefined && (
+              <DetailRow label="Position" value={`${(selectedDriver.lat ?? 0).toFixed(5)}, ${(selectedDriver.lng ?? 0).toFixed(5)}`} mono />
+              {selectedDriver.accuracy != null && (
                 <DetailRow label="Précision GPS" value={`±${Math.round(selectedDriver.accuracy)}m`} />
               )}
-              {selectedDriver.confidence !== undefined && (
+              {selectedDriver.confidence != null && (
                 <DetailRow label="Confiance Kalman" value={`${(selectedDriver.confidence * 100).toFixed(0)}%`} />
               )}
               <DetailRow label="Dernière position" value={formatTime(selectedDriver.timestamp)} />

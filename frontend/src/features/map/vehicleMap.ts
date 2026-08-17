@@ -73,9 +73,9 @@ export function mergePositionUpdate(
     if (!existing) return next;
     next.set(key, {
       ...existing,
-      speed: update.speed,
-      heading: update.heading,
-      accuracy: update.accuracy,
+      speed: update.speed ?? undefined,
+      heading: update.heading ?? undefined,
+      accuracy: update.accuracy ?? undefined,
       timestamp: update.timestamp,
       suspect: true,
     });
@@ -85,9 +85,9 @@ export function mergePositionUpdate(
       lat: update.latitude,
       lng: update.longitude,
       name: update.driverName || FALLBACK_DRIVER_NAME,
-      speed: update.speed,
-      heading: update.heading,
-      accuracy: update.accuracy,
+      speed: update.speed ?? undefined,
+      heading: update.heading ?? undefined,
+      accuracy: update.accuracy ?? undefined,
       vehicleId: update.vehicleId,
       deliveryId: update.deliveryId,
       confidence: update.confidence ?? (update.accuracy ? Math.max(0.1, 1 - update.accuracy / 50) : 1),
