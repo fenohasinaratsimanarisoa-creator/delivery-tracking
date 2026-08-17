@@ -66,7 +66,7 @@ const NEVER_CONNECTED_GRACE_PERIOD_MS = 30 * 60 * 1000;
 // quel que soit le protocole source (aucune hypothèse de marque).
 const TRACCAR_FUTURE_SKEW_TOLERANCE_MS = 5 * 60 * 1000; // 300s, aligné sur filter.future
 const LEADER_KEY = 'traccar:bridge:leader';
-const LEADER_TTL_S = 30;
+const LEADER_TTL_S = 50;
 const LEADER_RENEW_INTERVAL_MS = 20000;
 const LEADER_RETRY_INTERVAL_MS = 20000;
 
@@ -358,19 +358,25 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         this.consecutiveRenewFailures = 0;
       } catch (err: any) {
         this.consecutiveRenewFailures++;
-        // Un seul échec de renouvellement suffit à risquer l'expiration du verrou
-        // (retry toutes les 20s vs TTL 30s) : dès le premier échec on cède un
-        // leadership devenu INCERTAIN par prudence, au lieu de garder la connexion
-        // WebSocket ouverte pendant qu'une autre instance peut acquérir le lock.
         this.logger.error(
           `Leader renewal failed (échec consécutif #${this.consecutiveRenewFailures}): ${err.message}`,
         );
-        this.isLeader = false;
-        this.logger.warn(
-          `Traccar bridge: leadership incertain (erreur Redis transitoire) — repli par prudence, on cède le lock (instance=${this.instanceId})`,
-        );
-        this.disconnect();
-        this.stopLeaderRenew();
+        // Tolérer 1 échec consécutif (erreur Redis transitoire courante sur
+        // plan free). Le leadership n'est cédé qu'au 2e échec consécutif
+        // (soit ~40s sans renouvellement réussi), ce qui reste inférieur au
+        // TTL de 50s — garantie anti split-brain préservée.
+        if (this.consecutiveRenewFailures >= 2) {
+          this.isLeader = false;
+          this.logger.warn(
+            `Traccar bridge: 2 échecs de renouvellement consécutifs — leadership cédé par prudence (instance=${this.instanceId})`,
+          );
+          this.disconnect();
+          this.stopLeaderRenew();
+        } else {
+          this.logger.warn(
+            `Traccar bridge: erreur Redis transitoire au renouvellement — tolérée (1/${2 - this.consecutiveRenewFailures} tentatives restantes, instance=${this.instanceId})`,
+          );
+        }
       }
     }, LEADER_RENEW_INTERVAL_MS);
   }
