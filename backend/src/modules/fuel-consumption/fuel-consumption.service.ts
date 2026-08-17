@@ -129,14 +129,14 @@ export class FuelConsumptionService {
 
     // Pas de prix historique applicable → prix par défaut configurable de la company
     // (company_fuel_settings.default_fuel_prices, modifiable et persisté via l'app).
-    // Upsert pour garantir une ligne de settings et un seed initial (valeurs héritées).
-    const settings = await this.prisma.companyFuelSettings.upsert({
+    // findFirst (pas upsert) : la création de la ligne settings est faite par
+    // updateDefaultFuelPrices() ou createFuelPrice() — pas sur chaque lecture.
+    const settings = await this.prisma.companyFuelSettings.findUnique({
       where: { companyId },
-      update: {},
-      create: { companyId, defaultFuelPrices: DEFAULT_FUEL_PRICES },
+      select: { defaultFuelPrices: true },
     });
     const defaults =
-      (settings.defaultFuelPrices as Record<string, number> | null) ?? DEFAULT_FUEL_PRICES;
+      (settings?.defaultFuelPrices as Record<string, number> | null) ?? DEFAULT_FUEL_PRICES;
     const resolved = defaults[canonical] ?? 0;
     // Électrique : le prix par défaut est 0 Ar = AUCUN prix configuré (ni entrée
     // FuelPriceHistory, ni prix défini par la company). Renvoyer 0 ferait afficher

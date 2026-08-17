@@ -166,6 +166,44 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       },
     });
 
+    // Batch-load la DERNIÈRE position de TOUS les véhicules en UNE SEULE requête
+    // (au lieu d'une requête par véhicule = N+1). Les positions sont groupées par
+    // vehicleId en mémoire (DISTINCT ON garde la plus récente par véhicule).
+    const vehicleIds = vehicles.map((v) => v.id);
+    const lastPositionRows = vehicleIds.length > 0
+      ? await this.prisma.$queryRaw<
+          Array<{
+            vehicle_id: string;
+            latitude: number;
+            longitude: number;
+            timestamp: Date;
+            speed: number | null;
+            source: string | null;
+            attributes: unknown;
+          }>
+        >`
+          SELECT DISTINCT ON (vehicle_id)
+            vehicle_id, latitude, longitude, timestamp, speed, source, attributes
+          FROM gps_positions
+          WHERE vehicle_id = ANY(${vehicleIds}::uuid[])
+          ORDER BY vehicle_id, timestamp DESC
+        `
+      : [];
+
+    const lastPosByVehicle = new Map(
+      lastPositionRows.map((r) => [
+        r.vehicle_id,
+        {
+          latitude: r.latitude,
+          longitude: r.longitude,
+          timestamp: r.timestamp,
+          speed: r.speed,
+          source: r.source,
+          attributes: r.attributes,
+        },
+      ]),
+    );
+
     for (const vehicle of vehicles) {
       const source: PositionSource =
         vehicle.positionSource === 'physical_tracker' ? 'physical_tracker' : 'phone';
@@ -177,7 +215,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
 
       // Une position suspecte prouve quand même que le dispositif émet : on s'appuie
       // sur la DERNIÈRE position reçue quelle qu'elle soit (excludeSuspect=false).
-      const lastPos = await this.getLastPosition(vehicle.id, false);
+      const lastPos = lastPosByVehicle.get(vehicle.id) ?? null;
 
       if (!lastPos) {
         // Jamais émis : on n'alerte qu'après le délai de grâce (un véhicule tout
@@ -645,22 +683,23 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
             // le speed alert (cache 300s).
             const delayKey = `delay_alert:${dto.vehicleId}`;
             const delaySent = await this.cacheService.get<boolean>(delayKey);
-            if (delaySent) return;
-            await this.cacheService.set(delayKey, true, 900);
-            const delayMin = Math.round(
-              (etaDate.getTime() - delivery.scheduledDate.getTime()) / 60000,
-            );
-            tasks.push(
-              this.notifications.create(companyId, {
-                type: NotificationType.delay_alert,
-                priority: NotificationPriority.high,
-                title: 'Delay Alert',
-                message: `Estimated arrival ${delayMin} min late (scheduled: ${delivery.scheduledDate.toLocaleString()})`,
-                link: `/tracking/${dto.deliveryId}`,
-                deliveryId: dto.deliveryId ?? undefined,
-                userId: alertUserId ?? undefined,
-              }),
-            );
+            if (!delaySent) {
+              await this.cacheService.set(delayKey, true, 900);
+              const delayMin = Math.round(
+                (etaDate.getTime() - delivery.scheduledDate.getTime()) / 60000,
+              );
+              tasks.push(
+                this.notifications.create(companyId, {
+                  type: NotificationType.delay_alert,
+                  priority: NotificationPriority.high,
+                  title: 'Delay Alert',
+                  message: `Estimated arrival ${delayMin} min late (scheduled: ${delivery.scheduledDate.toLocaleString()})`,
+                  link: `/tracking/${dto.deliveryId}`,
+                  deliveryId: dto.deliveryId ?? undefined,
+                  userId: alertUserId ?? undefined,
+                }),
+              );
+            }
           }
         }
       }
@@ -1600,39 +1639,65 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       }
     >();
 
-    for (const delivery of deliveries) {
-      if (!delivery.vehicleId) continue;
-      const positions = await this.prisma.gpsPosition.findMany({
+    // Batch-load TOUTES les positions pour TOUTES les livraisons en UNE SEULE
+    // requête (au lieu d'une requête par livraison = N+1). Les positions sont
+    // groupées par (vehicleId, deliveryId) en mémoire pour calculer la couverture
+    // par livraison individuellement.
+    const deliveryVehiclePairs = deliveries
+      .filter((d) => d.vehicleId)
+      .map((d) => ({ vehicleId: d.vehicleId!, deliveryId: d.id, completedAt: d.completedAt }));
+
+    if (deliveryVehiclePairs.length > 0) {
+      const deliveryIds = [...new Set(deliveryVehiclePairs.map((d) => d.deliveryId))];
+      const vehicleIds = [...new Set(deliveryVehiclePairs.map((d) => d.vehicleId))];
+
+      const allPositions = await this.prisma.gpsPosition.findMany({
         where: {
-          vehicleId: delivery.vehicleId,
-          deliveryId: delivery.id,
+          vehicleId: { in: vehicleIds },
+          deliveryId: { in: deliveryIds },
           suspect: false,
         },
-        select: { timestamp: true },
+        select: { vehicleId: true, deliveryId: true, timestamp: true },
+        orderBy: { timestamp: 'asc' },
       });
-      const coverage = this.computeCoverage(positions, gapThresholdSec);
-      const agg = byVehicle.get(delivery.vehicleId) ?? {
-        vehicleId: delivery.vehicleId,
-        deliveries: 0,
-        totalSec: 0,
-        coveredSec: 0,
-        gaps: 0,
-        positions: 0,
-        source: 'phone' as PositionSource,
-        lastDeliveryCompletedAt: null,
-      };
-      agg.deliveries += 1;
-      agg.totalSec += coverage.totalSec;
-      agg.coveredSec += coverage.coveredSec;
-      agg.gaps += coverage.gapCount;
-      agg.positions += positions.length;
-      if (
-        delivery.completedAt &&
-        (!agg.lastDeliveryCompletedAt || delivery.completedAt > agg.lastDeliveryCompletedAt)
-      ) {
-        agg.lastDeliveryCompletedAt = delivery.completedAt;
+
+      // Grouper par (vehicleId, deliveryId) en mémoire
+      const positionsByDelivery = new Map<string, Array<{ timestamp: Date }>>();
+      for (const pos of allPositions) {
+        if (!pos.deliveryId) continue;
+        const key = `${pos.vehicleId}:${pos.deliveryId}`;
+        const arr = positionsByDelivery.get(key) ?? [];
+        arr.push({ timestamp: pos.timestamp });
+        positionsByDelivery.set(key, arr);
       }
-      byVehicle.set(delivery.vehicleId, agg);
+
+      for (const pair of deliveryVehiclePairs) {
+        const key = `${pair.vehicleId}:${pair.deliveryId}`;
+        const positions = positionsByDelivery.get(key) ?? [];
+        const coverage = this.computeCoverage(positions, gapThresholdSec);
+        const agg = byVehicle.get(pair.vehicleId) ?? {
+          vehicleId: pair.vehicleId,
+          deliveries: 0,
+          totalSec: 0,
+          coveredSec: 0,
+          gaps: 0,
+          positions: 0,
+          source: 'phone' as PositionSource,
+          lastDeliveryCompletedAt: null,
+        };
+        agg.deliveries += 1;
+        agg.totalSec += coverage.totalSec;
+        agg.coveredSec += coverage.coveredSec;
+        agg.gaps += coverage.gapCount;
+        agg.positions += positions.length;
+        if (
+          pair.completedAt &&
+          (!agg.lastDeliveryCompletedAt || pair.completedAt > agg.lastDeliveryCompletedAt)
+        ) {
+          agg.lastDeliveryCompletedAt = pair.completedAt;
+        }
+        byVehicle.set(pair.vehicleId, agg);
+      }
     }
 
     const vehicles = await this.prisma.vehicle.findMany({

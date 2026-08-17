@@ -171,7 +171,8 @@ describe('FuelConsumptionService', () => {
 
     it('falls back to default when no price matches', async () => {
       mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(null);
-      mockPrisma.companyFuelSettings.upsert.mockResolvedValueOnce({ defaultFuelPrices: null });
+      // getFuelPriceForDate now uses findUnique (no upsert on read)
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce(null);
 
       const result = await (service as any).getFuelPriceForDate(
         'company-1',
@@ -180,10 +181,9 @@ describe('FuelConsumptionService', () => {
       );
 
       expect(result).toBe(5000);
-      expect(mockPrisma.companyFuelSettings.upsert).toHaveBeenCalledWith({
+      expect(mockPrisma.companyFuelSettings.findUnique).toHaveBeenCalledWith({
         where: { companyId: 'company-1' },
-        update: {},
-        create: expect.objectContaining({ companyId: 'company-1' }),
+        select: { defaultFuelPrices: true },
       });
     });
 

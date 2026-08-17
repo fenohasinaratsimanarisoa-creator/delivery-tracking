@@ -1742,9 +1742,13 @@ describe('TrackingService', () => {
           completedAt: new Date(base),
         },
       ]);
-      // Positions sans trou pour ce trajet.
+      // Batch findMany returns positions for all vehicles/deliveries in one query.
       mockPrisma.gpsPosition.findMany.mockResolvedValue(
-        Array.from({ length: 20 }, (_, i) => ({ timestamp: new Date(base + i * 3000) })),
+        Array.from({ length: 20 }, (_, i) => ({
+          vehicleId: 'vehicle-1',
+          deliveryId: 'delivery-1',
+          timestamp: new Date(base + i * 3000),
+        })),
       );
       mockPrisma.vehicle.findMany.mockResolvedValue([
         {
@@ -1778,16 +1782,18 @@ describe('TrackingService', () => {
         },
         { id: 'delivery-2', vehicleId: 'vehicle-bad', driverId: null, completedAt: new Date(base) },
       ]);
-      // Bon véhicule : trajet sans trou → 100 %.
-      mockPrisma.gpsPosition.findMany
-        .mockResolvedValueOnce(
-          Array.from({ length: 20 }, (_, i) => ({ timestamp: new Date(base + i * 3000) })),
-        )
+      // Batch findMany returns positions for all vehicles/deliveries in one query.
+      mockPrisma.gpsPosition.findMany.mockResolvedValue([
+        // Bon véhicule : trajet sans trou → 100 %.
+        ...Array.from({ length: 20 }, (_, i) => ({
+          vehicleId: 'vehicle-good',
+          deliveryId: 'delivery-1',
+          timestamp: new Date(base + i * 3000),
+        })),
         // Mauvais véhicule : 2 points + un trou de 10 min → couverture faible.
-        .mockResolvedValueOnce([
-          { timestamp: new Date(base) },
-          { timestamp: new Date(base + 600 * 1000) },
-        ]);
+        { vehicleId: 'vehicle-bad', deliveryId: 'delivery-2', timestamp: new Date(base) },
+        { vehicleId: 'vehicle-bad', deliveryId: 'delivery-2', timestamp: new Date(base + 600 * 1000) },
+      ]);
       mockPrisma.vehicle.findMany.mockResolvedValue([
         {
           id: 'vehicle-good',
