@@ -6,7 +6,7 @@ databases:
 
   - name: deliverytrack-redis
     region: frankfurt
-    plan: free
+    plan: starter
     type: redis
 
 services:
@@ -76,6 +76,24 @@ services:
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
+
+  # ── Keep-alive : empêche le cold start (contournement, pas une vraie correction) ──
+  # La vraie correction est de passer Redis en plan "starter" ou supérieur.
+  - type: cron
+    name: deliverytrack-keepalive
+    runtime: docker
+    repo: https://github.com/fenohasinaratsimanarisoa-creator/delivery-tracking
+    branch: main
+    dockerfilePath: ./Dockerfile.keepalive
+    dockerContext: ./
+    region: frankfurt
+    schedule: "*/10 * * * *"
+    envVars:
+      - key: BACKEND_URL
+        fromService:
+          name: deliverytrack-api
+          type: web
+          property: url
 
 envVarGroups:
   - name: deliverytrack-secrets

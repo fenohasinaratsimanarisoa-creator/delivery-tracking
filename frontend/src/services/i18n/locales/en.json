@@ -1504,6 +1504,7 @@
     "error": {
       "timeout": "The request timed out. Check your connection.",
       "network": "Unable to reach the server. Check your connection.",
+      "waking": "The server is waking up, please try again in a few seconds.",
       "rateLimit": "Too many requests. Please wait.",
       "server": "Server error. Please try again later."
     }

@@ -1504,6 +1504,7 @@
     "error": {
       "timeout": "La requête a pris trop de temps. Vérifiez votre connexion.",
       "network": "Impossible de joindre le serveur. Vérifiez votre connexion.",
+      "waking": "Le serveur se réveille, réessaie dans quelques secondes.",
       "rateLimit": "Trop de requêtes. Veuillez patienter.",
       "server": "Erreur serveur. Veuillez réessayer plus tard."
     }
