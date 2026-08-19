@@ -77,11 +77,14 @@ export default function MapPage() {
     setOpen(false);
     setResults([]);
     if (r.lat && r.lng) {
+      // focusId reste DÉFINI (plus de purge automatique à 3 s) : la carte
+      // continue de suivre le véhicule à chaque position reçue tant que
+      // l'utilisateur ne change pas de sélection (unified follow state dans
+      // RealTimeMap via selectedDriverId / onFocusChange).
       setFocusId(r.id);
       setFocusCenter({ lat: r.lat, lng: r.lng });
       const found = vehicles.find((v) => v.id === r.id);
       if (found) toast(t('map.toast.centered', { label: r.label }), 'info');
-      setTimeout(() => { setFocusId(null); setFocusCenter(null); }, 3000);
     } else {
       toast(t('map.toast.noPosition', { label: r.label }), 'error');
     }
@@ -118,7 +121,12 @@ export default function MapPage() {
 
   return (
     <div className={styles.pageWrap}>
-      <RealTimeMap focusId={focusId} focusCenter={focusCenter} onVehiclesUpdate={setVehicles} />
+      <RealTimeMap
+        focusId={focusId}
+        focusCenter={focusCenter}
+        onVehiclesUpdate={setVehicles}
+        onFocusChange={setFocusId}
+      />
 
       <div className={styles.liveChip}>
         <span className={styles.liveDot} />
@@ -141,7 +149,15 @@ export default function MapPage() {
             aria-label={t('map.searchAria')}
           />
           {search && (
-            <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setResults([]); setOpen(false); }} aria-label={t('map.clearAria')}>✕</Button>
+            <Button variant="ghost" size="sm" onClick={() => {
+              setSearch('');
+              setResults([]);
+              setOpen(false);
+              // Efface la sélection : la fiche véhicule se ferme et le suivi
+              // s'arrête (synchronisé via onFocusChange / focusId).
+              setFocusId(null);
+              setFocusCenter(null);
+            }} aria-label={t('map.clearAria')}>✕</Button>
           )}
           <button
             onClick={() => setShowFilters(!showFilters)}

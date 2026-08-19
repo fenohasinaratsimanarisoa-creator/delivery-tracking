@@ -105,6 +105,74 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+  gap: 8px;
+}
+
+.driverCardActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Toggle "Suivre / Suivi actif" dans la fiche véhicule : reflète l'état RÉEL
+   du mode suivi (désactivé automatiquement quand l'utilisateur déplace ou
+   zoome la carte manuellement). */
+.followToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--color-border-subtle, rgba(232, 236, 243, 0.12));
+  background: transparent;
+  color: var(--color-text-secondary, #9BA6B9);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  font-family: var(--font-body, Inter, sans-serif);
+}
+
+.followToggle:hover {
+  border-color: var(--color-accent, #F2A93C);
+}
+
+.followToggleActive {
+  background: var(--color-accent-muted, rgba(242, 169, 60, 0.15));
+  border-color: var(--color-accent, #F2A93C);
+  color: var(--color-status-moving, #F2A93C);
+}
+
+/* Bouton flottant à côté du marqueur du véhicule sélectionné : mêmes deux
+   états que le toggle de la fiche ("🎯 Suivre" / "🎯 Suivi actif"), sert aussi
+   de bouton "Recentrer" après désactivation automatique par drag/zoom. */
+.followFloating {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--color-glass, rgba(18, 27, 46, 0.85));
+  border: 1px solid var(--color-glass-border, rgba(232, 236, 243, 0.12));
+  border-radius: var(--radius-full, 999px);
+  box-shadow: var(--shadow-md, 0 2px 12px rgba(0, 0, 0, 0.35));
+  color: var(--color-text, #E8ECF3);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  font-family: var(--font-body, Inter, sans-serif);
+}
+
+.followFloating:hover {
+  border-color: var(--color-accent, #F2A93C);
+}
+
+.followFloatingActive {
+  background: var(--color-accent-muted, rgba(242, 169, 60, 0.15));
+  border-color: var(--color-accent, #F2A93C);
+  color: var(--color-status-moving, #F2A93C);
 }
 
 .driverCardTitle {

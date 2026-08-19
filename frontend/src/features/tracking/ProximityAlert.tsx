@@ -26,6 +26,7 @@ function alertIcon(type: string): React.ReactNode {
     case 'geofence': return <Construction size={16} />;
     case 'poor_accuracy': return <Antenna size={16} />;
     case 'queue_full': return <Radio size={16} />;
+    case 'queue_near_full': return <Radio size={16} />;
     case 'geo_denied': return <Ban size={16} />;
     case 'background_continued': return <ShieldCheck size={16} />;
     default: return <Bell size={16} />;
@@ -129,7 +130,7 @@ const MAX_VISIBLE_ALERTS = 3;
 export default function ProximityAlert({ status }: { status: TrackingStatus }) {
   const shownAlerts = status.alerts.filter((a) =>
     a.type === 'proximity' || a.type === 'cascade' || a.type === 'geofence' ||
-    a.type === 'poor_accuracy' || a.type === 'queue_full' || a.type === 'geo_denied' ||
+    a.type === 'poor_accuracy' || a.type === 'queue_full' || a.type === 'queue_near_full' || a.type === 'geo_denied' ||
     a.type === 'background_continued'
   );
 

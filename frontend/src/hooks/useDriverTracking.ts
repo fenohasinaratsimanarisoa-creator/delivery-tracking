@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api/client';
 import { getSocket } from '../services/socket/socket';
-import { enqueuePosition, queueSize, flushQueue } from '../services/offlineQueue';
+import { enqueuePosition, queueSize, flushQueue, QUEUE_WARN_SIZE } from '../services/offlineQueue';
 import { KalmanFilter } from '../services/tracking/KalmanFilter';
 import { sensorFusion, simulateStationaryFromSpeed } from '../services/tracking/sensorFusion';
 import {
@@ -90,7 +90,7 @@ export interface DriverPosition {
 }
 
 export interface DriverAlert {
-  type: 'proximity' | 'cascade' | 'geofence' | 'poor_accuracy' | 'queue_full' | 'geo_denied' | 'background_continued' | 'battery_critical';
+  type: 'proximity' | 'cascade' | 'geofence' | 'poor_accuracy' | 'queue_full' | 'queue_near_full' | 'geo_denied' | 'background_continued' | 'battery_critical';
   title: string;
   message: string;
   deliveryId?: string;
@@ -454,17 +454,31 @@ export function useDriverTracking() {
     return payload;
   }, [vehicleId]);
 
-  // Mise en file locale UNIFIÉE : stocke la position (IndexedDB persistante) et
-  // SIGNALE explicitement toute éviction (file pleine à 5000 entrées) via une alerte
-  // critique — jamais de perte silencieuse de données de trajet.
+  // Mise en file locale UNIFIÉE : stocke la position (IndexedDB persistante).
+  // STRATÉGIE SANS PERTE sur les coupures longues (voir offlineQueue.ts) :
+  // - près de 80 % du quota → alerte précoce (nearCapacity), bien avant la saturation ;
+  // - à saturation, les positions anciennes sont COMPACTÉES (1 point / 45 s,
+  //   la trace reste complète) avant toute éviction ;
+  // - une éventuelle éviction du plus ancien est TOUJOURS signalée (droppedOldest
+  //   → alerte critique) — jamais de perte silencieuse de données de trajet.
   const queuePosition = useCallback(async (payload: Record<string, unknown>) => {
     try {
       const res = await enqueuePosition(payload);
+      if (res.nearCapacity) {
+        addAlert({
+          type: 'queue_near_full',
+          title: 'File de positions presque pleine',
+          message: `La file locale a dépassé 80 % de sa capacité (${QUEUE_WARN_SIZE} positions). Une coupure prolongée va saturer : vérifiez votre connexion réseau dès que possible.`,
+          urgency: 'high',
+        });
+      } else {
+        removeAlert('queue_near_full', '');
+      }
       if (res.droppedOldest) {
         addAlert({
           type: 'queue_full',
           title: 'File de positions saturée',
-          message: 'La file locale a atteint sa limite (5000 positions) : les positions les plus anciennes ont été remplacées. Vérifiez la connexion réseau dès que possible pour éviter toute perte de trajet.',
+          message: 'La file locale a atteint sa limite alors que toutes les positions sont récentes : une position très ancienne a dû être remplacée. Vérifiez la connexion réseau dès que possible pour éviter toute perte de trajet.',
           urgency: 'critical',
         });
       }
@@ -474,7 +488,7 @@ export function useDriverTracking() {
     } finally {
       refreshQueueCount();
     }
-  }, [addAlert, refreshQueueCount]);
+  }, [addAlert, refreshQueueCount, removeAlert]);
 
   const sendPosition = useCallback(() => {
     const p = posRef.current;

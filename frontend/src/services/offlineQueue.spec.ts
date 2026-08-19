@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
-import { enqueuePosition, flushQueue, queueSize, clearQueue, dequeuePositions } from './offlineQueue';
+import {
+  enqueuePosition,
+  flushQueue,
+  queueSize,
+  clearQueue,
+  dequeuePositions,
+  QUEUE_MAX_SIZE,
+  QUEUE_WARN_SIZE,
+} from './offlineQueue';
 
 beforeEach(async () => {
   await clearQueue();
@@ -59,43 +67,42 @@ describe('offlineQueue', () => {
     expect(size).toBe(1);
   });
 
-  it('handles maximum capacity of 5000 positions (≈4h offline)', async () => {
-    // 5000 écritures IndexedDB séquentielles > 5s sous charge parallèle : timeout dédié.
-    for (let i = 0; i < 5000; i++) {
+  it(`handles maximum capacity of ${QUEUE_MAX_SIZE} positions (≈8h20 offline)`, async () => {
+    // Écritures IndexedDB séquentielles lentes dans fake-indexeddb : timeout dédié.
+    for (let i = 0; i < QUEUE_MAX_SIZE; i++) {
       await enqueuePosition({ latitude: -18.87 + i * 0.001, index: i });
     }
 
     let size = await queueSize();
-    expect(size).toBe(5000);
+    expect(size).toBe(QUEUE_MAX_SIZE);
 
-    await enqueuePosition({ latitude: -18.87, index: 5000 });
+    await enqueuePosition({ latitude: -18.87, index: QUEUE_MAX_SIZE });
 
     size = await queueSize();
-    expect(size).toBe(5000);
-  }, 30_000);
+    expect(size).toBe(QUEUE_MAX_SIZE);
+  }, 90_000);
 
-  it('evicts oldest only beyond 5000, and signals it explicitly (droppedOldest=true — never silent)', async () => {
-    for (let i = 0; i < 5000; i++) {
+  it(`evicts oldest only beyond ${QUEUE_MAX_SIZE} (file entièrement récente → rien à compacter), and signals it explicitly (droppedOldest=true — never silent)`, async () => {
+    for (let i = 0; i < QUEUE_MAX_SIZE; i++) {
       await enqueuePosition({ index: i });
     }
 
-    const result = await enqueuePosition({ index: 5000 });
+    const result = await enqueuePosition({ index: QUEUE_MAX_SIZE });
     expect(result.queued).toBe(true);
     expect(result.droppedOldest).toBe(true);
 
-    let flushed: any[] = [];
-    await flushQueue(async (positions) => {
-      flushed = positions;
-    });
-
-    expect(flushed).toHaveLength(5000);
+    // Lecture NON destructrice (pas de flush complet : l'éviction se vérifie
+    // sans rejouer les 10000 positions).
+    const flushed = await dequeuePositions(QUEUE_MAX_SIZE);
+    expect(flushed).toHaveLength(QUEUE_MAX_SIZE);
     const flushedIndices = flushed.map((p) => p.index);
     expect(flushedIndices[0]).toBe(1);
-    expect(flushedIndices[flushedIndices.length - 1]).toBe(5000);
+    expect(flushedIndices[flushedIndices.length - 1]).toBe(QUEUE_MAX_SIZE);
     expect(flushedIndices).not.toContain(0);
-  }, 30_000);
+    await clearQueue();
+  }, 90_000);
 
-  it('does NOT evict below the 5000 cap (fidelity during realistic outages)', async () => {
+  it('does NOT evict below the cap (fidelity during realistic outages)', async () => {
     // 3000 positions ≈ 2h30 de coupure à la cadence 3s : AUCUNE perte, droppedOldest=false.
     for (let i = 0; i < 3000; i++) {
       const res = await enqueuePosition({ index: i });
@@ -103,7 +110,83 @@ describe('offlineQueue', () => {
     }
     const size = await queueSize();
     expect(size).toBe(3000);
-  }, 30_000);
+  }, 60_000);
+
+  it(`signals nearCapacity early at ${QUEUE_WARN_SIZE} (80% of quota — option B), and clears below`, async () => {
+    // En dessous du seuil : aucune alerte précoce.
+    const small = await enqueuePosition({ index: 'small' });
+    expect(small.nearCapacity).toBe(false);
+
+    // Au seuil : nearCapacity=true dès la première position au-delà de 80 %.
+    for (let i = 0; i < QUEUE_WARN_SIZE; i++) {
+      await enqueuePosition({ index: i });
+    }
+    const atThreshold = await enqueuePosition({ index: 'threshold' });
+    expect(atThreshold.queued).toBe(true);
+    expect(atThreshold.nearCapacity).toBe(true);
+    await clearQueue();
+  }, 90_000);
+
+  it('ne perd AUCUNE position sur une coupure simulée très longue (8 h 30, au-delà du quota) : compaction au lieu d\'éviction', async () => {
+    // 10200 positions à cadence 3s = 8 h 30 de coupure, horodatées sur la
+    // durée. Le quota (10000 ≈ 8 h 20) est dépassé : la stratégie doit
+    // COMPACTER les anciennes (1 point / 45 s — résolution dégradée sur le
+    // segment ancien, trace complète conservée) et ne JAMAIS signaler d'éviction.
+    const STEP_MS = 3000;
+    const COUNT = 10200;
+    const startMs = Date.now() - (COUNT * STEP_MS);
+    try {
+      let dropped = 0;
+      for (let i = 0; i < COUNT; i++) {
+        const res = await enqueuePosition({
+          index: i,
+          timestamp: new Date(startMs + i * STEP_MS).toISOString(),
+        });
+        if (res.droppedOldest) dropped++;
+      }
+      // ZÉRO éviction dure : la compaction a absorbé le dépassement du quota.
+      expect(dropped).toBe(0);
+
+      let flushed: any[] = [];
+      await flushQueue(async (positions) => {
+        flushed = positions;
+      });
+      // La résolution a été dégradée (compaction) : moins de points que les
+      // 10200 d'origine, mais AUCUNE position n'a été jetée sans représentante.
+      expect(flushed.length).toBeLessThan(COUNT);
+      expect(flushed.length).toBeGreaterThan(0);
+
+      // Couverture chronologique COMPLÈTE du trajet : chaque tranche de 45 s de
+      // la trace d'origine est représentée par au moins une position rejouée —
+      // aucun trou dans l'historique, quelle que soit la durée de la coupure.
+      const BUCKET_MS = 45 * 1000;
+      const originalBuckets = new Set<number>();
+      for (let i = 0; i < COUNT; i++) {
+        originalBuckets.add(Math.floor((startMs + i * STEP_MS) / BUCKET_MS));
+      }
+      const flushedBuckets = new Set<number>();
+      for (const p of flushed) {
+        flushedBuckets.add(Math.floor(new Date(String(p.timestamp)).getTime() / BUCKET_MS));
+      }
+      let missingBuckets = 0;
+      for (const bucketTs of originalBuckets) {
+        if (!flushedBuckets.has(bucketTs)) missingBuckets++;
+      }
+      expect(missingBuckets).toBe(0);
+
+      // Extrémités du trajet présentes (la plus ancienne ET la plus récente).
+      const indices = flushed.map((p) => p.index as number).sort((a, b) => a - b);
+      expect(indices[0]).toBe(0);
+      expect(indices[indices.length - 1]).toBe(COUNT - 1);
+
+      // Les tranches compactées sont marquées `compressed: true`.
+      expect(flushed.filter((p) => p.compressed === true).length).toBeGreaterThan(0);
+    } finally {
+      // Nettoyage garanti MÊME en cas d'échec d'assertion : sans lui, la file
+      // restante ralentit les tests suivants (contamination inter-tests).
+      await clearQueue();
+    }
+  }, 180_000);
 
   it('handles concurrent enqueue and size check', async () => {
     await Promise.all([
@@ -121,7 +204,7 @@ describe('offlineQueue', () => {
     await flushQueue(async () => {});
     const size = await queueSize();
     expect(size).toBe(0);
-  });
+  }, 15_000);
 
   it('dequeuePositions returns at most N oldest positions in FIFO order without deleting them', async () => {
     for (let i = 0; i < 5; i++) {
@@ -171,7 +254,7 @@ describe('offlineQueue', () => {
       expect(hi).toBe(c * 250 + 249);
     }
     await clearQueue();
-  }, 30_000);
+  }, 60_000);
 
   it('flushQueue never deletes positions whose send was NOT acked (chunk failing stops the loop, keeps the rest)', async () => {
     await clearQueue();
@@ -196,5 +279,5 @@ describe('offlineQueue', () => {
     await flushQueue(async () => {});
     expect(await queueSize()).toBe(0);
     await clearQueue();
-  }, 30_000);
+  }, 60_000);
 });

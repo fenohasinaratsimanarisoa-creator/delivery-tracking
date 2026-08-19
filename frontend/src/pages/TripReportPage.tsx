@@ -67,6 +67,18 @@ export default function TripReportPage() {
     return `${s}s`;
   };
 
+  // Écart relatif entre les deux distances affichées : les seuils de filtrage
+  // du bruit GPS diffèrent légitimement entre computeFilteredDistance (référence,
+  // pondérée par l'accuracy) et calculateDistancePostGIS (seuil fixe 5 m) —
+  // voir backend/src/common/geo/geo.utils.ts. Si l'écart dépasse 10 %, un petit
+  // badge discret le signale pour que la différence soit visible sans comparer
+  // les deux chiffres manuellement.
+  const distanceGapPct = report
+    ? report.totalDistance.kilometers > 0 && report.postgisDistance
+      ? (Math.abs(report.totalDistance.kilometers - report.postgisDistance.kilometers) / report.totalDistance.kilometers) * 100
+      : 0
+    : 0;
+
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>
@@ -110,9 +122,33 @@ export default function TripReportPage() {
           <div className={styles.reportGrid}>
             <div className={styles.reportItem}><strong>Status:</strong> {report.delivery.status}</div>
             <div className={styles.reportItem}><strong>Positions:</strong> {report.positionCount}</div>
-            <div className={styles.reportItem}><strong>Distance:</strong> {report.totalDistance.kilometers} km</div>
+            <div className={styles.reportItem}>
+              <strong
+                className={styles.distanceLabel}
+                title="Distance de référence : source unique de vérité, calculée par le backend (computeFilteredDistance) et utilisée aussi pour la consommation de carburant."
+              >
+                Distance (référence — utilisée pour le carburant):
+              </strong>{' '}
+              {report.totalDistance.kilometers} km
+            </div>
             {report.postgisDistance && (
-              <div className={styles.reportItem}><strong>Distance (PostGIS):</strong> {report.postgisDistance.kilometers} km</div>
+              <div className={styles.reportItem}>
+                <strong
+                  className={styles.distanceLabel}
+                  title="Estimation alternative calculée par PostGIS. Elle peut différer de la distance de référence car les seuils de filtrage du bruit GPS sont différents : les deux sont valides, la distance de référence fait foi pour le carburant."
+                >
+                  Distance (estimation alternative):
+                </strong>{' '}
+                {report.postgisDistance.kilometers} km
+                {distanceGapPct >= 10 && (
+                  <span
+                    className={styles.distanceBadge}
+                    title={`Écart de ${distanceGapPct.toFixed(0)} % entre les deux calculs — différence attendue (filtrage du bruit GPS différent), la référence fait foi.`}
+                  >
+                    écart {distanceGapPct.toFixed(0)} %
+                  </span>
+                )}
+              </div>
             )}
             <div className={styles.reportItem}><strong>Avg Speed:</strong> {report.avgSpeedKmh} km/h</div>
             <div className={styles.reportItem}><strong>Duration:</strong> {formatDuration(report.totalDurationSec)}</div>

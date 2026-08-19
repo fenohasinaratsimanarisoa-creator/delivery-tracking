@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   mergePositionUpdate,
   mergeBootstrapPositions,
+  shouldFollowRecenter,
   FALLBACK_DRIVER_NAME,
   type PositionUpdateInput,
   type VehicleData,
@@ -76,5 +77,31 @@ describe('mergeBootstrapPositions — bootstrap REST par vehicleId', () => {
     expect(after.size).toBe(2);
     expect(after.get('vehicle-1')!.name).toBe(FALLBACK_DRIVER_NAME);
     expect(after.get('vehicle-2')!.name).toBe(FALLBACK_DRIVER_NAME);
+  });
+});
+
+describe('shouldFollowRecenter — suivi CONTINU de la caméra (le bug #1 de l\'audit)', () => {
+  it('retourne true à la PREMIÈRE position d\'un véhicule sélectionné (aucune référence)', () => {
+    expect(shouldFollowRecenter(null, { id: 'v1', lat: -18.8792, lng: 47.5079 })).toBe(true);
+  });
+
+  it('retourne true à CHAQUE nouvelle position du véhicule suivi — pas seulement à la première', () => {
+    // Le défaut corrigé : l\'ancien code (snapshot figé + garde focusId) ne
+    // recentrait qu\'une seule fois ; la caméra doit maintenant suivre chaque
+    // mouvement reçu.
+    const prev = { id: 'v1', lat: -18.8792, lng: 47.5079 };
+    expect(shouldFollowRecenter(prev, { id: 'v1', lat: -18.8801, lng: 47.5079 })).toBe(true);
+    expect(shouldFollowRecenter(prev, { id: 'v1', lat: -18.8792, lng: 47.5100 })).toBe(true);
+    expect(shouldFollowRecenter(prev, { id: 'v1', lat: -18.8795, lng: 47.5083 })).toBe(true);
+  });
+
+  it('retourne false quand les coordonnées n\'ont pas changé (pas de panTo inutile)', () => {
+    const prev = { id: 'v1', lat: -18.8792, lng: 47.5079 };
+    expect(shouldFollowRecenter(prev, { id: 'v1', lat: -18.8792, lng: 47.5079 })).toBe(false);
+  });
+
+  it('recentre quand on passe d\'un véhicule à un autre (changement de sélection)', () => {
+    const prev = { id: 'v1', lat: -18.8792, lng: 47.5079 };
+    expect(shouldFollowRecenter(prev, { id: 'v2', lat: -18.8792, lng: 47.5079 })).toBe(true);
   });
 });

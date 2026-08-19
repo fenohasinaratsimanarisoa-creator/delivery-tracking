@@ -50,6 +50,32 @@ export const FALLBACK_DRIVER_NAME = 'Véhicule sans chauffeur assigné';
 
 export const OFFLINE_TIMEOUT_MIN = 15;
 
+export interface FollowReference {
+  id: string;
+  lat: number;
+  lng: number;
+}
+
+/**
+ * Décide si la caméra doit re-centrer sur le véhicule suivi :
+ * - true à la PREMIÈRE position d'un véhicule sélectionné (aucune référence,
+ *   ou changement de véhicule) — c'est le saut caméra initial,
+ * - true à CHAQUE changement de coordonnées suivant : suivi CONTINU (le défaut
+ *   corrigé — avant, le snapshot sélectionné était figé et la carte ne
+ *   recentrait qu'une seule fois, au clic),
+ * - false quand les coordonnées sont identiques (pas de mouvement réel → pas
+ *   de panTo inutile).
+ * La désactivation du suivi par l'utilisateur (drag/zoom manuel) est gérée par
+ * l'état `following` côté composant, pas ici.
+ */
+export function shouldFollowRecenter(
+  prev: FollowReference | null,
+  vehicle: { id: string; lat: number; lng: number },
+): boolean {
+  if (!prev || prev.id !== vehicle.id) return true;
+  return prev.lat !== vehicle.lat || prev.lng !== vehicle.lng;
+}
+
 /**
  * Fusionne une position socket dans la Map des véhicules.
  * La clé primaire de la Map est TOUJOURS vehicleId — jamais driverId : quand

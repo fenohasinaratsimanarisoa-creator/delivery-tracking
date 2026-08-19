@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { enqueuePosition, queueSize, clearQueue, flushQueue } from '../offlineQueue';
+import { enqueuePosition, queueSize, clearQueue, flushQueue, QUEUE_MAX_SIZE } from '../offlineQueue';
 import 'fake-indexeddb/auto';
 
 // =============================================================================
@@ -69,19 +69,19 @@ describe('tracking-reliability — filet de sécurité côté app', () => {
     await clearQueue();
   });
 
-  it('3. Queue offline : une file pleine (> 5000) évince l\'ancien mais le SIGNALE (jamais de perte silencieuse)', async () => {
+  it('3. Queue offline : une file pleine (> quota, entièrement récente) évince l\'ancien mais le SIGNALE (jamais de perte silencieuse)', async () => {
     await clearQueue();
     // Remplit la file au-delà du cap (éviction du plus ancien signalée).
-    // 5001 écritures IndexedDB séquentielles > 5s sous charge parallèle : timeout dédié.
+    // (quota + 1) écritures IndexedDB séquentielles > 5s sous charge parallèle : timeout dédié.
     let lastResult: { queued: boolean; droppedOldest: boolean } | null = null;
-    for (let i = 0; i < 5001; i++) {
+    for (let i = 0; i < QUEUE_MAX_SIZE + 1; i++) {
       lastResult = await enqueuePosition({ index: i });
     }
     expect(lastResult?.queued).toBe(true);
     expect(lastResult?.droppedOldest).toBe(true);
-    expect(await queueSize()).toBe(5000);
+    expect(await queueSize()).toBe(QUEUE_MAX_SIZE);
     await clearQueue();
-  }, 30_000);
+  }, 60_000);
 
   it('4. La file offline est PERSISTANTE sur disque (IndexedDB) — une position en file survit à un kill de l\'app', () => {
     // Le stockage est IndexedDB (pas un Map en mémoire) : vérification statique du

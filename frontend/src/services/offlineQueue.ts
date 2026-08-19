@@ -3,12 +3,35 @@ const STORE_NAME = 'position-queue';
 const DB_VERSION = 1;
 
 // Capacité de la file locale (IndexedDB, persistante sur disque — survit à un kill
-// de l'app par l'OS). 5000 positions à la cadence de 3 s ≈ 4 h de coupure réseau
-// couvertes SANS perte. L'ancienne limite de 500 (~25 min) écrasait silencieusement
-// les positions les plus anciennes au-delà — inacceptable pour la fidélité du trajet
-// enregistré pendant une coupure prolongée. Au-delà de 5000, l'éviction du plus ancien
-// est désormais SIGNALÉE (droppedOldest → alerte explicite dans l'app), jamais silencieuse.
-const QUEUE_MAX_SIZE = 5000;
+// de l'app par l'OS). 10000 positions à la cadence de 3 s ≈ 8 h 20 de coupure
+// réseau en PLEINE résolution (quota doublé par rapport aux 5000 ≈ 4 h d'avant).
+// Au-delà, la stratégie est SANS perte : on COMPACTE d'abord les positions
+// anciennes (1 point représentatif par tranche de 45 s, voir
+// compactOldestPositions) — le quota ne borne donc plus la DURÉE de coupure
+// couverte, il ne fait que dégrader la résolution des positions les plus
+// anciennes. L'éviction d'un point ancien n'arrive plus qu'en dernier recours
+// (file entièrement récente), et elle est TOUJOURS signalée (droppedOldest →
+// alerte explicite dans l'app), jamais silencieuse. Choix documenté (prompt 4
+// de l'audit) : option A (compression des anciennes) + mécanisme d'alerte
+// précoce de l'option B (nearCapacity à 80 %) — l'augmentation du quota est
+// bornée volontairement (×2) car la compaction rend la capacité non-limitante
+// pour la fidélité du trajet.
+export const QUEUE_MAX_SIZE = 10000;
+// Alerte précoce à 80 % du quota (option B) : la saturation n'arrive jamais
+// sans signe avant-coureur — enqueuePosition remonte `nearCapacity` dès que la
+// file dépasse ce seuil, bien avant la moindre perte ou compaction.
+export const QUEUE_WARN_FRACTION = 0.8;
+export const QUEUE_WARN_SIZE = Math.floor(QUEUE_MAX_SIZE * QUEUE_WARN_FRACTION);
+// Stratégie sans perte pour les coupures très longues (option A) : au lieu de
+// supprimer une à une les positions les plus anciennes une fois le quota
+// dépassé, on COMPACTE les positions plus vieilles que COMPACT_HORIZON_MS —
+// une seule position représentative par tranche de COMPACT_BUCKET_MS (la
+// première, marquée `compressed: true`) remplace toutes celles de sa tranche.
+// La trace complète du trajet reste couverte (résolution dégradée sur le
+// segment ancien, pleine résolution sur les dernières minutes) : AUCUNE
+// position n'est supprimée sans qu'une représentante de sa tranche ne subsiste.
+const COMPACT_HORIZON_MS = 5 * 60 * 1000;
+const COMPACT_BUCKET_MS = 45 * 1000;
 const LATENCY_THRESHOLD_MS = 3000;
 
 let isFlushing = false;
@@ -76,31 +99,109 @@ export interface EnqueueResult {
   queued: boolean;
   /** true si la file était pleine et qu'une position plus ancienne a dû être évincée. */
   droppedOldest: boolean;
+  /** true si la file dépasse 80 % du quota (alerte précoce, bien avant toute perte). */
+  nearCapacity: boolean;
 }
 
 /**
  * Stocke une position dans la file locale (IndexedDB, persistante sur disque).
- * Ne perd JAMAIS une position silencieusement : si la capacité maximale est
- * atteinte, la position la plus ANCIENNE est évincée et l'appelant est informé
- * via droppedOldest (l'app affiche alors une alerte explicite) — en dessous de
- * 5000 entrées (~4 h de coupure), AUCUNE perte n'a lieu.
+ * Stratégie SANS perte sur les coupures très longues :
+ * - quota doublé (10000 ≈ 8 h 20 de pleine résolution) ;
+ * - au-delà du quota, COMPACTION d'abord (les positions plus vieilles que
+ *   COMPACT_HORIZON_MS sont remplacées par 1 représentante par tranche de 45 s,
+ *   marquée `compressed: true` — la trace reste complète, résolution dégradée
+ *   sur le segment ancien, quelle que soit la durée de la coupure) ;
+ * - éviction du plus ancien UNIQUEMENT si rien n'est compactable (file
+ *   entièrement récente), TOUJOURS signalée via droppedOldest (l'app affiche
+ *   alors une alerte explicite) — jamais de perte silencieuse ;
+ * - dès 80 % du quota, nearCapacity remonte (alerte précoce, option B).
  */
 export async function enqueuePosition(
   pos: Record<string, unknown>,
 ): Promise<EnqueueResult> {
   const db = await getDB();
-  const size = await queueSize();
+  let size = await queueSize();
   let droppedOldest = false;
   if (size >= QUEUE_MAX_SIZE) {
+    // Quota atteint : compaction des positions anciennes AVANT toute éviction.
+    // Ne s'exécute qu'à saturation (le scan curseur a un coût, payé seulement
+    // quand il est nécessaire).
+    await compactOldestPositions();
+    size = await queueSize();
+  }
+  if (size >= QUEUE_MAX_SIZE) {
+    // Rien de compactable (file entièrement récente) : éviction du plus ancien,
+    // TOUJOURS signalée — jamais silencieuse.
     const oldest = await dequeueOldest();
-    if (!oldest) return { queued: false, droppedOldest };
+    if (!oldest) return { queued: false, droppedOldest, nearCapacity: false };
     droppedOldest = true;
   }
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).add({ ...pos, queuedAt: new Date().toISOString() });
-    tx.oncomplete = () => resolve({ queued: true, droppedOldest });
+    tx.oncomplete = () => resolve({
+      queued: true,
+      droppedOldest,
+      // Alerte précoce à 80 % du quota (option B) : l'app prévient bien avant
+      // toute saturation/compaction/perte.
+      nearCapacity: size + 1 >= QUEUE_WARN_SIZE,
+    });
     tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
+ * Compaction de la file SANS perte (option A) : remplace les positions plus
+ * anciennes que COMPACT_HORIZON_MS par UNE position représentative par tranche
+ * de COMPACT_BUCKET_MS (la première du bucket, marquée `compressed: true`).
+ * Retourne true si au moins une position a été remplacée/supprimée. Le
+ * bucketing se fait sur le timestamp GPS de la position (`timestamp`, repli
+ * sur `queuedAt`) : pendant une longue coupure, la trace horodatée est
+ * préservée dans son intégralité, juste à résolution réduite sur le segment
+ * ancien.
+ */
+async function compactOldestPositions(): Promise<boolean> {
+  const db = await getDB();
+  const cutoff = Date.now() - COMPACT_HORIZON_MS;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    // bucketTs (début de tranche) → id de la position représentative conservée.
+    const keptPerBucket = new Map<number, number>();
+    const toDelete: number[] = [];
+    const scan = store.openCursor();
+    scan.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+      if (cursor) {
+        const value = cursor.value as Record<string, unknown>;
+        const ts = new Date(String(value.timestamp ?? value.queuedAt ?? '')).getTime();
+        if (Number.isFinite(ts) && ts > 0 && ts < cutoff) {
+          const bucketTs = Math.floor(ts / COMPACT_BUCKET_MS) * COMPACT_BUCKET_MS;
+          const keptId = keptPerBucket.get(bucketTs);
+          if (keptId === undefined) {
+            // Première position de la tranche : conservée, marquée compressée.
+            keptPerBucket.set(bucketTs, value.id as number);
+            cursor.update({ ...value, compressed: true });
+          } else if (keptId !== value.id) {
+            // Positions suivantes de la même tranche : remplacées par leur
+            // représentante — AUCUNE perte de trace (la représentante couvre
+            // la tranche), juste une résolution dégradée sur le segment ancien.
+            toDelete.push(value.id as number);
+          }
+        }
+        cursor.continue();
+      } else {
+        // Scan terminé : purge des points absorbés par leur représentante.
+        if (toDelete.length === 0) {
+          resolve(false);
+          return;
+        }
+        for (const id of toDelete) store.delete(id);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      }
+    };
+    scan.onerror = () => reject(scan.error);
   });
 }
 

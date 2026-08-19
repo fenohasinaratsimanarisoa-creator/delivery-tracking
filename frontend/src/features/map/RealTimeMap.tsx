@@ -106,7 +106,7 @@ interface SearchResult {
 }
 
 import type { VehicleData } from './vehicleMap';
-import { mergePositionUpdate, mergeBootstrapPositions } from './vehicleMap';
+import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, type FollowReference } from './vehicleMap';
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -419,15 +419,58 @@ function MapBoundsUpdater({ positions }: { positions: { latitude: number; longit
   return null;
 }
 
-function MapFlyToDriver({ lat, lng }: { lat: number; lng: number }) {
+function FollowVehicleController({ vehicle, following, onUserInteraction }: {
+  vehicle: VehicleData | null;
+  following: boolean;
+  onUserInteraction: () => void;
+}) {
   const map = useMap();
-  const prevRef = useRef({ lat: 0, lng: 0 });
+  const prevPosRef = useRef<FollowReference | null>(null);
+  const suppressUntilRef = useRef(0);
 
   useEffect(() => {
-    if (prevRef.current.lat === lat && prevRef.current.lng === lng) return;
-    prevRef.current = { lat, lng };
-    map.flyTo([lat, lng], 16, { duration: 0.8 });
-  }, [lat, lng, map]);
+    if (!vehicle || !following) {
+      prevPosRef.current = null;
+      return;
+    }
+    const prev = prevPosRef.current;
+    const recenter = shouldFollowRecenter(prev, vehicle);
+    prevPosRef.current = { id: vehicle.id, lat: vehicle.lat, lng: vehicle.lng };
+    if (!recenter) return;
+
+    // Nos propres animations programmatiques (flyTo/panTo) déclenchent des
+    // événements internes de déplacement : on les ignore via ce garde temporel
+    // pour ne pas les confondre avec une interaction utilisateur réelle (drag
+    // ou zoom) qui doit, elle, désactiver le mode suivi.
+    suppressUntilRef.current = Date.now() + 500;
+    if (!prev || prev.id !== vehicle.id) {
+      // Première position du véhicule sélectionné : flyTo zoom 16 (comme
+      // l'ancien MapFlyToDriver), puis suivi continu (panTo) ensuite.
+      map.flyTo([vehicle.lat, vehicle.lng], 16, { duration: 0.8 });
+    } else {
+      // Suivi CONTINU : panTo fluide (0.5s) à CHAQUE nouvelle position reçue
+      // pour ce véhicule — synchronisé avec l'animation du marqueur
+      // (AnimatedMarker), là où l'ancien code ne recentrait qu'une seule fois.
+      map.panTo([vehicle.lat, vehicle.lng], { animate: true, duration: 0.5 });
+    }
+  }, [vehicle, following, map]);
+
+  useEffect(() => {
+    if (!following) return;
+    // Interaction manuelle (drag ou zoom utilisateur) → désactive le mode suivi
+    // (l'utilisateur veut explorer la carte librement) ; un bouton "Suivre"
+    // (fiche véhicule ou bouton flottant) permet de le réactiver.
+    const onUserGesture = () => {
+      if (Date.now() < suppressUntilRef.current) return;
+      onUserInteraction();
+    };
+    map.on('dragstart', onUserGesture);
+    map.on('zoomstart', onUserGesture);
+    return () => {
+      map.off('dragstart', onUserGesture);
+      map.off('zoomstart', onUserGesture);
+    };
+  }, [following, map, onUserInteraction]);
 
   return null;
 }
@@ -443,17 +486,26 @@ function DetailRow({ label, value, color, mono }: { label: string; value: string
 
 function MapFocusHandler({ focusId, focusCenter, vehicles }: { focusId?: string | null; focusCenter?: { lat: number; lng: number } | null; vehicles: VehicleData[] }) {
   const map = useMap();
-  const lastFocus = useRef<string | null>(null);
+  const lastPopupFocus = useRef<string | null>(null);
 
+  // Recentrage ponctuel fourni par la recherche globale (MapPage) : réservé aux
+  // résultats SANS véhicule temps réel (ex. une livraison). Pour un véhicule,
+  // le suivi CONTINU est piloté par FollowVehicleController via selectedDriverId
+  // (état unifié) — pas de double animation sur le même focus.
   useEffect(() => {
-    if (focusCenter) {
-      map.flyTo([focusCenter.lat, focusCenter.lng], 15, { duration: 0.8 });
-    }
-  }, [focusCenter, map]);
+    if (!focusCenter) return;
+    if (focusId && vehicles.some((v) => v.id === focusId)) return;
+    map.flyTo([focusCenter.lat, focusCenter.lng], 15, { duration: 0.8 });
+  }, [focusCenter, focusId, vehicles, map]);
 
+  // Ouvre le popup du marqueur UNE fois par véhicule sélectionné via la
+  // recherche globale. Le garde `lastPopupFocus` ne bloque PLUS le recentrage :
+  // il ne sert qu'à ne pas rouvrir le popup en boucle — la caméra, elle, suit
+  // le véhicule à chaque position tant que focusId reste défini (suivi continu
+  // dans FollowVehicleController).
   useEffect(() => {
-    if (!focusId || focusId === lastFocus.current) return;
-    lastFocus.current = focusId;
+    if (!focusId || focusId === lastPopupFocus.current) return;
+    lastPopupFocus.current = focusId;
     const vehicle = vehicles.find((v) => v.id === focusId);
     if (vehicle) {
       setTimeout(() => {
@@ -505,9 +557,11 @@ interface RealTimeMapProps {
   focusId?: string | null;
   focusCenter?: { lat: number; lng: number } | null;
   onVehiclesUpdate?: (vehicles: VehicleData[]) => void;
+  /** Synchronise la sélection (recherche globale MapPage) avec la sélection interne : les deux mécanismes pilotent le MÊME état de suivi. */
+  onFocusChange?: (id: string | null) => void;
 }
 
-export default function RealTimeMap({ deliveryId, readOnly, initialPositions, deliveryLat, deliveryLng, focusId, focusCenter, onVehiclesUpdate }: RealTimeMapProps) {
+export default function RealTimeMap({ deliveryId, readOnly, initialPositions, deliveryLat, deliveryLng, focusId, focusCenter, onVehiclesUpdate, onFocusChange }: RealTimeMapProps) {
   const [vehicles, setVehicles] = useState<Map<string, VehicleData>>(new Map());
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const [routingPolyline, setRoutingPolyline] = useState<[number, number][]>([]);
@@ -515,7 +569,22 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
   const [routingDistance, setRoutingDistance] = useState<number>(0);
   const [routingLoading, setRoutingLoading] = useState(false);
   const [driverFilter, setDriverFilter] = useState('');
-  const [selectedDriver, setSelectedDriver] = useState<VehicleData | null>(null);
+  // Snapshot corrigé : on ne stocke PLUS un objet VehicleData figé au clic (la
+  // fiche et la caméra ne suivaient plus jamais les positions suivantes).
+  // selectedDriverId reste le SEUL état de sélection ; la donnée affichée est
+  // DÉRIVÉE en direct du flux temps réel (Map `vehicles`) à chaque render.
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  // Mode "Suivre" : tant qu'un véhicule est sélectionné, la caméra recentre à
+  // CHAQUE nouvelle position reçue (FollowVehicleController). Désactivé dès
+  // que l'utilisateur déplace/zoome la carte manuellement (drag/zoom) —
+  // réactivable via le bouton "Suivre" de la fiche véhicule ou le bouton
+  // flottant "Recentrer".
+  const [following, setFollowing] = useState(true);
+  // Horloge basse fréquence : fait réagir le bandeau "Position non actualisée
+  // depuis 2 min" en temps réel, même quand le véhicule s'arrête (plus aucun
+  // update WebSocket → le render seul ne suffirait pas à faire apparaître /
+  // disparaître le bandeau automatiquement).
+  const [now, setNow] = useState(() => Date.now());
   const devPerf = useDevicePerformance();
 
   const { data: driversData } = useQuery({
@@ -555,6 +624,39 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
   setRoutingLoadingRef.current = setRoutingLoading;
 
   const allPositions = Array.from(vehicles.values());
+
+  // Dérivation en direct du flux temps réel : tant que le véhicule est
+  // sélectionné, la fiche (vitesse, statut, dernière position, ETA…) ET les
+  // coordonnées passées au suivi caméra restent synchronisées avec chaque
+  // positionUpdate WebSocket — fin du snapshot figé au clic de sélection.
+  const selectedDriver = useMemo(
+    () => (selectedDriverId ? allPositions.find((v) => v.id === selectedDriverId) ?? null : null),
+    [allPositions, selectedDriverId],
+  );
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // UNIFICATION des deux mécanismes de sélection (recherche globale MapPage via
+  // focusId/focusCenter, recherche interne via driverFilter) : les deux pilotent
+  // le MÊME état de suivi (selectedDriverId + following). focusId reste défini
+  // tant que l'utilisateur ne change pas de sélection (la purge automatique à
+  // 3 s a été retirée côté MapPage) : le suivi continu fonctionne donc aussi
+  // après une recherche globale.
+  const lastFocusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (focusId === lastFocusRef.current) return;
+    if (!focusId) {
+      lastFocusRef.current = null;
+      setSelectedDriverId(null);
+      return;
+    }
+    lastFocusRef.current = focusId;
+    setSelectedDriverId(focusId);
+    setFollowing(true);
+  }, [focusId]);
   const searchResults = useMemo(() => {
     if (!driverFilter.trim()) return [];
     const q = driverFilter.toLowerCase();
@@ -788,7 +890,12 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
           />
           {driverFilter && (
             <button
-              onClick={() => { setDriverFilter(''); setSelectedDriver(null); }}
+              onClick={() => {
+                setDriverFilter('');
+                setSelectedDriverId(null);
+                setFollowing(true);
+                onFocusChange?.(null);
+              }}
               className={styles.searchClearButton}
             >
               <X size={14} />
@@ -810,7 +917,12 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                   onMouseDown={(e) => {
                     e.preventDefault();
                     if (!v.isOffline) {
-                      setSelectedDriver(v as VehicleData);
+                      // Sélection : on ne stocke que l'ID (plus de snapshot
+                      // figé), on active le suivi continu, et on synchronise la
+                      // recherche globale (MapPage) avec la même sélection.
+                      setSelectedDriverId(v.id);
+                      setFollowing(true);
+                      onFocusChange?.(v.id);
                     }
                     setDriverFilter('');
                   }}
@@ -841,18 +953,43 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
 
       {selectedDriver && (
         <>
-          <MapFlyToDriver lat={selectedDriver.lat} lng={selectedDriver.lng} />
+          <FollowVehicleController
+            vehicle={selectedDriver}
+            following={following}
+            onUserInteraction={() => setFollowing(false)}
+          />
+          <button
+            onClick={() => setFollowing((f) => !f)}
+            className={`${styles.followFloating}${following ? ` ${styles.followFloatingActive}` : ''}`}
+            style={{ position: 'absolute', bottom: 20, left: 10, zIndex: 1000 }}
+            aria-pressed={following}
+          >
+            {following ? '🎯 Suivi actif' : '🎯 Suivre'}
+          </button>
           <div style={{
             position: 'absolute', bottom: 20, right: 10, zIndex: 1000,
           }} className={styles.driverCard}>
             <div className={styles.driverCardHeader}>
               <div className={styles.driverCardTitle}>{selectedDriver.name}</div>
-              <button
-                onClick={() => setSelectedDriver(null)}
-                className={styles.driverCardClose}
-              >
-                <X size={16} />
-              </button>
+              <div className={styles.driverCardActions}>
+                <button
+                  onClick={() => setFollowing((f) => !f)}
+                  className={`${styles.followToggle}${following ? ` ${styles.followToggleActive}` : ''}`}
+                  aria-pressed={following}
+                >
+                  {following ? '🎯 Suivi actif' : '🎯 Suivre'}
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedDriverId(null);
+                    setFollowing(true);
+                    onFocusChange?.(null);
+                  }}
+                  className={styles.driverCardClose}
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             <div className={styles.driverCardBody}>
@@ -889,7 +1026,12 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
               )}
             </div>
 
-            {(!selectedDriver.timestamp || Date.now() - new Date(selectedDriver.timestamp).getTime() > 120_000) && (
+            {/* Bandeau réactif EN TEMPS RÉEL : selectedDriver est dérivé en
+                direct du flux (pas de snapshot figé), et une horloge basse
+                fréquence (`now`) déclenche le render même quand le véhicule
+                s'arrête — le bandeau apparaît/disparaît tout seul, sans
+                re-sélectionner le véhicule. */}
+            {(!selectedDriver.timestamp || now - new Date(selectedDriver.timestamp).getTime() > 120_000) && (
               <div className={styles.warningBanner}>
                 Position non actualisée depuis plus de 2 minutes
               </div>
