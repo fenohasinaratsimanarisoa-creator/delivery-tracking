@@ -73,6 +73,30 @@
   border-color: rgba(242, 169, 60, 0.3);
 }
 
+/* Pas de réseau téléphone (navigator.onLine === false) */
+.offline {
+  background: var(--color-red-muted, rgba(232,84,76,0.15));
+  color: var(--color-red, #E8544C);
+  border-color: rgba(232, 84, 76, 0.3);
+}
+
+/* Session expirée / révoquée par le serveur — reconnexion requise */
+.sessionExpired {
+  background: var(--color-red-muted, rgba(232,84,76,0.15));
+  color: var(--color-red, #E8544C);
+  border-color: rgba(232, 84, 76, 0.3);
+}
+
+.reconnectLink {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.reconnectLink:hover {
+  text-decoration: none;
+}
+
 /* Actif */
 .active {
   background: var(--color-teal-muted, rgba(63,167,150,0.15));

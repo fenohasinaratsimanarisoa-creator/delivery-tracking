@@ -1,29 +1,11 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { getAccessToken, setAccessToken } from '../auth/tokenStore';
+import { refreshAccessTokenOutcome } from '../auth/refreshToken';
+import { fetchCsrfToken, getCsrfHeaders } from './csrf';
 import { getApiBaseUrl } from './config';
 import i18n from '../i18n/i18n';
 
-let csrfToken: string | null = null;
-let csrfHmac: string | null = null;
-
 const apiBaseUrl = getApiBaseUrl();
-
-export function getCsrfHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
-  if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
-  if (csrfHmac) headers['X-CSRF-HMAC'] = csrfHmac;
-  return headers;
-}
-
-export async function fetchCsrfToken(): Promise<void> {
-  try {
-    const res = await axios.get(`${apiBaseUrl}/auth/csrf-token`, { withCredentials: true });
-    csrfToken = res.data.csrfToken;
-    csrfHmac = res.data.csrfHmac;
-  } catch {
-    // CSRF token fetch failure is non-fatal; mutations without CSRF may fail server-side
-  }
-}
 
 const api: AxiosInstance = axios.create({
   baseURL: apiBaseUrl,
@@ -32,16 +14,13 @@ const api: AxiosInstance = axios.create({
   withCredentials: true,
 });
 
-let refreshPromise: Promise<void> | null = null;
-
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = getAccessToken();
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   if (config.method && !['get', 'head', 'options'].includes(config.method) && config.headers) {
-    if (csrfToken) config.headers['X-CSRF-Token'] = csrfToken;
-    if (csrfHmac) config.headers['X-CSRF-HMAC'] = csrfHmac;
+    Object.assign(config.headers, getCsrfHeaders());
   }
   return config;
 });
@@ -80,9 +59,8 @@ api.interceptors.response.use(
       error.config._csrfRetry = true;
       try {
         await fetchCsrfToken();
-        if (csrfToken && error.config.headers) {
-          error.config.headers['X-CSRF-Token'] = csrfToken;
-          error.config.headers['X-CSRF-HMAC'] = csrfHmac;
+        if (error.config.headers) {
+          Object.assign(error.config.headers, getCsrfHeaders());
         }
         return api(error.config);
       } catch {
@@ -111,42 +89,28 @@ api.interceptors.response.use(
 
     error.config._retry = true;
 
-    if (!refreshPromise) {
-      refreshPromise = (async () => {
-        await fetchCsrfToken();
-        const headers: Record<string, string> = {};
-        if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
-        if (csrfHmac) headers['X-CSRF-HMAC'] = csrfHmac;
-        const res = await axios.post(
-          `${apiBaseUrl}/auth/refresh`,
-          {},
-          { headers, withCredentials: true, timeout: 30000 },
-        );
-        setAccessToken(res.data.accessToken);
-      })()
-        .catch((refreshError) => {
-          // Si le refresh timeout (cold start serveur) → ne PAS rediriger vers /login
-          if (
-            refreshError.code === 'ECONNABORTED' ||
-            (!refreshError.response && refreshError.request)
-          ) {
-            refreshError.userMessage = i18n.t('api.error.waking');
-            throw refreshError;
-          }
-          // Sinon : refresh authentiquement échoué → session expirée
-          setAccessToken(null);
-          window.location.href = '/login';
-        })
-        .finally(() => { refreshPromise = null; });
-    }
-
+    // ── Refresh UNIFIÉ avec le verrou partagé de refreshToken.ts ──
+    // L'intercepteur 401 réactif et le timer proactif du socket passent par LE
+    // MÊME refreshPromise : un seul /auth/refresh en vol à un instant donné, quel
+    // que soit le déclencheur. Le résultat distingue un échec réseau (cold start
+    // serveur → message 'waking', PAS de redirection) d'un rejet réel du serveur
+    // (session expirée → nettoyage local + redirection /login).
     try {
-      await refreshPromise;
-      const newToken = getAccessToken();
-      if (newToken) {
-        error.config.headers.Authorization = `Bearer ${newToken}`;
+      const outcome = await refreshAccessTokenOutcome();
+      if (outcome.token) {
+        error.config.headers.Authorization = `Bearer ${outcome.token}`;
+        return api(error.config);
       }
-      return api(error.config);
+      if (outcome.reason === 'network') {
+        // Refresh timeout / sans réponse (cold start) → on NE redirige PAS vers /login.
+        (error as Record<string, unknown>).userMessage = i18n.t('api.error.waking');
+        return Promise.reject(error);
+      }
+      // Refresh authentiquement échoué → session expirée.
+      setAccessToken(null);
+      try { sessionStorage.setItem('dt_auth_error', 'session_expired'); } catch {}
+      window.location.href = '/login';
+      return Promise.reject(error);
     } catch (refreshErr: unknown) {
       // Propager le message 'waking' si le refresh a échoué par timeout
       const re = refreshErr as Record<string, unknown> | undefined;

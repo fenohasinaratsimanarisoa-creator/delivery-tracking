@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import axios from 'axios';
-import api, { fetchCsrfToken, getCsrfHeaders } from '../services/api/client';
+import api from '../services/api/client';
+import { fetchCsrfToken, getCsrfHeaders } from '../services/api/csrf';
 import { getApiBaseUrl } from '../services/api/config';
 import type { User } from '../types';
 import { setAccessToken, getAccessToken } from '../services/auth/tokenStore';

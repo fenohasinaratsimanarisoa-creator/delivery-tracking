@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ClipboardList, MapPin, Flag, CalendarDays, Truck, StickyNote,
   PackagePlus, PackageCheck, XCircle, Inbox, Navigation,
-  Radio, WifiOff, Cpu, AlertTriangle, ChevronDown,
+  Radio, WifiOff, Cpu, AlertTriangle, ChevronDown, Signal, ShieldAlert, Crosshair,
 } from 'lucide-react';
 import { formatDate, formatDateShort } from '../services/i18n/formatDate';
 import api from '../services/api/client';
@@ -299,6 +299,30 @@ function LivePill() {
       </span>
     );
   }
+  // Cas 1 — PAS de réseau téléphone : problème réseau RÉEL, à distinguer d'un
+  // simple état du WebSocket (qui peut être down sans que le réseau soit coupé).
+  if (!status.networkOnline) {
+    return (
+      <span className={`${styles.livePill} ${styles.pillRed}`}>
+        <Signal size={13} />
+        {t('trackingIndicator.noNetwork')}
+      </span>
+    );
+  }
+  // Cas 2 — SESSION EXPIRÉE (révoquée par le serveur) : le socket ne pourra pas
+  // se reconnecter avec un jeton périmé — afficher la reconnexion manuelle au
+  // lieu d'un "Hors ligne" générique qui boucle en silence.
+  if (status.sessionExpired) {
+    return (
+      <span className={`${styles.livePill} ${styles.pillRed}`}>
+        <ShieldAlert size={13} />
+        {t('trackingIndicator.sessionExpired')}{' '}
+        <a href="/login" className={styles.pillLink}>
+          {t('trackingIndicator.reconnectCta')}
+        </a>
+      </span>
+    );
+  }
   // Hors ligne avec file locale en cours : le chauffeur (et le dispatcher) doivent
   // savoir immédiatement que les positions ne partent PAS en temps réel.
   if (!status.socketConnected && status.queueCount > 0) {
@@ -336,7 +360,7 @@ function LivePill() {
   if (status.poorAccuracy) {
     return (
       <span className={`${styles.livePill} ${styles.pillAmber}`}>
-        <WifiOff size={13} />
+        <Crosshair size={13} />
         {t('trackingIndicator.poorAccuracy')}
       </span>
     );

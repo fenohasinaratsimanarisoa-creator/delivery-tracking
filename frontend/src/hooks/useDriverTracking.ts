@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api/client';
-import { getSocket } from '../services/socket/socket';
+import { getSocket, onSocketSessionExpired } from '../services/socket/socket';
 import { enqueuePosition, queueSize, flushQueue, QUEUE_WARN_SIZE } from '../services/offlineQueue';
 import { KalmanFilter } from '../services/tracking/KalmanFilter';
 import { sensorFusion, simulateStationaryFromSpeed } from '../services/tracking/sensorFusion';
@@ -40,6 +40,18 @@ const ACCURACY_GOOD = 10;
 const ACCURACY_MODERATE = 30;
 const ACCURACY_POOR = 50;
 const ACCURACY_REJECT = 80;
+// Seuil UI "signal GPS faible" (badge) : DÉDIÉ, volontairement plus proche de
+// l'usage réel que ACCURACY_MODERATE (30m). En conditions réelles (rue, sous
+// couvert, en ville), un téléphone Android donne très souvent 20-50m — normal
+// et parfaitement exploitable pour du tracking de livraison (le seuil de rejet
+// réel d'une position est ACCURACY_REJECT = 80m). Le badge ne s'affiche donc
+// qu'au-dessus de 50m, aligné sur la branche d'alerte "GPS très faible"
+// (ACCURACY_POOR), au lieu de se déclencher dès 30m.
+const UI_POOR_ACCURACY_THRESHOLD = 50;
+// Nombre de fixes CONSÉCUTIFS au-dessus du seuil avant d'afficher le badge :
+// un pic isolé de bruit GPS (arbre, bus, passage couvert) ne doit pas faire
+// clignoter le badge à chaque fix.
+const UI_POOR_ACCURACY_FIXES_REQUIRED = 3;
 const SPEED_MOVING_THRESHOLD_MS = 1.39;
 const STOPPED_DURATION_MS = 30_000;
 // Cadence d'envoi en mouvement : 3s. Alignée sur le LOCATION_INTERVAL_MS natif
@@ -110,6 +122,10 @@ export interface TrackingStatus {
   queueCount: number;
   /** true = socket temps réel connecté (le dispatcher reçoit les positions en direct). */
   socketConnected: boolean;
+  /** true = le téléphone a du réseau (navigator.onLine + événements online/offline). */
+  networkOnline: boolean;
+  /** true = le serveur a révoqué/rejeté la session et le refresh a échoué → reconnexion manuelle requise. */
+  sessionExpired: boolean;
   statusMsg: string;
   geolocationDenied: boolean;
   activeDeliveryId: string;
@@ -136,6 +152,16 @@ export function useDriverTracking() {
   // plan pour masquer la bannière dès que le chauffeur accorde l'exemption.
   const [batteryOptimizationIgnored, setBatteryOptimizationIgnored] = useState(true);
   const [socketConnected, setSocketConnected] = useState(false);
+  // État réseau réel du téléphone (navigator.onLine + événements 'online'/'offline',
+  // même pattern que drainQueue) : distingue "pas de réseau" de "socket déconnecté"
+  // dans le badge de statut.
+  const [networkOnline, setNetworkOnline] = useState(
+    typeof navigator !== 'undefined' ? navigator.onLine !== false : true,
+  );
+  // Session révoquée côté serveur (refresh échoué après 'Invalid token' du socket) :
+  // le badge affiche "Session expirée — reconnexion nécessaire" au lieu de boucler
+  // sur un "Hors ligne" générique.
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [deviceOem, setDeviceOem] = useState<DeviceOemInfo | null>(null);
   const [activeDeliveryId, setActiveDeliveryId] = useState('');
   const [alerts, setAlerts] = useState<DriverAlert[]>([]);
@@ -167,6 +193,10 @@ export function useDriverTracking() {
   // INTERVAL_FAST (choix documenté dans recalcInterval), on trace simplement ces cas
   // pour le débogage terrain. Exposé en lecture dans trackingStatus.
   const degradedAccuracyWhileMovingRef = useRef(0);
+  // Compteur de fixes CONSÉCUTIFS au-dessus de UI_POOR_ACCURACY_THRESHOLD : le badge
+  // "GPS faible" ne s'affiche qu'à partir de UI_POOR_ACCURACY_FIXES_REQUIRED fixes
+  // consécutifs (évite le clignotement sur un pic isolé de bruit GPS).
+  const poorAccuracyStreakRef = useRef(0);
   const posRef = useRef(position);
   const isSendingRef = useRef(false);
   // Horodatage du dernier envoi réellement initié (throttle minimal contre la
@@ -515,11 +545,12 @@ export function useDriverTracking() {
       // zone urbaine dense (fixes 80-150m), la trace avait des trous et la distance/ETA
       // étaient faussés. On la met en file (envoyée telle quelle, le serveur décide du
       // suspect) au lieu de la perdre.
-      setPoorAccuracy(true);
+      // NB : le badge "GPS faible" (poorAccuracy) est géré exclusivement par
+      // processCoords — pas de setPoorAccuracy ici, pour ne pas court-circuiter le
+      // décompte de fixes consécutifs (UI_POOR_ACCURACY_FIXES_REQUIRED).
       queueAndSkip(p);
       return;
     }
-    setPoorAccuracy(acc > ACCURACY_MODERATE);
 
     // Throttle minimal : ne pas initier un envoi si le dernier date de moins de
     // LOCATION_FASTEST_INTERVAL_MS. En arrière-plan Chromium throttle déjà les timers,
@@ -658,6 +689,14 @@ export function useDriverTracking() {
     recalcInterval(speed ?? undefined, acc, isActuallyStationary);
     checkProximity(filtered.lat, filtered.lng);
 
+    // Badge "signal GPS faible" : seuil UI dédié (50m, voir UI_POOR_ACCURACY_THRESHOLD)
+    // ET persistance sur plusieurs fixes consécutifs — un pic isolé de bruit GPS
+    // (arbre, bus, passage couvert) ne doit pas faire clignoter le badge à chaque fix.
+    // Les alertes (GPS faible / très faible) restent sur les seuils historiques.
+    const poorFix = acc > UI_POOR_ACCURACY_THRESHOLD;
+    poorAccuracyStreakRef.current = poorFix ? poorAccuracyStreakRef.current + 1 : 0;
+    const showPoorAccuracy = poorAccuracyStreakRef.current >= UI_POOR_ACCURACY_FIXES_REQUIRED;
+
     if (acc <= ACCURACY_GOOD) {
       setStatusMsg('');
       setPoorAccuracy(false);
@@ -667,10 +706,10 @@ export function useDriverTracking() {
       setPoorAccuracy(false);
       removeAlert('poor_accuracy', '');
     } else if (acc <= ACCURACY_POOR) {
-      setPoorAccuracy(true);
+      setPoorAccuracy(showPoorAccuracy);
       addAlert({ type: 'poor_accuracy', title: 'GPS faible', message: `La précision GPS est faible (±${Math.round(acc)}m). Déplacez-vous dans une zone dégagée.`, urgency: 'normal' });
     } else {
-      setPoorAccuracy(true);
+      setPoorAccuracy(showPoorAccuracy);
       addAlert({ type: 'poor_accuracy', title: 'GPS très faible', message: `La précision GPS est très faible (±${Math.round(acc)}m). Les positions envoyées peuvent être imprécises.`, urgency: 'high' });
     }
   }, [recalcInterval, checkProximity, addAlert, removeAlert]);
@@ -711,6 +750,7 @@ export function useDriverTracking() {
     setGeolocationDenied(false);
     setPoorAccuracy(false);
     setConfidenceLevel(1);
+    poorAccuracyStreakRef.current = 0;
     kalmanRef.current = null;
     filteredPosRef.current = null;
 
@@ -932,6 +972,7 @@ export function useDriverTracking() {
     hiddenSinceRef.current = 0;
     lastMovingRef.current = Date.now();
     intervalDurationRef.current = INTERVAL_DEFAULT;
+    poorAccuracyStreakRef.current = 0;
     setPosition(null);
     setQueueCount(0);
     setPoorAccuracy(false);
@@ -940,11 +981,19 @@ export function useDriverTracking() {
 
   useEffect(() => {
     const socket = getSocket();
-    const updateConnState = () => setSocketConnected(socket.connected);
+    const updateConnState = () => {
+      setSocketConnected(socket.connected);
+      // Une reconnexion réussie avec un jeton VALIDE lève l'état sessionExpired.
+      if (socket.connected) setSessionExpired(false);
+    };
     updateConnState();
     socket.on('connect', updateConnState);
     socket.on('disconnect', updateConnState);
     socket.on('connect', drainQueue);
+    // Session révoquée par le serveur (refresh échoué après 'Invalid token') :
+    // le badge affiche "Session expirée — reconnexion nécessaire" au lieu d'un
+    // "Hors ligne" générique qui boucle en silence.
+    const unsubSessionExpired = onSocketSessionExpired(() => setSessionExpired(true));
     socket.on('dataUpdate', (event: { entity: string; action: string; geofenceName: string; deliveryId?: string; driverId?: string }) => {
       if (event.entity === 'geofence_event' && event.driverId && event.driverId === driverIdRef.current) {
         addAlert({
@@ -969,8 +1018,10 @@ export function useDriverTracking() {
         });
       }
     });
-    const onOnline = () => { drainQueue(); };
+    const onOnline = () => { setNetworkOnline(true); drainQueue(); };
+    const onOffline = () => { setNetworkOnline(false); };
     window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
 
     return () => {
       if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
@@ -984,12 +1035,14 @@ export function useDriverTracking() {
         batterySubscriptionRef.current.unsubscribe();
         batterySubscriptionRef.current = null;
       }
+      unsubSessionExpired();
       socket.off('connect', updateConnState);
       socket.off('disconnect', updateConnState);
       socket.off('connect', drainQueue);
       socket.off('dataUpdate');
       socket.off('proximityAlert');
       window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
     };
   }, [drainQueue, addAlert]);
 
@@ -1041,6 +1094,8 @@ export function useDriverTracking() {
     isStationary,
     queueCount,
     socketConnected,
+    networkOnline,
+    sessionExpired,
     statusMsg,
     geolocationDenied,
     activeDeliveryId,

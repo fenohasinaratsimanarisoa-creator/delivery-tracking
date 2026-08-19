@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import api, { fetchCsrfToken } from '../../services/api/client';
+import api from '../../services/api/client';
+import { fetchCsrfToken } from '../../services/api/csrf';
 import { useAuth } from '../../hooks/AuthContext';
 import LoginLayout from './components/LoginLayout';
 import VisualPanel from './components/VisualPanel';

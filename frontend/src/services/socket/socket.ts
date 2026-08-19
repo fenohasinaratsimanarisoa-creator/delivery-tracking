@@ -31,6 +31,52 @@ const VISIBLE_RECONNECT_THRESHOLD_MS = 10_000;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let lastHiddenAt = 0;
 
+// True quand le serveur a rejeté la session (refresh échoué après un
+// 'Invalid token') : on stoppe la boucle de reconnexion (économie batterie,
+// plus de retries avec un jeton périmé) et on l'expose à l'UI via les
+// listeners ci-dessous (TrackingStatus.sessionExpired).
+let sessionExpired = false;
+
+type SessionExpiredListener = () => void;
+const sessionExpiredListeners = new Set<SessionExpiredListener>();
+
+/**
+ * S'abonne à l'état "session expirée" (le serveur a révoqué/rejeté la session et
+ * le refresh a échoué). Renvoie la fonction de désabonnement. Consommé par
+ * useDriverTracking pour alimenter TrackingStatus.sessionExpired.
+ */
+export function onSocketSessionExpired(cb: SessionExpiredListener): () => void {
+  sessionExpiredListeners.add(cb);
+  return () => { sessionExpiredListeners.delete(cb); };
+}
+
+/**
+ * 'error'/'connect_error' = "Invalid token" (émis par tracking.gateway.ts
+ * handleConnection catch, ou rejet du handshake par ws-auth.service.ts).
+ * NE PAS laisser socket.io retenter indéfiniment avec le même jeton périmé :
+ *  - refresh immédiat (verrou partagé refreshToken.ts) ;
+ *  - succès → reconnexion propre avec le nouveau jeton (nouveau handshake) ;
+ *  - échec → stoppe la reconnexion et expose sessionExpired à l'UI.
+ */
+function handleInvalidToken(): void {
+  void (async () => {
+    const token = await refreshAccessToken();
+    if (token) {
+      sessionExpired = false;
+      if (socket) {
+        socket.auth = { token };
+        socket.disconnect();
+        socket.connect();
+        scheduleTokenRefresh();
+      }
+    } else {
+      sessionExpired = true;
+      if (socket) socket.disconnect();
+      sessionExpiredListeners.forEach((cb) => cb());
+    }
+  })();
+}
+
 /**
  * Programme un rafraîchissement du token au plus tard REFRESH_MARGIN_MS avant
  * son expiration. Après un échec (retryAfterMs fourni), on repart sur un délai
@@ -91,9 +137,25 @@ export function getSocket(): Socket {
     });
 
     socket.on('disconnect', (reason) => {
-      if ((reason === 'io server disconnect' || reason === 'transport close') && getAccessToken()) {
+      if (
+        (reason === 'io server disconnect' || reason === 'transport close') &&
+        getAccessToken() &&
+        !sessionExpired
+      ) {
         socket?.connect();
       }
+    });
+
+    // Rejet d'authentification du handshake par le serveur ('Invalid token',
+    // tracking.gateway.ts handleConnection catch) : ne pas boucler en silence —
+    // refresh immédiat, sinon sessionExpired exposé à l'UI.
+    socket.on('error', (err: unknown) => {
+      if (typeof err === 'string' && err.includes('Invalid token')) handleInvalidToken();
+    });
+    // Rejet du handshake pendant la phase de connexion (avant 'connect') :
+    // socket.io-client l'expose comme 'connect_error' avec le message du serveur.
+    socket.on('connect_error', (err: Error) => {
+      if (err?.message?.includes('Invalid token')) handleInvalidToken();
     });
 
     socket.io.on('reconnect_attempt', () => {
@@ -147,6 +209,7 @@ export function disconnectSocket(): void {
     clearTimeout(refreshTimer);
     refreshTimer = null;
   }
+  sessionExpired = false;
   if (socket) {
     socket.disconnect();
     socket = null;

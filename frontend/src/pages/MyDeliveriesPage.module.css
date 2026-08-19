@@ -127,6 +127,17 @@
   color: var(--color-red, #E8544C);
 }
 
+/* Lien "Reconnecter" à l'intérieur du pill "Session expirée". */
+.pillLink {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.pillLink:hover {
+  text-decoration: none;
+}
+
 .pillMuted {
   background: var(--color-surface-alt, #182339);
   color: var(--color-text-tertiary, #7A8BA3);

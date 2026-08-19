@@ -1475,6 +1475,10 @@
     "poorAccuracy": "Poor GPS",
     "stationary": "Stationary",
     "moving": "On the road",
+    "noNetworkTitle": "No internet connection on the phone",
+    "noNetwork": "No network",
+    "sessionExpired": "Session expired — reconnect required",
+    "reconnectCta": "Reconnect",
     "offlineQueue": "Offline — {{count}} pending",
     "reconnecting": "Reconnecting…",
     "syncing": "Syncing — {{count}} pending"

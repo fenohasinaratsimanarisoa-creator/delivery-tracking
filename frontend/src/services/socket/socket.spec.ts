@@ -38,7 +38,7 @@ vi.mock('../api/config', () => ({
 // que si socket.connected).
 function makeFakeSocket() {
   const handlers: Record<string, Array<(data?: unknown) => void>> = {};
-  const listeners: Record<string, Array<() => void>> = {};
+  const listeners: Record<string, Array<(data?: unknown) => void>> = {};
   let connected = true;
   return {
     get connected() { return connected; },
@@ -51,13 +51,13 @@ function makeFakeSocket() {
     once: vi.fn(),
     off: vi.fn(),
     io: {
-      on: vi.fn((event: string, handler: () => void) => {
+      on: vi.fn((event: string, handler: (data?: unknown) => void) => {
         (listeners[event] ||= []).push(handler);
       }),
     },
     // Helpers de test
     _emit: (event: string, data?: unknown) => (handlers[event] || []).forEach((h) => h(data)),
-    _emitIo: (event: string) => (listeners[event] || []).forEach((h) => h()),
+    _emitIo: (event: string, data?: unknown) => (listeners[event] || []).forEach((h) => h(data)),
     auth: undefined as unknown,
   };
 }
@@ -152,5 +152,68 @@ describe('socket.ts — reconnexion robuste du dashboard', () => {
     const s = getSocket() as unknown as ReturnType<typeof makeFakeSocket>;
     s._emit('disconnect', 'io server disconnect');
     expect(s.connect).toHaveBeenCalled();
+  });
+
+  it('erreur serveur "Invalid token" → refresh immédiat puis reconnexion propre avec le nouveau jeton', async () => {
+    const { getSocket } = await import('./socket');
+    const s = getSocket() as unknown as ReturnType<typeof makeFakeSocket>;
+    const { refreshAccessToken } = await import('../auth/refreshToken');
+    // Le serveur rejette la session (tracking.gateway.ts → client.emit('error',
+    // 'Invalid token')) : on ne doit PAS boucler en silence avec le jeton périmé —
+    // refresh immédiat (mock résout 'token-2') puis disconnect+connect pour refaire
+    // le handshake avec le nouveau jeton.
+    s._emit('error', 'Invalid token');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refreshAccessToken).toHaveBeenCalled();
+    expect(s.disconnect).toHaveBeenCalled();
+    expect(s.connect).toHaveBeenCalled();
+  });
+
+  it('refresh échoué après "Invalid token" → sessionExpired notifié et boucle de reconnexion stoppée', async () => {
+    const { getSocket, onSocketSessionExpired } = await import('./socket');
+    const listener = vi.fn();
+    onSocketSessionExpired(listener);
+    const s = getSocket() as unknown as ReturnType<typeof makeFakeSocket>;
+    const { refreshAccessToken } = await import('../auth/refreshToken');
+    (refreshAccessToken as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+    s._emit('error', 'Invalid token');
+    await vi.advanceTimersByTimeAsync(0);
+    // L'UI est prévenue (TrackingStatus.sessionExpired)…
+    expect(listener).toHaveBeenCalledTimes(1);
+    // … et la reconnexion indéfinie avec le jeton périmé est stopée.
+    expect(s.disconnect).toHaveBeenCalled();
+    expect(s.connect).not.toHaveBeenCalled();
+  });
+
+  it('session expirée : "io server disconnect" ne relance PLUS la reconnexion automatique', async () => {
+    const { getSocket } = await import('./socket');
+    const s = getSocket() as unknown as ReturnType<typeof makeFakeSocket>;
+    const { refreshAccessToken } = await import('../auth/refreshToken');
+    (refreshAccessToken as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+    s._emit('error', 'Invalid token');
+    await vi.advanceTimersByTimeAsync(0);
+    s._emit('disconnect', 'io server disconnect');
+    expect(s.connect).not.toHaveBeenCalled();
+  });
+
+  it('rejet du handshake pendant la phase de connexion (connect_error "Invalid token") → même traitement refresh', async () => {
+    const { getSocket } = await import('./socket');
+    const s = getSocket() as unknown as ReturnType<typeof makeFakeSocket>;
+    const { refreshAccessToken } = await import('../auth/refreshToken');
+    // socket.io-client expose le rejet du handshake (avant 'connect') comme
+    // 'connect_error' avec le message du serveur.
+    s._emit('connect_error', new Error('Invalid token'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refreshAccessToken).toHaveBeenCalled();
+    expect(s.connect).toHaveBeenCalled();
+  });
+
+  it('un connect_error réseau classique (serveur down) ne déclenche PAS de refresh de session', async () => {
+    const { getSocket } = await import('./socket');
+    const s = getSocket() as unknown as ReturnType<typeof makeFakeSocket>;
+    const { refreshAccessToken } = await import('../auth/refreshToken');
+    s._emit('connect_error', new Error('websocket error'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refreshAccessToken).not.toHaveBeenCalled();
   });
 });

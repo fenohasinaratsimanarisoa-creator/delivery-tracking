@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Navigation, WifiOff, AlertTriangle, Radio, Cpu } from 'lucide-react';
+import { Navigation, Crosshair, Signal, ShieldAlert, AlertTriangle, Radio, Cpu } from 'lucide-react';
 import type { TrackingStatus } from '../hooks/useDriverTracking';
 import styles from './TrackingStatusIndicator.module.css';
 
@@ -35,6 +35,31 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
     );
   }
 
+  // Cas 1 — PAS de réseau téléphone (navigator.onLine false) : un problème réseau
+  // réel, distinct d'un simple état de connexion du WebSocket.
+  if (!status.networkOnline) {
+    return (
+      <div className={`${styles.container} ${styles.offline}`} title={t('trackingIndicator.noNetworkTitle')}>
+        <Signal size={12} />
+        {t('trackingIndicator.noNetwork')}
+      </div>
+    );
+  }
+
+  // Cas 2 — SESSION EXPIRÉE (révoquée par le serveur, refresh échoué) : ne pas
+  // boucler sur un "Hors ligne" générique — le chauffeur doit se reconnecter.
+  if (status.sessionExpired) {
+    return (
+      <div className={`${styles.container} ${styles.sessionExpired}`}>
+        <ShieldAlert size={12} />
+        {t('trackingIndicator.sessionExpired')}
+        <a href="/login" className={styles.reconnectLink}>
+          {t('trackingIndicator.reconnectCta')}
+        </a>
+      </div>
+    );
+  }
+
   if (!status.position) {
     return (
       <div className={`${styles.container} ${styles.searching}`}>
@@ -47,7 +72,7 @@ export default function TrackingStatusIndicator({ status }: { status: TrackingSt
   if (status.poorAccuracy) {
     return (
       <div className={`${styles.container} ${styles.poorAccuracy}`}>
-        <WifiOff size={12} />
+        <Crosshair size={12} />
         {t('trackingIndicator.poorAccuracy')}
       </div>
     );

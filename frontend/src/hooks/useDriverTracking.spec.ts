@@ -17,13 +17,22 @@ const socketEmits: Array<{ event: string; payload?: unknown }> = [];
 // Epoch ms (horloge fake) de CHAQUE émission réelle d'updatePosition : sert au
 // test de cadence à produire le log des timestamps consécutifs reçus côté carte.
 const emittedAt: number[] = [];
-const socketHandlers: Record<string, (data?: any) => void> = {};
+const socketHandlers: Record<string, Array<(data?: any) => void>> = {};
 let socketConnected = false;
 // Compteurs de souscription : le test de session 8h vérifie qu'AUCUN listener
 // socket ne s'accumule au fil des heures (fuite mémoire = chaque re-render ou
 // chaque reconnexion qui re-souscrit SANS nettoyer).
 let socketOnCalls = 0;
 let socketOnceCalls = 0;
+// Callbacks enregistrés via onSocketSessionExpired : le test "session expirée"
+// les invoque pour vérifier que TrackingStatus.sessionExpired est alimenté.
+const sessionExpiredCbs: Array<() => void> = [];
+
+// Invoque TOUS les listeners enregistrés pour un événement socket (fidèle au
+// comportement de socket.io : plusieurs listeners sur le même événement cohabitent).
+function emitSocket(event: string, data?: any) {
+  (socketHandlers[event] || []).forEach((h) => h(data));
+}
 
 // Fausse file IndexedDB observable : les tests B/C vérifient qu'aucune position
 // n'est perdue via queueSize() (positions mise en file pendant un envoi en cours).
@@ -36,10 +45,11 @@ vi.mock('../services/socket/socket', () => ({
       socketEmits.push({ event, payload });
       if (event === 'updatePosition') emittedAt.push(Date.now());
     },
-    on: (event: string, handler: (data?: any) => void) => { socketOnCalls++; socketHandlers[event] = handler; },
+    on: (event: string, handler: (data?: any) => void) => { socketOnCalls++; (socketHandlers[event] ||= []).push(handler); },
     off: vi.fn(),
-    once: (event: string, handler: (data?: any) => void) => { socketOnceCalls++; socketHandlers[event] = handler; },
+    once: (event: string, handler: (data?: any) => void) => { socketOnceCalls++; (socketHandlers[event] ||= []).push(handler); },
   }),
+  onSocketSessionExpired: (cb: () => void) => { sessionExpiredCbs.push(cb); return () => {}; },
 }));
 
 vi.mock('../services/api/client', () => ({
@@ -104,6 +114,7 @@ describe('useDriverTracking core logic', () => {
     fakeQueue.length = 0;
     socketOnCalls = 0;
     socketOnceCalls = 0;
+    sessionExpiredCbs.length = 0;
     nativeLocationHandler.current = null;
     nativeSubscriptions.length = 0;
     Object.keys(socketHandlers).forEach((k) => delete socketHandlers[k]);
@@ -178,7 +189,7 @@ describe('useDriverTracking core logic', () => {
 
     // Alerte serveur reçue pour un traceur physique, escalade niveau 2.
     act(() => {
-      socketHandlers['proximityAlert']({
+      emitSocket('proximityAlert', {
         type: 'proximity',
         deliveryId: 'delivery-1',
         escalationLevel: 2,
@@ -279,7 +290,7 @@ describe('useDriverTracking core logic', () => {
     // Libère isSendingRef via positionSaved (comme le ferait le serveur) puis re-joue
     // une position native immédiatement : le throttle LOCATION_FASTEST_INTERVAL_MS (3s)
     // doit empêcher un second envoi dans la même fenêtre (sur-fréquence premier plan).
-    act(() => { socketHandlers['positionSaved']?.(); });
+    act(() => { emitSocket('positionSaved'); });
     act(() => {
       nativeLocationHandler.current!({
         latitude: -18.8792,
@@ -387,7 +398,7 @@ describe('useDriverTracking core logic', () => {
     // bien avant le filet de sécurité de 2000ms : isSendingRef doit être libéré
     // par l'ACK, PAS par le timeout.
     act(() => { vi.advanceTimersByTime(100); });
-    act(() => { socketHandlers['positionSaved']?.({ id: 'pos-1', suspect: false }); });
+    act(() => { emitSocket('positionSaved', { id: 'pos-1', suspect: false }); });
 
     // Saut de Date.now() au-delà du throttle (3s) SANS laisser tourner les timers :
     // si isSendingRef avait seulement été libéré par le timeout (2000ms), il serait
@@ -444,7 +455,7 @@ describe('useDriverTracking core logic', () => {
     // Le drain (déclenché par le hook sur l'événement 'connect' du socket, comme au
     // retour réseau) vide la file via batchPosition → flushQueue : les positions
     // sont récupérées, pas abandonnées.
-    act(() => { socketHandlers['connect']?.(); });
+    act(() => { emitSocket('connect'); });
     await act(async () => {}); // microtasks (drainQueue async → flushQueue → queueSize)
     expect(offlineQueue.flushQueue).toHaveBeenCalled();
     expect(await offlineQueue.queueSize()).toBe(0);
@@ -479,7 +490,7 @@ describe('useDriverTracking core logic', () => {
 
     // ACK serveur : isSendingRef libéré, mais lastSendTimeRef garde la trace du
     // tout dernier envoi (t=0).
-    act(() => { socketHandlers['positionSaved']?.({ id: 'pos-1', suspect: false }); });
+    act(() => { emitSocket('positionSaved', { id: 'pos-1', suspect: false }); });
 
     // t+500ms (bien SOUS LOCATION_FASTEST_INTERVAL_MS=2000ms) : second
     // processCoords() puis sendPosition() → le garde de throttle (isSendingRef
@@ -500,7 +511,7 @@ describe('useDriverTracking core logic', () => {
 
     // Après la fenêtre de throttle, la position en file est purgée par un drain
     // (ex. retour du réseau) : elle part bien au backend.
-    act(() => { socketHandlers['connect']?.(); });
+    act(() => { emitSocket('connect'); });
     await act(async () => {});
     expect(offlineQueue.flushQueue).toHaveBeenCalled();
     expect(await offlineQueue.queueSize()).toBe(0);
@@ -540,7 +551,7 @@ describe('useDriverTracking core logic', () => {
       act(() => {
         nativeHandler({ latitude: -18.8792 + h * 0.001, longitude: 47.5079 + h * 0.001, speed: 12, heading: 0, altitude: 0, accuracy: 10 });
       });
-      act(() => { socketHandlers['positionSaved']?.({ id: `pos-${h}`, suspect: false }); });
+      act(() => { emitSocket('positionSaved', { id: `pos-${h}`, suspect: false }); });
       // 30 min simulées par palier (le throttle 2s est largement dépassé).
       act(() => { vi.advanceTimersByTime(30 * 60 * 1000); });
     }
@@ -600,7 +611,7 @@ describe('useDriverTracking core logic', () => {
         nativeHandler({ latitude: -18.8792 + i * 0.0001, longitude: 47.5079 + i * 0.0001, speed: 12, heading: 0, altitude: 0, accuracy: 10 });
       });
       // ACK serveur rapide : libère isSendingRef (l'ACK réel, pas le filet 2000ms).
-      act(() => { socketHandlers['positionSaved']?.({ id: `pos-${i}`, suspect: false }); });
+      act(() => { emitSocket('positionSaved', { id: `pos-${i}`, suspect: false }); });
       act(() => { vi.advanceTimersByTime(2000); });
     }
 
@@ -629,5 +640,72 @@ describe('useDriverTracking core logic', () => {
     expect(emittedAt.length).toBeGreaterThanOrEqual(110);
     // Intervalle moyen entre deux points émis ≤ 3s (exigence du test obligatoire).
     expect(meanInterval).toBeLessThanOrEqual(3000);
+  });
+
+  it('session expirée : le listener socket alimente sessionExpired, le connect le reset', () => {
+    const { result } = renderHook(() => useDriverTracking(), { wrapper });
+
+    expect(result.current.sessionExpired).toBe(false);
+
+    // Le socket a reçu un "Invalid token" avec refresh échoué → onSocketSessionExpired.
+    act(() => { sessionExpiredCbs.forEach((cb) => cb()); });
+    expect(result.current.sessionExpired).toBe(true);
+
+    // Une reconnexion réussie (nouveau jeton valide) lève l'état : le socket
+    // repasse en connected avant d'émettre 'connect' (comme en réel).
+    socketConnected = true;
+    act(() => { emitSocket('connect'); });
+    expect(result.current.sessionExpired).toBe(false);
+  });
+
+  it('networkOnline suit navigator.onLine et les événements online/offline', () => {
+    const { result } = renderHook(() => useDriverTracking(), { wrapper });
+    expect(result.current.networkOnline).toBe(true);
+
+    act(() => { window.dispatchEvent(new Event('offline')); });
+    expect(result.current.networkOnline).toBe(false);
+
+    act(() => { window.dispatchEvent(new Event('online')); });
+    expect(result.current.networkOnline).toBe(true);
+  });
+
+  it('badge "GPS faible" : nécessite 3 fixes > 50m CONSÉCUTIFS (pas un pic isolé)', async () => {
+    vi.useRealTimers();
+    socketConnected = true;
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/drivers/profile') {
+        return Promise.resolve({
+          data: { id: 'd1', firstName: 'A', lastName: 'B', vehicle: { id: 'v1', brand: 'X', model: 'Y', licensePlate: 'Z', positionSource: 'phone' } },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    const { result } = renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 1600)); }); // startTracking
+
+    vi.useFakeTimers();
+    const nativeHandler = nativeLocationHandler.current!;
+    const badFix = (i: number) => ({
+      latitude: -18.8792 + i * 0.0001, longitude: 47.5079,
+      speed: 0, heading: 0, altitude: 0, accuracy: 60, // > 50m = au-dessus du seuil UI
+    });
+
+    // 2 fixes dégradés consécutifs : PAS encore de badge (huis-close anti-clignotement).
+    act(() => { nativeHandler(badFix(1)); });
+    expect(result.current.poorAccuracy).toBe(false);
+    act(() => { nativeHandler(badFix(2)); });
+    expect(result.current.poorAccuracy).toBe(false);
+
+    // 3e fix consécutif dégradé : le badge s'affiche.
+    act(() => { nativeHandler(badFix(3)); });
+    expect(result.current.poorAccuracy).toBe(true);
+
+    // Un fix bon reset le compteur : un nouveau pic dégradé isolé ne réaffiche PAS le badge.
+    act(() => { nativeHandler({ ...badFix(4), accuracy: 10 }); });
+    expect(result.current.poorAccuracy).toBe(false);
+    act(() => { nativeHandler(badFix(5)); });
+    expect(result.current.poorAccuracy).toBe(false);
   });
 });

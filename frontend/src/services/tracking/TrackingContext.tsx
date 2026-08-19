@@ -11,6 +11,8 @@ export const TrackingContext = createContext<TrackingStatus>({
   isStationary: false,
   queueCount: 0,
   socketConnected: false,
+  networkOnline: true,
+  sessionExpired: false,
   statusMsg: '',
   geolocationDenied: false,
   activeDeliveryId: '',

@@ -1475,6 +1475,10 @@
     "poorAccuracy": "GPS faible",
     "stationary": "Arrêté",
     "moving": "En route",
+    "noNetworkTitle": "Pas de connexion Internet sur le téléphone",
+    "noNetwork": "Pas de réseau",
+    "sessionExpired": "Session expirée — reconnexion nécessaire",
+    "reconnectCta": "Reconnecter",
     "offlineQueue": "Hors ligne — {{count}} en attente",
     "reconnecting": "Reconnexion…",
     "syncing": "Synchronisation — {{count}} en attente"
