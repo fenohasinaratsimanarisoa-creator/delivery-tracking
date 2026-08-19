@@ -1,10 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
-import axios from 'axios';
 import api from '../services/api/client';
-import { fetchCsrfToken, getCsrfHeaders } from '../services/api/csrf';
-import { getApiBaseUrl } from '../services/api/config';
+import { fetchCsrfToken } from '../services/api/csrf';
 import type { User } from '../types';
 import { setAccessToken, getAccessToken } from '../services/auth/tokenStore';
+import { refreshAccessTokenOutcome } from '../services/auth/refreshToken';
 import { disconnectSocket } from '../services/socket/socket';
 import { parseToken } from '../services/jwt';
 import { setSentryUser } from '../services/monitoring/sentry';
@@ -80,25 +79,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // IMPORTANT : on passe par refreshAccessTokenOutcome() (verrou sharedRefresh)
+    // au lieu d'un appel axios direct. Un appel direct contournerait le verrou de
+    // déduplication et pourrait provoquer DEUX requêtes /auth/refresh concurrentes
+    // (AuthContext + timer du socket sur rechargement de page) — le backend
+    // détecterait une "reuse" du refresh token et révoquerait la session entière,
+    // causant la déconnexion automatique après quelques minutes.
     (async () => {
       try {
-        await fetchCsrfToken();
-        let res;
-        try {
-          res = await axios.post(`${getApiBaseUrl()}/auth/refresh`, {}, { headers: getCsrfHeaders(), withCredentials: true });
-        } catch (firstErr: unknown) {
-          const err = firstErr as { response?: { status?: number } };
-          if (err?.response?.status === 403) {
-            await fetchCsrfToken();
-            res = await axios.post(`${getApiBaseUrl()}/auth/refresh`, {}, { headers: getCsrfHeaders(), withCredentials: true });
-          } else {
-            throw firstErr;
-          }
+        const outcome = await refreshAccessTokenOutcome();
+        if (outcome.token) {
+          setAccessToken(outcome.token);
+          const u = userFromToken(outcome.token);
+          if (u) setUser(u);
+        } else if (outcome.reason === 'expired') {
+          // Refresh authentiquement échoué (401) : session réellement révoquée.
+          setAccessToken(null);
+          setUser(null);
         }
-        const token = res.data.accessToken;
-        setAccessToken(token);
-        const u = userFromToken(token);
-        if (u) setUser(u);
+        // outcome.reason === 'network' : transient (cold start, 429, 5xx) —
+        // on conserve le token stocké éventuel, le prochain refresh réactif
+        // (intercepteur 401 ou timer socket) retentera.
       } catch {
         const storedToken = getAccessToken();
         if (!storedToken) {
@@ -133,13 +134,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.post('/auth/logout');
     } catch {
-      // Le logout serveur échoue (réseau, token expiré) → on nettoie localement
-      // et on tente quand même d'expirer le cookie de refresh.
-      try {
-        await axios.post(`${getApiBaseUrl()}/auth/logout`, {}, { headers: getCsrfHeaders(), withCredentials: true });
-      } catch {
-        // ignore
-      }
+      // Le logout serveur échoue (réseau, token expiré) → on nettoie localement.
+      // On ne tente plus un appel axios direct (potentiellement cross-origin sans CSRF)
+      // : le cookie de refresh sera de toute façon expiré côté serveur lors du prochain
+      // refresh si l'utilisateur se reconnecte.
     }
     setAccessToken(null);
     setUser(null);

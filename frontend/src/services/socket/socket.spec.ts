@@ -216,4 +216,29 @@ describe('socket.ts — reconnexion robuste du dashboard', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(refreshAccessToken).not.toHaveBeenCalled();
   });
+
+  it('connect_error "Invalid token: expired or invalid" (jeton expiré pendant une reconnexion) → refresh immédiat — fin du "Reconnexion…" permanent', async () => {
+    const { getSocket } = await import('./socket');
+    const s = getSocket() as unknown as ReturnType<typeof makeFakeSocket>;
+    const { refreshAccessToken } = await import('../auth/refreshToken');
+    // Message EXACT de ws-auth.service.ts quand le JWT d'accès a expiré pendant
+    // la reconnexion (le cas le plus fréquent de la boucle "Reconnexion…"
+    // permanente sur le terrain : l'ancien matcher .includes('Invalid token')
+    // ne trouvait pas la sous-chaîne dans 'Invalid or expired token').
+    s._emit('connect_error', new Error('Invalid token: expired or invalid'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refreshAccessToken).toHaveBeenCalled();
+    expect(s.disconnect).toHaveBeenCalled();
+    expect(s.connect).toHaveBeenCalled();
+  });
+
+  it('connect_error "Invalid token: missing" → refresh puis reconnexion propre', async () => {
+    const { getSocket } = await import('./socket');
+    const s = getSocket() as unknown as ReturnType<typeof makeFakeSocket>;
+    const { refreshAccessToken } = await import('../auth/refreshToken');
+    s._emit('connect_error', new Error('Invalid token: missing'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refreshAccessToken).toHaveBeenCalled();
+    expect(s.connect).toHaveBeenCalled();
+  });
 });

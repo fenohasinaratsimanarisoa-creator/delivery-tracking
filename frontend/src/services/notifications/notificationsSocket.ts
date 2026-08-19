@@ -1,9 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { getAccessToken } from '../auth/tokenStore';
+import { refreshAccessToken } from '../auth/refreshToken';
 import { getSocketBaseUrl } from '../api/config';
 
 let socket: Socket | null = null;
+
+// Même mécanique que services/socket/socket.ts : un rejet d'auth du handshake
+// (jeton expiré pendant une reconnexion, révoqué...) doit déclencher un refresh
+// au lieu de boucler indéfiniment sur un jeton périmé. Le refresh est DÉDUPLIQUÉ
+// par le verrou partagé de refreshToken.ts (une seule requête /auth/refresh en
+// vol pour toute l'app), donc pas de course multi-sockets.
+function isAuthRejection(err: { message?: string } | null | undefined): boolean {
+  if (!err?.message) return false;
+  const m = err.message.toLowerCase();
+  return (
+    m.includes('token') ||
+    m.includes('jwt') ||
+    m.includes('unauthorized') ||
+    m.includes('revoked') ||
+    m.includes('inactive')
+  );
+}
 
 function getNotificationSocket(): Socket {
   if (!socket) {
@@ -13,6 +31,18 @@ function getNotificationSocket(): Socket {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
+    });
+
+    socket.on('connect_error', (err: Error) => {
+      if (!isAuthRejection(err)) return;
+      void (async () => {
+        const token = await refreshAccessToken();
+        if (token && socket) {
+          socket.auth = { token };
+          socket.disconnect();
+          socket.connect();
+        }
+      })();
     });
   }
   return socket;

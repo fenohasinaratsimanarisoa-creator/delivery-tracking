@@ -37,7 +37,7 @@ export class WsAuthService {
   async verify(client: Socket): Promise<WsAuthenticatedUser> {
     const token = this.extractToken(client);
     if (!token) {
-      throw new WsAuthError('Missing or invalid token', 'TOKEN_MISSING');
+      throw new WsAuthError('Invalid token: missing', 'TOKEN_MISSING');
     }
 
     try {
@@ -47,7 +47,7 @@ export class WsAuthService {
       });
 
       if (!payload.sub || !payload.companyId) {
-        throw new WsAuthError('Invalid token payload', 'INVALID_PAYLOAD');
+        throw new WsAuthError('Invalid token: malformed payload', 'INVALID_PAYLOAD');
       }
 
       // Même contrôle de révocation que JwtStrategy (HTTP) : un logout ou une
@@ -57,12 +57,12 @@ export class WsAuthService {
         try {
           const userRevokedAt = await this.redis.get(`revoked:user:${payload.sub}`);
           if (userRevokedAt && payload.iat < parseInt(userRevokedAt, 10)) {
-            throw new WsAuthError('Token has been revoked', 'TOKEN_INVALID');
+            throw new WsAuthError('Invalid token: revoked', 'TOKEN_INVALID');
           }
           if (payload.sessionId) {
             const sessionRevokedAt = await this.redis.get(`revoked:session:${payload.sessionId}`);
             if (sessionRevokedAt && payload.iat < parseInt(sessionRevokedAt, 10)) {
-              throw new WsAuthError('Token has been revoked', 'TOKEN_INVALID');
+              throw new WsAuthError('Invalid token: revoked', 'TOKEN_INVALID');
             }
           }
         } catch (err) {
@@ -87,11 +87,11 @@ export class WsAuthService {
       });
 
       if (!dbUser || !dbUser.isActive) {
-        throw new WsAuthError('User not found or inactive', 'TOKEN_INVALID');
+        throw new WsAuthError('Invalid token: user inactive', 'TOKEN_INVALID');
       }
 
       if (dbUser.company?.deletedAt) {
-        throw new WsAuthError('Company has been deleted', 'TOKEN_INVALID');
+        throw new WsAuthError('Invalid token: company deleted', 'TOKEN_INVALID');
       }
 
       const user: WsAuthenticatedUser = {
@@ -107,7 +107,10 @@ export class WsAuthService {
       return user;
     } catch (err) {
       if (err instanceof WsAuthError) throw err;
-      throw new WsAuthError('Invalid or expired token', 'TOKEN_INVALID');
+      // JWT expiré, signature invalide, payload corrompu : message UNIFIÉ avec le
+      // préfixe "Invalid token:" — le client (socket.ts isAuthRejection) se base
+      // sur ce préfixe/mots-clés pour déclencher le refresh au lieu de boucler.
+      throw new WsAuthError('Invalid token: expired or invalid', 'TOKEN_INVALID');
     }
   }
 

@@ -5,9 +5,10 @@ import { setAccessToken } from './tokenStore';
 
 export interface RefreshOutcome {
   token: string | null;
-  /** Raison de l'échec quand token est null : 'network' (timeout / sans réponse,
-   *  ex. cold start serveur → on NE redirige PAS vers /login) ou 'expired'
-   *  (rejet réel du serveur → session expirée). */
+  /** Raison de l'échec quand token est null : 'network' (timeout, sans réponse,
+   *  ou réponse d'erreur TRANSITOIRE — 403 CSRF, 429 throttle, 5xx serveur —
+   *  → on NE redirige PAS vers /login, le refresh sera retenté) ou 'expired'
+   *  (SEUL un 401 authentique de /auth/refresh = session réellement révoquée). */
   reason: 'network' | 'expired';
 }
 
@@ -46,17 +47,58 @@ function sharedRefresh(): Promise<RefreshOutcome> {
 async function doRefresh(): Promise<RefreshOutcome> {
   try {
     await fetchCsrfToken();
-    const res = await axios.post(
-      `${getApiBaseUrl()}/auth/refresh`,
-      {},
-      { headers: getCsrfHeaders(), withCredentials: true, timeout: 30000 },
-    );
+    const postRefresh = async () =>
+      axios.post(
+        `${getApiBaseUrl()}/auth/refresh`,
+        {},
+        { headers: getCsrfHeaders(), withCredentials: true, timeout: 30000 },
+      );
+
+    let res;
+    let csrfRetried = false;
+    try {
+      res = await postRefresh();
+    } catch (firstErr: unknown) {
+      // RETRY CSRF : si le POST échoue avec 403 CSRF (jeton CSRF obsolète,
+      // cookie csrf-token pas encore posé par un GET concurrent), on
+      // re-fetch le jeton CSRF et on retente UNE SEULE fois. Sans ce
+      // retry, un GET /auth/csrf-token qui échoue silencieusement (cold
+      // start, réseau mobile) laissait le POST avec des headers CSRF
+      // vides → 403 → raison 'network' → le timer socket re-tente dans
+      // 60 s, mais l'intercepteur 401 HTTP ne re-tente PAS → l'utilisateur
+      // reste bloqué avec un access token expiré jusqu'à ce qu'une
+      // requête HTTP déclenche un nouveau refresh.
+      const firstStatus = (firstErr as { response?: { status?: number } })?.response?.status;
+      if (firstStatus === 403 && !csrfRetried) {
+        csrfRetried = true;
+        await fetchCsrfToken();
+        res = await postRefresh();
+      } else {
+        throw firstErr;
+      }
+    }
+
     const token: string | undefined = res.data?.accessToken;
     if (token) setAccessToken(token);
     return { token: token ?? null, reason: 'expired' };
   } catch (err: unknown) {
-    const e = err as { code?: string; response?: unknown; request?: unknown };
-    const isNetworkError = e.code === 'ECONNABORTED' || (!e.response && !!e.request);
-    return { token: null, reason: isNetworkError ? 'network' : 'expired' };
+    const e = err as { code?: string; response?: { status?: number }; request?: unknown };
+    const status = e.response?.status;
+    // CRITIQUE POUR LA STABILITÉ DES SESSIONS : SEUL un 401 de /auth/refresh
+    // signifie une session RÉELLEMENT révoquée/périmée (refresh token invalide,
+    // croissance de session supprimée). Tout le reste est TRANSITOIRE et ne doit
+    // JAMAIS déconnecter l'utilisateur :
+    //  - 403 → jeton CSRF obsolète (le GET /auth/csrf-token a pu échouer sans
+    //    réseau) ;
+    //  - 429 → throttling du endpoint (5/min) — typique sur réseau mobile
+    //    instable où socket + REST se chevauchent ;
+    //  - 5xx → down Render / Postgres / cold start du conteneur ;
+    //  - réseau/timeout → coupure mobile.
+    // Avant ce correctif, tout échec HTTP non-2xx était classé 'expired' et
+    // déclenchait immédiatement setAccessToken(null) + redirection /login avec le
+    // message "Votre session a expiré" — l'utilisateur était déconnecté sans
+    // raison sur un simple blip.
+    const isGenuinelyExpired = status === 401;
+    return { token: null, reason: isGenuinelyExpired ? 'expired' : 'network' };
   }
 }

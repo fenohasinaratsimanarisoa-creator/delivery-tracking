@@ -39,6 +39,18 @@ describe('WsAuthService', () => {
     await expect(service.verify(client)).rejects.toMatchObject({ code: 'TOKEN_MISSING' });
   });
 
+  it('all auth rejections carry the unified "Invalid token:" prefix (contrat client isAuthRejection)', async () => {
+    const invalid = jwtService.sign({ sub: 'u1', role: 'admin', companyId: 'c1' }, { expiresIn: '-1s' });
+    const client = makeClient(invalid);
+    await expect(service.verify(client)).rejects.toThrow(/^Invalid token:/);
+
+    const clientNoSub = makeClient(jwtService.sign({ role: 'admin', companyId: 'c1' }));
+    await expect(service.verify(clientNoSub)).rejects.toThrow(/^Invalid token:/);
+
+    const clientMissing = makeClient();
+    await expect(service.verify(clientMissing)).rejects.toThrow(/^Invalid token:/);
+  });
+
   it('should throw on invalid token', async () => {
     const client = makeClient('invalid-token');
     await expect(service.verify(client)).rejects.toThrow(WsAuthError);

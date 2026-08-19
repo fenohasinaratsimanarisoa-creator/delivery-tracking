@@ -41,6 +41,30 @@ type SessionExpiredListener = () => void;
 const sessionExpiredListeners = new Set<SessionExpiredListener>();
 
 /**
+ * Vrai si le serveur a REJETÉ notre authentification (par opposition à un
+ * simple problème réseau). Les messages du backend sont variés — `'Invalid
+ * token'` (gateway), `'Missing or invalid token'`, `'Invalid or expired
+ * token'` (ws-auth.service.ts, notamment quand le JWT d'accès a expiré pendant
+ * une reconnexion), `'Token has been revoked'`, `'User not found or inactive'`,
+ * `'Company has been deleted'`. On matche donc sur les MOTS-CLÉS, pas sur une
+ * sous-chaîne exacte : avant ce correctif, `'Invalid or expired token'` ne
+ * contenait pas la chaîne `'Invalid token'` et le socket retentait indéfiniment
+ * avec le jeton périmé → badge "Reconnexion…" permanent malgré un réseau OK,
+ * jusqu'à ce qu'un 401 REST finisse par forcer une déconnexion.
+ */
+function isAuthRejection(err: { message?: string } | null | undefined): boolean {
+  if (!err?.message) return false;
+  const m = err.message.toLowerCase();
+  return (
+    m.includes('token') ||
+    m.includes('jwt') ||
+    m.includes('unauthorized') ||
+    m.includes('revoked') ||
+    m.includes('inactive')
+  );
+}
+
+/**
  * S'abonne à l'état "session expirée" (le serveur a révoqué/rejeté la session et
  * le refresh a échoué). Renvoie la fonction de désabonnement. Consommé par
  * useDriverTracking pour alimenter TrackingStatus.sessionExpired.
@@ -146,16 +170,19 @@ export function getSocket(): Socket {
       }
     });
 
-    // Rejet d'authentification du handshake par le serveur ('Invalid token',
-    // tracking.gateway.ts handleConnection catch) : ne pas boucler en silence —
-    // refresh immédiat, sinon sessionExpired exposé à l'UI.
+    // Rejet d'authentification du handshake par le serveur (ex. jeton expiré,
+    // révoqué, session supprimée) : ne pas boucler en silence — refresh immédiat,
+    // sinon sessionExpired exposé à l'UI. Matche par mots-clés (isAuthRejection)
+    // pour couvrir TOUS les messages de WsAuthService/gateway.
     socket.on('error', (err: unknown) => {
-      if (typeof err === 'string' && err.includes('Invalid token')) handleInvalidToken();
+      if (isAuthRejection(typeof err === 'string' ? { message: err } : err as { message?: string })) {
+        handleInvalidToken();
+      }
     });
     // Rejet du handshake pendant la phase de connexion (avant 'connect') :
     // socket.io-client l'expose comme 'connect_error' avec le message du serveur.
     socket.on('connect_error', (err: Error) => {
-      if (err?.message?.includes('Invalid token')) handleInvalidToken();
+      if (isAuthRejection(err)) handleInvalidToken();
     });
 
     socket.io.on('reconnect_attempt', () => {
