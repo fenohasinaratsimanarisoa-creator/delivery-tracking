@@ -2012,6 +2012,10 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       'archiveAllCompaniesPositionsBefore called — this archives positions for ALL companies',
     );
     const cutoff = date.toISOString();
+    // SÉCURITÉ ($executeRawUnsafe) : NE JAMAIS interpoler de variable dans cette
+    // query — uniquement des paramètres liés ($1, $2, ...). Le taggé $executeRaw
+    // ne peut pas s'utiliser ici car le SQL est multi-instruction (WITH ...),
+    // donc on garde Unsafe + variables 100% liées, vérifié à chaque changement.
     const result = await this.prisma.$executeRawUnsafe(
       `
       WITH archived AS (
@@ -2040,6 +2044,10 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       return 0;
     }
     const cutoff = date.toISOString();
+    // SÉCURITÉ ($executeRawUnsafe) : NE JAMAIS interpoler de variable dans cette
+    // query — uniquement des paramètres liés ($1 = cutoff, $2 = companyId), déjà
+    // vérifié (audit 19/08/2026). Le taggé $executeRaw ne convient pas ici (SQL
+    // multi-instruction WITH ...), on garde donc Unsafe + variables 100% liées.
     const result = await this.prisma.$executeRawUnsafe(
       `
       WITH archived AS (

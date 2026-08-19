@@ -42,6 +42,10 @@ export class ChangePasswordDto {
 export class UpdateEmailDto {
   @IsEmail()
   email: string;
+
+  @IsString()
+  @IsOptional()
+  currentPassword?: string;
 }
 
 export class UpdateAvatarDto {

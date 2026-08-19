@@ -123,7 +123,9 @@ export class TrackingGateway
         });
         this.logger.warn(`Driver ${user.id} disconnected`);
       }
-    } catch {}
+    } catch (err) {
+      this.logger.debug(`handleDisconnect best-effort cleanup failed: ${(err as Error).message}`);
+    }
   }
 
   /**

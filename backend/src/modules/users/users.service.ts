@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  UnauthorizedException,
   Logger,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
@@ -456,11 +457,26 @@ export class UsersService {
     });
   }
 
-  async updateEmail(userId: string, newEmail: string) {
+  async updateEmail(userId: string, newEmail: string, currentPassword?: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId, deletedAt: null },
     });
     if (!user) throw new NotFoundException('User not found');
+
+    // Sécurité : changer l'email = changer l'identifiant de connexion. On exige
+    // la preuve de possession du compte : le mot de passe courant pour un compte
+    // local (googleId null), l'authentification Google OAuth étant déjà la preuve
+    // (email vérifié par Google) pour les comptes créés via OAuth — ceux-ci ont
+    // un mot de passe aléatoire inconnu (validateGoogleUser).
+    if (!user.googleId) {
+      if (!currentPassword) {
+        throw new UnauthorizedException('Current password is required to change email');
+      }
+      const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isValid) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+    }
 
     // Normalisation (trim + minuscules) : la contrainte d'unicité Postgres est
     // sensible à la casse — sans cela, User@X.com et user@x.com coexistaient.
@@ -476,8 +492,11 @@ export class UsersService {
     );
     if (existing) throw new ConflictException('Email already in use');
 
-    // TODO: Send email verification to new email
-    // For now, just update the email
+    // TODO: Send verification email to the NEW email (preuve de possession de la
+    // nouvelle adresse). Pour l'instant le changement est immédiat — la preuve
+    // demandée est le mot de passe courant (ou la session OAuth Google), pas la
+    // propriété du nouvel email. Limitation connue, documentée dans l'audit
+    // global de fiabilité (AUDIT_GLOBAL_FIABILITE_2026-08-19.md, point mineur 4).
     return this.prisma.user.update({
       where: { id: userId },
       data: { email: newEmail },

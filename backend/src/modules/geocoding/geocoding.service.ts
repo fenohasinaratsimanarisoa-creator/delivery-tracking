@@ -67,7 +67,9 @@ export class GeocodingService {
       try {
         const cached = await this.redis.get(cacheKey);
         if (cached) return JSON.parse(cached);
-      } catch {}
+      } catch (err) {
+        this.logger.debug(`Redis cache read failed for ${cacheKey}: ${(err as Error).message}`);
+      }
     }
 
     const body = {
@@ -115,7 +117,9 @@ export class GeocodingService {
       if (this.redis && results.length > 0) {
         try {
           await this.redis.set(cacheKey, JSON.stringify(results), 'EX', CACHE_TTL_SEC);
-        } catch {}
+        } catch (err) {
+          this.logger.debug(`Redis cache write failed for ${cacheKey}: ${(err as Error).message}`);
+        }
       }
 
       return results;
@@ -137,7 +141,9 @@ export class GeocodingService {
       try {
         const cached = await this.redis.get(cacheKey);
         if (cached) return JSON.parse(cached);
-      } catch {}
+      } catch (err) {
+        this.logger.debug(`Redis cache read failed for ${cacheKey}: ${(err as Error).message}`);
+      }
     }
 
     try {
@@ -177,7 +183,9 @@ export class GeocodingService {
       if (this.redis) {
         try {
           await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 2592000);
-        } catch {}
+        } catch (err) {
+          this.logger.debug(`Redis cache write failed for ${cacheKey}: ${(err as Error).message}`);
+        }
       }
 
       return result;
@@ -197,7 +205,9 @@ export class GeocodingService {
       try {
         const cached = await this.redis.get(cacheKey);
         if (cached) return JSON.parse(cached);
-      } catch {}
+      } catch (err) {
+        this.logger.debug(`Redis cache read failed for ${cacheKey}: ${(err as Error).message}`);
+      }
     }
 
     const results: GeocodingResult[] = [];
@@ -302,7 +312,8 @@ export class GeocodingService {
               }
             }
           }
-        } catch {
+        } catch (err) {
+          this.logger.debug(`Geocode query failed (best-effort): ${(err as Error).message}`);
           /* continue */
         }
         if (results.length >= 5) break;
@@ -313,7 +324,9 @@ export class GeocodingService {
     if (this.redis && final.length > 0) {
       try {
         await this.redis.set(cacheKey, JSON.stringify(final), 'EX', CACHE_TTL_SEC);
-      } catch {}
+      } catch (err) {
+        this.logger.debug(`Redis cache write failed for ${cacheKey}: ${(err as Error).message}`);
+      }
     }
 
     return final;
@@ -325,7 +338,9 @@ export class GeocodingService {
       try {
         const cached = await this.redis.get(cacheKey);
         if (cached) return cached;
-      } catch {}
+      } catch (err) {
+        this.logger.debug(`Redis cache read failed for ${cacheKey}: ${(err as Error).message}`);
+      }
     }
 
     const url = `${NOMINATIM_BASE}/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=fr&addressdetails=1`;
@@ -347,12 +362,15 @@ export class GeocodingService {
       if (this.redis && result) {
         try {
           await this.redis.set(cacheKey, result, 'EX', CACHE_TTL_SEC);
-        } catch {}
+        } catch (err) {
+          this.logger.debug(`Redis cache write failed for ${cacheKey}: ${(err as Error).message}`);
+        }
       }
 
       return result;
-    } catch {
+    } catch (err) {
       clearTimeout(timeout);
+      this.logger.debug(`Nominatim reverse geocode failed (best-effort): ${(err as Error).message}`);
       return null;
     }
   }
@@ -363,7 +381,9 @@ export class GeocodingService {
       try {
         const cached = await this.redis.get(cacheKey);
         if (cached) return JSON.parse(cached);
-      } catch {}
+      } catch (err) {
+        this.logger.debug(`Redis cache read failed for ${cacheKey}: ${(err as Error).message}`);
+      }
     }
 
     const areaName = await this.reverse(lat, lng);
@@ -421,18 +441,21 @@ export class GeocodingService {
             }
           }
         }
-      } catch {
-        /* continue */
-      }
+} catch (err) {
+          this.logger.debug(`Nearby geocode query failed (best-effort): ${(err as Error).message}`);
+          /* continue */
+        }
 
-      if (results.length >= 20) break;
+        if (results.length >= 20) break;
     }
 
     const final = results.slice(0, 25);
     if (this.redis && final.length > 0) {
       try {
         await this.redis.set(cacheKey, JSON.stringify(final), 'EX', 3600);
-      } catch {}
+      } catch (err) {
+        this.logger.debug(`Redis cache write failed for ${cacheKey}: ${(err as Error).message}`);
+      }
     }
 
     return final;

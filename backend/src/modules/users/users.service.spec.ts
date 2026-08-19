@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { ConflictException, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from './users.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -806,9 +806,52 @@ describe('UsersService', () => {
   });
 
   describe('updateEmail', () => {
-    it('should update email when valid', async () => {
-      const user = { id: 'user-1', email: 'old@test.com', companyId: 'comp-1' };
-      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+    const localUser = {
+      id: 'user-1',
+      email: 'old@test.com',
+      companyId: 'comp-1',
+      googleId: null,
+      passwordHash: 'hashed_old',
+    };
+
+    it('should update email when valid (local account with current password)', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(localUser);
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.user.update.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'new@test.com',
+        firstName: 'Test',
+        lastName: 'User',
+        phone: null,
+        role: 'dispatcher',
+        isActive: true,
+        companyId: 'comp-1',
+        createdAt: new Date(),
+        avatarUrl: null,
+      });
+
+      const result = await service.updateEmail('user-1', 'new@test.com', 'OldPass123!');
+
+      expect(bcrypt.compare).toHaveBeenCalledWith('OldPass123!', 'hashed_old');
+      expect(mockPrisma.user.findUnique).toHaveBeenNthCalledWith(1, {
+        where: { id: 'user-1', deletedAt: null },
+      });
+      expect(mockPrisma.user.findUnique).toHaveBeenNthCalledWith(2, {
+        where: { email: 'new@test.com' },
+      });
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { email: 'new@test.com' },
+        select: expect.any(Object),
+      });
+      expect(result.email).toBe('new@test.com');
+    });
+
+    it('should update email without password for a Google OAuth account', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce({
+        ...localUser,
+        googleId: 'google-1',
+      });
       mockPrisma.user.findUnique.mockResolvedValueOnce(null);
       mockPrisma.user.update.mockResolvedValueOnce({
         id: 'user-1',
@@ -825,45 +868,50 @@ describe('UsersService', () => {
 
       const result = await service.updateEmail('user-1', 'new@test.com');
 
-      expect(mockPrisma.user.findUnique).toHaveBeenNthCalledWith(1, {
-        where: { id: 'user-1', deletedAt: null },
-      });
-      expect(mockPrisma.user.findUnique).toHaveBeenNthCalledWith(2, {
-        where: { email: 'new@test.com' },
-      });
-      expect(mockPrisma.user.update).toHaveBeenCalledWith({
-        where: { id: 'user-1' },
-        data: { email: 'new@test.com' },
-        select: expect.any(Object),
-      });
       expect(result.email).toBe('new@test.com');
+      expect(bcrypt.compare).not.toHaveBeenCalled();
+    });
+
+    it('should throw UnauthorizedException when current password is missing', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(localUser);
+
+      await expect(service.updateEmail('user-1', 'new@test.com')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('should throw UnauthorizedException when current password is wrong', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(localUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
+
+      await expect(service.updateEmail('user-1', 'new@test.com', 'WrongPass!')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw NotFoundException when user not found', async () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce(null);
 
-      await expect(service.updateEmail('user-1', 'new@test.com')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.updateEmail('user-1', 'new@test.com', 'OldPass123!'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException when new email equals current', async () => {
-      const user = { id: 'user-1', email: 'same@test.com' };
-      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+      mockPrisma.user.findUnique.mockResolvedValueOnce(localUser);
 
-      await expect(service.updateEmail('user-1', 'same@test.com')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.updateEmail('user-1', 'old@test.com', 'OldPass123!'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw ConflictException when email already in use', async () => {
-      const user = { id: 'user-1', email: 'old@test.com' };
-      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+      mockPrisma.user.findUnique.mockResolvedValueOnce(localUser);
       mockPrisma.user.findUnique.mockResolvedValueOnce({ id: 'other-user' });
 
-      await expect(service.updateEmail('user-1', 'taken@test.com')).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(
+        service.updateEmail('user-1', 'taken@test.com', 'OldPass123!'),
+      ).rejects.toThrow(ConflictException);
     });
   });
 

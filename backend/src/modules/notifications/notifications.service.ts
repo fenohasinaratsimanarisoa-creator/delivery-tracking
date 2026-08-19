@@ -181,7 +181,11 @@ export class NotificationsService {
         if (admin.email) {
           try {
             await this.emailService.send(admin.email, `[URGENT] ${notification.title}`, html);
-          } catch {}
+          } catch (err) {
+            this.logger.debug(
+              `Email alert to ${admin.email} failed (best-effort): ${(err as Error).message}`,
+            );
+          }
         }
       }
     }

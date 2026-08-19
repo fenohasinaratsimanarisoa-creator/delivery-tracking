@@ -124,7 +124,11 @@ export class DeliveriesService {
           deliveryLat = results[0].lat;
           deliveryLng = results[0].lng;
         }
-      } catch {}
+      } catch (err) {
+        this.logger.debug(
+          `Auto-geocode failed for "${dto.deliveryAddress}" (best-effort, delivery still created): ${(err as Error).message}`,
+        );
+      }
     }
 
     const requestedStatus = dto.status ?? DeliveryStatus.pending;
@@ -370,7 +374,11 @@ export class DeliveriesService {
           updateData.deliveryLat = results[0].lat;
           updateData.deliveryLng = results[0].lng;
         }
-      } catch {}
+      } catch (err) {
+        this.logger.debug(
+          `Auto-geocode failed for "${dto.deliveryAddress}" (best-effort, address kept as-is): ${(err as Error).message}`,
+        );
+      }
     }
     if (dto.vehicleId) {
       const vehicle = await this.prisma.vehicle.findFirst({
@@ -595,7 +603,11 @@ export class DeliveriesService {
             data: { deliveryLat: destLat, deliveryLng: destLng },
           });
         }
-      } catch {}
+      } catch (err) {
+        this.logger.debug(
+          `Auto-geocode failed for "${delivery.deliveryAddress}" (best-effort, proof uses raw coords): ${(err as Error).message}`,
+        );
+      }
     }
 
     const distance =

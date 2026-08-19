@@ -74,7 +74,7 @@ export class UsersController {
 
   @Patch('me/email')
   updateEmail(@CurrentUser('id') userId: string, @Body() dto: UpdateEmailDto) {
-    return this.usersService.updateEmail(userId, dto.email!);
+    return this.usersService.updateEmail(userId, dto.email!, dto.currentPassword);
   }
 
   @Get('me/preferences')
