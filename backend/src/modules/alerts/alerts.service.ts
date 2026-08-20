@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { NotificationType, NotificationPriority } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
@@ -97,7 +97,7 @@ export class AlertsService {
     const notification = await this.prisma.notification.findFirst({
       where: { id, companyId },
     });
-    if (!notification) throw new Error('Notification not found');
+    if (!notification) throw new NotFoundException('Notification not found');
 
     return this.prisma.notification.update({
       where: { id },
