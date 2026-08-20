@@ -454,11 +454,19 @@ public class LocationForegroundService extends Service {
                 if (location == null) {
                     return;
                 }
-                latestLocation = location;
-                adaptAcquisitionInterval(location);
-                for (LocationSink sink : LOCATION_SINKS) {
-                    sink.onLocationUpdate(location);
+                // LocationResult peut regrouper PLUSIEURS fixes en un seul
+                // callback (économie d'énergie, Doze, rattrapage du provider).
+                // getLastLocation() se limiterait au plus récent et perdrait
+                // silencieusement les autres : chaque point du lot est donc
+                // livré individuellement à chaque sink (le dernier de la liste
+                // étant le plus récent, il devient latestLocation).
+                for (Location loc : locationResult.getLocations()) {
+                    latestLocation = loc;
+                    for (LocationSink sink : LOCATION_SINKS) {
+                        sink.onLocationUpdate(loc);
+                    }
                 }
+                adaptAcquisitionInterval(location);
             }
         };
         fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
