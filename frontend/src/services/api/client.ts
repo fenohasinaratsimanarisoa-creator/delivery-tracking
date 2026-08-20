@@ -78,7 +78,16 @@ api.interceptors.response.use(
     if (isRefreshRequest) {
       setAccessToken(null);
       try { sessionStorage.setItem('dt_auth_error', 'session_expired'); } catch {}
-      window.location.href = '/login';
+      // Flux Google OAuth : pendant la finalisation du callback (#accessToken=…),
+      // un 401 du refresh est ATTENDU — le cookie refreshToken posé par le
+      // callback est host-only sur l'origine API, pas sur l'origine web.
+      // Rediriger ici détruirait la page avant que AuthCallbackPage ne
+      // consomme le hash. On laisse la page finaliser la session.
+      const isOAuthCallback =
+        window.location.pathname === '/auth/callback' && /[#&]accessToken=/.test(window.location.hash);
+      if (!isOAuthCallback) {
+        window.location.href = '/login';
+      }
       return Promise.reject(error);
     }
 
