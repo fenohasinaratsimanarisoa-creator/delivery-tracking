@@ -3,7 +3,7 @@
    - Assets statiques hashed : stale-while-revalidate
    - Cache versionné + purge automatique des vieilles versions
 */
-const VERSION = 'logitrack-v4';
+const VERSION = 'logitrack-v4'; // À bump à chaque déploiement
 const APP_SHELL = '/';
 const CACHE_URLS = [APP_SHELL, '/manifest.json', '/icons/icon.svg'];
 let consecutiveFallbacks = 0;
@@ -19,6 +19,14 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
+      .then(() =>
+        // Signale aux onglets ouverts qu'une nouvelle version est active : main.tsx
+        // écoute ce message pour forcer un reload propre plutôt que de compter
+        // uniquement sur l'event 'error' + chunk manquant.
+        self.clients.matchAll().then((clients) =>
+          clients.forEach((client) => client.postMessage({ type: 'SW_UPDATED' }))
+        )
+      )
   );
 });
 
@@ -41,6 +49,14 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((res) => {
+          if (res.status === 404) {
+            // Le déploiement a remplacé l'ancien index.html : ne jamais mettre un 404
+            // en cache comme shell. On purge pour forcer le prochain chargement à
+            // récupérer le nouveau shell (les chunks de l'ancien sont périmés de toute
+            // façon). Même purge que pour les assets statiques (branche non-navigate).
+            caches.delete(VERSION).catch(() => {});
+            return res;
+          }
           consecutiveFallbacks = 0;
           const copy = res.clone();
           caches.open(VERSION).then((cache) => cache.put(APP_SHELL, copy)).catch(() => {});
