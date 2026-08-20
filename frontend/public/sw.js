@@ -3,9 +3,10 @@
    - Assets statiques hashed : stale-while-revalidate
    - Cache versionné + purge automatique des vieilles versions
 */
-const VERSION = 'logitrack-v3';
+const VERSION = 'logitrack-v4';
 const APP_SHELL = '/';
 const CACHE_URLS = [APP_SHELL, '/manifest.json', '/icons/icon.svg'];
+let consecutiveFallbacks = 0;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -40,11 +41,23 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((res) => {
+          consecutiveFallbacks = 0;
           const copy = res.clone();
           caches.open(VERSION).then((cache) => cache.put(APP_SHELL, copy)).catch(() => {});
           return res;
         })
-        .catch(() => caches.match(APP_SHELL))
+        .catch(() => {
+          // Hors-ligne : on sert le shell en cache, mais avec une garde anti-boucle —
+          // si le réseau reste KO sur plusieurs navigations, on purge et on laisse le
+          // navigateur afficher son erreur au lieu de servir un vieux shell en boucle
+          // (vieux shell → vieux chunks → 404 → reload → boucle vers la page de login).
+          consecutiveFallbacks += 1;
+          if (consecutiveFallbacks > 3) {
+            caches.delete(VERSION).catch(() => {});
+            return Response.error();
+          }
+          return caches.match(APP_SHELL);
+        })
     );
     return;
   }
