@@ -20,6 +20,7 @@ import {
   updateNativeTrackingStatus,
   type DeviceOemInfo,
 } from '../services/tracking/backgroundLocation';
+import { Network } from '@capacitor/network';
 import type { Delivery } from '../types';
 
 // Wake lock 'screen' RETIRÉ : il n'empêche l'écran de s'éteindre que PENDANT que
@@ -572,24 +573,42 @@ export function useDriverTracking() {
     const socket = getSocket();
     if (socket.connected) {
       socket.emit('updatePosition', payload);
-      // Le backend émet positionSaved/positionRejected EXPLICITEMENT (le client
-      // n'utilise pas de callback ack socket.io) : le timeout n'est plus qu'un
-      // filet de sécurité réseau, réduit de 3000ms à 2000ms.
-      const posTimeout = setTimeout(() => { isSendingRef.current = false; }, 2000);
-      socket.once('positionSaved', () => {
+      // Filet de sécurité ANTI-CONNEXION ZOMBIE : socket.connected peut rester
+      // true alors que le TCP est mort (changement d'interface Wi-Fi ↔ mobile).
+      // Si NI positionSaved NI positionRejected n'arrivent dans les 2000ms, la
+      // position est RÉACQUÉE en file locale exactement comme une déconnexion
+      // — jamais perdue silencieusement. Le garde settled + le cleanup des
+      // listeners évitent tout double traitement si un ACK arrive après coup.
+      let settled = false;
+      let onSaved: () => void = () => {};
+      let onRejected: (data?: { reason?: string }) => void = () => {};
+      const cleanup = () => {
+        socket.off('positionSaved', onSaved);
+        socket.off('positionRejected', onRejected);
+      };
+      const posTimeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        isSendingRef.current = false;
+        void queuePosition(payload);
+      }, 2000);
+      onSaved = () => {
+        if (settled) return;
+        settled = true;
         clearTimeout(posTimeout);
+        cleanup();
         isSendingRef.current = false;
         // Drainage immédiat en mode dégradé (file non vide) : le timer drainIntervalRef
         // est throttlé par Chromium en arrière-plan comme setInterval ; un envoi direct
         // réussi est l'occasion de purger la file sans attendre le prochain tick.
         void drainQueue();
-      });
-      // Position rejetée par le serveur (ex. véhicule désactivé/mal configuré) :
-      // on la remet en file d'attente locale (même mécanisme que le cas socket
-      // déconnecté) pour qu'elle soit retentée via drainQueue plutôt que perdue, et
-      // on libère isSendingRef comme dans le cas de succès.
-      socket.once('positionRejected', (data?: { reason?: string }) => {
+      };
+      onRejected = (data) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(posTimeout);
+        cleanup();
         if (data?.reason === 'invalid_payload') {
           // Payload définitivement malformé (lat/lng hors bornes, timestamp
           // illisible, vehicleId inconnu) : le remettre en file enverrait la
@@ -599,7 +618,9 @@ export function useDriverTracking() {
           return;
         }
         void queuePosition(payload).then(() => { isSendingRef.current = false; });
-      });
+      };
+      socket.once('positionSaved', onSaved);
+      socket.once('positionRejected', onRejected);
     } else {
       void queuePosition(payload).then(() => { isSendingRef.current = false; });
     }
@@ -1023,7 +1044,35 @@ export function useDriverTracking() {
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
 
+    // Détection réseau RÉELLE via Capacitor Network (Android : ConnectivityManager,
+    // pas la WebView). C'est le seul canal qui reflète le changement d'interface
+    // WiFi ↔ données mobiles : au retour en ligne (ou changement d'interface), la
+    // socket existante peut être zombie (TCP mort sur l'ancienne interface) alors
+    // que socket.connected vaut encore true — on force une reconnexion PROPRE,
+    // PAS conditionnelle à socket.connected (c'est justement cette valeur qui
+    // ment). Le listener window online/offline ci-dessus reste en repli multi-
+    // plateforme (web/navigateur).
+    let netRemoved = false;
+    let netListener: { remove: () => void } | null = null;
+    void Network.addListener('networkStatusChange', (status: { connected: boolean }) => {
+      setNetworkOnline(status.connected);
+      if (status.connected) {
+        const s = getSocket();
+        s.disconnect();
+        s.connect();
+        void drainQueue();
+      }
+    }).then((handle) => {
+      if (netRemoved) {
+        handle.remove();
+      } else {
+        netListener = handle;
+      }
+    });
+
     return () => {
+      netRemoved = true;
+      if (netListener) netListener.remove();
       if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
       if (intervalRef.current !== null) clearInterval(intervalRef.current);
       if (drainIntervalRef.current !== null) clearInterval(drainIntervalRef.current);

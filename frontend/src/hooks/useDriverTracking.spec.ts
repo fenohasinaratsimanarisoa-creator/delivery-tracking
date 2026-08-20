@@ -37,19 +37,42 @@ function emitSocket(event: string, data?: any) {
 // Fausse file IndexedDB observable : les tests B/C vérifient qu'aucune position
 // n'est perdue via queueSize() (positions mise en file pendant un envoi en cours).
 const { fakeQueue } = vi.hoisted(() => ({ fakeQueue: [] as unknown[] }));
+// Capture du DERNIER objet socket retourné par getSocket() : les tests réseau
+// assertent disconnect()/connect() sur l'instance réelle utilisée par le hook.
+const socketInstances = vi.hoisted(() => ({ last: null as any }));
+// disconnect()/connect() PARTAGÉS entre toutes les instances de socket mockées
+// (getSocket() recrée un objet à chaque appel) : les tests réseau assertent sur
+// ces deux mocks, pas sur une instance fugitive.
+const socketDisconnect = vi.fn();
+const socketConnect = vi.fn();
+// remove() du listener Capacitor Network : le test de cleanup vérifie qu'il est
+// bien appelé au démontage du hook (netListener.remove()).
+const networkRemove = vi.fn();
 
 vi.mock('../services/socket/socket', () => ({
-  getSocket: () => ({
-    get connected() { return socketConnected; },
-    emit: (event: string, payload?: unknown) => {
-      socketEmits.push({ event, payload });
-      if (event === 'updatePosition') emittedAt.push(Date.now());
-    },
-    on: (event: string, handler: (data?: any) => void) => { socketOnCalls++; (socketHandlers[event] ||= []).push(handler); },
-    off: vi.fn(),
-    once: (event: string, handler: (data?: any) => void) => { socketOnceCalls++; (socketHandlers[event] ||= []).push(handler); },
-  }),
+  getSocket: () => {
+    const s = {
+      get connected() { return socketConnected; },
+      emit: (event: string, payload?: unknown) => {
+        socketEmits.push({ event, payload });
+        if (event === 'updatePosition') emittedAt.push(Date.now());
+      },
+      on: (event: string, handler: (data?: any) => void) => { socketOnCalls++; (socketHandlers[event] ||= []).push(handler); },
+      off: vi.fn(),
+      once: (event: string, handler: (data?: any) => void) => { socketOnceCalls++; (socketHandlers[event] ||= []).push(handler); },
+      disconnect: socketDisconnect,
+      connect: socketConnect,
+    };
+    socketInstances.last = s;
+    return s;
+  },
   onSocketSessionExpired: (cb: () => void) => { sessionExpiredCbs.push(cb); return () => {}; },
+}));
+
+vi.mock('@capacitor/network', () => ({
+  Network: {
+    addListener: vi.fn().mockImplementation(() => Promise.resolve({ remove: networkRemove })),
+  },
 }));
 
 vi.mock('../services/api/client', () => ({
@@ -667,6 +690,94 @@ describe('useDriverTracking core logic', () => {
 
     act(() => { window.dispatchEvent(new Event('online')); });
     expect(result.current.networkOnline).toBe(true);
+  });
+
+  it('Network.addListener (Capacitor) : changement réseau → setNetworkOnline + reconnexion SOCKET forcée + drainQueue', async () => {
+    vi.useRealTimers();
+    socketConnected = true;
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/drivers/profile') {
+        return Promise.resolve({
+          data: { id: 'd1', firstName: 'A', lastName: 'B', vehicle: { id: 'v1', brand: 'X', model: 'Y', licensePlate: 'Z', positionSource: 'phone' } },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    const { result } = renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+
+    const network = await import('@capacitor/network');
+    const addListenerMock = (network.Network.addListener as unknown as ReturnType<typeof vi.fn>);
+    const onNetworkStatus = addListenerMock.mock.calls[0][1] as (s: { connected: boolean; connectionType?: string }) => void;
+    expect(typeof onNetworkStatus).toBe('function');
+
+    // Perte du WiFi (status.connected=false) : networkOnline suit, AUCUNE reconnexion.
+    act(() => { onNetworkStatus({ connected: false, connectionType: 'none' }); });
+    expect(result.current.networkOnline).toBe(false);
+    expect(socketDisconnect).not.toHaveBeenCalled();
+
+    // Retour en ligne via une AUTRE interface (cellular) : la socket peut être
+    // zombie (TCP mort sur l'ancienne interface) alors que socket.connected serait
+    // encore true → disconnect()+connect() FORCÉS (non conditionnels), + drainQueue.
+    act(() => { onNetworkStatus({ connected: true, connectionType: 'cellular' }); });
+    await act(async () => {});
+    expect(result.current.networkOnline).toBe(true);
+    expect(socketDisconnect).toHaveBeenCalled();
+    expect(socketConnect).toHaveBeenCalled();
+    const offlineQueue = await import('../services/offlineQueue');
+    expect(offlineQueue.flushQueue).toHaveBeenCalled();
+
+    // Cleanup du hook : au démontage, le listener natif Capacitor est retiré.
+    const { unmount } = renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => {});
+    unmount();
+    await act(async () => {});
+    expect(networkRemove).toHaveBeenCalled();
+  });
+
+  it('Test zombie ACK : aucune réponse serveur dans les 2000ms → position remise EN FILE (jamais perdue), ACK tardif ignoré (pas de double traitement)', async () => {
+    vi.useRealTimers();
+    socketConnected = true;
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/drivers/profile') {
+        return Promise.resolve({
+          data: { id: 'd1', firstName: 'A', lastName: 'B', vehicle: { id: 'v1', brand: 'X', model: 'Y', licensePlate: 'Z', positionSource: 'phone' } },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 1600)); }); // startTracking
+
+    vi.useFakeTimers();
+    const nativeHandler = nativeLocationHandler.current!;
+
+    // Envoi n°1 : emit updatePosition, puis AUCUN ACK (connexion zombie simulée).
+    act(() => {
+      nativeHandler({ latitude: -18.8792, longitude: 47.5079, speed: 12, heading: 0, altitude: 0, accuracy: 10 });
+    });
+    expect(socketEmits.filter((e) => e.event === 'updatePosition')).toHaveLength(1);
+    const emittedPayload = socketEmits.find((e) => e.event === 'updatePosition')!.payload;
+    expect(fakeQueue.length).toBe(0);
+
+    // Le filet de sécurité expire (2000ms sans ack) : la position est RÉACQUÉE
+    // en file — le payload en file est EXACTEMENT celui émis (pas de perte).
+    act(() => { vi.advanceTimersByTime(2000); });
+    await act(async () => {});
+    const offlineQueue = await import('../services/offlineQueue');
+    expect(offlineQueue.enqueuePosition).toHaveBeenCalledTimes(1);
+    expect(offlineQueue.enqueuePosition).toHaveBeenCalledWith(emittedPayload);
+    expect(fakeQueue.length).toBe(1);
+
+    // Un positionSaved TARDIF (la "zombie" refait surface) ne doit NI re-drainer
+    // NI re-enqueer : le garde settled l'ignore — pas de double traitement.
+    act(() => { emitSocket('positionSaved', { id: 'pos-1', suspect: false }); });
+    await act(async () => {});
+    expect(offlineQueue.enqueuePosition).toHaveBeenCalledTimes(1);
+    expect(fakeQueue.length).toBe(1);
   });
 
   it('badge "GPS faible" : nécessite 3 fixes > 50m CONSÉCUTIFS (pas un pic isolé)', async () => {
