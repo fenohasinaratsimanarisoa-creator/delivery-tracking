@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { VehicleAssignmentHistoryService } from '../../common/vehicle-assignment/vehicle-assignment-history.service';
@@ -17,6 +18,17 @@ export class DriversService {
     private dataUpdateBus: DataUpdateBus,
     private assignmentHistory: VehicleAssignmentHistoryService,
   ) {}
+
+  private handleUniqueConflict(err: unknown, licenseFailedMessage: string): never {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      const target = Array.isArray(err.meta?.target) ? (err.meta.target as string[]) : [];
+      if (target.includes('vehicleId') || target.includes('vehicle_id')) {
+        throw new ConflictException('Vehicle is already assigned to another driver');
+      }
+      throw new ConflictException(licenseFailedMessage);
+    }
+    throw err;
+  }
 
   async create(companyId: string, dto: CreateDriverDto) {
     const existing = await this.prisma.driver.findFirst({
@@ -40,39 +52,43 @@ export class DriversService {
       }
     }
 
-    const driver = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.driver.create({
-        data: { ...dto, companyId },
-        include: {
-          vehicle: {
-            select: {
-              id: true,
-              brand: true,
-              model: true,
-              year: true,
-              licensePlate: true,
-              fuelType: true,
-              positionSource: true,
+    try {
+      const driver = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.driver.create({
+          data: { ...dto, companyId },
+          include: {
+            vehicle: {
+              select: {
+                id: true,
+                brand: true,
+                model: true,
+                year: true,
+                licensePlate: true,
+                fuelType: true,
+                positionSource: true,
+              },
             },
           },
-        },
-      });
-      if (dto.vehicleId) {
-        await this.assignmentHistory.assign(tx, {
-          companyId,
-          driverId: created.id,
-          vehicleId: dto.vehicleId,
         });
-      }
-      return created;
-    });
-    this.dataUpdateBus.emitUpdate({
-      companyId,
-      entity: 'driver',
-      action: 'created',
-      payload: { id: driver.id },
-    });
-    return driver;
+        if (dto.vehicleId) {
+          await this.assignmentHistory.assign(tx, {
+            companyId,
+            driverId: created.id,
+            vehicleId: dto.vehicleId,
+          });
+        }
+        return created;
+      });
+      this.dataUpdateBus.emitUpdate({
+        companyId,
+        entity: 'driver',
+        action: 'created',
+        payload: { id: driver.id },
+      });
+      return driver;
+    } catch (err) {
+      this.handleUniqueConflict(err, 'License number already exists');
+    }
   }
 
   async findByUserId(userId: string) {
@@ -152,34 +168,38 @@ export class DriversService {
       }
     }
 
-    const driver = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.driver.update({
-        where: { id },
-        data: dto,
-        include: {
-          vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } },
-        },
-      });
-      if (dto.vehicleId !== undefined) {
-        if (dto.vehicleId === null) {
-          await this.assignmentHistory.unassign(tx, { driverId: id });
-        } else {
-          await this.assignmentHistory.assign(tx, {
-            companyId,
-            driverId: id,
-            vehicleId: dto.vehicleId,
-          });
+    try {
+      const driver = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.driver.update({
+          where: { id },
+          data: dto,
+          include: {
+            vehicle: { select: { id: true, brand: true, model: true, licensePlate: true } },
+          },
+        });
+        if (dto.vehicleId !== undefined) {
+          if (dto.vehicleId === null) {
+            await this.assignmentHistory.unassign(tx, { driverId: id });
+          } else {
+            await this.assignmentHistory.assign(tx, {
+              companyId,
+              driverId: id,
+              vehicleId: dto.vehicleId,
+            });
+          }
         }
-      }
-      return updated;
-    });
-    this.dataUpdateBus.emitUpdate({
-      companyId,
-      entity: 'driver',
-      action: 'updated',
-      payload: { id: driver.id },
-    });
-    return driver;
+        return updated;
+      });
+      this.dataUpdateBus.emitUpdate({
+        companyId,
+        entity: 'driver',
+        action: 'updated',
+        payload: { id: driver.id },
+      });
+      return driver;
+    } catch (err) {
+      this.handleUniqueConflict(err, 'License number already in use');
+    }
   }
 
   async remove(companyId: string, id: string) {

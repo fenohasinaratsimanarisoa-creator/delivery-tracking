@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { VehicleAssignmentHistoryService } from '../../common/vehicle-assignment/vehicle-assignment-history.service';
@@ -270,6 +271,83 @@ describe('DriversService', () => {
         id: 'driver-2',
         vehicleId: 'vehicle-1',
       });
+    });
+  });
+
+  describe('collision concurrente sur vehicleId (P2002)', () => {
+    beforeEach(() => {
+      mockPrisma.driver.findFirst.mockResolvedValue(null);
+      mockPrisma.vehicle.findFirst.mockResolvedValue({ id: 'vehicle-1' });
+      mockPrisma.vehicleAssignmentHistory.findFirst.mockResolvedValue(null);
+    });
+
+    const p2002Vehicle = () =>
+      new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed on the fields: (`vehicle_id`)',
+        { code: 'P2002', clientVersion: '5.22.0', meta: { target: ['vehicle_id'] } },
+      );
+
+    const dto = {
+      firstName: 'Jean',
+      lastName: 'Rakoto',
+      licenseNumber: 'LIC-001',
+      vehicleId: 'vehicle-1',
+    };
+
+    it('create : deux appels parallèles — un réussit, lautre lève ConflictException', async () => {
+      let createCalls = 0;
+      mockPrisma.driver.create.mockImplementation(async () => {
+        createCalls++;
+        if (createCalls > 1) throw p2002Vehicle();
+        return { id: 'driver-1' };
+      });
+
+      const results = await Promise.allSettled([
+        service.create('company-1', { ...dto }),
+        service.create('company-1', { ...dto }),
+      ]);
+
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      const rejected = results.filter((r) => r.status === 'rejected');
+      expect(rejected).toHaveLength(1);
+      expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(ConflictException);
+      expect((rejected[0] as PromiseRejectedResult).reason.message).toBe(
+        'Vehicle is already assigned to another driver',
+      );
+    });
+
+    it('create : une erreur Prisma non-P2002 est re-propagée telle quelle', async () => {
+      mockPrisma.driver.create.mockRejectedValue(new Error('DB down'));
+
+      await expect(service.create('company-1', { ...dto })).rejects.toThrow('DB down');
+    });
+
+    it('update : deux appels parallèles — un réussit, lautre lève ConflictException', async () => {
+      mockPrisma.driver.findFirst.mockImplementation(async (args: any) => {
+        if (args?.where?.id && typeof args.where.id === 'string') {
+          return { id: 'driver-1', vehicleId: null };
+        }
+        return null;
+      });
+      let updateCalls = 0;
+      mockPrisma.driver.update.mockImplementation(async () => {
+        updateCalls++;
+        if (updateCalls > 1) throw p2002Vehicle();
+        return { id: 'driver-1', vehicle: null };
+      });
+
+      const results = await Promise.allSettled([
+        service.update('company-1', 'driver-1', { vehicleId: 'vehicle-1' }),
+        service.update('company-1', 'driver-1', { vehicleId: 'vehicle-1' }),
+      ]);
+
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      const rejected = results.filter((r) => r.status === 'rejected');
+      expect(rejected).toHaveLength(1);
+      expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(ConflictException);
+      expect((rejected[0] as PromiseRejectedResult).reason.message).toBe(
+        'Vehicle is already assigned to another driver',
+      );
     });
   });
 });
