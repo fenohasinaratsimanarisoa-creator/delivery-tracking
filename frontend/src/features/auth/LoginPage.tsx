@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api/client';
 import { fetchCsrfToken } from '../../services/api/csrf';
 import { useAuth } from '../../hooks/AuthContext';
+import type { User } from '../../types';
 import LoginLayout from './components/LoginLayout';
 import VisualPanel from './components/VisualPanel';
 import LoginForm from './components/LoginForm';
@@ -72,14 +73,27 @@ export default function LoginPage() {
     setError('');
     try {
       const res = await api.post('/auth/login', { email, password });
-      const { accessToken, user, requiresTwoFactor, tempToken } = res.data;
+      const data = res.data as
+        | { accessToken?: string; user?: User | null; requiresTwoFactor?: boolean; tempToken?: string }
+        | null
+        | undefined;
+      if (!data || typeof data !== 'object') {
+        throw new Error('Malformed login response (not an object)');
+      }
+      const { accessToken, user, requiresTwoFactor, tempToken } = data;
       if (requiresTwoFactor) {
+        if (!user || !user.email || typeof tempToken !== 'string' || !tempToken) {
+          throw new Error('Malformed 2FA step-1 response (missing user or tempToken)');
+        }
         setTwoFactor({
           tempToken,
-          email: user?.email || email,
-          firstName: user?.firstName || cached.name || '',
+          email: user.email,
+          firstName: user.firstName || cached.name || '',
         });
         return;
+      }
+      if (typeof accessToken !== 'string' || !accessToken || !user || typeof user !== 'object') {
+        throw new Error('Malformed login response (missing accessToken or user)');
       }
       login(user, accessToken);
       writeSessionCache(user.firstName, user.email);
@@ -108,7 +122,11 @@ export default function LoginPage() {
         token: code,
         tempToken: twoFactor.tempToken,
       });
-      const { accessToken, user } = res.data;
+      const data = res.data as { accessToken?: string; user?: User | null } | null | undefined;
+      if (!data || typeof data.accessToken !== 'string' || !data.accessToken || !data.user || typeof data.user !== 'object') {
+        throw new Error('Malformed 2FA response (missing accessToken or user)');
+      }
+      const { accessToken, user } = data;
       login(user, accessToken);
       writeSessionCache(user.firstName, user.email);
       // Le serveur a fait tourner le cookie csrf-token pendant l'étape 2 : on
