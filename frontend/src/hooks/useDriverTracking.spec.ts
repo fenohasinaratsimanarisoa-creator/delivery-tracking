@@ -98,6 +98,14 @@ vi.mock('../services/tracking/sensorFusion', () => ({
   simulateStationaryFromSpeed: vi.fn().mockReturnValue(false),
 }));
 
+vi.mock('../services/auth/tokenStore', () => ({
+  getAccessToken: vi.fn().mockReturnValue('test-token-123'),
+}));
+
+vi.mock('../services/api/config', () => ({
+  getSocketBaseUrl: vi.fn().mockReturnValue('http://localhost:4000'),
+}));
+
 // Capture du handler natif LocationForegroundService : le test l'invoque directement
 // pour vérifier que les positions natives déclenchent un envoi immédiat (sendPosition)
 // et non plus seulement le prochain tick de l'intervalle.
@@ -125,6 +133,11 @@ vi.mock('../services/tracking/backgroundLocation', () => ({
     nativeSubscriptions.push(sub);
     return Promise.resolve(sub);
   }),
+  // --- Fallback HTTP natif (Option B) ---
+  storeNativeFallbackToken: vi.fn().mockResolvedValue(undefined),
+  storeNativeFallbackApiUrl: vi.fn().mockResolvedValue(undefined),
+  markNativeJsAck: vi.fn().mockResolvedValue(undefined),
+  setNativeTrackingContext: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('useDriverTracking core logic', () => {

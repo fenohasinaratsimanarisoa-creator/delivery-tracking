@@ -84,6 +84,11 @@ interface BackgroundLocationNative {
   openOemBatterySettings(): Promise<{ opened: string }>;
   updateTrackingStatus(options: { status: string }): Promise<void>;
   getInterruptionInfo(): Promise<TrackingInterruptionInfo>;
+  // --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
+  storeNativeFallbackToken(options: { token: string }): Promise<void>;
+  storeNativeFallbackApiUrl(options: { apiUrl: string }): Promise<void>;
+  markNativeJsAck(): Promise<void>;
+  setNativeTrackingContext(options: { vehicleId: string; deliveryId: string }): Promise<void>;
   addListener(
     eventName: 'locationUpdate' | 'batteryCritical',
     listenerFunc: (data: NativeLocationUpdate | BatteryCriticalEvent) => void,
@@ -298,5 +303,62 @@ export async function subscribeToNativeLocations(
     };
   } catch {
     return null;
+  }
+}
+
+// --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
+
+/**
+ * Écrit le token d'accès dans SharedPreferences natif pour le fallback HTTP.
+ * Appelé par le JS à chaque refresh de token.
+ */
+export async function storeNativeFallbackToken(token: string): Promise<void> {
+  const p = resolvePlugin();
+  if (!p) return;
+  try {
+    await p.storeNativeFallbackToken({ token });
+  } catch {
+    // Silencieux : le fallback natif est un filet de sécurité, pas critique.
+  }
+}
+
+/**
+ * Écrit l'URL de base de l'API dans SharedPreferences natif.
+ * Appelé par le JS au démarrage du tracking.
+ */
+export async function storeNativeFallbackApiUrl(apiUrl: string): Promise<void> {
+  const p = resolvePlugin();
+  if (!p) return;
+  try {
+    await p.storeNativeFallbackApiUrl({ apiUrl });
+  } catch {
+    // Silencieux.
+  }
+}
+
+/**
+ * Notifie le service natif qu'unACK JS a été traité (le pipeline JS a reçu
+ * et traité une position). Réinitialise le timer de silence JS.
+ */
+export async function markNativeJsAck(): Promise<void> {
+  const p = resolvePlugin();
+  if (!p) return;
+  try {
+    await p.markNativeJsAck();
+  } catch {
+    // Silencieux.
+  }
+}
+
+/**
+ * Met à jour le contexte véhicule/livraison pour le fallback natif HTTP.
+ */
+export async function setNativeTrackingContext(vehicleId: string, deliveryId: string): Promise<void> {
+  const p = resolvePlugin();
+  if (!p) return;
+  try {
+    await p.setNativeTrackingContext({ vehicleId, deliveryId });
+  } catch {
+    // Silencieux.
   }
 }

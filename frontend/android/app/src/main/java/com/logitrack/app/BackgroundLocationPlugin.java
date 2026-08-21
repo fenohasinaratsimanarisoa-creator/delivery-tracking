@@ -450,6 +450,64 @@ public class BackgroundLocationPlugin extends Plugin {
         call.resolve();
     }
 
+    // --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
+
+    /**
+     * Stocke le token d'accès dans SharedPreferences pour le fallback natif HTTP.
+     * Appelé par le JS à chaque refresh de token (tokenStore.setAccessToken()).
+     */
+    @PluginMethod
+    public void storeNativeFallbackToken(PluginCall call) {
+        String token = call.getString("token");
+        if (token == null || token.isEmpty()) {
+            call.reject("TOKEN_REQUIRED");
+            return;
+        }
+        NativeHttpFallback.storeToken(getContext(), token);
+        call.resolve();
+    }
+
+    /**
+     * Stocke l'URL de base de l'API pour le fallback natif HTTP.
+     * Appelé par le JS au démarrage du tracking.
+     */
+    @PluginMethod
+    public void storeNativeFallbackApiUrl(PluginCall call) {
+        String apiUrl = call.getString("apiUrl");
+        if (apiUrl == null || apiUrl.isEmpty()) {
+            call.reject("API_URL_REQUIRED");
+            return;
+        }
+        NativeHttpFallback.storeApiUrl(getContext(), apiUrl);
+        call.resolve();
+    }
+
+    /**
+     * Notifie le service qu'unACK JS a été traité (le pipeline JS a reçu
+     * et traité une position). Réinitialise le timer de silence JS utilisé
+     * par le fallback natif pour décider de s'activer (> 2 min sans ACK).
+     */
+    @PluginMethod
+    public void markNativeJsAck(PluginCall call) {
+        LocationForegroundService.markJsAck();
+        call.resolve();
+    }
+
+    /**
+     * Met à jour le contexte véhicule/livraison pour le fallback natif HTTP.
+     * Appelé par le JS quand le vehicleId ou deliveryId change.
+     */
+    @PluginMethod
+    public void setNativeTrackingContext(PluginCall call) {
+        String vehicleId = call.getString("vehicleId");
+        String deliveryId = call.getString("deliveryId");
+        LocationForegroundService.setNativeContext(
+            vehicleId != null ? vehicleId : "",
+            deliveryId != null ? deliveryId : ""
+        );
+        call.resolve();
+    }
+
     /**
      * Demande l'exemption d'optimisation batterie.
      * Si déjà exempté, résout immédiatement avec batteryOptimizationIgnored=true. Sinon ouvre

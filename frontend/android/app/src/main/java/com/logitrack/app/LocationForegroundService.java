@@ -205,6 +205,14 @@ public class LocationForegroundService extends Service {
     /** Dernière position acquise, pour qu'un abonné tardif reçoive l'état courant. */
     private static volatile Location latestLocation = null;
 
+    // --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
+    /** Horodatage du dernier ACK JS (notifyListeners traité par le pipeline JS). */
+    private static volatile long lastJsAckTime = 0;
+    /** ID du véhicule courant (pour le fallback natif). */
+    private static volatile String nativeVehicleId = null;
+    /** ID de la livraison courante (pour le fallback natif). */
+    private static volatile String nativeDeliveryId = null;
+
     /**
      * Texte de statut courant affiché dans la notification persistante. Mis à
      * jour depuis le JS via BackgroundLocationPlugin.updateTrackingStatus()
@@ -229,6 +237,23 @@ public class LocationForegroundService extends Service {
 
     public static Location getLatestLocation() {
         return latestLocation;
+    }
+
+    // --- Fallback HTTP natif :ACK JS + contexte véhicule/livraison ---
+
+    /**
+     * Notifie le service qu'un ACK JS a été traité (le pipeline JS a reçu et
+     * traité une position via notifyListeners). Utilisé par le fallback natif
+     * pour détecter quand la WebView est silencieuse depuis > 2 min.
+     */
+    public static void markJsAck() {
+        lastJsAckTime = System.currentTimeMillis();
+    }
+
+    /** Met à jour les IDs véhicule/livraison pour le fallback natif. */
+    public static void setNativeContext(String vehicleId, String deliveryId) {
+        nativeVehicleId = vehicleId;
+        nativeDeliveryId = deliveryId;
     }
 
     /**
@@ -464,6 +489,18 @@ public class LocationForegroundService extends Service {
                     latestLocation = loc;
                     for (LocationSink sink : LOCATION_SINKS) {
                         sink.onLocationUpdate(loc);
+                    }
+                    // --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
+                    // Si le JS est silencieux depuis > 2 min (la WebView est gelée),
+                    // on envoie la position directement via HTTP pour ne pas la perdre.
+                    // Ne s'active que si lastJsAckTime > 0 (le JS a déjà communiqué
+                    // au moins une fois) et si le token/API URL sont disponibles.
+                    if (lastJsAckTime > 0
+                        && NativeHttpFallback.shouldActivate(lastJsAckTime)
+                        && nativeVehicleId != null && !nativeVehicleId.isEmpty()) {
+                        NativeHttpFallback.sendPosition(
+                            getApplicationContext(), loc, nativeVehicleId, nativeDeliveryId
+                        );
                     }
                 }
                 adaptAcquisitionInterval(location);

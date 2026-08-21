@@ -2,6 +2,8 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api/client';
 import { getSocket, onSocketSessionExpired } from '../services/socket/socket';
+import { getAccessToken } from '../services/auth/tokenStore';
+import { getSocketBaseUrl } from '../services/api/config';
 import { enqueuePosition, queueSize, flushQueue, QUEUE_WARN_SIZE } from '../services/offlineQueue';
 import { KalmanFilter } from '../services/tracking/KalmanFilter';
 import { sensorFusion, simulateStationaryFromSpeed } from '../services/tracking/sensorFusion';
@@ -18,6 +20,10 @@ import {
   subscribeToNativeBatteryCritical,
   subscribeToNativeLocations,
   updateNativeTrackingStatus,
+  storeNativeFallbackToken,
+  storeNativeFallbackApiUrl,
+  markNativeJsAck,
+  setNativeTrackingContext,
   type DeviceOemInfo,
 } from '../services/tracking/backgroundLocation';
 import { Network } from '@capacitor/network';
@@ -775,6 +781,9 @@ export function useDriverTracking() {
     kalmanRef.current = null;
     filteredPosRef.current = null;
 
+    // --- Fallback HTTP natif : initialiser le contexte véhicule/livraison ---
+    setNativeTrackingContext(vehicleId, autoDeliveryId).catch(() => {});
+
     sensorFusion.init().then(() => {}).catch(() => {});
 
     // État batterie lu au démarrage pour afficher la bannière d'exemption persistante
@@ -810,6 +819,15 @@ export function useDriverTracking() {
       .catch((err) => {
         console.warn('[tracking] native background status check failed:', err);
       });
+
+    // --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
+    // Stocke le token et l'URL API dans SharedPreferences natifs pour que
+    // NativeHttpFallback puisse envoyer des positions quand la WebView est gelée.
+    const currentToken = getAccessToken();
+    if (currentToken) {
+      storeNativeFallbackToken(currentToken).catch(() => {});
+    }
+    storeNativeFallbackApiUrl(getSocketBaseUrl()).catch(() => {});
 
     // DÉTECTION D'INTERRUPTION RÉSIDUELLE (force-stop, service tué) : le marqueur
     // natif (SharedPreferences, écrit par le watchdog ou onDestroy non-volontaire)
@@ -882,6 +900,8 @@ export function useDriverTracking() {
         accuracy: nativePos.accuracy,
       });
       sendPosition(); // envoi immédiat, ne dépend plus du timer throttlé
+      // Notifie le fallback natif que le JS traite les positions (reset du timer de silence).
+      markNativeJsAck().catch(() => {});
     })
       .then((sub) => {
         nativeSubscriptionRef.current = sub;
