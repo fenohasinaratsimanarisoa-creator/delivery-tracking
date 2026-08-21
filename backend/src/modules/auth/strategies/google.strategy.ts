@@ -28,13 +28,22 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       `${appUrl}/api/auth/google/callback`,
     );
 
-    Logger.log(`Google OAuth callback URL: ${callbackURL}`, 'GoogleStrategy');
+    // Derrière un reverse proxy (nginx/Render), les headers X-Forwarded-* indiquent
+    // le vrai protocole (https) et l'hôte. Sans proxy:true, Passport construit
+    // l'callback URL en http:// au lieu de https:// → redirect_uri_mismatch Google.
+    const useProxy = process.env.NODE_ENV === 'production';
+
+    Logger.log(
+      `Google OAuth — callbackURL: ${callbackURL}, proxy: ${useProxy}, APP_URL: ${appUrl}`,
+      'GoogleStrategy',
+    );
 
     super({
       clientID,
       clientSecret,
       callbackURL,
       scope: ['email', 'profile'],
+      proxy: useProxy,
     });
   }
 
