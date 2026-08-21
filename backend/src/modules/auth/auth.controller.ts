@@ -110,6 +110,9 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.register(dto);
+    // Garde-fou COOKIE_DOMAIN (voir commentaire login)
+    res.clearCookie('refreshToken', { path: '/' });
+    res.clearCookie('csrf-token', { path: '/' });
     const opts = this.getRefreshCookieOpts();
     res.cookie('refreshToken', result.refreshToken, opts);
     return { accessToken: result.accessToken, user: result.user };
@@ -139,6 +142,12 @@ export class AuthController {
           tempToken: result.tempToken,
         };
       }
+      // Garde-fou COOKIE_DOMAIN : clear les anciens cookies SANS l'option domain
+      // (host-only) avant de poser les nouveaux. Évite les doublons si COOKIE_DOMAIN
+      // a été ajouté/retiré entre deux deploys — un cookie de portée différente
+      // pourrait coexister et le mauvais serait transmis au serveur.
+      res.clearCookie('refreshToken', { path: '/' });
+      res.clearCookie('csrf-token', { path: '/' });
       const opts = this.getRefreshCookieOpts();
       res.cookie('refreshToken', result.refreshToken, opts);
       return {
@@ -170,6 +179,9 @@ export class AuthController {
       req.ip || '',
       req.headers?.['user-agent'] || '',
     );
+    // Garde-fou COOKIE_DOMAIN : clear l'ancien cookie SANS l'option domain (host-only)
+    // avant de poser le nouveau. Évite les doublons si COOKIE_DOMAIN a changé.
+    res.clearCookie('refreshToken', { path: '/' });
     const opts = this.getRefreshCookieOpts();
     res.cookie('refreshToken', result.refreshToken, opts);
     return { accessToken: result.accessToken, user: result.user };
@@ -378,6 +390,9 @@ export class AuthController {
       req.ip || '',
       req.headers?.['user-agent'] || '',
     );
+    // Garde-fou COOKIE_DOMAIN (voir commentaire login)
+    res.clearCookie('refreshToken', { path: '/' });
+    res.clearCookie('csrf-token', { path: '/' });
     res.cookie('refreshToken', result.refreshToken, this.getRefreshCookieOpts());
     const configuredSecret = this.configService.get<string>('CSRF_SECRET');
     const secret = configuredSecret || getDevFallbackSecret();
@@ -427,6 +442,9 @@ export class AuthController {
       throw new UnauthorizedException('Invalid or expired exchange code');
     }
     const session = await this.authService.createSessionForUser(result.userId);
+    // Garde-fou COOKIE_DOMAIN (voir commentaire login)
+    res.clearCookie('refreshToken', { path: '/' });
+    res.clearCookie('csrf-token', { path: '/' });
     res.cookie('refreshToken', session.refreshToken, this.getRefreshCookieOpts());
     const configuredSecret = this.configService.get<string>('CSRF_SECRET');
     const secret = configuredSecret || getDevFallbackSecret();
@@ -481,6 +499,9 @@ export class AuthController {
         // Cookie posé UNIQUEMENT si le refresh token existe réellement : un
         // cookie vide provoquerait des erreurs « Refresh token not found »
         // confuses côté client.
+        // Garde-fou COOKIE_DOMAIN (voir commentaire login)
+        res.clearCookie('refreshToken', { path: '/' });
+        res.clearCookie('csrf-token', { path: '/' });
         if (user.refreshToken) {
           res.cookie('refreshToken', user.refreshToken, refreshOpts);
         }

@@ -2,6 +2,8 @@
    - App-shell : « network-first » (toujours recharger les nouvelles versions au connecté)
    - Assets statiques hashed : stale-while-revalidate
    - Cache versionné + purge automatique des vieilles versions
+   - Auto-guérison : ping de version à l'activate pour débloquer les clients coincés
+     sur un ancien SW (unregister forcé via SW_FORCE_RESET)
 */
 const VERSION = 'logitrack-v4'; // À bump à chaque déploiement
 const APP_SHELL = '/';
@@ -20,14 +22,37 @@ self.addEventListener('activate', (event) => {
       Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
       .then(() =>
-        // Signale aux onglets ouverts qu'une nouvelle version est active : main.tsx
-        // écoute ce message pour forcer un reload propre plutôt que de compter
-        // uniquement sur l'event 'error' + chunk manquant.
+        // Auto-guérison : ping chaque client avec la version active. Le client
+        // compare avec sa version connue — si incohérent (SW orphelin), il force
+        // unregister + purge + reload via SW_FORCE_RESET.
         self.clients.matchAll().then((clients) =>
-          clients.forEach((client) => client.postMessage({ type: 'SW_UPDATED' }))
+          clients.forEach((client) => {
+            client.postMessage({ type: 'SW_UPDATED', version: VERSION });
+            // Aussi envoyer un ping de version pur : le client répond avec sa
+            // version perçue, et le SW peut décider de forcer le reset.
+            client.postMessage({ type: 'SW_VERSION_PING', version: VERSION });
+          })
         )
       )
   );
+});
+
+// Réponse aux pings de version : si le client signale une version différente
+// (ou n'a jamais répondu), on lui ordonne un reset complet.
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data) return;
+
+  if (data.type === 'SW_CLIENT_VERSION_REPORT') {
+    const clientVersion = data.version;
+    // Le client signale une version différente de la nôtre → SW orphelin
+    if (clientVersion && clientVersion !== VERSION) {
+      event.source.postMessage({
+        type: 'SW_FORCE_RESET',
+        reason: `version mismatch: client has "${clientVersion}", active is "${VERSION}"`,
+      });
+    }
+  }
 });
 
 function isStatic(request) {

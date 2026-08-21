@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api/client';
 import { fetchCsrfToken } from '../../services/api/csrf';
 import { useAuth } from '../../hooks/AuthContext';
+import { resetServiceWorkerAndReload } from '../../services/pwa/reset';
 import type { User } from '../../types';
 import LoginLayout from './components/LoginLayout';
 import VisualPanel from './components/VisualPanel';
@@ -19,6 +20,7 @@ const ROLE_REDIRECT: Record<string, string> = {
 };
 
 const SESSION_KEY = 'dt_welcome';
+const SW_CACHE_WARNING_AGE_MS = 30_000; // 30 secondes
 
 function readSessionCache(): { name?: string; email?: string } {
   try {
@@ -37,6 +39,24 @@ function writeSessionCache(name: string, email: string) {
   }
 }
 
+/**
+ * Détecte si un reset de SW a récemment eu lieu (dt_chunk_reload ou dt_sw_reset
+ * dans sessionStorage, datant de moins de 30 secondes). Si oui, le navigateur
+ * a potentiellement un ancien SW en cache et l'utilisateur atterrit sur /login
+ * juste après un login pourtant réussi.
+ */
+function detectSwCacheWarning(): boolean {
+  try {
+    const now = Date.now();
+    const chunkReload = Number(sessionStorage.getItem('dt_chunk_reload') || 0);
+    const swReset = Number(sessionStorage.getItem('dt_sw_reset') || 0);
+    const latestEvent = Math.max(chunkReload, swReset);
+    return latestEvent > 0 && now - latestEvent < SW_CACHE_WARNING_AGE_MS;
+  } catch {
+    return false;
+  }
+}
+
 export default function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -50,6 +70,7 @@ export default function LoginPage() {
   } | null>(null);
   const [twoFactorError, setTwoFactorError] = useState('');
   const [twoFactorLoading, setTwoFactorLoading] = useState(false);
+  const [showSwCacheWarning, setShowSwCacheWarning] = useState(false);
 
   const cached = readSessionCache();
 
@@ -61,6 +82,16 @@ export default function LoginPage() {
     }
   }, [t]);
 
+  // Détecter le cas où on atterrit sur /login après un reset de SW récent
+  useEffect(() => {
+    if (detectSwCacheWarning()) {
+      setShowSwCacheWarning(true);
+      console.warn(
+        '[app] LoginPage : reset SW récent détecté dans sessionStorage — affichage du message diagnostic',
+      );
+    }
+  }, []);
+
   useEffect(() => {
     if (!isInitializing && isAuthenticated && user) {
       const target = ROLE_REDIRECT[user.role] || '/dashboard';
@@ -71,6 +102,7 @@ export default function LoginPage() {
   const handleLogin = async (email: string, password: string) => {
     setLoading(true);
     setError('');
+    setShowSwCacheWarning(false);
     try {
       const res = await api.post('/auth/login', { email, password });
       const data = res.data as
@@ -147,6 +179,11 @@ export default function LoginPage() {
     }
   };
 
+  const handleResetApp = () => {
+    console.warn('[app] LoginPage : bouton "Réinitialiser l\'application" cliqué');
+    void resetServiceWorkerAndReload();
+  };
+
   if (isInitializing) {
     return (
       <div className={styles.loadingContainer}>
@@ -180,6 +217,46 @@ export default function LoginPage() {
           cachedName={cached.name}
           cachedEmail={cached.email}
         />
+      )}
+
+      {/* Message diagnostic : ancien SW en cache détecté */}
+      {showSwCacheWarning && (
+        <div
+          role="alert"
+          style={{
+            marginTop: '16px',
+            padding: '12px 16px',
+            backgroundColor: '#fef3c7',
+            border: '1px solid #f59e0b',
+            borderRadius: '8px',
+            fontSize: '13px',
+            lineHeight: '1.5',
+            color: '#92400e',
+          }}
+        >
+          <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>
+            ⚠️ {t('auth.login.swCacheWarning')}
+          </p>
+          <p style={{ margin: '0 0 12px 0' }}>
+            {t('auth.login.swCacheHint')}
+          </p>
+          <button
+            type="button"
+            onClick={handleResetApp}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#dc2626',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+            }}
+          >
+            🔄 {t('auth.login.swCacheResetButton')}
+          </button>
+        </div>
       )}
     </LoginLayout>
   );
