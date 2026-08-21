@@ -34,7 +34,7 @@ export class DashboardService {
       }),
       this.prisma.delivery.count({ where: { companyId } }),
       this.prisma.vehicle.count({ where: { companyId, isActive: true } }),
-      this.prisma.driver.count({ where: { companyId, isActive: true } }),
+      this.prisma.driver.count({ where: { companyId, isActive: true, deletedAt: null } }),
       // M3 : avant, les totaux étaient calculés sur les 50 derniers pleins (take: 50)
       // puis étiquetés « Total Fuel / Total Distance » dans le PDF/Excel — chiffres
       // sous-évalués pour une flotte active. L'agrégat couvre TOUS les pleins ; les

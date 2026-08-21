@@ -76,6 +76,10 @@ describe('DashboardService', () => {
         },
       },
     });
+    // driver.count filtre deletedAt: null pour exclure les chauffeurs soft-supprimés
+    expect(mockPrisma.driver.count).toHaveBeenCalledWith({
+      where: { companyId: 'company-1', isActive: true, deletedAt: null },
+    });
     // L'agrégat est bien demandé sur TOUTE la company (pas de take).
     expect(mockPrisma.fuelLog.aggregate).toHaveBeenCalledWith({
       where: { companyId: 'company-1' },
@@ -220,5 +224,26 @@ describe('DashboardService', () => {
         anomaly: true,
       },
     ]);
+  });
+
+  it('activeDrivers exclut les chauffeurs soft-supprimés (deletedAt renseigné)', async () => {
+    // Setup : 1 driver actif + 1 driver soft-supprimé (isActive: true, deletedAt: Date)
+    // mockResolvedValueOnce pour chaque appel à count/aggregate/findMany dans getKpis
+    mockPrisma.delivery.count
+      .mockResolvedValueOnce(0) // deliveriesToday
+      .mockResolvedValueOnce(10); // totalDeliveries
+    mockPrisma.vehicle.count.mockResolvedValueOnce(3);
+    mockPrisma.driver.count.mockResolvedValueOnce(1); // seul le driver non-supprimé compte
+    mockPrisma.fuelLog.aggregate.mockResolvedValueOnce({ _sum: { liters: 0, kilometers: 0 } });
+    mockPrisma.fuelLog.count.mockResolvedValueOnce(0);
+    mockPrisma.fuelLog.findMany.mockResolvedValueOnce([]);
+
+    const result = await service.getKpis('company-1');
+
+    expect(result.activeDrivers).toBe(1);
+    // Vérifie que la requête inclut bien deletedAt: null
+    expect(mockPrisma.driver.count).toHaveBeenCalledWith({
+      where: { companyId: 'company-1', isActive: true, deletedAt: null },
+    });
   });
 });
