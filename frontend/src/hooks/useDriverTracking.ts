@@ -1070,7 +1070,43 @@ export function useDriverTracking() {
       }
     });
 
+    // --- Garde-fou temporel (Prompt 2, audit 21/08/2026) ---
+    // Filet de sécurité indépendant de l'événement Network : si le socket
+    // reste déconnecté pendant > 20s alors que le réseau est OK (networkOnline
+    // true), on force un cycle disconnect()+connect(). Se déclenche UNE fois
+    // par fenêtre de 20s (cooldown) pour éviter une boucle agressive.
+    // Utile quand l'event networkStatusChange ne se déclenche pas (certains
+    // OEM Android rapportent connected:true en continu pendant le handover
+    // WiFi→Data).
+    const WATCHDOG_INTERVAL_MS = 5_000; // vérification toutes les 5s
+    const WATCHDOG_THRESHOLD_MS = 20_000; // déclenchement après 20s consécutives
+    let watchdogDisconnectedSince = 0;
+    let watchdogLastTrigger = 0;
+    const watchdogTimer = setInterval(() => {
+      const s = getSocket();
+      const isOnline = networkOnline;
+      if (!s.connected && isOnline) {
+        if (watchdogDisconnectedSince === 0) {
+          watchdogDisconnectedSince = Date.now();
+        }
+        const elapsed = Date.now() - watchdogDisconnectedSince;
+        if (elapsed >= WATCHDOG_THRESHOLD_MS && Date.now() - watchdogLastTrigger >= WATCHDOG_THRESHOLD_MS) {
+          watchdogLastTrigger = Date.now();
+          watchdogDisconnectedSince = 0; // reset pour la prochaine fenêtre
+          console.warn(
+            `[tracking] watchdog reconnect: socket déconnecté depuis ${Math.round(elapsed / 1000)}s alors que le réseau est OK — tentative de reconnexion forcée`,
+          );
+          s.disconnect();
+          s.connect();
+          void drainQueue();
+        }
+      } else if (s.connected) {
+        watchdogDisconnectedSince = 0; // reset si reconnecté
+      }
+    }, WATCHDOG_INTERVAL_MS);
+
     return () => {
+      clearInterval(watchdogTimer);
       netRemoved = true;
       if (netListener) netListener.remove();
       if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);

@@ -241,4 +241,54 @@ describe('socket.ts — reconnexion robuste du dashboard', () => {
     expect(refreshAccessToken).toHaveBeenCalled();
     expect(s.connect).toHaveBeenCalled();
   });
+
+  it('configure transports: ["websocket", "polling"] — fallback polling si WebSocket bloqué', async () => {
+    const { getSocket } = await import('./socket');
+    getSocket();
+    const [, options] = ioMock.mock.calls[0];
+    // Le socket doit inclure 'polling' comme transport de repli pour les
+    // réseaux mobiles/proxy qui bloquent l'upgrade WebSocket.
+    expect(options.transports).toEqual(['websocket', 'polling']);
+  });
+
+  it('connect_error réseau (non-auth) incrémente le compteur d\'échecs consécutifs', async () => {
+    const { getSocket } = await import('./socket');
+    const s = getSocket() as unknown as ReturnType<typeof makeFakeSocket>;
+    // 3 erreurs réseau consécutives (pas d'auth rejection)
+    s._emit('connect_error', new Error('websocket error'));
+    s._emit('connect_error', new Error('timeout'));
+    s._emit('connect_error', new Error('polling error'));
+    await vi.advanceTimersByTimeAsync(0);
+    // Pas de refresh déclenché (pas d'auth rejection)
+    const { refreshAccessToken } = await import('../auth/refreshToken');
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('déconnexion produit un log structuré (disconnect reason)', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { getSocket } = await import('./socket');
+    const s = getSocket() as unknown as ReturnType<typeof makeFakeSocket>;
+    s._emit('disconnect', 'transport close');
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('disconnect: reason=transport close'),
+    );
+    spy.mockRestore();
+  });
+
+  it('reconnect_attempt au-delà de la 3e tentative produit un log', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { getSocket } = await import('./socket');
+    getSocket();
+    // Récupère le handler enregistré via fakeSocket.io.on('reconnect_attempt', ...)
+    const ioOnCalls = fakeSocket.io.on.mock.calls;
+    const reconnectEntry = ioOnCalls.find((c: any[]) => c[0] === 'reconnect_attempt');
+    expect(reconnectEntry).toBeDefined();
+    const reconnectHandler = reconnectEntry![1];
+    // Simule la 5e tentative de reconnexion
+    reconnectHandler(5);
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('reconnect_attempt #5'),
+    );
+    spy.mockRestore();
+  });
 });

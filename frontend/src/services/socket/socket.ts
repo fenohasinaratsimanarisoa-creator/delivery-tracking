@@ -2,6 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { getAccessToken, getAccessTokenExpiryMs } from '../auth/tokenStore';
 import { refreshAccessToken } from '../auth/refreshToken';
 import { getSocketBaseUrl } from '../api/config';
+import * as Sentry from '@sentry/react';
 
 let socket: Socket | null = null;
 
@@ -30,6 +31,13 @@ const VISIBLE_RECONNECT_THRESHOLD_MS = 10_000;
 
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let lastHiddenAt = 0;
+// --- Diagnostic des échecs de reconnexion (audit 21/08/2026) ---
+// Compteur de tentatives consécutives échouées (connect_error non-auth).
+// Réinitialisé à chaque connexion réussie. Au-delà de 5, on envoie un
+// breadcrumb Sentry pour télémétrie sans crash.
+let consecutiveFailures = 0;
+// Horodatage de la dernière connexion réussie (pour la durée écoulée dans le breadcrumb).
+let lastConnectedAt: number | null = null;
 
 // True quand le serveur a rejeté la session (refresh échoué après un
 // 'Invalid token') : on stoppe la boucle de reconnexion (économie batterie,
@@ -161,6 +169,11 @@ export function getSocket(): Socket {
     });
 
     socket.on('disconnect', (reason) => {
+      // --- Diagnostic (Prompt 1) : log de CHAQUE disconnect avec la raison exacte ---
+      console.warn(
+        `[socket] disconnect: reason=${reason}`,
+      );
+
       if (
         (reason === 'io server disconnect' || reason === 'transport close') &&
         getAccessToken() &&
@@ -182,15 +195,58 @@ export function getSocket(): Socket {
     // Rejet du handshake pendant la phase de connexion (avant 'connect') :
     // socket.io-client l'expose comme 'connect_error' avec le message du serveur.
     socket.on('connect_error', (err: Error) => {
-      if (isAuthRejection(err)) handleInvalidToken();
+      // --- Diagnostic (Prompt 1) : log STRUCTURÉ de CHAQUE connect_error ---
+      const transportName = (socket?.io?.engine?.transport as any)?.name || 'unknown';
+      const elapsed = lastConnectedAt ? Math.round((Date.now() - lastConnectedAt) / 1000) : null;
+      console.warn(
+        `[socket] connect_error: message=${err.message}, type=${(err as any).type || 'n/a'}, transport=${transportName}, elapsed=${elapsed !== null ? `${elapsed}s` : 'n/a'}`,
+      );
+
+      if (isAuthRejection(err)) {
+        handleInvalidToken();
+        return;
+      }
+
+      // Erreur réseau (timeout, upgrade refusé, TLS, DNS) : on incrémente le compteur
+      // et après 5 tentatives consécutives on envoie un breadcrumb Sentry.
+      consecutiveFailures++;
+      if (consecutiveFailures >= 5) {
+        Sentry.addBreadcrumb({
+          category: 'socket',
+          message: `Socket reconnection failed ${consecutiveFailures} times`,
+          level: 'warning',
+          data: {
+            transport: transportName,
+            lastError: err.message,
+            elapsedSinceConnected: elapsed,
+          },
+        });
+      }
     });
 
-    socket.io.on('reconnect_attempt', () => {
+    socket.io.on('reconnect_attempt', (attempt: number) => {
       if (socket) socket.auth = { token: getAccessToken() };
+      // --- Diagnostic (Prompt 1) : log au-delà de la 3e tentative ---
+      if (attempt > 3) {
+        const transportName = (socket?.io?.engine?.transport as any)?.name || 'unknown';
+        console.warn(
+          `[socket] reconnect_attempt #${attempt} (transport=${transportName})`,
+        );
+      }
     });
 
     // À chaque (re)connexion, repart sur la bonne expiration du token courant.
-    socket.on('connect', () => scheduleTokenRefresh());
+    socket.on('connect', () => {
+      scheduleTokenRefresh();
+      // Réinitialise le compteur d'échecs et trace l'horodatage de connexion.
+      if (consecutiveFailures > 0) {
+        console.info(
+          `[socket] reconnecté après ${consecutiveFailures} tentative(s) échouée(s)`,
+        );
+      }
+      consecutiveFailures = 0;
+      lastConnectedAt = Date.now();
+    });
     // Première programmation dès la création du socket.
     scheduleTokenRefresh();
 
