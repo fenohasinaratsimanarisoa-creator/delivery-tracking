@@ -51,10 +51,20 @@ export class TrackingController {
   getPositions(
     @CurrentUser('companyId') companyId: string,
     @Param('deliveryId') deliveryId: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 200,
+    @Query('page') page = '1',
+    @Query('limit') limit = '200',
   ) {
-    return this.trackingService.getPositionsByDelivery(deliveryId, companyId, +page, +limit);
+    // Clamp strict (audit 2026-08-25 G.3) : `?limit=10000000` chargeait toute la
+    // trace en mémoire (DoS applicatif) et une page négative produisait un skip
+    // négatif → exception Prisma → 500.
+    const safePage = Math.max(1, Math.floor(Number(page) || 1));
+    const safeLimit = Math.min(1000, Math.max(1, Math.floor(Number(limit) || 200)));
+    return this.trackingService.getPositionsByDelivery(
+      deliveryId,
+      companyId,
+      safePage,
+      safeLimit,
+    );
   }
 
   @UseGuards(ApiKeyOrJwtGuard)

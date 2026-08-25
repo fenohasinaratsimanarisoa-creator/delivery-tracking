@@ -64,6 +64,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     teleported: 0,
     batchSaved: 0,
     rateLimited: 0,
+    batchRateLimited: 0,
     lastReportTime: Date.now(),
   };
 
@@ -395,11 +396,35 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     return false;
   }
 
+  /**
+   * Budget de LOTS par driver (audit 2026-08-25 G.5) : handlePosition est
+   * anti-floodé mais pas batchPosition — un client authentifié pouvait contourner
+   * le rate limit en rafales de 250 positions (CPU de validation + lectures DB).
+   * Fenêtre fixe 60 s, budget configurable ; 0/négatif = désactivé (tests e2e).
+   * Un drain légitime (rattrapage réseau) = quelques lots — très sous le défaut 30.
+   */
+  async isBatchRateLimited(driverId: string): Promise<boolean> {
+    const max = Number(
+      this.configService.get<string>('BATCH_RATE_LIMIT_PER_MIN', '30'),
+    );
+    if (!max || max <= 0) return false;
+    const key = `rate_limit_batch:${driverId}`;
+    const current = await this.cacheService.get<number>(key);
+    if (current !== null && current >= max) {
+      this.metrics.batchRateLimited++;
+      return true;
+    }
+    // Compteur best-effort : la course get/set entre deux batchs concurrents peut
+    // sous-compter de 1 — acceptable pour une couche anti-flood (pas comptable).
+    await this.cacheService.set(key, (current ?? 0) + 1, 60);
+    return false;
+  }
+
   logMetrics() {
     const now = Date.now();
     const elapsedMin = (now - this.metrics.lastReportTime) / 60000;
     this.logger.log(
-      `[METRICS] received=${this.metrics.received} saved=${this.metrics.saved} deduped=${this.metrics.deduped} teleported=${this.metrics.teleported} batch=${this.metrics.batchSaved} rateLimited=${this.metrics.rateLimited} (last ${elapsedMin.toFixed(1)}min)`,
+      `[METRICS] received=${this.metrics.received} saved=${this.metrics.saved} deduped=${this.metrics.deduped} teleported=${this.metrics.teleported} batch=${this.metrics.batchSaved} rateLimited=${this.metrics.rateLimited} batchRateLimited=${this.metrics.batchRateLimited} (last ${elapsedMin.toFixed(1)}min)`,
     );
     this.metrics = {
       received: 0,
@@ -408,6 +433,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       teleported: 0,
       batchSaved: 0,
       rateLimited: 0,
+      batchRateLimited: 0,
       lastReportTime: now,
     };
   }
@@ -2008,6 +2034,18 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
    * {@link archivePositionsBefore} instead.
    */
   async archiveAllCompaniesPositionsBefore(date: Date): Promise<number> {
+    // MÊME garde que la version par entreprise (audit 2026-08-25 G.2) : sans elle,
+    // un `before` récent archivait/supprimait des positions < 48 h de TOUTES les
+    // sociétés avant que le cron carburant (22 h) et les rapports à la demande ne
+    // les consomment. La validation de format ISO est faite côté contrôleur ; ici
+    // on protège le métier quel que soit l'appelant.
+    const minAge = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    if (date > minAge) {
+      this.logger.warn(
+        `archiveAllCompaniesPositionsBefore refused: date ${date.toISOString()} is less than 48h old`,
+      );
+      return 0;
+    }
     this.logger.warn(
       'archiveAllCompaniesPositionsBefore called — this archives positions for ALL companies',
     );

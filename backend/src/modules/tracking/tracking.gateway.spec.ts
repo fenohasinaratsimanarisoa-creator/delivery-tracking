@@ -21,6 +21,7 @@ describe('TrackingGateway — cross-tenant security', () => {
     findDriverByUserId: jest.Mock;
     assertVehicleOwnership: jest.Mock;
     isRateLimited: jest.Mock;
+    isBatchRateLimited: jest.Mock;
     verifyDriverAssignment: jest.Mock;
     getLastPosition: jest.Mock;
     savePosition: jest.Mock;
@@ -35,6 +36,7 @@ describe('TrackingGateway — cross-tenant security', () => {
       findDriverByUserId: jest.fn(),
       assertVehicleOwnership: jest.fn(),
       isRateLimited: jest.fn().mockResolvedValue(false),
+      isBatchRateLimited: jest.fn().mockResolvedValue(false),
       verifyDriverAssignment: jest.fn(),
       getLastPosition: jest.fn().mockResolvedValue(null),
       savePosition: jest.fn().mockResolvedValue({ id: 'pos-1', suspect: false }),
@@ -285,6 +287,41 @@ describe('TrackingGateway — cross-tenant security', () => {
       expect(mockServer.to).toHaveBeenCalledWith('company:company-a');
       // ACK explicite : le client apprend que 1 position a bien été persistée.
       expect(client.emit).toHaveBeenCalledWith('positionsSaved', { count: 1 });
+    });
+
+    it('rate-limited batch: positionsRejected explicite, AUCUN ack, saveBatch non appelé (audit G.5)', async () => {
+      const client = mockSocket();
+      client.data.user = {
+        id: 'user-1',
+        role: 'driver',
+        companyId: 'company-a',
+        firstName: 'Test',
+        lastName: 'Driver',
+      };
+      trackingService.isBatchRateLimited.mockResolvedValueOnce(true);
+
+      const dto = {
+        positions: [
+          {
+            latitude: 1,
+            longitude: 2,
+            timestamp: '2026-07-21T10:00:00.000Z',
+            vehicleId: '22222222-2222-4222-8222-222222222222',
+          },
+        ],
+      };
+
+      await gateway.handleBatchPosition(client, dto as any);
+
+      expect(trackingService.isBatchRateLimited).toHaveBeenCalledWith('user-1');
+      expect(client.emit).toHaveBeenCalledWith(
+        'positionsRejected',
+        expect.objectContaining({ reason: 'rate_limited', kind: 'batch' }),
+      );
+      // PAS de positionsSaved : le client garde ses positions en file IndexedDB
+      // et retente après timeout (backoff naturel, zéro perte de données).
+      expect(client.emit).not.toHaveBeenCalledWith('positionsSaved', expect.anything());
+      expect(trackingService.saveBatch).not.toHaveBeenCalled();
     });
   });
 

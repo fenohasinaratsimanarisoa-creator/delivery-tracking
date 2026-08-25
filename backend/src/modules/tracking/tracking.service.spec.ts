@@ -74,10 +74,14 @@ const mockDataUpdateBus = {
 // Fenêtre anti-flood configurable, remise à 1s avant chaque test (les tests de
 // rate-limiting la modifient localement sans fuite vers les autres tests).
 let rateLimitTtl = '1000';
+// Budget de lots batchPosition/driver/min (audit G.5), remis au défaut avant chaque test.
+let batchRateLimitPerMin = '30';
 const mockConfig = {
-  get: jest.fn((key: string, def: unknown) =>
-    key === 'POSITION_RATE_LIMIT_TTL_MS' ? rateLimitTtl : def,
-  ),
+  get: jest.fn((key: string, def: unknown) => {
+    if (key === 'POSITION_RATE_LIMIT_TTL_MS') return rateLimitTtl;
+    if (key === 'BATCH_RATE_LIMIT_PER_MIN') return batchRateLimitPerMin;
+    return def;
+  }),
 };
 
 describe('TrackingService', () => {
@@ -86,6 +90,7 @@ describe('TrackingService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     rateLimitTtl = '1000';
+    batchRateLimitPerMin = '30';
     // savePosition() résout désormais le véhicule via findFirst (filtre deletedAt:null + isActive:true)
     mockPrisma.vehicle.findFirst.mockResolvedValue({ companyId: 'company-1' });
     service = new TrackingService(
@@ -127,6 +132,39 @@ describe('TrackingService', () => {
 
       rateLimitTtl = '-1';
       expect(await service.isRateLimited('driver-1')).toBe(false);
+      expect(mockCacheService.set).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('isBatchRateLimited — budget de lots par driver (audit G.5)', () => {
+    it('laisse passer sous le budget et incrémente le compteur (fenêtre 60 s)', async () => {
+      (mockCacheService.get as jest.Mock).mockResolvedValueOnce(null);
+      expect(await service.isBatchRateLimited('driver-1')).toBe(false);
+      expect(mockCacheService.set).toHaveBeenCalledWith('rate_limit_batch:driver-1', 1, 60);
+
+      // Dernier lot du budget (29 → 30) : passe encore.
+      (mockCacheService.get as jest.Mock).mockResolvedValueOnce(29);
+      expect(await service.isBatchRateLimited('driver-1')).toBe(false);
+      expect(mockCacheService.set).toHaveBeenCalledWith('rate_limit_batch:driver-1', 30, 60);
+    });
+
+    it('refuse au-delà du budget SANS réincrémenter (compteur figé)', async () => {
+      (mockCacheService.get as jest.Mock).mockResolvedValueOnce(30);
+      expect(await service.isBatchRateLimited('driver-1')).toBe(true);
+      expect(mockCacheService.set).not.toHaveBeenCalled();
+
+      (mockCacheService.get as jest.Mock).mockResolvedValueOnce(999);
+      expect(await service.isBatchRateLimited('driver-1')).toBe(true);
+      expect(mockCacheService.set).not.toHaveBeenCalled();
+    });
+
+    it('désactivé quand BATCH_RATE_LIMIT_PER_MIN est 0 ou négatif', async () => {
+      batchRateLimitPerMin = '0';
+      expect(await service.isBatchRateLimited('driver-1')).toBe(false);
+      expect(mockCacheService.set).not.toHaveBeenCalled();
+
+      batchRateLimitPerMin = '-5';
+      expect(await service.isBatchRateLimited('driver-1')).toBe(false);
       expect(mockCacheService.set).not.toHaveBeenCalled();
     });
   });
@@ -2209,6 +2247,33 @@ describe('TrackingService', () => {
       const params = mockPrisma.$executeRawUnsafe.mock.calls[0].slice(1);
       expect(params[1]).toBe('company-b');
       expect(result).toBe(0);
+    });
+  });
+
+  describe('archiveAllCompaniesPositionsBefore — garde 48h (audit G.2)', () => {
+    it("refuse une date de moins de 48h : 0 archivé, AUCUNE requête SQL (sinon les rapports carburant perdent leurs données)", async () => {
+      mockPrisma.$executeRawUnsafe = jest.fn().mockResolvedValue(0);
+      const oneHourAgo = new Date(Date.now() - 3600_000);
+
+      const result = await service.archiveAllCompaniesPositionsBefore(oneHourAgo);
+
+      expect(result).toBe(0);
+      expect(mockPrisma.$executeRawUnsafe).not.toHaveBeenCalled();
+    });
+
+    it('exécute l’archivage multi-entreprises pour une date de plus de 48h', async () => {
+      mockPrisma.$executeRawUnsafe = jest.fn().mockResolvedValue(7);
+      const threeDaysAgo = new Date(Date.now() - 72 * 3600_000);
+
+      const result = await service.archiveAllCompaniesPositionsBefore(threeDaysAgo);
+
+      expect(result).toBe(7);
+      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledTimes(1);
+      // Toujours paramétré (aucune interpolation) — cohérent avec le commentaire
+      // SÉCURITÉ du service.
+      const sql: string = mockPrisma.$executeRawUnsafe.mock.calls[0][0];
+      expect(sql).toContain('$1::timestamp');
+      expect(mockPrisma.$executeRawUnsafe.mock.calls[0]).toHaveLength(2);
     });
   });
 

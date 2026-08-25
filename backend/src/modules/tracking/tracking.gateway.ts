@@ -304,6 +304,17 @@ export class TrackingGateway
     const user = client.data.user;
     if (!user || user.role !== 'driver') return;
 
+    // Anti-flood batch (audit 2026-08-25 G.5) : sans ce garde, le rate limit de
+    // updatePosition était contournable en rafales de batchPosition. AUCUN
+    // acquittement positionsSaved n'est émis : le client conserve ses positions
+    // en file IndexedDB (flushQueue ne purge que sur résolution) et retente après
+    // son timeout (~5 s) — backoff naturel, zéro perte de données.
+    if (await this.trackingService.isBatchRateLimited(user.id)) {
+      this.logger.warn(`Batch rate limited (driver=${user.id})`);
+      client.emit('positionsRejected', { reason: 'rate_limited', kind: 'batch' });
+      return;
+    }
+
     return CompanyScopedContext.run(user.companyId, async () => {
       // Validation individuelle des positions : une position corrompue ne doit
       // pas tuer le rattrapage réseau des autres, et les payloads VALIDÉS

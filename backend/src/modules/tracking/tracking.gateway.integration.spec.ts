@@ -38,6 +38,7 @@ describe('TrackingGateway — ACK WebSocket réel (Test D)', () => {
 
   const trackingService = {
     isRateLimited: jest.fn().mockResolvedValue(false),
+    isBatchRateLimited: jest.fn().mockResolvedValue(false),
     verifyDriverAssignment: jest.fn().mockResolvedValue(undefined),
     assertVehicleOwnership: jest.fn().mockResolvedValue(undefined),
     findDriverByUserId: jest.fn().mockResolvedValue({ id: 'driver-1' }),
