@@ -92,6 +92,10 @@ export class AuthController {
     return CSRF_COOKIE_OPTIONS;
   }
 
+  // Public : appelé AVANT toute authentification (register/login) ou par un
+  // visiteur anonyme avant /auth/refresh — ne doit jamais exiger de JWT.
+  @Public()
+  @SkipCsrf()
   @SkipThrottle()
   @Get('csrf-token')
   getCsrfToken(@Res({ passthrough: true }) res: Response) {
@@ -345,6 +349,7 @@ export class AuthController {
     return { secret: result.secret, otpauthUrl: result.otpauthUrl, qrCode: result.qrCode };
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UseGuards(JwtAuthGuard)
   @Post('2fa/verify')
   @HttpCode(HttpStatus.OK)
@@ -364,6 +369,7 @@ export class AuthController {
     return { message: '2FA enabled successfully' };
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UseGuards(JwtAuthGuard, BlockImpersonationGuard)
   @Post('2fa/disable')
   @HttpCode(HttpStatus.OK)
@@ -428,8 +434,8 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('oauth/begin')
   @HttpCode(HttpStatus.OK)
-  oauthBegin(@Body() dto: OAuthBeginDto) {
-    const relayId = this.oauthRelayService.begin(dto.codeChallenge);
+  async oauthBegin(@Body() dto: OAuthBeginDto) {
+    const relayId = await this.oauthRelayService.begin(dto.codeChallenge);
     return { relayId };
   }
 
@@ -449,7 +455,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = this.oauthRelayService.verifyAndConsumeCode(dto.code, dto.verifier);
+    const result = await this.oauthRelayService.verifyAndConsumeCode(dto.code, dto.verifier);
     if (!result) {
       throw new UnauthorizedException('Invalid or expired exchange code');
     }
@@ -488,7 +494,7 @@ export class AuthController {
     const authenticate = passport.authenticate(
       'google',
       { session: false },
-      (err: any, user: any, info: any) => {
+      async (err: any, user: any, info: any) => {
         if (err || !user) {
           let error = 'google_auth_failed';
           if (!user && info?.message === 'access_denied') error = 'access_denied';
@@ -530,8 +536,8 @@ export class AuthController {
         // Flux natif : `state` (nonce) présent et valide → on ne met JAMAIS le
         // JWT de session dans l'URL. On émet un code à usage unique (TTL 60 s)
         // lié au codeChallenge PKCE, échangé ensuite par POST /auth/exchange.
-        if (relayId && this.oauthRelayService.isRelayValid(relayId)) {
-          const code = this.oauthRelayService.issueCode(relayId, user.user?.id);
+        if (relayId && (await this.oauthRelayService.isRelayValid(relayId))) {
+          const code = await this.oauthRelayService.issueCode(relayId, user.user?.id);
           if (!code) {
             this.logger.error(`Google OAuth native: relay expired for ${user.user?.id}`);
             return res.redirect(`${frontendUrl}/auth/callback?error=google_auth_failed`);

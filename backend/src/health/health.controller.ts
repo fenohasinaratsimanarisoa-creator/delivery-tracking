@@ -2,7 +2,11 @@ import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { Redis } from 'ioredis';
 import { Queue } from 'bullmq';
+import { Public } from '../common/decorators/public.decorator';
 
+// Consulté sans authentification par le load balancer / le monitoring
+// (probe de disponibilité) : ne doit jamais exiger de JWT.
+@Public()
 @Controller('health')
 export class HealthController {
   private redis: Redis | null = null;

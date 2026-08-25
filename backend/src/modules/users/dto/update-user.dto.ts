@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, MinLength, Matches } from 'class-validator';
 import { UserRole } from '@prisma/client';
 import { MaxByteLength } from '../../../common/validators/max-byte-length';
 
@@ -7,9 +7,16 @@ export class UpdateUserDto {
   @IsOptional()
   email?: string;
 
+  // Même politique que RegisterDto / CreateUserDto : un mot de passe posé par
+  // un admin via PATCH ne doit pas être plus faible qu'un mot de passe
+  // auto-défini (avant : 8 caractères, aucune complexité requise).
   @IsString()
-  @MinLength(8)
+  @MinLength(12)
   @MaxByteLength(72)
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{12,}$/, {
+    message:
+      'Password must contain at least 12 characters, one uppercase, one lowercase, one digit and one special character',
+  })
   @IsOptional()
   password?: string;
 

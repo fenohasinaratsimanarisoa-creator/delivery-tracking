@@ -19,6 +19,7 @@ const LoginPage = lazy(() => import('./features/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./features/auth/RegisterPage'));
 const ForgotPasswordPage = lazy(() => import('./features/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./features/auth/ResetPasswordPage'));
+const AcceptInvitePage = lazy(() => import('./features/auth/AcceptInvitePage'));
 const AuthCallbackPage = lazy(() => import('./features/auth/AuthCallbackPage'));
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage'));
 const PublicTrackingPage = lazy(() => import('./features/map/PublicTrackingPage'));
@@ -132,6 +133,7 @@ export default function App() {
               <Route path="/register" element={<SuspenseWrapper><RegisterPage /></SuspenseWrapper>} />
               <Route path="/forgot-password" element={<SuspenseWrapper><ForgotPasswordPage /></SuspenseWrapper>} />
               <Route path="/reset-password" element={<SuspenseWrapper><ResetPasswordPage /></SuspenseWrapper>} />
+              <Route path="/auth/invite/:token" element={<SuspenseWrapper><AcceptInvitePage /></SuspenseWrapper>} />
               <Route path="/auth/callback" element={<SuspenseWrapper><AuthCallbackPage /></SuspenseWrapper>} />
               <Route path="/cgu" element={<SuspenseWrapper><CguPage /></SuspenseWrapper>} />
               <Route path="/privacy" element={<SuspenseWrapper><PrivacyPolicyPage /></SuspenseWrapper>} />

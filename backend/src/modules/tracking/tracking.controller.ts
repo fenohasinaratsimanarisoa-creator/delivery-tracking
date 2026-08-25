@@ -24,6 +24,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
 import { ApiKeyScope } from '../api-keys/decorators/api-key-scope.decorator';
 import { TraccarBridgeService } from './traccar-bridge.service';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('Tracking')
 @Controller('tracking')
@@ -337,6 +338,7 @@ export class TrackingController {
   // Le lien entre véhicule et traceur se fait via POST /vehicles/:vehicleId/link-traccar.
 
   @ApiOperation({ summary: 'Get tracking info via public token (no auth required)' })
+  @Public()
   @Get('public/:token')
   async getPublicTrackingInfo(@Param('token') token: string) {
     try {

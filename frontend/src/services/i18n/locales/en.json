@@ -180,6 +180,34 @@
         "digit": "One digit",
         "special": "One special character"
       }
+    },
+    "acceptInvite": {
+      "title": "Join your team",
+      "subtitle": "Finish setting up your account to get started.",
+      "invitedAs": "You've been invited to join {{company}} as {{role}}.",
+      "email": "Email address",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "phone": "Phone (optional)",
+      "password": "Password",
+      "confirmPassword": "Confirm password",
+      "passwordMismatch": "Passwords do not match.",
+      "submit": "Create my account",
+      "submitting": "Creating account...",
+      "successTitle": "Account created",
+      "successMessage": "Your account has been created successfully. You can now sign in.",
+      "login": "Sign in",
+      "backToLogin": "Back to sign in",
+      "errorInvalid": "This invitation link is invalid or has expired.",
+      "error429": "Too many attempts. Please try again in a few moments.",
+      "errorGeneric": "An error occurred. Please try again.",
+      "passwordRules": {
+        "minLength": "At least 12 characters",
+        "uppercase": "One uppercase letter",
+        "lowercase": "One lowercase letter",
+        "digit": "One digit",
+        "special": "One special character"
+      }
     }
   },
   "deliveries": {

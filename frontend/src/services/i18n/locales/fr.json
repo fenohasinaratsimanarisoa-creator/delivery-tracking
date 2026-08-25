@@ -180,6 +180,34 @@
         "digit": "Un chiffre",
         "special": "Un caractère spécial"
       }
+    },
+    "acceptInvite": {
+      "title": "Rejoignez votre équipe",
+      "subtitle": "Terminez la création de votre compte pour commencer.",
+      "invitedAs": "Vous avez été invité(e) à rejoindre {{company}} en tant que {{role}}.",
+      "email": "Adresse email",
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "phone": "Téléphone (optionnel)",
+      "password": "Mot de passe",
+      "confirmPassword": "Confirmer le mot de passe",
+      "passwordMismatch": "Les mots de passe ne correspondent pas.",
+      "submit": "Créer mon compte",
+      "submitting": "Création du compte...",
+      "successTitle": "Compte créé",
+      "successMessage": "Votre compte a été créé avec succès. Vous pouvez dès à présent vous connecter.",
+      "login": "Se connecter",
+      "backToLogin": "Retour à la connexion",
+      "errorInvalid": "Ce lien d'invitation est invalide ou a expiré.",
+      "error429": "Trop de tentatives. Veuillez réessayer dans quelques instants.",
+      "errorGeneric": "Une erreur est survenue. Veuillez réessayer.",
+      "passwordRules": {
+        "minLength": "Au moins 12 caractères",
+        "uppercase": "Une majuscule",
+        "lowercase": "Une minuscule",
+        "digit": "Un chiffre",
+        "special": "Un caractère spécial"
+      }
     }
   },
   "deliveries": {
