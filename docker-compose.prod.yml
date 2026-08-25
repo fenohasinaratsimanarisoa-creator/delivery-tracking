@@ -132,7 +132,11 @@ services:
         limits: { cpus: '0.5', memory: 128M }
         reservations: { cpus: '0.1', memory: 64M }
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/"]
+      # 127.0.0.1 explicite : "localhost" résout en IPv6 (::1) en premier dans ce
+      # conteneur, or nginx n'écoute qu'en IPv4 — le healthcheck échouait tout le
+      # temps (statut "unhealthy" trompeur, le site fonctionnait pourtant très
+      # bien via l'IPv4 réellement exposée). Constaté au premier déploiement réel.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:80/"]
       interval: 15s
       timeout: 5s
       retries: 3
