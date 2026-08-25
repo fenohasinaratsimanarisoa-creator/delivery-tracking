@@ -80,6 +80,10 @@ services:
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-}
       TOTP_ISSUER: DeliveryTracking
       FUEL_ANOMALY_THRESHOLD_PERCENT: 20
+      # Sans ça, MobileMoneyService.validateSandbox() refuse de démarrer en
+      # NODE_ENV=production (voir backend/src/modules/billing/mobile-money.service.ts).
+      BILLING_ENABLED: ${BILLING_ENABLED:-false}
+      MOBILE_MONEY_SANDBOX: ${MOBILE_MONEY_SANDBOX:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN:-}
       ALERT_SLACK_WEBHOOK: ${ALERT_SLACK_WEBHOOK:-}

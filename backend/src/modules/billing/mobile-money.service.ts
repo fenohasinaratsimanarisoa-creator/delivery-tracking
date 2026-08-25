@@ -72,6 +72,15 @@ export class MobileMoneyService {
   private mvolaTokenCache: { token: string; expiresAt: number } | null = null;
 
   static validateSandbox(configService: ConfigService): void {
+    // Même garde que StripeService.validateConfig : si la facturation est
+    // désactivée (mode pilote, BILLING_ENABLED != 'true'), Mobile Money n'est
+    // jamais sollicité — pas de raison d'exiger une config sandbox=false.
+    // Avant : ce garde tournait INCONDITIONNELLEMENT, plantant le boot au
+    // démarrage de tout déploiement en NODE_ENV=production qui n'avait pas
+    // explicitement défini MOBILE_MONEY_SANDBOX, même sans jamais utiliser
+    // la facturation mobile money.
+    const billingEnabled = configService.get<string>('BILLING_ENABLED', 'false') === 'true';
+    if (!billingEnabled) return;
     const isSandbox = configService.get<string>('MOBILE_MONEY_SANDBOX', 'true') === 'true';
     const nodeEnv = configService.get<string>('NODE_ENV', 'development');
     if (isSandbox && nodeEnv === 'production') {
