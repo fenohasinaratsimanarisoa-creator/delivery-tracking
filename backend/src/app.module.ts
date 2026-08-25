@@ -89,23 +89,27 @@ import { TenantModule } from './common/tenant/tenant.module';
                 retryStrategy: () => 5000,
                 lazyConnect: false,
               });
+              // Un seul bucket nommé 'default' : c'est le nom que tous les
+              // @Throttle({ default: {...} }) du reste du code (auth, geocoding,
+              // invitations, platform-admin, mobile-app) référencent pour durcir
+              // une route précise. Avant, ce bloc définissait 3 buckets nommés
+              // 'short'/'medium'/'long' (boilerplate NestJS de base) — comme
+              // @nestjs/throttler ne fait correspondre un override de route qu'à
+              // un throttler du MÊME nom, aucun de ces @Throttle() ne s'appliquait
+              // jamais : toutes les routes, y compris login/reset-password,
+              // retombaient sur le bucket 'short' brut (3 req/s), bien trop
+              // strict pour un dashboard temps réel (ex. le Dashboard déclenche
+              // 4 GET en parallèle au chargement) → ThrottlerException dès la
+              // navigation, avant même toute création.
               return {
-                throttlers: [
-                  { name: 'short', ttl: 1000, limit: 3 },
-                  { name: 'medium', ttl: 10000, limit: 20 },
-                  { name: 'long', ttl: 60000, limit: 100 },
-                ],
+                throttlers: [{ name: 'default', ttl: 60000, limit: 300 }],
                 storage: new ThrottlerStorageRedisService(redis),
               };
             },
           }),
         ]
       : [
-          ThrottlerModule.forRoot([
-            { name: 'short', ttl: 1000, limit: 3 },
-            { name: 'medium', ttl: 10000, limit: 20 },
-            { name: 'long', ttl: 60000, limit: 100 },
-          ]),
+          ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 300 }]),
         ]),
     PrismaModule,
     MonitoringModule,
