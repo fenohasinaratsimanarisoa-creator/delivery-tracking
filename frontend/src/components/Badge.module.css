@@ -1,0 +1,64 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  border-radius: var(--radius-full, 9999px);
+  white-space: nowrap;
+  line-height: var(--lh-tight, 1.2);
+  border: 1px solid transparent;
+}
+
+.sizeSm {
+  padding: 2px 8px;
+  font-size: var(--text-xs, 0.625rem);
+}
+
+.sizeMd {
+  padding: 3px 10px;
+  font-size: var(--text-sm, 0.75rem);
+}
+
+.variantAccent {
+  background: var(--color-accent-muted);
+  color: var(--color-accent);
+}
+
+.variantTeal {
+  background: var(--color-teal-muted);
+  color: var(--color-teal);
+}
+
+.variantRed {
+  background: var(--color-red-muted);
+  color: var(--color-red);
+}
+
+.variantBlue {
+  background: var(--color-blue-muted);
+  color: var(--color-blue);
+}
+
+.variantPurple {
+  background: var(--color-purple-muted);
+  color: var(--color-purple);
+}
+
+.variantOrange {
+  background: var(--color-orange-muted);
+  color: var(--color-orange);
+}
+
+.variantNeutral {
+  background: var(--color-surface-alt);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-subtle);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}

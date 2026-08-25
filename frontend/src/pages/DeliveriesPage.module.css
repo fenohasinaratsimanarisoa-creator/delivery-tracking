@@ -322,16 +322,6 @@
   overflow: auto;
 }
 
-.tableCard {
-  background: var(--color-surface, #121B2E);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
-  border-radius: var(--radius-2xl, 16px);
-  overflow: auto;
-  box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.35));
-  animation: dt-fade-in-up 0.5s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
-  animation-delay: 150ms;
-}
-
 /* ─── Cellules premium ────────────────────────────────────── */
 .titleCell {
   display: inline-flex;
@@ -378,62 +368,6 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
-}
-
-.statusBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 11px;
-  border-radius: var(--radius-full, 9999px);
-  font-size: var(--text-xs, 0.625rem);
-  font-weight: 600;
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  white-space: nowrap;
-}
-
-.statusDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.statusBadgePending {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.statusBadgeAssigned,
-.statusBadgeInProgress {
-  background: rgba(59, 130, 246, 0.12);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-}
-
-.statusBadgeDelivered {
-  background: rgba(34, 197, 94, 0.12);
-  color: #22c55e;
-  border: 1px solid rgba(34, 197, 94, 0.3);
-}
-
-.statusBadgeFailed {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.statusBadgeCancelled {
-  background: rgba(154, 166, 185, 0.08);
-  color: var(--color-text-tertiary, #7A8BA3);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
-}
-
-.statusBadgeDefault {
-  background: var(--color-surface-alt, #182339);
-  color: var(--color-text-secondary, #9BA6B9);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
 }
 
 .mismatchAlert {
@@ -876,7 +810,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .titleIconChip, .kpiCard, .tableCard, .shimmer, .importModal, .reverseToast {
+  .titleIconChip, .kpiCard, .shimmer, .importModal, .reverseToast {
     animation: none !important;
     transition: none !important;
   }

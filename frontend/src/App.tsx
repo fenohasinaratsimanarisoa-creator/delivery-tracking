@@ -22,6 +22,7 @@ const ResetPasswordPage = lazy(() => import('./features/auth/ResetPasswordPage')
 const AcceptInvitePage = lazy(() => import('./features/auth/AcceptInvitePage'));
 const AuthCallbackPage = lazy(() => import('./features/auth/AuthCallbackPage'));
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage'));
+const LandingPage = lazy(() => import('./pages/LandingPage'));
 const PublicTrackingPage = lazy(() => import('./features/map/PublicTrackingPage'));
 const CguPage = lazy(() => import('./pages/CguPage'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
@@ -82,7 +83,7 @@ const ROLE_HOME: Record<string, string> = {
 function HomeRedirect() {
   const { user, isInitializing, isAuthenticated } = useAuth();
   if (isInitializing) return null;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) return <SuspenseWrapper><LandingPage /></SuspenseWrapper>;
   const target = ROLE_HOME[user!.role] || '/dashboard';
   return <Navigate to={target} replace />;
 }

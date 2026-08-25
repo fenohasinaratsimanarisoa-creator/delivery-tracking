@@ -1,0 +1,40 @@
+.root {
+  background: var(--color-glass, var(--color-surface));
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg, 8px);
+  overflow: hidden;
+  transition: transform var(--duration-base, 200ms) var(--ease-premium, cubic-bezier(0.16,1,0.3,1)),
+    border-color var(--duration-fast, 120ms) var(--ease-smooth, ease),
+    box-shadow var(--duration-fast, 120ms) var(--ease-smooth, ease);
+}
+
+.animated {
+  animation: dt-fade-in-up 0.45s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
+}
+
+.hoverable:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md, 12px);
+  padding: var(--space-lg, 16px) var(--space-lg, 16px) 0;
+}
+
+.body {
+  padding: var(--space-lg, 16px);
+}
+
+.bodyFlush {
+  padding: 0;
+}
+
+.footer {
+  padding: var(--space-md, 12px) var(--space-lg, 16px);
+  border-top: 1px solid var(--color-border-subtle);
+}

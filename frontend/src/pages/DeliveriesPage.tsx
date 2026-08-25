@@ -6,6 +6,8 @@ import {
   Calendar, CalendarDays, AlertTriangle, Clock, CheckCircle2, Loader2, Truck, StickyNote,
 } from 'lucide-react';
 import Button from '../components/Button';
+import Badge, { type BadgeVariant } from '../components/Badge';
+import Card from '../components/Card';
 import api from '../services/api/client';
 import { formatDate } from '../services/i18n/formatDate';
 import styles from './DeliveriesPage.module.css';
@@ -53,13 +55,13 @@ const STATUS_LABELS_KEY: Record<string, string> = {
   delivered: 'delivered', failed: 'failed', cancelled: 'cancelled',
 };
 
-const STATUS_BADGE: Record<string, string> = {
-  pending: styles.statusBadgePending,
-  assigned: styles.statusBadgeAssigned,
-  in_progress: styles.statusBadgeInProgress,
-  delivered: styles.statusBadgeDelivered,
-  failed: styles.statusBadgeFailed,
-  cancelled: styles.statusBadgeCancelled,
+const STATUS_VARIANT: Record<string, BadgeVariant> = {
+  pending: 'orange',
+  assigned: 'blue',
+  in_progress: 'blue',
+  delivered: 'teal',
+  failed: 'red',
+  cancelled: 'neutral',
 };
 
 function useCountUp(target: number, duration = 650) {
@@ -638,7 +640,7 @@ export default function DeliveriesPage() {
             )}
           </div>
         ) : (
-          <div className={styles.tableCard}>
+          <Card flush animated style={{ animationDelay: '150ms' }}>
             <DataTable
               selectable
               selectedIds={selectedIds}
@@ -654,10 +656,9 @@ export default function DeliveriesPage() {
                   key: 'status', label: t('deliveries.table.status'), sortable: true,
                   render: (r: Delivery) => (
                     <div className={styles.statusColumn}>
-                      <span className={`${styles.statusBadge} ${STATUS_BADGE[r.status] || styles.statusBadgeDefault}`}>
-                        <span className={styles.statusDot} />
+                      <Badge variant={STATUS_VARIANT[r.status] || 'neutral'} size="sm" dot>
                         {t(`deliveries.status.${r.status}`)}
-                      </span>
+                      </Badge>
                       {r.locationMismatch && !r.mismatchResolved && (
                         <div className={styles.mismatchAlert}>
                           <AlertTriangle size={12} />
@@ -719,7 +720,7 @@ export default function DeliveriesPage() {
               emptyMessage=""
               keyExtractor={(r) => r.id}
             />
-          </div>
+          </Card>
         )}
       </div>
 

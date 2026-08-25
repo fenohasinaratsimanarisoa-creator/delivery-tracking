@@ -1848,5 +1848,99 @@
       "deletedAll": "Toutes les notifications ont été effacées.",
       "deleted": "Notification supprimée."
     }
+  },
+  "landing": {
+    "nav": {
+      "features": "Fonctionnalités",
+      "pricing": "Tarifs",
+      "login": "Se connecter",
+      "getStarted": "Essayer gratuitement"
+    },
+    "hero": {
+      "eyebrow": "Tracking de flotte nouvelle génération",
+      "title": "Livrez avec précision. Prouvez-le en temps réel.",
+      "subtitle": "DeliveryTrack donne à votre entreprise de livraison un dispatching en direct, une détection anti-fraude GPS et un suivi carburant — dans un seul tableau de bord, pensé pour Madagascar et l'Afrique.",
+      "ctaPrimary": "Essayer gratuitement",
+      "ctaSecondary": "Se connecter",
+      "trustNote": "Aucune carte bancaire requise — phase pilote gratuite."
+    },
+    "features": {
+      "eyebrow": "Fonctionnalités",
+      "title": "Tout ce qu'il faut pour piloter une flotte, rien de superflu",
+      "items": [
+        {
+          "title": "Anti-fraude GPS",
+          "desc": "Détection automatique des écarts entre la position déclarée et la position réelle du livreur, avec résolution en un clic dès qu'une incohérence est signalée."
+        },
+        {
+          "title": "Dispatching temps réel",
+          "desc": "Carte live de tous les chauffeurs, assignation de livraisons en quelques secondes, statuts synchronisés instantanément entre dispatcher, chauffeur et client."
+        },
+        {
+          "title": "Mode terrain chauffeur",
+          "desc": "Interface optimisée pour une utilisation en extérieur plein soleil, navigation et preuve de livraison intégrées, disponible en app mobile légère."
+        },
+        {
+          "title": "Carburant & rapports",
+          "desc": "Suivi de consommation par véhicule, détection automatique des anomalies, rapports exportables pour piloter les coûts de la flotte."
+        }
+      ]
+    },
+    "pricing": {
+      "eyebrow": "Tarifs",
+      "title": "Une offre qui grandit avec votre flotte",
+      "subtitle": "Tarifs indicatifs — grille définitive communiquée à la sortie de la phase pilote.",
+      "tiers": [
+        {
+          "name": "Starter",
+          "price": "Sur devis",
+          "period": "",
+          "desc": "Pour les petites équipes qui démarrent le suivi de leur flotte.",
+          "features": ["Jusqu'à 5 véhicules", "Dispatching temps réel", "Suivi GPS de base", "Support par email"],
+          "cta": "Nous contacter",
+          "highlighted": false
+        },
+        {
+          "name": "Business",
+          "price": "Sur devis",
+          "period": "",
+          "desc": "Pour les flottes en croissance qui ont besoin de fiabilité et d'anti-fraude.",
+          "features": ["Véhicules illimités", "Anti-fraude GPS", "Rapports carburant", "Support prioritaire"],
+          "cta": "Nous contacter",
+          "highlighted": true
+        },
+        {
+          "name": "Enterprise",
+          "price": "Sur devis",
+          "period": "",
+          "desc": "Pour les groupes multi-sites avec des besoins d'intégration spécifiques.",
+          "features": ["Multi-entités", "SLA dédié", "Intégrations sur mesure", "Accompagnement dédié"],
+          "cta": "Nous contacter",
+          "highlighted": false
+        }
+      ],
+      "note": "Actuellement en phase pilote gratuite — voir les conditions."
+    },
+    "cta": {
+      "title": "Prêt à voir votre flotte autrement ?",
+      "subtitle": "Créez votre compte en quelques minutes, sans engagement.",
+      "button": "Essayer gratuitement"
+    },
+    "footer": {
+      "tagline": "Tracking de flotte de livraison pour PME.",
+      "product": "Produit",
+      "company": "Entreprise",
+      "legal": "Légal",
+      "links": {
+        "features": "Fonctionnalités",
+        "pricing": "Tarifs",
+        "login": "Se connecter",
+        "register": "Créer un compte",
+        "cgu": "CGU",
+        "privacy": "Confidentialité",
+        "cookies": "Cookies"
+      },
+      "copyright": "© {year} DeliveryTrack. Tous droits réservés."
+    }
   }
 }

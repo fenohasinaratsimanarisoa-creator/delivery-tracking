@@ -10,6 +10,21 @@
   white-space: nowrap;
   position: relative;
   overflow: hidden;
+  cursor: pointer;
+}
+
+.root:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.root:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.root:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 .loading {
@@ -35,14 +50,23 @@
 
 .sizeSm {
   min-height: 28px;
+  padding: var(--space-xs, 4px) var(--space-sm, 8px);
+  font-size: var(--text-xs, 0.625rem);
+  gap: 4px;
 }
 
 .sizeMd {
   min-height: 36px;
+  padding: var(--space-sm, 8px) var(--space-lg, 16px);
+  font-size: var(--text-sm, 0.875rem);
+  gap: 6px;
 }
 
 .sizeLg {
   min-height: 44px;
+  padding: 12px 24px;
+  font-size: var(--text-md, 1rem);
+  gap: 8px;
 }
 
 /* Confort tactile : sur écrans tactiles, toutes les tailles passent à ≥44px
@@ -53,4 +77,67 @@
   .sizeLg {
     min-height: 44px;
   }
+}
+
+.variantPrimary {
+  background: var(--color-accent, #F2A93C);
+  color: var(--color-bg, #0B1220);
+  border: none;
+  box-shadow: var(--shadow-xs, 0 1px 3px rgba(0,0,0,0.3));
+}
+
+.variantPrimary:hover:not(:disabled) {
+  background: var(--color-accent-hover, #7ECBA9);
+}
+
+.variantSecondary {
+  background: var(--color-surface-alt, #182339);
+  color: var(--color-text, #E8ECF3);
+  border: 1px solid var(--color-input-border, rgba(232,236,243,0.15));
+  box-shadow: var(--shadow-xs, 0 1px 3px rgba(0,0,0,0.3));
+}
+
+.variantSecondary:hover:not(:disabled) {
+  background: var(--color-surface-hover, #1E2A45);
+}
+
+.variantSuccess {
+  background: var(--color-teal, #3FA796);
+  color: var(--color-bg, #0B1220);
+  border: none;
+  box-shadow: var(--shadow-xs, 0 1px 3px rgba(0,0,0,0.3));
+}
+
+.variantSuccess:hover:not(:disabled) {
+  background: var(--color-teal-hover, #256B52);
+}
+
+.variantDanger {
+  background: var(--color-red-muted, rgba(232,84,76,0.15));
+  color: var(--color-red, #E8544C);
+  border: 1px solid var(--color-red-muted, rgba(232,84,76,0.15));
+}
+
+.variantDanger:hover:not(:disabled) {
+  background: var(--color-red-muted, rgba(232,84,76,0.24));
+}
+
+.variantGhost {
+  background: transparent;
+  color: var(--color-text-secondary, #9BA6B9);
+  border: none;
+}
+
+.variantGhost:hover:not(:disabled) {
+  background: var(--color-accent-muted, rgba(242,169,60,0.08));
+}
+
+.variantOutline {
+  background: transparent;
+  color: var(--color-accent, #F2A93C);
+  border: 1px solid var(--color-accent, #F2A93C);
+}
+
+.variantOutline:hover:not(:disabled) {
+  background: var(--color-accent-muted, rgba(242,169,60,0.15));
 }

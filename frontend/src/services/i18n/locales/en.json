@@ -1848,5 +1848,99 @@
       "deletedAll": "All notifications cleared.",
       "deleted": "Notification deleted."
     }
+  },
+  "landing": {
+    "nav": {
+      "features": "Features",
+      "pricing": "Pricing",
+      "login": "Sign in",
+      "getStarted": "Get started free"
+    },
+    "hero": {
+      "eyebrow": "Next-generation fleet tracking",
+      "title": "Deliver with precision. Prove it in real time.",
+      "subtitle": "DeliveryTrack gives your delivery business live dispatching, GPS anti-fraud detection and fuel tracking — in a single dashboard, built for Madagascar and Africa.",
+      "ctaPrimary": "Get started free",
+      "ctaSecondary": "Sign in",
+      "trustNote": "No credit card required — free pilot phase."
+    },
+    "features": {
+      "eyebrow": "Features",
+      "title": "Everything you need to run a fleet, nothing you don't",
+      "items": [
+        {
+          "title": "GPS anti-fraud",
+          "desc": "Automatic detection of gaps between a driver's declared and actual position, resolved in one click as soon as a mismatch is flagged."
+        },
+        {
+          "title": "Real-time dispatching",
+          "desc": "Live map of every driver, delivery assignment in seconds, statuses synced instantly between dispatcher, driver and client."
+        },
+        {
+          "title": "Field mode for drivers",
+          "desc": "Interface optimized for outdoor use in bright sunlight, with navigation and proof of delivery built into a lightweight mobile app."
+        },
+        {
+          "title": "Fuel & reporting",
+          "desc": "Per-vehicle consumption tracking, automatic anomaly detection, exportable reports to keep fleet costs under control."
+        }
+      ]
+    },
+    "pricing": {
+      "eyebrow": "Pricing",
+      "title": "A plan that grows with your fleet",
+      "subtitle": "Indicative pricing — final grid communicated at the end of the pilot phase.",
+      "tiers": [
+        {
+          "name": "Starter",
+          "price": "Contact us",
+          "period": "",
+          "desc": "For small teams starting to track their fleet.",
+          "features": ["Up to 5 vehicles", "Real-time dispatching", "Basic GPS tracking", "Email support"],
+          "cta": "Contact us",
+          "highlighted": false
+        },
+        {
+          "name": "Business",
+          "price": "Contact us",
+          "period": "",
+          "desc": "For growing fleets that need reliability and anti-fraud.",
+          "features": ["Unlimited vehicles", "GPS anti-fraud", "Fuel reports", "Priority support"],
+          "cta": "Contact us",
+          "highlighted": true
+        },
+        {
+          "name": "Enterprise",
+          "price": "Contact us",
+          "period": "",
+          "desc": "For multi-site groups with specific integration needs.",
+          "features": ["Multi-entity", "Dedicated SLA", "Custom integrations", "Dedicated onboarding"],
+          "cta": "Contact us",
+          "highlighted": false
+        }
+      ],
+      "note": "Currently in a free pilot phase — see terms."
+    },
+    "cta": {
+      "title": "Ready to see your fleet differently?",
+      "subtitle": "Create your account in minutes, no commitment.",
+      "button": "Get started free"
+    },
+    "footer": {
+      "tagline": "Delivery fleet tracking for small businesses.",
+      "product": "Product",
+      "company": "Company",
+      "legal": "Legal",
+      "links": {
+        "features": "Features",
+        "pricing": "Pricing",
+        "login": "Sign in",
+        "register": "Create account",
+        "cgu": "Terms",
+        "privacy": "Privacy",
+        "cookies": "Cookies"
+      },
+      "copyright": "© {year} DeliveryTrack. All rights reserved."
+    }
   }
 }
