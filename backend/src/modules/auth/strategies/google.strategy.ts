@@ -44,10 +44,14 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       callbackURL,
       scope: ['email', 'profile'],
       proxy: useProxy,
+      // Expose req au validate : ip/user-agent sont propagés à la UserSession
+      // (sinon les sessions OAuth apparaissent sans device/ip dans « Mes sessions »).
+      passReqToCallback: true as const,
     });
   }
 
   async validate(
+    req: { ip?: string; headers?: Record<string, string | string[] | undefined> },
     _accessToken: string,
     _refreshToken: string,
     profile: {
@@ -67,12 +71,16 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       throw new Error('Email not verified');
     }
 
-    const result = await this.authService.validateGoogleUser({
-      googleId: profile.id,
-      email,
-      firstName: profile.name?.givenName || '',
-      lastName: profile.name?.familyName || '',
-    });
+    const result = await this.authService.validateGoogleUser(
+      {
+        googleId: profile.id,
+        email,
+        firstName: profile.name?.givenName || '',
+        lastName: profile.name?.familyName || '',
+      },
+      req.ip || '',
+      (req.headers?.['user-agent'] as string) || '',
+    );
 
     return result;
   }

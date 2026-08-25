@@ -1,11 +1,14 @@
-import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
+import Redis from 'ioredis';
 import { AuditAction } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TotpService } from '../auth/totp.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { PlatformAdminLoginDto } from './dto/login.dto';
 import { PlatformAdminVerify2faDto } from './dto/verify-2fa.dto';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -16,6 +19,12 @@ export class PlatformAdminService {
   private readonly accessExpiration: jwt.SignOptions['expiresIn'];
   private readonly refreshExpiration: jwt.SignOptions['expiresIn'];
   private readonly tempTokenExpiration: jwt.SignOptions['expiresIn'] = '5m';
+  // Verrouillage par compte (même mécanique qu'AuthService) : N échecs de mot de
+  // passe dans une fenêtre → compte bloqué. Actif uniquement si Redis est
+  // disponible ; une erreur Redis ne doit JAMAIS empêcher le login.
+  private readonly loginFailWindowSeconds = 15 * 60;
+  private readonly loginFailMaxAttempts = 15;
+  private dummyHash: string | null = null;
 
   /**
    * Secret des temp-tokens 2FA : même convention que le flux utilisateur
@@ -34,6 +43,7 @@ export class PlatformAdminService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private totpService: TotpService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis | null,
   ) {
     this.accessExpiration = this.configService.get<string>(
       'JWT_ACCESS_EXPIRATION',
@@ -45,20 +55,86 @@ export class PlatformAdminService {
     ) as jwt.SignOptions['expiresIn'];
   }
 
+  /**
+   * Hash factice pour égaliser le temps de réponse quand l'admin n'existe pas :
+   * sans lui, la latence (bcrypt ~100 ms vs 0 ms) énumère les emails admins.
+   * Même mécanique qu'AuthService.getDummyHash().
+   */
+  private getDummyHash(): string {
+    if (!this.dummyHash) {
+      this.dummyHash = bcrypt.hashSync('dummy-timing-attack-mitigation', 10);
+    }
+    return this.dummyHash;
+  }
+
+  private adminLoginFailKey(email: string): string {
+    // Email haché (PII) : la clé Redis ne contient jamais l'email en clair.
+    const hash = crypto.createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
+    return `admin_login_fail:${hash.slice(0, 32)}`;
+  }
+
+  /** Refuse le login si le compte est verrouillé. Jamais bloquant sur erreur Redis. */
+  private async checkAdminLoginLockout(email: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const count = await this.redis.get(this.adminLoginFailKey(email));
+      if (count && parseInt(count, 10) >= this.loginFailMaxAttempts) {
+        throw new UnauthorizedException('Too many failed login attempts. Please try again later.');
+      }
+    } catch (err) {
+      if (err instanceof UnauthorizedException) throw err;
+      // Erreur Redis → on laisse passer (défense en profondeur, jamais bloquant).
+    }
+  }
+
+  private async recordAdminLoginFailure(email: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const key = this.adminLoginFailKey(email);
+      const count = await this.redis.incr(key);
+      if (count === 1) {
+        await this.redis.expire(key, this.loginFailWindowSeconds);
+      }
+    } catch {
+      // Erreur Redis → on ne bloque jamais le login pour ça.
+    }
+  }
+
+  private async clearAdminLoginFailures(email: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      await this.redis.del(this.adminLoginFailKey(email));
+    } catch {
+      // ignore
+    }
+  }
+
   async login(dto: PlatformAdminLoginDto, ip?: string, userAgent?: string) {
     dto.email = dto.email.toLowerCase().trim();
+
+    // Verrouillage par compte vérifié AVANT tout travail bcrypt (audit 2026-08-25 N.1).
+    await this.checkAdminLoginLockout(dto.email);
+
     const admin = await this.prisma.platformAdmin.findUnique({
       where: { email: dto.email },
     });
 
     if (!admin || !admin.isActive) {
+      // Anti-énumération par timing : consomme le même budget bcrypt qu'un admin
+      // existant + mauvais mot de passe (avant : throw immédiat → latence 0 ms).
+      await bcrypt.compare(dto.password, this.getDummyHash());
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, admin.passwordHash);
     if (!isPasswordValid) {
+      // Comptabilise l'échec pour le lockout par compte (jamais bloquant).
+      await this.recordAdminLoginFailure(dto.email);
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    // Mot de passe valide → purge de l'historique d'échecs de ce compte.
+    await this.clearAdminLoginFailures(dto.email);
 
     // 2FA OPTIONNELLE : si la 2FA est désactivée sur le compte (totpEnabled=false),
     // le login s'achève ici avec le mot de passe seul — le token est émis directement.

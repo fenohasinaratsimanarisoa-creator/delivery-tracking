@@ -45,16 +45,28 @@ const mockTotpService = {
   verifyToken: jest.fn(),
 };
 
+function buildRedisMock() {
+  return {
+    get: jest.fn().mockResolvedValue(null),
+    incr: jest.fn().mockResolvedValue(1),
+    expire: jest.fn(),
+    del: jest.fn().mockResolvedValue(1),
+  };
+}
+
 describe('PlatformAdminService.login — 2FA optionnelle', () => {
   let service: PlatformAdminService;
+  let redis: ReturnType<typeof buildRedisMock>;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    redis = buildRedisMock();
     service = new PlatformAdminService(
       mockPrisma as any,
       mockJwtService as any,
       mockConfigService as any,
       mockTotpService as any,
+      redis as any,
     );
   });
 
@@ -113,6 +125,73 @@ describe('PlatformAdminService.login — 2FA optionnelle', () => {
     await expect(service.login({ email: 'admin@test.com', password: 'wrong' })).rejects.toThrow(
       'Invalid credentials',
     );
+  });
+
+  describe('durcissement login (audit 2026-08-25 N.1)', () => {
+    it('compte les échecs dans Redis avec une clé admin_login_fail hachée puis purge au succès', async () => {
+      mockPrisma.platformAdmin.findUnique
+        // Échec : mauvais mot de passe.
+        .mockResolvedValueOnce({ ...base, totpEnabled: false, passwordHash })
+        // Succès ensuite.
+        .mockResolvedValueOnce({ ...base, totpEnabled: false, passwordHash });
+
+      await expect(
+        service.login({ email: 'admin@test.com', password: 'wrong' }),
+      ).rejects.toThrow('Invalid credentials');
+      expect(redis.incr).toHaveBeenCalledWith(
+        expect.stringMatching(/^admin_login_fail:[0-9a-f]{32}$/),
+      );
+      expect(redis.expire).toHaveBeenCalledWith(expect.stringMatching(/^admin_login_fail:/), 900);
+
+      await service.login({ email: 'admin@test.com', password: PASSWORD });
+      expect(redis.del).toHaveBeenCalledWith(expect.stringMatching(/^admin_login_fail:/));
+    });
+
+    it("refuse le login d'un compte verrouillé sans bcrypt.compare ni accès DB", async () => {
+      redis.get.mockResolvedValue('15');
+
+      await expect(service.login({ email: 'admin@test.com', password: PASSWORD })).rejects.toThrow(
+        'Too many failed login attempts',
+      );
+      expect(mockPrisma.platformAdmin.findUnique).not.toHaveBeenCalled();
+      expect(redis.incr).not.toHaveBeenCalled();
+    });
+
+    it('égalise le temps de réponse quand l’email est inconnu (bcrypt.compare sur hash factice)', async () => {
+      mockPrisma.platformAdmin.findUnique.mockResolvedValue(null);
+      const compareSpy = jest.spyOn(bcrypt, 'compare');
+
+      await expect(
+        service.login({ email: 'ghost@test.com', password: 'whatever' }),
+      ).rejects.toThrow('Invalid credentials');
+
+      // Le compare a bien été appelé malgré l'admin inexistant (anti-énumération).
+      expect(compareSpy).toHaveBeenCalled();
+      const [plainArg] = compareSpy.mock.calls[0];
+      expect(plainArg).toBe('whatever');
+    });
+
+    it('n’applique AUCUN lockout quand Redis est indisponible (null) — jamais bloquant', async () => {
+      const noRedisService = new PlatformAdminService(
+        mockPrisma as any,
+        mockJwtService as any,
+        mockConfigService as any,
+        mockTotpService as any,
+        null,
+      );
+      mockPrisma.platformAdmin.findUnique.mockResolvedValue({
+        ...base,
+        totpEnabled: false,
+        passwordHash,
+      });
+
+      const result = (await noRedisService.login({
+        email: 'admin@test.com',
+        password: PASSWORD,
+      })) as any;
+      expect(result.accessToken).toBe('signed-token');
+      expect(redis.incr).not.toHaveBeenCalled();
+    });
   });
 
   it('impersonate() writes the target tenant AuditLog with action=admin_impersonation (not profile_update)', async () => {

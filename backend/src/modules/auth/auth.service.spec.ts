@@ -194,6 +194,44 @@ describe('AuthService', () => {
       await expect(service.register(dto)).rejects.toThrow(ConflictException);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
+
+    it('propage ip/user-agent à la UserSession créée (audit 2026-08-25 N.5)', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_password');
+      mockTx.company.create.mockResolvedValueOnce({ id: 'comp-1' });
+      mockTx.user.create.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'test@test.com',
+        role: 'admin',
+        companyId: 'comp-1',
+      });
+      mockEmailService.sendWelcome.mockResolvedValueOnce(undefined);
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ firstName: 'John', lastName: 'Doe' })
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          email: 'test@test.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          role: 'admin',
+          companyId: 'comp-1',
+        });
+      mockJwtService.sign.mockReturnValueOnce('access_token').mockReturnValueOnce('refresh_token');
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_refresh');
+      mockPrisma.userSession.create.mockResolvedValueOnce({ id: 'session-register' });
+
+      await service.register(dto, '1.2.3.4', 'Firefox');
+
+      expect(mockPrisma.userSession.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'user-1',
+            ip: '1.2.3.4',
+            device: 'Firefox',
+          }),
+        }),
+      );
+    });
   });
 
   describe('login', () => {
@@ -767,11 +805,17 @@ describe('AuthService', () => {
       mockJwtService.sign.mockReturnValueOnce('access_token').mockReturnValueOnce('refresh_token');
       (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_refresh');
 
-      const result = await service.validateGoogleUser(profile);
+      const result = await service.validateGoogleUser(profile, '5.6.7.8', 'Safari');
 
       expect(mockPrisma.user.findUnique).toHaveBeenNthCalledWith(1, {
         where: { googleId: 'google-123' },
       });
+      // ip/user-agent propagés à la session (audit 2026-08-25 N.5).
+      expect(mockPrisma.userSession.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ userId: 'user-1', ip: '5.6.7.8', device: 'Safari' }),
+        }),
+      );
       expect(result).toEqual({
         accessToken: 'access_token',
         refreshToken: 'refresh_token',

@@ -41,7 +41,9 @@ export class UsersService {
       throw new BadRequestException('Invalid user role');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    // Coût 12 aligné sur register / changePassword / resetPassword (avant : 10,
+    // ~4× moins cher à casser hors-ligne en cas de fuite DB).
+    const passwordHash = await bcrypt.hash(dto.password, 12);
 
     if (dto.role === 'driver') {
       if (dto.vehicleId) {
@@ -345,7 +347,7 @@ export class UsersService {
     if (dto.role !== undefined) data.role = dto.role;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.password) {
-      data.passwordHash = await bcrypt.hash(dto.password, 10);
+      data.passwordHash = await bcrypt.hash(dto.password, 12);
       // Réinitialisation du mot de passe PAR UN ADMIN : on révoque TOUTES les
       // sessions de l'utilisateur (refreshTokenHash purgé + lignes UserSession
       // supprimées), sinon un compte compromis resterait connecté 7 jours après

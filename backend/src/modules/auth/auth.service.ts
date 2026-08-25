@@ -120,7 +120,7 @@ export class AuthService {
     return this.dummyHash;
   }
 
-  async register(dto: RegisterDto): Promise<TokenResponse> {
+  async register(dto: RegisterDto, ip?: string, userAgent?: string): Promise<TokenResponse> {
     dto.email = dto.email.toLowerCase().trim();
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) {
@@ -158,6 +158,8 @@ export class AuthService {
       result.user.email,
       result.user.role,
       result.user.companyId,
+      undefined,
+      { ip, device: userAgent },
     );
   }
 
@@ -468,12 +470,16 @@ export class AuthService {
     await this.prisma.userSession.deleteMany({ where: { userId: user.id } });
   }
 
-  async validateGoogleUser(profile: {
-    googleId: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-  }): Promise<TokenResponse> {
+  async validateGoogleUser(
+    profile: {
+      googleId: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+    },
+    ip?: string,
+    userAgent?: string,
+  ): Promise<TokenResponse> {
     const { googleId, firstName, lastName } = profile;
     const email = profile.email.toLowerCase().trim();
 
@@ -492,7 +498,14 @@ export class AuthService {
         throw new UnauthorizedException('Account deactivated');
       }
       refuseTotp(user);
-      return this.generateTokens(user.id, user.email, user.role, user.companyId);
+      return this.generateTokens(
+        user.id,
+        user.email,
+        user.role,
+        user.companyId,
+        undefined,
+        { ip, device: userAgent },
+      );
     }
 
     user = await this.prisma.user.findUnique({ where: { email } });
@@ -505,7 +518,14 @@ export class AuthService {
         where: { id: user.id },
         data: { googleId },
       });
-      return this.generateTokens(user.id, user.email, user.role, user.companyId);
+      return this.generateTokens(
+        user.id,
+        user.email,
+        user.role,
+        user.companyId,
+        undefined,
+        { ip, device: userAgent },
+      );
     }
 
     const pendingInvitation = await this.prisma.invitation.findFirst({
@@ -546,15 +566,27 @@ export class AuthService {
       });
     }
 
-    return this.generateTokens(user.id, user.email, user.role, user.companyId);
+    return this.generateTokens(
+      user.id,
+      user.email,
+      user.role,
+      user.companyId,
+      undefined,
+      { ip, device: userAgent },
+    );
   }
 
   /**
    * Émet une session (access + refresh) pour un utilisateur identifié par un
    * code d'échange OAuth natif validé (voir POST /auth/exchange). Le refresh
-   * token est stocké haché (rotation) comme dans login/refresh.
+   * token est stocké haché (rotation) comme dans login/refresh. ip/device sont
+   * propagés pour que la session apparaisse correctement dans « Mes sessions ».
    */
-  async createSessionForUser(userId: string): Promise<TokenResponse> {
+  async createSessionForUser(
+    userId: string,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<TokenResponse> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -575,7 +607,14 @@ export class AuthService {
     if (user.totpEnabled) {
       throw new UnauthorizedException('Two-factor authentication required');
     }
-    return this.generateTokens(user.id, user.email, user.role, user.companyId);
+    return this.generateTokens(
+      user.id,
+      user.email,
+      user.role,
+      user.companyId,
+      undefined,
+      { ip, device: userAgent },
+    );
   }
 
   private async generateTokens(
@@ -584,6 +623,7 @@ export class AuthService {
     role: string,
     companyId: string,
     sessionId?: string,
+    ctx?: { ip?: string; device?: string },
   ): Promise<TokenResponse> {
     const userRecord = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -642,10 +682,14 @@ export class AuthService {
     } else {
       // Appelant sans session existante (register / OAuth / création de session) :
       // on matérialise la UserSession ici pour que le refresh token soit TOUJOURS
-      // rattaché à une ligne durable, jamais au champ legacy.
+      // rattaché à une ligne durable, jamais au champ legacy. Les métadonnées
+      // ip/device (si fournies par l'appelant) alimentent « Mes sessions » et
+      // l'historique de connexions — sinon ces lignes restaient vides.
       await this.prisma.userSession.create({
         data: {
           userId,
+          device: ctx?.device,
+          ip: ctx?.ip,
           refreshTokenHash,
           expiresAt: new Date(Date.now() + this.refreshExpirationSeconds * 1000),
         },

@@ -108,8 +108,16 @@ export class AuthController {
   @SkipCsrf()
   @Post('register')
   @HttpCode(HttpStatus.OK)
-  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.register(dto);
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.register(
+      dto,
+      req.ip || '',
+      req.headers?.['user-agent'] || '',
+    );
     // Garde-fou COOKIE_DOMAIN (voir commentaire login)
     res.clearCookie('refreshToken', { path: '/' });
     res.clearCookie('csrf-token', { path: '/' });
@@ -436,12 +444,20 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('exchange')
   @HttpCode(HttpStatus.OK)
-  async oauthExchange(@Body() dto: OAuthExchangeDto, @Res({ passthrough: true }) res: Response) {
+  async oauthExchange(
+    @Body() dto: OAuthExchangeDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = this.oauthRelayService.verifyAndConsumeCode(dto.code, dto.verifier);
     if (!result) {
       throw new UnauthorizedException('Invalid or expired exchange code');
     }
-    const session = await this.authService.createSessionForUser(result.userId);
+    const session = await this.authService.createSessionForUser(
+      result.userId,
+      req.ip || '',
+      req.headers?.['user-agent'] || '',
+    );
     // Garde-fou COOKIE_DOMAIN (voir commentaire login)
     res.clearCookie('refreshToken', { path: '/' });
     res.clearCookie('csrf-token', { path: '/' });

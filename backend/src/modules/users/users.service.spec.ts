@@ -113,7 +113,7 @@ describe('UsersService', () => {
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
         where: { email: 'new@test.com' },
       });
-      expect(bcrypt.hash).toHaveBeenCalledWith('StrongPass123!', 10);
+      expect(bcrypt.hash).toHaveBeenCalledWith('StrongPass123!', 12);
       expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(result).not.toHaveProperty('passwordHash');
     });
@@ -486,7 +486,7 @@ describe('UsersService', () => {
         'current-user',
       );
 
-      expect(bcrypt.hash).toHaveBeenCalledWith('NewPass123!', 10);
+      expect(bcrypt.hash).toHaveBeenCalledWith('NewPass123!', 12);
       expect(mockPrisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ passwordHash: 'hashed_password' }),

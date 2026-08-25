@@ -34,6 +34,14 @@ export function validateCsrfSecret(configService: ConfigService): void {
   }
 }
 
+/** Comparaison constant-time (même pattern que oauth-relay.service.safeEqual). */
+function timingSafeEquals(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
 @Injectable()
 export class CsrfGuard implements CanActivate {
   constructor(
@@ -61,7 +69,7 @@ export class CsrfGuard implements CanActivate {
       throw new ForbiddenException('Missing CSRF token');
     }
 
-    if (cookieToken !== headerToken) {
+    if (!timingSafeEquals(cookieToken, headerToken)) {
       throw new ForbiddenException('Invalid CSRF token');
     }
 
@@ -71,7 +79,7 @@ export class CsrfGuard implements CanActivate {
     const expectedHmac = crypto.createHmac('sha256', secret).update(cookieToken).digest('hex');
 
     const providedHmac = request.headers?.['x-csrf-hmac'];
-    if (!providedHmac || providedHmac !== expectedHmac) {
+    if (!providedHmac || !timingSafeEquals(providedHmac, expectedHmac)) {
       throw new ForbiddenException('Invalid CSRF token signature');
     }
 
