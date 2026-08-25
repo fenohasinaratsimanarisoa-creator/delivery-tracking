@@ -8,6 +8,21 @@
 # synchronisé via db push / les déploiements précédents).
 set -u
 
+# Sélection du moteur Prisma selon l'architecture CPU du conteneur : le Dockerfile
+# fixe PRISMA_QUERY_ENGINE_LIBRARY/BINARY sur le binaire x86_64 (debian-openssl-3.0.x,
+# généré par le build sur les runners GitHub Actions / Render, amd64). Sur une image
+# construite nativement sur ARM64 (ex. VM Oracle Cloud Ampere A1), `prisma generate`
+# produit AUSSI le moteur "native" linux-arm64-openssl-3.0.x — mais l'ENV du Dockerfile
+# pointerait quand même vers le fichier amd64 (inexistant/inexécutable sur ARM), donc
+# on écrase ces deux variables ici si on tourne sur arm64/aarch64 avant de démarrer Node.
+ARCH="$(uname -m)"
+if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+  ARM_ENGINE="/app/node_modules/.prisma/client/libquery_engine-linux-arm64-openssl-3.0.x.so.node"
+  echo "[startup] arch=$ARCH — moteur Prisma arm64: $ARM_ENGINE"
+  export PRISMA_QUERY_ENGINE_LIBRARY="$ARM_ENGINE"
+  export PRISMA_QUERY_ENGINE_BINARY="$ARM_ENGINE"
+fi
+
 # Durée max (s) d'une étape migration/seed. Réglable via l'env Render si besoin.
 MIGRATE_TIMEOUT="${MIGRATE_TIMEOUT:-90}"
 

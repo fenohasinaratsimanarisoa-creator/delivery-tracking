@@ -1,0 +1,19 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Caddy — reverse-proxy devant le frontend.
+#
+# PHASE 1 (pas de domaine, accès par IP) : configuration ci-dessous, HTTP
+# simple sur le port 80. Caddy ne peut pas obtenir de certificat Let's
+# Encrypt pour une adresse IP nue — c'est normal, on reste en HTTP tant
+# qu'aucun domaine ne pointe vers la VM.
+:80 {
+	reverse_proxy frontend:80
+}
+
+# PHASE 2 (dès qu'un nom de domaine pointe vers l'IP publique de la VM) :
+# commentez le bloc ":80" ci-dessus et décommentez celui-ci en remplaçant
+# app.example.com par votre domaine. Caddy obtient et renouvelle SEUL le
+# certificat HTTPS (Let's Encrypt) — aucune autre configuration à changer.
+#
+# app.example.com {
+# 	reverse_proxy frontend:80
+# }

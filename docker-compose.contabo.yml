@@ -1,0 +1,264 @@
+version: '3.8'
+
+# ─────────────────────────────────────────────────────────────────────────
+# Stack auto-hébergée pour un VPS Contabo générique (x86_64 — pas les
+# contraintes ARM64 d'Oracle Cloud : postgis/postgis officiel fonctionne
+# directement, pas de bidouille de moteur Prisma nécessaire).
+#
+# Pas de domaine / pas de TLS : le frontend (qui embarque déjà nginx, voir
+# frontend/nginx.conf.template) est exposé DIRECTEMENT sur le port 80 — pas
+# besoin d'un second reverse-proxy devant. Le backend est EN PLUS exposé sur
+# 8080 pour un accès API direct (debug/tests), en complément du /api déjà
+# proxifié en interne par le frontend.
+#
+# OSRM (routage/itinéraires) est OMIS ici : la prod Render actuelle ne l'a
+# pas non plus (routing.service.ts renvoie 503 sans fallback public — choix
+# RGPD volontaire, voir le commentaire dans ce fichier). Ajout possible plus
+# tard en copiant le service "osrm" de docker-compose.oracle.yml.
+# ─────────────────────────────────────────────────────────────────────────
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: 3
+
+x-restart: &restart-policy
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: delivery-tracking-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-delivery_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-delivery_tracking}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-delivery_app} -d ${POSTGRES_DB:-delivery_tracking}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    <<: *restart-policy
+    logging: *default-logging
+    deploy:
+      resources:
+        limits: { cpus: '1.5', memory: 2G }
+        reservations: { cpus: '0.25', memory: 512M }
+
+  redis:
+    image: redis:7-alpine
+    container_name: delivery-tracking-redis
+    # Redis n'est PAS optionnel malgré son absence de ta liste : verrouillage
+    # anti-bruteforce du login, révocation de sessions JWT, rate limiting et
+    # la queue BullMQ (calcul carburant, digests email) en dépendent tous.
+    # Sans lui l'app démarre mais perd ces protections silencieusement.
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    <<: *restart-policy
+    logging: *default-logging
+    deploy:
+      resources:
+        limits: { cpus: '0.5', memory: 256M }
+        reservations: { cpus: '0.1', memory: 64M }
+
+  traccar:
+    image: traccar/traccar:latest
+    container_name: delivery-tracking-traccar
+    environment:
+      - JAVA_OPTS=-Xms256m -Xmx512m
+    volumes:
+      - traccar_data:/opt/traccar/data
+      - ./traccar/traccar.xml:/opt/traccar/conf/traccar.xml:ro
+    ports:
+      - "8082:8082"    # Interface web admin — restreins-la à ton IP via le firewall si possible
+      - "5055:5055"    # GT06 / Concox / JM-VL03
+      - "5056:5056"    # Teltonika FMB / FM / TAVL / GH
+      - "5057:5057"    # H02
+      - "5058:5058"    # TK103 / TK102 / Coban / ST-901
+      - "5059:5059"    # Meitrack
+      - "5060:5060"    # OsmAnd
+      - "5061:5061"    # Lézard (EZ90/EZ21/EZ630/Delta)
+      - "5062:5062"    # WristWatch
+      - "5063:5063"    # Naviset / Navtelecom
+      - "5064:5064"    # Xexun / Sanav / GStar / GlobalSat
+      - "5065:5065"    # AST
+    <<: *restart-policy
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8082"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: '1', memory: 1G }
+        reservations: { cpus: '0.1', memory: 256M }
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: deliverytrack-api:latest
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-delivery_app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-delivery_tracking}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      JWT_ACCESS_EXPIRATION: 15m
+      JWT_REFRESH_EXPIRATION: 7d
+      CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN is required — ex. http://<IP-DU-VPS>}
+      CSRF_SECRET: ${CSRF_SECRET:?CSRF_SECRET is required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@deliverytrack.app}
+      APP_URL: ${APP_URL:?APP_URL is required — ex. http://<IP-DU-VPS>}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-}
+      TOTP_ISSUER: DeliveryTracking
+      FUEL_ANOMALY_THRESHOLD_PERCENT: 20
+      TRACCAR_URL: http://traccar:8082
+      TRACCAR_USER: ${TRACCAR_USER:-admin}
+      TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-admin}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      ALERT_SLACK_WEBHOOK: ${ALERT_SLACK_WEBHOOK:-}
+      ALERT_DISCORD_WEBHOOK: ${ALERT_DISCORD_WEBHOOK:-}
+      ALERT_ON_ERROR: ${ALERT_ON_ERROR:-true}
+      # Pas de domaine/TLS : un redirect HTTP→HTTPS forcé bouclerait sur lui-même.
+      ENFORCE_HTTPS: 'false'
+    ports:
+      # Accès direct à l'API (debug/tests), EN PLUS du /api proxifié par le
+      # frontend en interne. 8080 choisi pour ne pas entrer en conflit avec
+      # le port interne 3000 déjà utilisé par le healthcheck/le réseau docker.
+      - "8080:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      traccar:
+        condition: service_started
+    <<: *restart-policy
+    logging: *default-logging
+    deploy:
+      mode: replicated
+      replicas: ${BACKEND_REPLICAS:-1}
+      resources:
+        limits: { cpus: '1', memory: 768M }
+        reservations: { cpus: '0.25', memory: 256M }
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: deliverytrack-api:latest
+    container_name: delivery-tracking-worker
+    command: ["node", "dist/src/queue/queue.worker.js"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-delivery_app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-delivery_tracking}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    <<: *restart-policy
+    logging: *default-logging
+    deploy:
+      resources:
+        limits: { cpus: '0.5', memory: 512M }
+        reservations: { cpus: '0.1', memory: 128M }
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: deliverytrack-web:latest
+    container_name: delivery-tracking-web
+    environment:
+      # Le frontend embarque déjà nginx (frontend/nginx.conf.template) qui
+      # proxifie /api et /socket.io vers ce backend en interne — pas besoin
+      # d'un nginx séparé devant.
+      BACKEND_URL: http://backend:3000
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    <<: *restart-policy
+    logging: *default-logging
+    deploy:
+      resources:
+        limits: { cpus: '0.5', memory: 128M }
+        reservations: { cpus: '0.1', memory: 64M }
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  backup:
+    image: postgis/postgis:16-3.4
+    container_name: delivery-tracking-backup
+    entrypoint: >
+      sh -c "
+      apt-get update -qq && apt-get install -y -qq --no-install-recommends awscli cron > /dev/null 2>&1 || true;
+      echo '0 3 * * * /backup/backup.sh' > /etc/cron.d/backup;
+      crontab /etc/cron.d/backup;
+      cron -f
+      "
+    volumes:
+      - ./scripts/backup.sh:/backup/backup.sh:ro
+      - backupdata:/backup/data
+    environment:
+      PGUSER: ${POSTGRES_USER:-delivery_app}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGHOST: postgres
+      PGDATABASE: ${POSTGRES_DB:-delivery_tracking}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    <<: *restart-policy
+    logging: *default-logging
+
+volumes:
+  pgdata:
+  redisdata:
+  traccar_data:
+  backupdata:

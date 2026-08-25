@@ -8,7 +8,14 @@ coverage/
 *.tsbuildinfo
 bundle-report.html
 osrm/data/
-scripts/
+# "scripts/*" (pas "scripts/") : un ignore de RÉPERTOIRE empêcherait toute
+# réinclusion via "!" ci-dessous (git ne descend pas dans un dossier exclu).
+scripts/*
+# Exceptions : scripts référencés par les compose de prod / le guide de
+# déploiement, doivent être versionnés pour arriver sur le serveur via git.
+!scripts/backup.sh
+!scripts/oracle-vm-setup.sh
+!scripts/migrate-from-render.sh
 start.sh
 
 # Audit / diagnostic files (never committed)
