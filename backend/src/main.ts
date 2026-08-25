@@ -101,7 +101,14 @@ async function bootstrap() {
     }),
   );
 
-  if (process.env.NODE_ENV === 'production' || process.env.ENFORCE_HTTPS === 'true') {
+  // ENFORCE_HTTPS est censé être le SEUL interrupteur (voir .env.production.example :
+  // "should be 'true' in production", donc togglable). Avant : le OR avec
+  // NODE_ENV==='production' rendait la redirection inconditionnelle dès que
+  // NODE_ENV=production, quelle que soit la valeur d'ENFORCE_HTTPS — impossible
+  // de désactiver la redirection HTTPS en prod, ce qui cassait TOUT self-hosting
+  // sans domaine/TLS devant l'API (boucle de redirection vers un port 443
+  // inexistant). Constaté en déployant réellement sur un VPS sans HTTPS.
+  if (process.env.ENFORCE_HTTPS === 'true') {
     app.use((req: Request, res: Response, next: NextFunction) => {
       if (req.headers['x-forwarded-proto'] === 'https' || req.secure) return next();
       if (req.headers.host) {
