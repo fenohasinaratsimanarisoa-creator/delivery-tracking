@@ -813,7 +813,7 @@ export class DeliveriesService {
             this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId, targetStatus);
           }
           await this.prisma.delivery.update({ where: { id }, data: updateData });
-          this.webhooks.dispatch('delivery.status_changed', companyId, {
+          await this.webhooks.dispatch('delivery.status_changed', companyId, {
             deliveryId: id,
             companyId,
             title: delivery.title,
@@ -849,7 +849,7 @@ export class DeliveriesService {
               assignedDriverId: driver.userId ?? null,
             },
           });
-          this.webhooks.dispatch('delivery.driver_assigned', companyId, {
+          await this.webhooks.dispatch('delivery.driver_assigned', companyId, {
             deliveryId: id,
             companyId,
             title: delivery.title,

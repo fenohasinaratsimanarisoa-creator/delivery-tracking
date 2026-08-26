@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength, Matches } from 'class-validator';
+import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, MinLength, Matches } from 'class-validator';
 import { UserRole } from '@prisma/client';
 import { MaxByteLength } from '../../../common/validators/max-byte-length';
 
@@ -36,6 +36,7 @@ export class UpdateUserDto {
   @IsOptional()
   role?: UserRole;
 
+  @IsBoolean()
   @IsOptional()
   isActive?: boolean;
 

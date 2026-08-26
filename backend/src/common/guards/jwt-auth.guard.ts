@@ -4,13 +4,20 @@ import { AuthGuard } from '@nestjs/passport';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 /**
- * Enregistré comme APP_GUARD global (voir app.module.ts) : toute route est
- * authentifiée PAR DÉFAUT, `@Public()` est l'unique façon d'en sortir — même
- * pattern que CsrfGuard/@SkipCsrf(). Avant ce correctif, aucun guard global
- * n'existait : la protection dépendait entièrement du fait que chaque
- * contrôleur pense à ajouter `@UseGuards(JwtAuthGuard)` lui-même, et
- * `@Public()` n'était lu par personne (mort, purement documentaire) — un
- * nouveau contrôleur qui l'oubliait devenait silencieusement public.
+ * PAS enregistré comme APP_GUARD global (vérifié dans app.module.ts : seuls
+ * ThrottlerGuard et CsrfGuard le sont) — malgré ce qu'un commentaire ici
+ * affirmait précédemment. La protection dépend donc entièrement du fait que
+ * chaque contrôleur applique `@UseGuards(JwtAuthGuard)` lui-même ; `@Public()`
+ * n'a d'effet que sur les contrôleurs qui l'appliquent déjà. Vérifié le
+ * 2026-08-26 : tous les contrôleurs métier le font sauf health/geocoding/
+ * mobile-app, qui sont volontairement publics (`@Public()` posé dessus) — pas
+ * de trou d'auth actif aujourd'hui, mais un nouveau contrôleur qui oublie
+ * `@UseGuards(JwtAuthGuard)` devient silencieusement public, sans filet.
+ * Faire de ce guard un APP_GUARD global fermerait ce risque, mais impose de
+ * revérifier au préalable que CHAQUE route publique porte bien `@Public()`
+ * (health, geocoding, mobile-app, auth, billing webhooks, invitations,
+ * tracking public, platform-admin login) — à traiter comme un changement dédié,
+ * pas en passant.
  */
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
