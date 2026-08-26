@@ -32,14 +32,14 @@ fi
 
 echo ""
 echo "══════════════════════════════════════════════════════"
-echo " 2/6 — Pare-feu (ports 80, 8080, 8082, 5055-5065)"
+echo " 2/6 — Pare-feu (ports 80, 443, 8080, 8082, 5055-5065)"
 echo "══════════════════════════════════════════════════════"
 # 5055-5065 = protocoles boîtiers GPS Traccar (GT06, Teltonika, H02, etc.) :
 # sans ces ports ouverts, l'interface admin Traccar fonctionne mais AUCUN
 # traceur GPS réel ne peut se connecter — la demande initiale (80/8080/8082)
 # n'incluait pas ces ports, ajoutés ici car indispensables au fonctionnement
 # réel de Traccar.
-PORTS="80 8080 8082 5055 5056 5057 5058 5059 5060 5061 5062 5063 5064 5065"
+PORTS="80 443 8080 8082 5055 5056 5057 5058 5059 5060 5061 5062 5063 5064 5065"
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
   for port in $PORTS; do
     ufw allow "$port"/tcp
@@ -132,15 +132,24 @@ echo " 6/6 — Vérification"
 echo "══════════════════════════════════════════════════════"
 FAIL=0
 curl -fsS http://localhost:8080/health && echo " → backend OK" || { echo " → backend KO"; FAIL=1; }
-curl -fsS -o /dev/null http://localhost:80/ && echo " → frontend OK" || { echo " → frontend KO"; FAIL=1; }
+# Testé sur le conteneur frontend directement, PAS via localhost:80 : ce port
+# appartient maintenant à Caddy, qui ne répond qu'aux Host configurés dans le
+# Caddyfile (sslip.io / IP nue) — un Host "localhost" tomberait sur un 404
+# Caddy trompeur alors que tout va bien derrière.
+docker compose -f "$COMPOSE_FILE" exec -T frontend wget --spider -q http://127.0.0.1:80/ \
+  && echo " → frontend OK" || { echo " → frontend KO"; FAIL=1; }
 curl -fsS -o /dev/null http://localhost:8082/ && echo " → traccar OK" || { echo " → traccar KO"; FAIL=1; }
 
 echo ""
 if [ "$FAIL" -eq 0 ]; then
   IP="$(curl -s ifconfig.me 2>/dev/null || echo '<IP-du-VPS>')"
+  SSLIP="$(echo "$IP" | tr '.' '-').sslip.io"
+  curl -fsS -o /dev/null "https://$SSLIP/" 2>/dev/null && echo " → caddy/HTTPS OK" \
+    || echo " → caddy/HTTPS pas encore prêt (certificat en cours d'émission ? relancez ce script dans 1-2 min)"
   echo "✅ Déploiement terminé."
-  echo "   App        : http://$IP"
-  echo "   API directe: http://$IP:8080"
+  echo "   App        : https://$SSLIP (HTTPS réel, Let's Encrypt automatique)"
+  echo "   http://$IP redirige maintenant vers l'URL ci-dessus."
+  echo "   API directe: http://$IP:8080 (debug, hors HTTPS)"
   echo "   Traccar    : http://$IP:8082 (identifiants par défaut admin/admin —"
   echo "                CHANGEZ-LES dans traccar/traccar.xml si pas déjà fait)"
   echo ""

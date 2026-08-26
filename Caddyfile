@@ -1,19 +1,25 @@
 # ─────────────────────────────────────────────────────────────────────────
-# Caddy — reverse-proxy devant le frontend.
+# Caddy — reverse-proxy devant le frontend, HTTPS automatique (Let's Encrypt).
 #
-# PHASE 1 (pas de domaine, accès par IP) : configuration ci-dessous, HTTP
-# simple sur le port 80. Caddy ne peut pas obtenir de certificat Let's
-# Encrypt pour une adresse IP nue — c'est normal, on reste en HTTP tant
-# qu'aucun domaine ne pointe vers la VM.
-:80 {
+# Pas de domaine acheté : 169-58-237-88.sslip.io est un service de DNS public
+# gratuit qui résout automatiquement vers l'IP encodée dans le nom
+# (169-58-237-88 → 169.58.237.88, tirets = points) — aucune inscription,
+# aucune configuration DNS à faire. Comme c'est un vrai nom de domaine (pas
+# une IP nue), Let's Encrypt peut y émettre un certificat normalement, et
+# Caddy l'obtient/le renouvelle seul, sans aucune autre configuration.
+169-58-237-88.sslip.io {
 	reverse_proxy frontend:80
 }
 
-# PHASE 2 (dès qu'un nom de domaine pointe vers l'IP publique de la VM) :
-# commentez le bloc ":80" ci-dessus et décommentez celui-ci en remplaçant
-# app.example.com par votre domaine. Caddy obtient et renouvelle SEUL le
-# certificat HTTPS (Let's Encrypt) — aucune autre configuration à changer.
-#
-# app.example.com {
-# 	reverse_proxy frontend:80
-# }
+# Redirige l'ancien accès par IP nue (favoris/liens déjà partagés en
+# http://169.58.237.88) vers le nouveau domaine HTTPS, plutôt que de le
+# laisser tomber en 404 maintenant que Caddy est propriétaire du port 80.
+http://169.58.237.88 {
+	redir https://169-58-237-88.sslip.io{uri} permanent
+}
+
+# Si un jour un vrai domaine à vous pointe vers l'IP publique de la VM :
+# ajoutez un bloc supplémentaire ci-dessous avec ce domaine (même syntaxe
+# que le bloc sslip.io ci-dessus) — Caddy obtient seul son propre certificat,
+# aucune autre configuration à changer. Le bloc sslip.io peut rester en
+# parallèle sans conflit.

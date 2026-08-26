@@ -5,11 +5,12 @@ version: '3.8'
 # contraintes ARM64 d'Oracle Cloud : postgis/postgis officiel fonctionne
 # directement, pas de bidouille de moteur Prisma nécessaire).
 #
-# Pas de domaine / pas de TLS : le frontend (qui embarque déjà nginx, voir
-# frontend/nginx.conf.template) est exposé DIRECTEMENT sur le port 80 — pas
-# besoin d'un second reverse-proxy devant. Le backend est EN PLUS exposé sur
-# 8080 pour un accès API direct (debug/tests), en complément du /api déjà
-# proxifié en interne par le frontend.
+# HTTPS via Caddy + sslip.io (voir Caddyfile) : pas de domaine acheté, Caddy
+# obtient seul un certificat Let's Encrypt pour 169-58-237-88.sslip.io et
+# reverse-proxifie vers frontend:80 (qui embarque déjà nginx, voir
+# frontend/nginx.conf.template, proxifiant /api et /socket.io vers le backend
+# en interne). Le backend est EN PLUS exposé sur 8080 pour un accès API
+# direct (debug/tests, en clair, hors chemin Caddy).
 #
 # OSRM (routage/itinéraires) est OMIS ici : la prod Render actuelle ne l'a
 # pas non plus (routing.service.ts renvoie 503 sans fallback public — choix
@@ -223,8 +224,11 @@ services:
       # proxifie /api et /socket.io vers ce backend en interne — pas besoin
       # d'un nginx séparé devant.
       BACKEND_URL: http://backend:3000
-    ports:
-      - "80:80"
+    # Pas de "ports:" ici : Caddy (ci-dessous) est maintenant seul propriétaire
+    # des ports 80/443 côté hôte et reverse-proxifie vers frontend:80 en
+    # interne (réseau Docker) — évite un conflit de port avec Caddy.
+    expose:
+      - "80"
     depends_on:
       - backend
     <<: *restart-policy
@@ -243,6 +247,26 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  # HTTPS automatique (Let's Encrypt) devant frontend — voir Caddyfile pour le
+  # détail (domaine sslip.io, pas d'achat de domaine nécessaire).
+  caddy:
+    image: caddy:2-alpine
+    container_name: delivery-tracking-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+    <<: *restart-policy
+    logging: *default-logging
+    deploy:
+      resources:
+        limits: { cpus: '0.25', memory: 128M }
 
   backup:
     image: postgis/postgis:16-3.4
@@ -278,3 +302,5 @@ volumes:
   redisdata:
   traccar_data:
   backupdata:
+  caddy_data:
+  caddy_config:

@@ -1,5 +1,19 @@
 resolver 8.8.8.8 1.1.1.1 ipv6=off;
 
+# Ce nginx tourne maintenant systématiquement derrière un reverse-proxy TLS
+# (Caddy sur Contabo/Oracle) qui lui parle en clair sur le réseau Docker
+# interne — $scheme vaut donc toujours "http" ici, même quand le client a
+# réellement utilisé HTTPS jusqu'à Caddy. `proxy_set_header X-Forwarded-Proto
+# $scheme` écraserait le header que Caddy a déjà posé correctement, faisant
+# croire au backend que TOUTE requête est en HTTP (pertinent pour
+# ENFORCE_HTTPS et tout code qui lit ce header). On garde la valeur amont
+# quand elle existe (déployé derrière Caddy), on ne retombe sur $scheme que
+# si absente (accès direct à ce nginx, sans proxy devant).
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    ''      $scheme;
+}
+
 server {
     listen ${PORT};
     server_name _;
@@ -14,7 +28,7 @@ server {
         proxy_set_header Host ${BACKEND_HOST};
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
         proxy_cache_bypass $http_upgrade;
         proxy_ssl_verify off;
         proxy_ssl_server_name on;
@@ -28,7 +42,7 @@ server {
         proxy_set_header Host ${BACKEND_HOST};
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
         proxy_cache_bypass $http_upgrade;
         proxy_ssl_verify off;
         proxy_ssl_server_name on;
