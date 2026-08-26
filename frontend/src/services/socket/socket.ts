@@ -2,6 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { getAccessToken, getAccessTokenExpiryMs } from '../auth/tokenStore';
 import { refreshAccessToken } from '../auth/refreshToken';
 import { getSocketBaseUrl } from '../api/config';
+import { isNativeApp } from '../native/nativeAuth';
 import * as Sentry from '@sentry/react';
 
 let socket: Socket | null = null;
@@ -251,6 +252,7 @@ export function getSocket(): Socket {
     scheduleTokenRefresh();
 
     registerVisibilityHandler();
+    registerNativeResumeHandler();
   }
   return socket;
 }
@@ -258,11 +260,33 @@ export function getSocket(): Socket {
 let visibilityHandlerRegistered = false;
 
 /**
+ * Retour au premier plan (onglet redevenu visible, ou app native résumée) :
+ * force une reconnexion propre pour rattraper l'état complet (le serveur a pu
+ * émettre des événements pendant la déconnexion, et le token a pu expirer
+ * pendant que les timers JS étaient gelés/throttlés en arrière-plan — la
+ * reconnexion échouera alors avec un rejet d'auth, ce qui déclenche
+ * handleInvalidToken() → refresh immédiat, cf. socket.on('connect_error')
+ * ci-dessus). Ne se déclenche que si la mise en arrière-plan a duré au-delà
+ * du seuil (10 s), pour ne pas recréer la connexion à chaque changement
+ * d'onglet rapide.
+ */
+function handleForegroundReturn(): void {
+  const s = socket;
+  if (!s) return;
+  const hiddenMs = lastHiddenAt > 0 ? Date.now() - lastHiddenAt : 0;
+  if (hiddenMs > VISIBLE_RECONNECT_THRESHOLD_MS || !s.connected) {
+    // Reconnexion propre : les handlers 'connect' (refetch complet des queries
+    // dans useDataUpdates, resubscribe des rooms dans RealTimeMap, drainQueue
+    // dans useDriverTracking) se déclenchent et rattrapent le manqué.
+    s.disconnect();
+    s.connect();
+  }
+  lastHiddenAt = 0;
+}
+
+/**
  * Page Visibility API : au retour au premier plan après une mise en veille de
- * l'onglet / de l'ordinateur, force une reconnexion propre pour rattraper l'état
- * complet (le serveur a pu émettre des événements pendant la déconnexion). Ne se
- * déclenche que si la mise en arrière-plan a duré au-delà du seuil (10 s), pour
- * ne pas recréer la connexion à chaque changement d'onglet rapide.
+ * l'onglet / de l'ordinateur, force une reconnexion propre (cf. handleForegroundReturn).
  */
 function registerVisibilityHandler(): void {
   if (visibilityHandlerRegistered || typeof document === 'undefined') return;
@@ -272,18 +296,37 @@ function registerVisibilityHandler(): void {
       lastHiddenAt = Date.now();
       return;
     }
-    // visible
-    const s = socket;
-    if (!s) return;
-    const hiddenMs = lastHiddenAt > 0 ? Date.now() - lastHiddenAt : 0;
-    if (hiddenMs > VISIBLE_RECONNECT_THRESHOLD_MS || !s.connected) {
-      // Reconnexion propre : les handlers 'connect' (refetch complet des queries
-      // dans useDataUpdates, resubscribe des rooms dans RealTimeMap, drainQueue
-      // dans useDriverTracking) se déclenchent et rattrapent le manqué.
-      s.disconnect();
-      s.connect();
-    }
-    lastHiddenAt = 0;
+    handleForegroundReturn();
+  });
+}
+
+let nativeResumeHandlerRegistered = false;
+
+/**
+ * App Capacitor 'pause'/'resume' : sur Android, l'événement DOM
+ * `visibilitychange` n'est PAS toujours émis de façon fiable quand l'app
+ * passe en arrière-plan/premier plan via le bouton Accueil ou le
+ * multitâche — contrairement au cycle de vie natif de l'Activity, que le
+ * plugin `@capacitor/app` expose précisément via 'pause'/'resume'. Sans ce
+ * relais, une app remise au premier plan après plus de 15 min (durée de
+ * l'access token, cf. JWT_ACCESS_EXPIRATION) pouvait rester avec un socket
+ * "connecté" en apparence mais un token périmé jusqu'à la prochaine action
+ * utilisateur déclenchant un appel REST — c'est très exactement le
+ * symptôme "déconnecté après 10-15 min en arrière-plan" observé en usage
+ * réel : ce relais force la même détection/récupération que
+ * `registerVisibilityHandler` dès le retour au premier plan natif, sans
+ * attendre une interaction de l'utilisateur.
+ */
+function registerNativeResumeHandler(): void {
+  if (nativeResumeHandlerRegistered || !isNativeApp()) return;
+  nativeResumeHandlerRegistered = true;
+  void import('@capacitor/app').then(({ App }) => {
+    void App.addListener('pause', () => {
+      lastHiddenAt = Date.now();
+    });
+    void App.addListener('resume', () => {
+      handleForegroundReturn();
+    });
   });
 }
 

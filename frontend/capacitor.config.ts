@@ -8,7 +8,12 @@ const config: CapacitorConfig = {
   // Same-origin → login (dont Google OAuth), cookies, websockets, GPS,
   // notifications live… tout fonctionne exactement comme le site web.
   server: {
-    url: 'https://deliverytrack-web.onrender.com',
+    // VPS auto-hébergé (Contabo, Caddy + sslip.io — voir Caddyfile à la racine
+    // du repo) : remplace définitivement Render. Origine UNIQUE (nginx du
+    // conteneur frontend proxifie /api et /socket.io vers le backend en
+    // interne, cf. docker-compose.contabo.yml) — pas de cookies cross-site
+    // SameSite=None à gérer contrairement à l'ancienne archi 2 origines Render.
+    url: 'https://169-58-237-88.sslip.io',
     cleartext: false,
     // Liste blanche des hôtes que la WebView peut charger. Tout autre domaine
     // (lien <a> ou navigation utilisateur) est bloqué dans la WebView et rouvert
@@ -18,7 +23,7 @@ const config: CapacitorConfig = {
     // NB : la navigation JS (window.location.href) vers un domaine externe
     // échappe à ce garde — les flux externes (checkout Stripe…) utilisent
     // @capacitor/browser (custom tab) dans l'app native.
-    allowNavigation: ['deliverytrack-web.onrender.com'],
+    allowNavigation: ['169-58-237-88.sslip.io'],
   },
   android: {
     allowMixedContent: false,

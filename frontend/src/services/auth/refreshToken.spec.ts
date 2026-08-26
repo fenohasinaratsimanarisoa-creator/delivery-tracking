@@ -139,4 +139,72 @@ describe('refreshToken.ts — verrou de déduplication unique du refresh JWT', (
     expect(first.reason).toBe('network');
     expect(second.token).toBe('token-apres-blip');
   });
+
+  describe('verrou inter-onglets (Web Locks API)', () => {
+    // Le verrou refreshPromise ne déduplique que DANS un même onglet (module JS
+    // par onglet). Avec 3+ onglets qui rafraîchissent à quelques ms d'écart en
+    // tenant tous le même cookie pré-rotation, le backend ne tolère qu'un seul
+    // niveau d'historique (refresh_token_hash + previous_refresh_token_hash) —
+    // le 3e onglet ne correspond à aucun des deux → "REUSE detected" → session
+    // entière révoquée. navigator.locks sérialise les appels réseau à travers
+    // TOUS les onglets de l'origine pour éliminer cette course.
+    afterEach(() => {
+      // @ts-expect-error -- nettoyage du mock installé sur navigator dans ce bloc
+      delete globalThis.navigator?.locks;
+    });
+
+    it("passe par navigator.locks.request() quand l'API est disponible, avec le nom de verrou dédié", async () => {
+      const lockRequest = vi.fn((_name: string, cb: () => Promise<unknown>) => cb());
+      vi.stubGlobal('navigator', { locks: { request: lockRequest } });
+
+      const { refreshAccessTokenOutcome } = await import('./refreshToken');
+      const outcome = await refreshAccessTokenOutcome();
+
+      expect(lockRequest).toHaveBeenCalledTimes(1);
+      expect(lockRequest.mock.calls[0][0]).toBe('dt-auth-refresh');
+      expect(outcome.token).toBe('token-new');
+      expect(axiosPost).toHaveBeenCalledTimes(1);
+
+      vi.unstubAllGlobals();
+    });
+
+    it('deux refresh concurrents inter-onglets simulés (verrou qui met la 2e tentative en file) → un seul appel réseau', async () => {
+      // Simule le comportement réel de navigator.locks : la 2e demande attend que
+      // le callback de la 1re se termine avant de démarrer la sienne.
+      const gate: { release: (() => void) | null } = { release: null };
+      let firstRequestSeen = false;
+      const lockRequest = vi.fn(async (_name: string, cb: () => Promise<unknown>) => {
+        if (!firstRequestSeen) {
+          firstRequestSeen = true;
+          // 1re demande : on retarde son exécution pour garder le verrou "tenu"
+          // pendant que la 2e demande arrive et doit attendre.
+          await new Promise<void>((resolve) => { gate.release = () => resolve(); });
+        }
+        return cb();
+      });
+      vi.stubGlobal('navigator', { locks: { request: lockRequest } });
+
+      const { refreshAccessTokenOutcome } = await import('./refreshToken');
+      const p1 = refreshAccessTokenOutcome();
+      const p2 = refreshAccessTokenOutcome();
+      gate.release?.();
+      await Promise.all([p1, p2]);
+
+      // Le verrou en mémoire (refreshPromise) dédup déjà ces deux appels DANS ce
+      // même onglet — ce test documente que le chemin passe bien par le verrou
+      // cross-tab en plus, sans appel réseau dupliqué.
+      expect(axiosPost).toHaveBeenCalledTimes(1);
+
+      vi.unstubAllGlobals();
+    });
+
+    it("sans navigator.locks (Safari < 15.4, vieux WebView) : repli silencieux, comportement inchangé", async () => {
+      vi.stubGlobal('navigator', {});
+      const { refreshAccessTokenOutcome } = await import('./refreshToken');
+      const outcome = await refreshAccessTokenOutcome();
+      expect(outcome.token).toBe('token-new');
+      expect(axiosPost).toHaveBeenCalledTimes(1);
+      vi.unstubAllGlobals();
+    });
+  });
 });

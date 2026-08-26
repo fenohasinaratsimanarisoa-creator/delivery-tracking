@@ -31,6 +31,24 @@ vi.mock('../api/config', () => ({
   getSocketBaseUrl: vi.fn().mockReturnValue('http://localhost:4000'),
 }));
 
+const isNativeAppMock = vi.fn().mockReturnValue(false);
+vi.mock('../native/nativeAuth', () => ({
+  isNativeApp: (...args: unknown[]) => isNativeAppMock(...args),
+}));
+
+// Fausse implémentation du plugin Capacitor App : capture les listeners
+// 'pause'/'resume' enregistrés par socket.ts pour pouvoir les déclencher
+// manuellement dans les tests, comme makeFakeSocket() le fait pour socket.io.
+const capacitorAppHandlers: Record<string, Array<() => void>> = {};
+vi.mock('@capacitor/app', () => ({
+  App: {
+    addListener: vi.fn((event: string, handler: () => void) => {
+      (capacitorAppHandlers[event] ||= []).push(handler);
+      return Promise.resolve({ remove: () => {} });
+    }),
+  },
+}));
+
 // Mock du socket retourné par io(): on capture les options de connexion et on
 // simule connect/disconnect pour exercer les handlers. Le socket commence
 // CONNECTÉ : c'est le comportement réel de socket.io-client (io() auto-connect),
@@ -68,6 +86,8 @@ describe('socket.ts — reconnexion robuste du dashboard', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    isNativeAppMock.mockReturnValue(false);
+    for (const key of Object.keys(capacitorAppHandlers)) delete capacitorAppHandlers[key];
     fakeSocket = makeFakeSocket();
     ioMock.mockReturnValue(fakeSocket);
     // document.visibilityState doit être défini avant l'import du module (le
@@ -127,6 +147,32 @@ describe('socket.ts — reconnexion robuste du dashboard', () => {
 
     expect(s.disconnect).toHaveBeenCalled();
     expect(s.connect).toHaveBeenCalled();
+  });
+
+  it('app native Capacitor : "resume" après une longue pause force disconnect+connect (relais fiable là où visibilitychange peut ne pas se déclencher sur Android)', async () => {
+    isNativeAppMock.mockReturnValue(true);
+    const { getSocket } = await import('./socket');
+    const s = getSocket();
+
+    // L'enregistrement des listeners App.addListener est asynchrone (import()
+    // dynamique) : on laisse la microtask queue se vider avant de déclencher 'pause'.
+    await vi.advanceTimersByTimeAsync(0);
+
+    capacitorAppHandlers['pause']?.forEach((h) => h());
+    vi.advanceTimersByTime(12 * 1000); // > VISIBLE_RECONNECT_THRESHOLD_MS (10s)
+    capacitorAppHandlers['resume']?.forEach((h) => h());
+
+    expect(s.disconnect).toHaveBeenCalled();
+    expect(s.connect).toHaveBeenCalled();
+  });
+
+  it("app native Capacitor : pas de listener 'resume'/'pause' enregistré hors contexte natif (repli sur visibilitychange seul)", async () => {
+    isNativeAppMock.mockReturnValue(false);
+    const { getSocket } = await import('./socket');
+    getSocket();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(capacitorAppHandlers['resume']).toBeUndefined();
+    expect(capacitorAppHandlers['pause']).toBeUndefined();
   });
 
   it('ne force PAS de reconnexion pour un passage arrière-plan court (< seuil)', async () => {

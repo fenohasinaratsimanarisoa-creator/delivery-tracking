@@ -25,6 +25,31 @@ export interface RefreshOutcome {
 // sur les requêtes REST concurrentes).
 let refreshPromise: Promise<RefreshOutcome> | null = null;
 
+// ── VERROU INTER-ONGLETS ──────────────────────────────────────────────────────
+// Le verrou ci-dessus (refreshPromise) ne déduplique QUE dans l'instance JS d'UN
+// onglet — chaque onglet a son propre module, donc son propre refreshPromise.
+// Or le cookie refreshToken est PARTAGÉ par tous les onglets de l'origine, et la
+// rotation atomique côté backend (auth.service.ts generateTokens) ne conserve
+// qu'UN SEUL niveau d'historique (refresh_token_hash + previous_refresh_token_hash).
+// Avec 3 onglets (ou plus) qui rafraîchissent à quelques ms d'écart en tenant
+// TOUS le même cookie pré-rotation (ex. plusieurs onglets rouverts en même temps,
+// ou leurs timers socket.ts arrivant à expiration ensemble), le 3e onglet ne
+// correspond plus ni au hash courant ni au précédent → "REUSE detected" → la
+// session ENTIÈRE est révoquée, déconnectant tous les onglets et l'app mobile
+// (même compte, sessions séparées mais symptôme identique côté utilisateur).
+// Web Locks API (navigator.locks) coordonne un verrou EXCLUSIF au niveau de
+// l'origine, à travers tous les onglets/workers — pas seulement ce module JS.
+// En sérialisant les appels réseau, le 2e onglet part APRÈS que le 1er ait reçu
+// son Set-Cookie : il porte donc automatiquement le cookie déjà tourné, plus
+// jamais l'ancien. Repli silencieux sur le comportement mono-onglet si l'API est
+// absente (Safari < 15.4, anciens WebView) — pas de régression, juste pas de
+// protection inter-onglets sur ces environnements.
+const CROSS_TAB_LOCK_NAME = 'dt-auth-refresh';
+
+function hasWebLocks(): boolean {
+  return typeof navigator !== 'undefined' && !!navigator.locks;
+}
+
 /** Renvoie le nouveau token, ou null en cas d'échec (usage socket.ts, UI). */
 export function refreshAccessToken(): Promise<string | null> {
   return sharedRefresh().then((outcome) => outcome.token);
@@ -37,11 +62,20 @@ export function refreshAccessTokenOutcome(): Promise<RefreshOutcome> {
 
 function sharedRefresh(): Promise<RefreshOutcome> {
   if (!refreshPromise) {
-    refreshPromise = doRefresh().finally(() => {
+    refreshPromise = runRefreshExclusive().finally(() => {
       refreshPromise = null;
     });
   }
   return refreshPromise;
+}
+
+async function runRefreshExclusive(): Promise<RefreshOutcome> {
+  if (!hasWebLocks()) return doRefresh();
+  // `await` aplatit une Promise<Promise<T>> — nécessaire ici : la signature de
+  // LockManager.request() dans ce lib.dom.d.ts ne résout pas Awaited<T> et
+  // typerait sinon Promise<Promise<RefreshOutcome>> (le callback renvoie une
+  // Promise, pas la valeur elle-même).
+  return await navigator.locks.request(CROSS_TAB_LOCK_NAME, () => doRefresh());
 }
 
 async function doRefresh(): Promise<RefreshOutcome> {
