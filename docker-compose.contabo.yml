@@ -140,7 +140,7 @@ services:
       # NODE_ENV=production (voir backend/src/modules/billing/mobile-money.service.ts).
       BILLING_ENABLED: ${BILLING_ENABLED:-false}
       MOBILE_MONEY_SANDBOX: ${MOBILE_MONEY_SANDBOX:-false}
-      TRACCAR_URL: http://traccar:8082
+      TRACCAR_URL: ${TRACCAR_URL:-http://traccar:8082}
       TRACCAR_USER: ${TRACCAR_USER:-admin}
       TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-admin}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
@@ -196,7 +196,7 @@ services:
       # TraccarBridgeService tourne aussi dans ce process (QueueModule) — sans
       # ces 3 variables (identiques à celles du service "backend"), le pont
       # GPS reste inactif ici (constaté au premier déploiement réel).
-      TRACCAR_URL: http://traccar:8082
+      TRACCAR_URL: ${TRACCAR_URL:-http://traccar:8082}
       TRACCAR_USER: ${TRACCAR_USER:-admin}
       TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-admin}
     depends_on:
