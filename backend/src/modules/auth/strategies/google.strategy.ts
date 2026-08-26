@@ -23,10 +23,14 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       /\/+$/,
       '',
     );
-    const callbackURL = configService.get<string>(
-      'GOOGLE_CALLBACK_URL',
-      `${appUrl}/api/auth/google/callback`,
-    );
+    // `.get(key, default)` ne retombe sur `default` QUE si la clé est absente —
+    // pas si elle vaut '' (cas réel : .env.*.example livre GOOGLE_CALLBACK_URL=
+    // vide "pour auto-dériver de APP_URL", mais la variable EXISTE quand même
+    // dans l'environnement une fois le fichier chargé). Constaté en prod
+    // (Contabo) : callbackURL vide envoyé à passport-google-oauth20, OAuth
+    // cassé silencieusement. Même style que clientID/clientSecret ci-dessus.
+    const callbackURL =
+      configService.get<string>('GOOGLE_CALLBACK_URL') || `${appUrl}/api/auth/google/callback`;
 
     // Derrière un reverse proxy (nginx/Render), les headers X-Forwarded-* indiquent
     // le vrai protocole (https) et l'hôte. Sans proxy:true, Passport construit
