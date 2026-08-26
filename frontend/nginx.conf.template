@@ -28,7 +28,13 @@ server {
     set $backend_upstream ${BACKEND_URL};
 
     location /api/ {
-        proxy_pass $backend_upstream/;
+        # proxy_pass avec une valeur littérale ("$backend_upstream/") ne fait PAS le
+        # strip automatique du préfixe /api que fait un proxy_pass littéral classique
+        # (comportement nginx différent dès que la cible contient une variable) —
+        # constaté en prod : le backend recevait "/" pour TOUTE requête /api/*.
+        # rewrite...break le fait explicitement avant le proxy_pass (sans URI ici).
+        rewrite ^/api/(.*)$ /$1 break;
+        proxy_pass $backend_upstream;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
