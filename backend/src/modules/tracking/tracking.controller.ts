@@ -29,6 +29,7 @@ import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
 import { ApiKeyScope } from '../api-keys/decorators/api-key-scope.decorator';
 import { TraccarBridgeService } from './traccar-bridge.service';
 import { Public } from '../../common/decorators/public.decorator';
+import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
 import { UpdateTrackingReliabilityDto } from './dto/update-tracking-reliability.dto';
 import { BatchPositionDto } from './dto/update-position.dto';
 
@@ -244,6 +245,21 @@ export class TrackingController {
     description:
       "Point d'entrée REST pour PositionUploadWorker (Android, WorkManager) : permet d'envoyer les positions accumulées en SQLite natif (LocationQueueDb) même quand le socket.io JS n'est pas connecté (WebView gelée/tuée par l'OS). Applique EXACTEMENT le même garde-fou anti-flood et la même logique de sauvegarde que le chemin WebSocket 'batchPosition' — voir TrackingService.validateAndSaveBatch, factorisé entre les deux chemins pour ne jamais diverger.",
   })
+  // BUG CORRIGÉ (audit 2026-08-26, confirmé par test réel sur appareil : 135
+  // positions capturées en SQLite natif, 0 jamais synchronisées, 403 "Missing
+  // CSRF token" reproduit via curl avec le token natif exact) : ce endpoint
+  // est appelé par PositionUploadWorker.java (HttpURLConnection natif), qui
+  // n'a et ne peut avoir AUCUN moyen d'obtenir un jeton CSRF — celui-ci
+  // provient exclusivement de GET /auth/csrf-token, un flux JS/cookie que le
+  // code natif n'exécute jamais. La protection CSRF n'a de toute façon aucun
+  // sens ici : ce endpoint n'est authentifié QUE par Bearer JWT
+  // (Authorization), jamais par cookie — un attaquant cross-site ne peut pas
+  // faire porter un Authorization arbitraire par le navigateur de la victime
+  // (contrairement à un cookie), donc aucune requête cross-site forgée ne
+  // peut jamais l'atteindre. Ce bug rendait Phase 4 (upload natif indépendant
+  // du JS) totalement non fonctionnelle depuis sa création — jamais détecté
+  // faute de test Phase 5 (protocole réel sur appareil) exécuté avant ce jour.
+  @SkipCsrf()
   @HttpCode(HttpStatus.OK)
   @Post('positions/native-batch')
   async saveNativeBatch(
