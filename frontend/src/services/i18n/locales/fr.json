@@ -964,7 +964,8 @@
     "toast": {
       "statusUpdated": "Statut mis à jour",
       "updateError": "Erreur lors de la mise à jour",
-      "gpsRequired": "Activez la localisation pour confirmer la livraison"
+      "gpsRequired": "Activez la localisation pour confirmer la livraison",
+      "gpsInsecureContext": "Connexion non sécurisée — la géolocalisation nécessite HTTPS, contactez votre administrateur"
     },
     "hello": "Bonjour",
     "live": "En direct",

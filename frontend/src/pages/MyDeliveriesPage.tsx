@@ -22,6 +22,14 @@ function captureGpsPosition(): Promise<{ latitude: number; longitude: number; ac
       reject(new Error('Geolocation not supported'));
       return;
     }
+    // Même restriction que le tracking continu (voir useDriverTracking) : sur
+    // http:// non-localhost, tous les navigateurs bloquent l'API AVANT la
+    // demande de permission — inutile de tenter l'appel, autant distinguer ce
+    // cas pour afficher le bon message.
+    if (window.isSecureContext === false) {
+      reject(new Error('insecure_context'));
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         resolve({
@@ -75,8 +83,11 @@ export default function MyDeliveriesPage() {
       try {
         const gps = await captureGpsPosition();
         updateMutation.mutate({ id, status, ...gps });
-      } catch {
-        toast(t('myDeliveries.toast.gpsRequired'), 'error');
+      } catch (err) {
+        const message = err instanceof Error && err.message === 'insecure_context'
+          ? t('myDeliveries.toast.gpsInsecureContext')
+          : t('myDeliveries.toast.gpsRequired');
+        toast(message, 'error');
         setGpsLoading(false);
       }
     } else {

@@ -964,7 +964,8 @@
     "toast": {
       "statusUpdated": "Status updated",
       "updateError": "Error updating status",
-      "gpsRequired": "Enable location to confirm delivery"
+      "gpsRequired": "Enable location to confirm delivery",
+      "gpsInsecureContext": "Insecure connection — geolocation requires HTTPS, contact your administrator"
     },
     "hello": "Hello",
     "live": "Live",
