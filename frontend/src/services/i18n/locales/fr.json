@@ -1507,6 +1507,7 @@
     "physicalTrackerTitle": "Suivi par traceur GPS physique installé sur le véhicule",
     "physicalTracker": "Traceur GPS",
     "gpsBlocked": "GPS bloqué",
+    "insecureContext": "HTTPS requis",
     "gpsPending": "GPS en attente",
     "searching": "Recherche signal...",
     "poorAccuracy": "GPS faible",

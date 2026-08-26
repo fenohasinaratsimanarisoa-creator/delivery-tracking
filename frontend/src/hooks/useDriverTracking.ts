@@ -109,7 +109,7 @@ export interface DriverPosition {
 }
 
 export interface DriverAlert {
-  type: 'proximity' | 'cascade' | 'geofence' | 'poor_accuracy' | 'queue_full' | 'queue_near_full' | 'geo_denied' | 'background_continued' | 'battery_critical';
+  type: 'proximity' | 'cascade' | 'geofence' | 'poor_accuracy' | 'queue_full' | 'queue_near_full' | 'geo_denied' | 'insecure_context' | 'background_continued' | 'battery_critical';
   title: string;
   message: string;
   deliveryId?: string;
@@ -135,6 +135,11 @@ export interface TrackingStatus {
   sessionExpired: boolean;
   statusMsg: string;
   geolocationDenied: boolean;
+  /** true = page servie hors contexte sécurisé (http:// non-localhost) — l'API
+   * Geolocation est bloquée par TOUS les navigateurs avant même toute demande
+   * de permission. Distinct de geolocationDenied : ici, aucun réglage
+   * navigateur ne peut débloquer, seul un passage en HTTPS le peut. */
+  insecureContext: boolean;
   activeDeliveryId: string;
   alerts: DriverAlert[];
   dismissAlert: (type: string, deliveryId?: string) => void;
@@ -154,6 +159,7 @@ export function useDriverTracking() {
   const [queueCount, setQueueCount] = useState(0);
   const [statusMsg, setStatusMsg] = useState('');
   const [geolocationDenied, setGeolocationDenied] = useState(false);
+  const [insecureContext, setInsecureContext] = useState(false);
   // État persistant de l'exemption d'optimisation batterie (Android). Défaut true sur
   // iOS/web (pas de Doze) ; relu au démarrage du tracking puis à chaque retour au premier
   // plan pour masquer la bannière dès que le chauffeur accorde l'exemption.
@@ -774,6 +780,28 @@ export function useDriverTracking() {
 
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) return;
+    // Sur une origine http:// non-localhost, tous les navigateurs bloquent
+    // l'API Geolocation AVANT même d'afficher la demande de permission —
+    // watchPosition échouerait immédiatement avec err.code===1, indistinct
+    // d'un vrai refus utilisateur. Vérifier isSecureContext en amont permet
+    // d'afficher le bon diagnostic (passer en HTTPS, pas "vérifiez vos
+    // réglages navigateur" — qui n'a aucun effet ici).
+    // === false (pas juste falsy) : jsdom et certains anciens environnements
+    // n'implémentent pas isSecureContext (undefined) — ne pas les traiter comme
+    // non sécurisés par défaut, seul un `false` explicite (vrais navigateurs
+    // sur http:// non-localhost) doit déclencher ce diagnostic.
+    if (window.isSecureContext === false) {
+      setInsecureContext(true);
+      setStatusMsg('insecure_context');
+      addAlert({
+        type: 'insecure_context',
+        title: 'Connexion non sécurisée',
+        message: 'La géolocalisation nécessite une connexion HTTPS. Contactez votre administrateur — aucun réglage de votre côté ne peut débloquer ça.',
+        urgency: 'critical',
+      });
+      return;
+    }
+    setInsecureContext(false);
     setGeolocationDenied(false);
     setPoorAccuracy(false);
     setConfidenceLevel(1);
@@ -1203,6 +1231,7 @@ export function useDriverTracking() {
     sessionExpired,
     statusMsg,
     geolocationDenied,
+    insecureContext,
     activeDeliveryId,
     alerts,
     dismissAlert,

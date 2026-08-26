@@ -283,6 +283,14 @@ function LivePill() {
       </span>
     );
   }
+  if (status.insecureContext) {
+    return (
+      <span className={`${styles.livePill} ${styles.pillRed}`}>
+        <AlertTriangle size={13} />
+        {t('trackingIndicator.insecureContext')}
+      </span>
+    );
+  }
   if (status.geolocationDenied) {
     return (
       <span className={`${styles.livePill} ${styles.pillRed}`}>

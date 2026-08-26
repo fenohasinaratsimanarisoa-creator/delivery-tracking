@@ -15,6 +15,7 @@ export const TrackingContext = createContext<TrackingStatus>({
   sessionExpired: false,
   statusMsg: '',
   geolocationDenied: false,
+  insecureContext: false,
   activeDeliveryId: '',
   alerts: [],
   dismissAlert: () => {},
