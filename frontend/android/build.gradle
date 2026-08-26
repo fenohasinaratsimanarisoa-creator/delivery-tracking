@@ -24,6 +24,23 @@ allprojects {
     }
 }
 
+// Force la même version de kotlin-stdlib-jdk7/jdk8 (1.8.22, déjà fusionnées dans
+// kotlin-stdlib depuis cette version) sur TOUTES les configurations de TOUS les
+// sous-modules — app/build.gradle ne contraint que SES PROPRES configurations
+// (implementation), pas celles des sous-projets (capacitor-cordova-android-plugins
+// tire kotlin-stdlib-jdk7/8 1.6.21 en transitif). Sans ce forçage global,
+// checkDebugAndroidTestDuplicateClasses échoue dès qu'un test instrumenté réel
+// existe (constaté en ajoutant LocationQueueDbTest — jamais exercé avant, faute de
+// test instrumenté réel dans ce module).
+subprojects {
+    configurations.all {
+        resolutionStrategy {
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+        }
+    }
+}
+
 task clean(type: Delete) {
     delete rootProject.buildDir
 }

@@ -80,10 +80,22 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "com.google.android.gms:play-services-location:21.3.0"
     implementation "androidx.work:work-runtime:2.10.1"
+    // Seule nouvelle dépendance de ce chantier (Phase 3 — pont du token
+    // d'authentification vers le natif) : EncryptedSharedPreferences pour que
+    // PositionUploadWorker (Phase 4) authentifie ses envois HTTP même quand JS
+    // ne tourne pas, SANS stocker le token en clair sur disque (contrairement à
+    // NativeHttpFallback, qui utilise des SharedPreferences non chiffrées —
+    // hérité, hors périmètre de cette phase, à durcir séparément).
+    implementation "androidx.security:security-crypto:1.1.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    // Harnais de test OFFICIEL de WorkManager (androidx.work, déjà en dépendance
+    // ci-dessus) — PAS une nouvelle lib de scheduling, juste son outillage de
+    // test, nécessaire pour exécuter PositionUploadWorker.doWork() directement
+    // dans un test instrumenté (Phase 4).
+    androidTestImplementation "androidx.work:work-testing:2.10.1"
     implementation project(':capacitor-cordova-android-plugins')
     constraints {
         implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk7") {

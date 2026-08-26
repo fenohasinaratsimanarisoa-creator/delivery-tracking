@@ -9,6 +9,9 @@ import {
   UseGuards,
   UnauthorizedException,
   BadRequestException,
+  HttpCode,
+  HttpStatus,
+  HttpException,
   Res,
   Header,
 } from '@nestjs/common';
@@ -27,6 +30,7 @@ import { ApiKeyScope } from '../api-keys/decorators/api-key-scope.decorator';
 import { TraccarBridgeService } from './traccar-bridge.service';
 import { Public } from '../../common/decorators/public.decorator';
 import { UpdateTrackingReliabilityDto } from './dto/update-tracking-reliability.dto';
+import { BatchPositionDto } from './dto/update-position.dto';
 
 @ApiTags('Tracking')
 @Controller('tracking')
@@ -230,6 +234,47 @@ export class TrackingController {
     @Body() body: UpdateTrackingReliabilityDto,
   ) {
     return this.trackingService.updateTrackingReliability(userId, body.status);
+  }
+
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('driver')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Pousser un lot de positions GPS via HTTP natif, indépendant du WebSocket',
+    description:
+      "Point d'entrée REST pour PositionUploadWorker (Android, WorkManager) : permet d'envoyer les positions accumulées en SQLite natif (LocationQueueDb) même quand le socket.io JS n'est pas connecté (WebView gelée/tuée par l'OS). Applique EXACTEMENT le même garde-fou anti-flood et la même logique de sauvegarde que le chemin WebSocket 'batchPosition' — voir TrackingService.validateAndSaveBatch, factorisé entre les deux chemins pour ne jamais diverger.",
+  })
+  @HttpCode(HttpStatus.OK)
+  @Post('positions/native-batch')
+  async saveNativeBatch(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('companyId') companyId: string,
+    @Body() dto: BatchPositionDto,
+  ): Promise<{ saved: number; duplicates: number }> {
+    const result = await this.trackingService.validateAndSaveBatch(
+      userId,
+      companyId,
+      dto?.positions,
+    );
+
+    if (result.status === 'rate_limited') {
+      // Même comportement que handleBatchPosition (gateway) : rejet PROPRE, rien
+      // n'est marqué côté client (PositionUploadWorker ne fait markSynced() que
+      // sur 200 OK) — les positions restent en file SQLite locale pour retry au
+      // prochain cycle WorkManager (backoff exponentiel natif), jamais de perte
+      // silencieuse.
+      throw new HttpException({ saved: 0, duplicates: 0 }, HttpStatus.TOO_MANY_REQUESTS);
+    }
+    if (result.status === 'empty' || result.status === 'no_driver') {
+      return { saved: 0, duplicates: 0 };
+    }
+
+    // duplicates = positions validées mais NON persistées par saveBatch(). En
+    // pratique, pour ce chemin natif (vehicleId toujours celui de la session de
+    // tracking en cours), la quasi-totalité provient du garde-fou d'unicité
+    // (vehicleId, timestamp) — skipDuplicates dans saveBatch, INCHANGÉ ici.
+    const duplicates = Math.max(0, result.validatedCount - result.saved.length);
+    return { saved: result.saved.length, duplicates };
   }
 
   @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)

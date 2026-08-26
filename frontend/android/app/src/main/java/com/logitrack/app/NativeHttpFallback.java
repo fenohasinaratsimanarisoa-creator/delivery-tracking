@@ -76,6 +76,16 @@ public class NativeHttpFallback {
     }
 
     /**
+     * Lit l'URL de base de l'API déjà stockée. Réutilisé par PositionUploadWorker
+     * (Phase 4) — évite de dupliquer un second mécanisme de stockage d'URL pour
+     * le même besoin (l'URL n'est pas un secret, aucune raison de la chiffrer
+     * comme le token — voir NativeAuthTokenStore).
+     */
+    public static String getApiUrl(Context context) {
+        return getPrefs(context).getString(PREF_API_URL, null);
+    }
+
+    /**
      * Vérifie si le fallback doit s'activer.
      * @param lastJsAckTime timestamp du dernier ACK JS (notifyListeners traité par le pipeline)
      * @return true si le JS est silencieux depuis > NATIVE_FALLBACK_THRESHOLD_MS

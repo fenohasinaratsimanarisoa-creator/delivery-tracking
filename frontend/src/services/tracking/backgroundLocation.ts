@@ -89,6 +89,8 @@ interface BackgroundLocationNative {
   storeNativeFallbackApiUrl(options: { apiUrl: string }): Promise<void>;
   markNativeJsAck(): Promise<void>;
   setNativeTrackingContext(options: { vehicleId: string; deliveryId: string }): Promise<void>;
+  // --- Pont du token d'auth vers le worker natif (Phase 3, PositionUploadWorker) ---
+  setAuthToken(options: { accessToken: string; expiresAtEpochMs: number }): Promise<void>;
   addListener(
     eventName: 'locationUpdate' | 'batteryCritical',
     listenerFunc: (data: NativeLocationUpdate | BatteryCriticalEvent) => void,
@@ -333,6 +335,27 @@ export async function storeNativeFallbackApiUrl(apiUrl: string): Promise<void> {
     await p.storeNativeFallbackApiUrl({ apiUrl });
   } catch {
     // Silencieux.
+  }
+}
+
+// --- Pont du token d'authentification vers le worker natif (Phase 3) ---
+
+/**
+ * Écrit le token d'accès + son expiration dans EncryptedSharedPreferences natif
+ * (NativeAuthTokenStore, JAMAIS en clair) — lu par PositionUploadWorker
+ * (WorkManager, Phase 4) pour authentifier ses envois HTTP même quand le JS ne
+ * tourne pas. Appelé à chaque login() ET à chaque refresh réussi
+ * (services/auth/refreshToken.ts). No-op silencieux sur iOS/web (resolvePlugin()
+ * → null), même pattern que le reste de ce fichier.
+ */
+export async function setNativeAuthToken(accessToken: string, expiresAtEpochMs: number): Promise<void> {
+  const p = resolvePlugin();
+  if (!p) return;
+  try {
+    await p.setAuthToken({ accessToken, expiresAtEpochMs });
+  } catch {
+    // Silencieux : PositionUploadWorker retentera avec l'ancien token/rien au
+    // prochain cycle, ce n'est jamais bloquant pour l'app.
   }
 }
 

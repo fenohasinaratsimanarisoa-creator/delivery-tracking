@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, UnauthorizedException, ExecutionContext } from '@nestjs/common';
 import * as request from 'supertest';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -25,6 +25,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 
 const mockTrackingService = {
   updateTrackingReliability: jest.fn(),
+  validateAndSaveBatch: jest.fn(),
 };
 
 describe('TrackingController — PATCH /tracking/reliability-status (autorisation)', () => {
@@ -123,5 +124,176 @@ describe('TrackingController — PATCH /tracking/reliability-status (autorisatio
 
     expect(res.status).toBe(400);
     expect(mockTrackingService.updateTrackingReliability).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// POST /tracking/positions/native-batch — endpoint REST natif (Phase 2),
+// indépendant du WebSocket. Applique EXACTEMENT le même garde-fou anti-flood
+// et la même logique de sauvegarde que 'batchPosition' (gateway), via la
+// méthode partagée TrackingService.validateAndSaveBatch (voir aussi
+// tracking.gateway.spec.ts / tracking.gateway.integration.spec.ts, adaptés au
+// même refactor).
+// =============================================================================
+
+const UUID_A = '11111111-1111-4111-8111-111111111111';
+
+function makeValidPosition(index: number) {
+  return {
+    latitude: -18.8792 + index * 0.0001,
+    longitude: 47.5079,
+    accuracy: 12,
+    speed: 5,
+    heading: 90,
+    timestamp: new Date(2026, 7, 20, 10, 0, index).toISOString(),
+    vehicleId: UUID_A,
+  };
+}
+
+describe('TrackingController — POST /tracking/positions/native-batch', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [TrackingController],
+      providers: [
+        { provide: TrackingService, useValue: mockTrackingService },
+        { provide: JwtService, useValue: {} },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
+        { provide: TraccarBridgeService, useValue: {} },
+        { provide: PrismaService, useValue: {} },
+      ],
+    })
+      // JwtAuthGuard mocké pour REPRODUIRE fidèlement son comportement observable
+      // (rejette sans Authorization, peuple req.user sinon) sans dépendre de la
+      // stratégie Passport réelle (hors périmètre ici — testée ailleurs) : c'est
+      // précisément le comportement "sans JWT valide → 401" qu'on veut vérifier.
+      .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          const req = context.switchToHttp().getRequest();
+          if (!req.headers['authorization']) {
+            throw new UnauthorizedException('Invalid or expired token');
+          }
+          req.user = {
+            id: req.headers['x-test-user-id'] || 'user-driver-1',
+            companyId: 'company-1',
+            role: req.headers['x-test-role'] || 'driver',
+          };
+          return true;
+        },
+      })
+      .overrideGuard(CompanyScopeGuard)
+      .useValue({ canActivate: () => true })
+      // RolesGuard NON mocké : @Roles('driver') doit rester appliqué.
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('50 positions valides → { saved: 50, duplicates: 0 }', async () => {
+    const positions = Array.from({ length: 50 }, (_, i) => makeValidPosition(i));
+    mockTrackingService.validateAndSaveBatch.mockResolvedValueOnce({
+      status: 'ok',
+      saved: positions.map((p, i) => ({ id: `saved-${i}`, ...p })),
+      validatedCount: 50,
+      driverId: 'driver-1',
+    });
+
+    const res = await request(app.getHttpServer())
+      .post('/tracking/positions/native-batch')
+      .set('authorization', 'Bearer fake-token')
+      .send({ positions });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ saved: 50, duplicates: 0 });
+    expect(mockTrackingService.validateAndSaveBatch).toHaveBeenCalledWith(
+      'user-driver-1',
+      'company-1',
+      expect.any(Array),
+    );
+    expect(mockTrackingService.validateAndSaveBatch.mock.calls[0][2]).toHaveLength(50);
+  });
+
+  it('positions en doublon exact (vehicleId+timestamp déjà en base) → duplicates > 0, saved reflète le vrai compte, pas de crash', async () => {
+    // 5 positions envoyées, seules 3 réellement insérées par saveBatch
+    // (skipDuplicates a silencieusement ignoré les 2 doublons — logique
+    // INCHANGÉE, cf. tracking.service.ts) : validateAndSaveBatch le reflète
+    // déjà dans son `saved` (issu tel quel de saveBatch).
+    const positions = Array.from({ length: 5 }, (_, i) => makeValidPosition(i));
+    mockTrackingService.validateAndSaveBatch.mockResolvedValueOnce({
+      status: 'ok',
+      saved: [
+        { id: 'saved-0', ...positions[0] },
+        { id: 'saved-1', ...positions[1] },
+        { id: 'saved-2', ...positions[2] },
+      ],
+      validatedCount: 5,
+      driverId: 'driver-1',
+    });
+
+    const res = await request(app.getHttpServer())
+      .post('/tracking/positions/native-batch')
+      .set('authorization', 'Bearer fake-token')
+      .send({ positions });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ saved: 3, duplicates: 2 });
+  });
+
+  it('sans JWT valide (pas d\'en-tête Authorization) → 401', async () => {
+    const positions = [makeValidPosition(0)];
+
+    const res = await request(app.getHttpServer())
+      .post('/tracking/positions/native-batch')
+      .send({ positions });
+
+    expect(res.status).toBe(401);
+    expect(mockTrackingService.validateAndSaveBatch).not.toHaveBeenCalled();
+  });
+
+  it('au-delà du rate limit (driver déjà au plafond) → 429, rejet propre, aucune perte silencieuse côté serveur', async () => {
+    mockTrackingService.validateAndSaveBatch.mockResolvedValueOnce({ status: 'rate_limited' });
+
+    const positions = Array.from({ length: 10 }, (_, i) => makeValidPosition(i));
+    const res = await request(app.getHttpServer())
+      .post('/tracking/positions/native-batch')
+      .set('authorization', 'Bearer fake-token')
+      .send({ positions });
+
+    // 429, pas 200 avec un faux "saved" : le client (PositionUploadWorker) ne
+    // doit JAMAIS interpréter cette réponse comme un succès qui justifierait un
+    // markSynced() — les positions restent en file SQLite locale pour retry
+    // (backoff exponentiel WorkManager natif), même comportement que le rejet
+    // 'positionsRejected' du chemin WebSocket (handleBatchPosition).
+    expect(res.status).toBe(429);
+    expect(res.body).toEqual({ saved: 0, duplicates: 0 });
+    // Le rate limit a bien été évalué EN AMONT de toute tentative de sauvegarde
+    // (validateAndSaveBatch encapsule ce garde-fou — jamais contourné par ce
+    // chemin REST natif).
+    expect(mockTrackingService.validateAndSaveBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("rôle non-driver (dispatcher) rejeté (403) — même garde @Roles('driver') que les autres routes chauffeur", async () => {
+    const res = await request(app.getHttpServer())
+      .post('/tracking/positions/native-batch')
+      .set('authorization', 'Bearer fake-token')
+      .set('x-test-role', 'dispatcher')
+      .send({ positions: [makeValidPosition(0)] });
+
+    expect(res.status).toBe(403);
+    expect(mockTrackingService.validateAndSaveBatch).not.toHaveBeenCalled();
   });
 });

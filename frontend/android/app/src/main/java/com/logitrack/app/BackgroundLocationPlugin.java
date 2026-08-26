@@ -98,6 +98,10 @@ public class BackgroundLocationPlugin extends Plugin {
         // on la laisse en place (idempotent, pas de reset du compteur WorkManager).
         setTrackingActive(true);
         scheduleWatchdog();
+        // Phase 4 : filet de sécurité périodique (~3 min) de PositionUploadWorker,
+        // en complément du déclenchement one-shot posé à chaque insertion en DB
+        // (LocationForegroundService.handleLocationUpdate).
+        PositionUploadWorker.schedulePeriodic(context);
         JSObject ret = new JSObject();
         ret.put("running", isServiceRunning());
         ret.put("permissions", buildPermissionStatus());
@@ -109,6 +113,10 @@ public class BackgroundLocationPlugin extends Plugin {
         unsubscribeFromLocations();
         setTrackingActive(false);
         cancelWatchdog();
+        // Même logique que le watchdog : les positions déjà en file SQLite
+        // restent (jamais purgées ici) et seront reprises par le worker
+        // périodique de la PROCHAINE session de tracking si besoin.
+        PositionUploadWorker.cancelPeriodic(getContext());
         getContext().stopService(new Intent(getContext(), LocationForegroundService.class));
         JSObject ret = new JSObject();
         ret.put("running", false);
@@ -490,6 +498,26 @@ public class BackgroundLocationPlugin extends Plugin {
     @PluginMethod
     public void markNativeJsAck(PluginCall call) {
         LocationForegroundService.markJsAck();
+        call.resolve();
+    }
+
+    /**
+     * Stocke le token d'accès (CHIFFRÉ — EncryptedSharedPreferences, voir
+     * NativeAuthTokenStore) pour PositionUploadWorker (Phase 4 — worker natif
+     * WorkManager, indépendant du JS). Appelé par le JS à chaque login() ET à
+     * chaque refresh réussi (frontend/src/services/auth/refreshToken.ts).
+     *
+     * SÉCURITÉ : le token n'est JAMAIS logué en clair ici — aucun Log.*(token).
+     */
+    @PluginMethod
+    public void setAuthToken(PluginCall call) {
+        String accessToken = call.getString("accessToken");
+        Long expiresAtEpochMs = call.getLong("expiresAtEpochMs");
+        if (accessToken == null || accessToken.isEmpty() || expiresAtEpochMs == null) {
+            call.reject("TOKEN_AND_EXPIRY_REQUIRED");
+            return;
+        }
+        NativeAuthTokenStore.setAuthToken(getContext(), accessToken, expiresAtEpochMs);
         call.resolve();
     }
 

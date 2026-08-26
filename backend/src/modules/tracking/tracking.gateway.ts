@@ -304,87 +304,40 @@ export class TrackingGateway
     const user = client.data.user;
     if (!user || user.role !== 'driver') return;
 
-    // Anti-flood batch (audit 2026-08-25 G.5) : sans ce garde, le rate limit de
-    // updatePosition était contournable en rafales de batchPosition. AUCUN
-    // acquittement positionsSaved n'est émis : le client conserve ses positions
-    // en file IndexedDB (flushQueue ne purge que sur résolution) et retente après
-    // son timeout (~5 s) — backoff naturel, zéro perte de données.
-    if (await this.trackingService.isBatchRateLimited(user.id)) {
-      this.logger.warn(`Batch rate limited (driver=${user.id})`);
-      client.emit('positionsRejected', { reason: 'rate_limited', kind: 'batch' });
-      return;
-    }
-
     return CompanyScopedContext.run(user.companyId, async () => {
-      // Validation individuelle des positions : une position corrompue ne doit
-      // pas tuer le rattrapage réseau des autres, et les payloads VALIDÉS
-      // (clés inconnues — dont event — stripped, conversions implicites
-      // appliquées) sont ce qui part en persistence.
-      const rawPositions = dto?.positions;
-      if (!Array.isArray(rawPositions) || rawPositions.length === 0) {
-        client.emit('positionsSaved', { count: 0 });
-        return;
-      }
-      // Validation PARALLÈLE (Promise.all) au lieu d'une boucle séquentielle
-      // `for...await validate()` : un rattrapage réseau peut compter plusieurs
-      // milliers de positions (longue coupure) et le coût réflexion de
-      // class-validator rendait la boucle séquentielle > 3s — au-delà du
-      // timeout d'ACK côté client, qui rejouait alors le même lot surdimensionné
-      // en boucle. Promise.all lance les validations en parallèle tout en
-      // CONSERVANT l'ordre relatif du tableau résultat (Promise.all préserve
-      // l'ordre d'entrée) ; le tri chronologique réel est fait dans
-      // tracking.service.saveBatch, inchangé.
-      const validationResults = await Promise.all(
-        rawPositions.map(async (raw) => {
-          const instance = plainToInstance(UpdatePositionDto, raw, {
-            exposeUnsetFields: false,
-            enableImplicitConversion: true,
-          });
-          const errors = await validate(instance, {
-            whitelist: true,
-            skipMissingProperties: false,
-          });
-          return { instance, errors };
-        }),
-      );
-
-      // Comportement individuel IDENTIQUE à l'ancienne boucle : une position
-      // corrompue est loggée en warning et exclue, sans invalider les autres.
-      const validatedPositions: UpdatePositionDto[] = [];
-      for (const { instance, errors } of validationResults) {
-        if (errors.length > 0) {
-          this.logger.warn(
-            `Batch position invalid (driver=${user.id}): ${errors
-              .map((e) => Object.keys(e.constraints || {}))
-              .flat()
-              .join(', ')}`,
-          );
-          continue;
-        }
-        validatedPositions.push(instance);
-      }
-
-      const driver = await this.trackingService.findDriverByUserId(user.id);
-      if (!driver) {
-        client.emit('positionsSaved', { count: 0 });
-        return;
-      }
-
-      if (validatedPositions.length === 0) {
-        client.emit('positionsSaved', { count: 0 });
-        return;
-      }
-
-      const saved = await this.trackingService.saveBatch(
+      // Rate limit anti-flood + validation parallèle + résolution driver + appel
+      // saveBatch() : logique COMMUNE avec POST /tracking/positions/native-batch
+      // (TrackingController), extraite dans TrackingService.validateAndSaveBatch
+      // pour que les deux chemins appliquent EXACTEMENT le même garde-fou anti-flood
+      // — sinon le chemin REST natif deviendrait un contournement du rate limit.
+      const result = await this.trackingService.validateAndSaveBatch(
         user.id,
-        driver.id,
-        validatedPositions,
         user.companyId,
+        dto?.positions,
       );
+
+      // AUCUN acquittement positionsSaved n'est émis sur rate-limit : le client
+      // conserve ses positions en file IndexedDB (flushQueue ne purge que sur
+      // résolution) et retente après son timeout (~5 s) — backoff naturel, zéro
+      // perte de données.
+      if (result.status === 'rate_limited') {
+        client.emit('positionsRejected', { reason: 'rate_limited', kind: 'batch' });
+        return;
+      }
+      if (result.status === 'empty' || result.status === 'no_driver') {
+        client.emit('positionsSaved', { count: 0 });
+        return;
+      }
+      if (result.validatedCount === 0) {
+        client.emit('positionsSaved', { count: 0 });
+        return;
+      }
+
+      const { saved, driverId } = result;
 
       // Only broadcast positions that were actually saved
       const broadcasts = saved.map((pos: GpsPosition) => ({
-        driverId: driver.id,
+        driverId,
         driverName: `${user.firstName} ${user.lastName}`,
         latitude: pos.latitude,
         longitude: pos.longitude,

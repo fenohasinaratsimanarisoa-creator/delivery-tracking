@@ -2,7 +2,10 @@ import { createServer, Server as HttpServer } from 'http';
 import { AddressInfo } from 'net';
 import { Server } from 'socket.io';
 import { io as createClient, Socket as ClientSocket } from 'socket.io-client';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { TrackingGateway } from './tracking.gateway';
+import { UpdatePositionDto } from './dto/update-position.dto';
 
 /**
  * Test D — Acquittement WebSocket RÉEL (round-trip socket.io, pas un stub).
@@ -62,6 +65,45 @@ describe('TrackingGateway — ACK WebSocket réel (Test D)', () => {
     saveBatch: jest.fn().mockResolvedValue([]),
     getDeliveryInfo: jest.fn(),
   };
+
+  // Réplique EXACTEMENT TrackingService.validateAndSaveBatch (rate limit →
+  // validation parallèle class-validator → résolution driver → saveBatch), en
+  // déléguant aux mocks isBatchRateLimited/findDriverByUserId/saveBatch
+  // ci-dessus — pour que ce test (VRAI gateway, VRAI socket.io) exerce la
+  // même validation réelle qu'en production après le refactor gateway→service
+  // partagé (Phase 2, POST /tracking/positions/native-batch).
+  (trackingService as any).validateAndSaveBatch = jest.fn(
+    async (userId: string, companyId: string, rawPositions: unknown) => {
+      if (await trackingService.isBatchRateLimited(userId)) {
+        return { status: 'rate_limited' as const };
+      }
+      if (!Array.isArray(rawPositions) || rawPositions.length === 0) {
+        return { status: 'empty' as const };
+      }
+      const validationResults = await Promise.all(
+        rawPositions.map(async (raw) => {
+          const instance = plainToInstance(UpdatePositionDto, raw, {
+            exposeUnsetFields: false,
+            enableImplicitConversion: true,
+          });
+          const errors = await validate(instance, { whitelist: true, skipMissingProperties: false });
+          return { instance, errors };
+        }),
+      );
+      const validatedPositions: UpdatePositionDto[] = [];
+      for (const { instance, errors } of validationResults) {
+        if (errors.length > 0) continue;
+        validatedPositions.push(instance);
+      }
+      const driver = await trackingService.findDriverByUserId(userId);
+      if (!driver) return { status: 'no_driver' as const };
+      if (validatedPositions.length === 0) {
+        return { status: 'ok' as const, saved: [], validatedCount: 0, driverId: driver.id };
+      }
+      const saved = await trackingService.saveBatch(userId, driver.id, validatedPositions, companyId);
+      return { status: 'ok' as const, saved, validatedCount: validatedPositions.length, driverId: driver.id };
+    },
+  );
 
   beforeAll(async () => {
     httpServer = createServer();

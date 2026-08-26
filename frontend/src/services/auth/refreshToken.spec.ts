@@ -29,8 +29,20 @@ vi.mock('../api/csrf', () => ({
 }));
 
 const setAccessTokenMock = vi.fn();
+// Phase 3 : refreshToken.ts lit désormais getTokenExpiryMs(token) pour pousser
+// le token vers le worker natif (setNativeAuthToken, mocké séparément
+// ci-dessous) — sans ce mock, l'appel undefined(token) plantait silencieusement
+// à l'intérieur du try/catch de doRefresh() et faisait passer TOUS les tests de
+// succès en reason: 'network'.
+const getTokenExpiryMsMock = vi.fn().mockReturnValue(Date.now() + 900_000);
 vi.mock('./tokenStore', () => ({
   setAccessToken: (...args: unknown[]) => setAccessTokenMock(...args),
+  getTokenExpiryMs: (...args: unknown[]) => getTokenExpiryMsMock(...args),
+}));
+
+const setNativeAuthTokenMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('../tracking/backgroundLocation', () => ({
+  setNativeAuthToken: (...args: unknown[]) => setNativeAuthTokenMock(...args),
 }));
 
 vi.mock('../api/config', () => ({

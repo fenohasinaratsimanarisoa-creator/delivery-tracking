@@ -2,11 +2,12 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, ty
 import api from '../services/api/client';
 import { fetchCsrfToken } from '../services/api/csrf';
 import type { User } from '../types';
-import { setAccessToken, getAccessToken } from '../services/auth/tokenStore';
+import { setAccessToken, getAccessToken, getTokenExpiryMs } from '../services/auth/tokenStore';
 import { refreshAccessTokenOutcome } from '../services/auth/refreshToken';
 import { disconnectSocket } from '../services/socket/socket';
 import { parseToken } from '../services/jwt';
 import { setSentryUser } from '../services/monitoring/sentry';
+import { setNativeAuthToken } from '../services/tracking/backgroundLocation';
 
 interface AuthState {
   user: User | null;
@@ -148,6 +149,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     explicitLoginRef.current = true;
     setAccessToken(accessToken);
     setUser(userData);
+    // Pont vers PositionUploadWorker (Phase 4, natif) : sans ce token, le
+    // worker ne peut authentifier aucun envoi tant que le JS ne tourne pas.
+    // No-op silencieux sur web/iOS (setNativeAuthToken → resolvePlugin() null).
+    const expiresAtEpochMs = getTokenExpiryMs(accessToken);
+    if (expiresAtEpochMs !== null) {
+      void setNativeAuthToken(accessToken, expiresAtEpochMs);
+    }
   }, []);
 
   const logout = useCallback(async () => {

@@ -8,6 +8,8 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { NotificationType, NotificationPriority, Prisma, TrackingReliability } from '@prisma/client';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { isUniqueConstraintViolation } from '../../common/prisma/unique-violation';
@@ -418,6 +420,86 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     // sous-compter de 1 — acceptable pour une couche anti-flood (pas comptable).
     await this.cacheService.set(key, (current ?? 0) + 1, 60);
     return false;
+  }
+
+  /**
+   * Logique COMMUNE de traitement d'un lot de positions — rate limit anti-flood,
+   * validation parallèle (Promise.all), résolution du chauffeur, puis appel à
+   * saveBatch() (INCHANGÉ). Extrait pour être partagé entre TrackingGateway
+   * (WebSocket, 'batchPosition') et TrackingController (POST
+   * /tracking/positions/native-batch, chemin natif indépendant du socket) : les
+   * deux DOIVENT appliquer EXACTEMENT le même garde-fou anti-flood — sinon le
+   * chemin REST natif deviendrait un contournement du rate limit existant.
+   *
+   * Chaque appelant traduit le `status` retourné dans son propre protocole
+   * (émissions socket pour le gateway, réponse HTTP pour le controller) ; cette
+   * méthode ne connaît ni socket.io ni HTTP.
+   */
+  async validateAndSaveBatch(
+    userId: string,
+    companyId: string,
+    rawPositions: unknown,
+  ): Promise<
+    | { status: 'rate_limited' }
+    | { status: 'empty' }
+    | { status: 'no_driver' }
+    // saved : any[] — même typage que saveBatch() (retourne les GpsPosition
+    // Prisma réellement insérés, cf. createManyAndReturn), non re-précisé ici
+    // pour ne pas dupliquer/dévier de sa signature.
+    | { status: 'ok'; saved: any[]; validatedCount: number; driverId: string }
+  > {
+    if (await this.isBatchRateLimited(userId)) {
+      this.logger.warn(`Batch rate limited (driver=${userId})`);
+      return { status: 'rate_limited' };
+    }
+
+    if (!Array.isArray(rawPositions) || rawPositions.length === 0) {
+      return { status: 'empty' };
+    }
+
+    // Validation PARALLÈLE (Promise.all) : un rattrapage réseau peut compter
+    // plusieurs milliers de positions, une boucle séquentielle for...await
+    // validate() rendait ce traitement > 3s — voir handleBatchPosition (gateway),
+    // logique identique déplacée ici sans changement de comportement.
+    const validationResults = await Promise.all(
+      rawPositions.map(async (raw) => {
+        const instance = plainToInstance(UpdatePositionDto, raw, {
+          exposeUnsetFields: false,
+          enableImplicitConversion: true,
+        });
+        const errors = await validate(instance, {
+          whitelist: true,
+          skipMissingProperties: false,
+        });
+        return { instance, errors };
+      }),
+    );
+
+    const validatedPositions: UpdatePositionDto[] = [];
+    for (const { instance, errors } of validationResults) {
+      if (errors.length > 0) {
+        this.logger.warn(
+          `Batch position invalid (driver=${userId}): ${errors
+            .map((e) => Object.keys(e.constraints || {}))
+            .flat()
+            .join(', ')}`,
+        );
+        continue;
+      }
+      validatedPositions.push(instance);
+    }
+
+    const driver = await this.findDriverByUserId(userId);
+    if (!driver) {
+      return { status: 'no_driver' };
+    }
+
+    if (validatedPositions.length === 0) {
+      return { status: 'ok', saved: [], validatedCount: 0, driverId: driver.id };
+    }
+
+    const saved = await this.saveBatch(userId, driver.id, validatedPositions, companyId);
+    return { status: 'ok', saved, validatedCount: validatedPositions.length, driverId: driver.id };
   }
 
   logMetrics() {

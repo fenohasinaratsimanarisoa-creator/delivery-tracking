@@ -36,6 +36,8 @@ import com.google.android.gms.location.Priority;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -273,6 +275,16 @@ public class LocationForegroundService extends Service {
     /** Instance courante du service (pour rafraîchir la notification depuis un contexte statique). */
     private static volatile LocationForegroundService runningInstance = null;
 
+    /**
+     * Thread UNIQUE dédié aux écritures LocationQueueDb (persistance native — voir
+     * onLocationResult ci-dessous). Ne bloque JAMAIS le thread de callback location
+     * (main looper, requis par FusedLocationProviderClient/notifyListeners) : les
+     * écritures SQLite sont sérialisées ici, hors du chemin critique GPS→JS. Un seul
+     * thread suffit (SQLite sérialise de toute façon les écritures sur une même DB)
+     * et garantit l'ordre d'insertion = ordre d'acquisition.
+     */
+    private static final ExecutorService DB_WRITE_EXECUTOR = Executors.newSingleThreadExecutor();
+
     private FusedLocationProviderClient fusedLocationClient;
     private LocationRequest locationRequest;
     private LocationCallback locationCallback;
@@ -486,27 +498,85 @@ public class LocationForegroundService extends Service {
                 // livré individuellement à chaque sink (le dernier de la liste
                 // étant le plus récent, il devient latestLocation).
                 for (Location loc : locationResult.getLocations()) {
-                    latestLocation = loc;
-                    for (LocationSink sink : LOCATION_SINKS) {
-                        sink.onLocationUpdate(loc);
-                    }
-                    // --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
-                    // Si le JS est silencieux depuis > 2 min (la WebView est gelée),
-                    // on envoie la position directement via HTTP pour ne pas la perdre.
-                    // Ne s'active que si lastJsAckTime > 0 (le JS a déjà communiqué
-                    // au moins une fois) et si le token/API URL sont disponibles.
-                    if (lastJsAckTime > 0
-                        && NativeHttpFallback.shouldActivate(lastJsAckTime)
-                        && nativeVehicleId != null && !nativeVehicleId.isEmpty()) {
-                        NativeHttpFallback.sendPosition(
-                            getApplicationContext(), loc, nativeVehicleId, nativeDeliveryId
-                        );
-                    }
+                    handleLocationUpdate(getApplicationContext(), loc);
                 }
                 adaptAcquisitionInterval(location);
             }
         };
         fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
+    }
+
+    /**
+     * Traite UNE position acquise : persistance native (SQLite) PUIS diffusion JS
+     * (sinks) PUIS fallback HTTP natif si applicable. Extrait de
+     * LocationCallback.onLocationResult pour être appelable directement depuis un
+     * test instrumenté (LocationQueueDbTest) SANS dépendre d'un vrai
+     * FusedLocationProviderClient — le chemin de production (ci-dessus) appelle
+     * EXACTEMENT cette méthode, rien n'est dupliqué.
+     *
+     * static/package-visible à dessein (visibilité de test) : lit/écrit les
+     * champs statiques nativeVehicleId/nativeDeliveryId/latestLocation/
+     * lastJsAckTime, cohérent avec le reste de la classe (LOCATION_SINKS statique
+     * partagé entre toutes les instances du service).
+     */
+    static void handleLocationUpdate(Context appContext, Location loc) {
+        latestLocation = loc;
+        // --- Persistance native immédiate (indépendante du JS/WebView) ---
+        // Écrit CHAQUE position en SQLite AVANT toute tentative de la faire
+        // parvenir au JS (sink.onLocationUpdate ci-dessous, qui déclenche
+        // notifyListeners). Si la WebView est gelée/tuée par l'OS (Doze agressif,
+        // longue veille), le JS ne traitera peut-être JAMAIS cet appel — mais la
+        // position existe déjà sur disque, prête à être envoyée par
+        // PositionUploadWorker (WorkManager, indépendant du JS). Capture des
+        // champs primitifs AVANT de poster sur l'executor : un objet Location
+        // n'est pas garanti immuable/thread-safe au-delà de ce callback (le
+        // provider peut le recycler).
+        final String vehicleIdForDb = nativeVehicleId;
+        if (vehicleIdForDb != null && !vehicleIdForDb.isEmpty()) {
+            final String deliveryIdForDb = nativeDeliveryId;
+            final double latForDb = loc.getLatitude();
+            final double lngForDb = loc.getLongitude();
+            final Float accuracyForDb = loc.hasAccuracy() ? loc.getAccuracy() : null;
+            final Float speedForDb = loc.hasSpeed() ? loc.getSpeed() : null;
+            final Float headingForDb = loc.hasBearing() ? loc.getBearing() : null;
+            final long timestampForDb = loc.getTime();
+            DB_WRITE_EXECUTOR.execute(() -> {
+                try {
+                    LocationQueueDb.getInstance(appContext).insert(
+                        vehicleIdForDb,
+                        deliveryIdForDb,
+                        latForDb,
+                        lngForDb,
+                        accuracyForDb,
+                        speedForDb,
+                        headingForDb,
+                        timestampForDb
+                    );
+                    // Déclenche un envoi natif immédiat (Phase 4, PositionUploadWorker) —
+                    // sans coût même appelé à chaque position (~3 s) grâce à
+                    // ExistingWorkPolicy.KEEP : un travail déjà en attente/en cours n'est
+                    // jamais dupliqué.
+                    PositionUploadWorker.triggerImmediateUploadIfNetworkAvailable(appContext);
+                } catch (Exception e) {
+                    // Ne doit JAMAIS remonter sur le thread de callback location — le
+                    // chemin JS/notifyListeners ci-dessous reste inchangé même si
+                    // l'écriture native échoue (ex. disque plein, DB corrompue).
+                }
+            });
+        }
+        for (LocationSink sink : LOCATION_SINKS) {
+            sink.onLocationUpdate(loc);
+        }
+        // --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
+        // Si le JS est silencieux depuis > 2 min (la WebView est gelée), on envoie
+        // la position directement via HTTP pour ne pas la perdre. Ne s'active que
+        // si lastJsAckTime > 0 (le JS a déjà communiqué au moins une fois) et si
+        // le token/API URL sont disponibles.
+        if (lastJsAckTime > 0
+            && NativeHttpFallback.shouldActivate(lastJsAckTime)
+            && vehicleIdForDb != null && !vehicleIdForDb.isEmpty()) {
+            NativeHttpFallback.sendPosition(appContext, loc, vehicleIdForDb, nativeDeliveryId);
+        }
     }
 
     /**

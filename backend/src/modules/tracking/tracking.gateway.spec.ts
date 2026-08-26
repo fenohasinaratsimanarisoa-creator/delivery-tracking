@@ -1,6 +1,66 @@
 import { NotFoundException } from '@nestjs/common';
 import { GATEWAY_OPTIONS } from '@nestjs/websockets/constants';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { TrackingGateway } from './tracking.gateway';
+import { UpdatePositionDto } from './dto/update-position.dto';
+
+// trackingService est réassigné à chaque beforeEach (closure sur la variable, pas
+// sa valeur au moment de la définition — résolu à l'APPEL, pas à la déclaration).
+// eslint-disable-next-line @typescript-eslint/no-use-before-define
+let trackingService: TrackingServiceMock;
+
+/**
+ * Réplique EXACTEMENT la logique de TrackingService.validateAndSaveBatch (rate
+ * limit → validation parallèle class-validator → résolution driver → saveBatch),
+ * mais en déléguant aux mocks isBatchRateLimited/findDriverByUserId/saveBatch de
+ * CE fichier — pour que les assertions existantes sur CES méthodes (déjà
+ * nombreuses dans ce fichier) restent valides après le refactor gateway→service
+ * partagé (Phase 2, POST /tracking/positions/native-batch).
+ */
+async function mockValidateAndSaveBatch(userId: string, companyId: string, rawPositions: unknown) {
+  if (await trackingService.isBatchRateLimited(userId)) {
+    return { status: 'rate_limited' as const };
+  }
+  if (!Array.isArray(rawPositions) || rawPositions.length === 0) {
+    return { status: 'empty' as const };
+  }
+  const validationResults = await Promise.all(
+    rawPositions.map(async (raw) => {
+      const instance = plainToInstance(UpdatePositionDto, raw, {
+        exposeUnsetFields: false,
+        enableImplicitConversion: true,
+      });
+      const errors = await validate(instance, { whitelist: true, skipMissingProperties: false });
+      return { instance, errors };
+    }),
+  );
+  const validatedPositions: UpdatePositionDto[] = [];
+  for (const { instance, errors } of validationResults) {
+    if (errors.length > 0) continue;
+    validatedPositions.push(instance);
+  }
+  const driver = await trackingService.findDriverByUserId(userId);
+  if (!driver) return { status: 'no_driver' as const };
+  if (validatedPositions.length === 0) {
+    return { status: 'ok' as const, saved: [], validatedCount: 0, driverId: driver.id };
+  }
+  const saved = await trackingService.saveBatch(userId, driver.id, validatedPositions, companyId);
+  return { status: 'ok' as const, saved, validatedCount: validatedPositions.length, driverId: driver.id };
+}
+
+interface TrackingServiceMock {
+  getDeliveryInfo: jest.Mock;
+  saveBatch: jest.Mock;
+  findDriverByUserId: jest.Mock;
+  assertVehicleOwnership: jest.Mock;
+  isRateLimited: jest.Mock;
+  isBatchRateLimited: jest.Mock;
+  validateAndSaveBatch: jest.Mock;
+  verifyDriverAssignment: jest.Mock;
+  getLastPosition: jest.Mock;
+  savePosition: jest.Mock;
+}
 
 const mockSocket = () => {
   const rooms = new Set<string>();
@@ -15,17 +75,6 @@ const mockSocket = () => {
 
 describe('TrackingGateway — cross-tenant security', () => {
   let gateway: TrackingGateway;
-  let trackingService: {
-    getDeliveryInfo: jest.Mock;
-    saveBatch: jest.Mock;
-    findDriverByUserId: jest.Mock;
-    assertVehicleOwnership: jest.Mock;
-    isRateLimited: jest.Mock;
-    isBatchRateLimited: jest.Mock;
-    verifyDriverAssignment: jest.Mock;
-    getLastPosition: jest.Mock;
-    savePosition: jest.Mock;
-  };
   let mockServer: { to: jest.Mock; emit: jest.Mock };
   let deliveryProximityService: { snoozeProximity: jest.Mock };
 
@@ -37,6 +86,7 @@ describe('TrackingGateway — cross-tenant security', () => {
       assertVehicleOwnership: jest.fn(),
       isRateLimited: jest.fn().mockResolvedValue(false),
       isBatchRateLimited: jest.fn().mockResolvedValue(false),
+      validateAndSaveBatch: jest.fn(mockValidateAndSaveBatch),
       verifyDriverAssignment: jest.fn(),
       getLastPosition: jest.fn().mockResolvedValue(null),
       savePosition: jest.fn().mockResolvedValue({ id: 'pos-1', suspect: false }),

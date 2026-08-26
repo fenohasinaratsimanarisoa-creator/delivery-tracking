@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { fetchCsrfToken, getCsrfHeaders } from '../api/csrf';
 import { getApiBaseUrl } from '../api/config';
-import { setAccessToken } from './tokenStore';
+import { setAccessToken, getTokenExpiryMs } from './tokenStore';
+import { setNativeAuthToken } from '../tracking/backgroundLocation';
 
 export interface RefreshOutcome {
   token: string | null;
@@ -113,7 +114,16 @@ async function doRefresh(): Promise<RefreshOutcome> {
     }
 
     const token: string | undefined = res.data?.accessToken;
-    if (token) setAccessToken(token);
+    if (token) {
+      setAccessToken(token);
+      // Pont vers PositionUploadWorker (Phase 4, natif) : chaque refresh réussi
+      // met à jour le token chiffré lu par le worker WorkManager, indépendant
+      // du JS. No-op silencieux sur web/iOS.
+      const expiresAtEpochMs = getTokenExpiryMs(token);
+      if (expiresAtEpochMs !== null) {
+        void setNativeAuthToken(token, expiresAtEpochMs);
+      }
+    }
     return { token: token ?? null, reason: 'expired' };
   } catch (err: unknown) {
     const e = err as { code?: string; response?: { status?: number }; request?: unknown };
