@@ -6,8 +6,9 @@ import {
   Calendar, CalendarDays, AlertTriangle, Clock, CheckCircle2, Loader2, Truck, StickyNote,
 } from 'lucide-react';
 import Button from '../components/Button';
-import Badge, { type BadgeVariant } from '../components/Badge';
+import Badge from '../components/Badge';
 import Card from '../components/Card';
+import { DELIVERY_STATUS_VARIANT } from '../services/deliveryStatus';
 import api from '../services/api/client';
 import { formatDate } from '../services/i18n/formatDate';
 import styles from './DeliveriesPage.module.css';
@@ -55,14 +56,6 @@ const STATUS_LABELS_KEY: Record<string, string> = {
   delivered: 'delivered', failed: 'failed', cancelled: 'cancelled',
 };
 
-const STATUS_VARIANT: Record<string, BadgeVariant> = {
-  pending: 'orange',
-  assigned: 'blue',
-  in_progress: 'blue',
-  delivered: 'teal',
-  failed: 'red',
-  cancelled: 'neutral',
-};
 
 function useCountUp(target: number, duration = 650) {
   const [value, setValue] = useState(target);
@@ -656,7 +649,7 @@ export default function DeliveriesPage() {
                   key: 'status', label: t('deliveries.table.status'), sortable: true,
                   render: (r: Delivery) => (
                     <div className={styles.statusColumn}>
-                      <Badge variant={STATUS_VARIANT[r.status] || 'neutral'} size="sm" dot>
+                      <Badge variant={DELIVERY_STATUS_VARIANT[r.status] || 'neutral'} size="sm" dot>
                         {t(`deliveries.status.${r.status}`)}
                       </Badge>
                       {r.locationMismatch && !r.mismatchResolved && (

@@ -6,6 +6,8 @@ import {
   Mail, Phone, Car, IdCard, Truck,
 } from 'lucide-react';
 import Button from '../components/Button';
+import Badge from '../components/Badge';
+import Card from '../components/Card';
 import api from '../services/api/client';
 import DataTable from '../components/DataTable';
 import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
@@ -314,7 +316,7 @@ export default function DriversPage() {
             <p className={styles.emptyDesc}>{search ? t('drivers.empty.tryDifferent') : t('drivers.fromUsersHint')}</p>
           </div>
         ) : (
-          <div className={styles.tableCard}>
+          <Card flush animated style={{ animationDelay: '150ms' }}>
             <DataTable
               columns={[
                 {
@@ -345,10 +347,9 @@ export default function DriversPage() {
                   key: 'isActive', label: t('drivers.table.status'),
                   render: (r: Driver) => (
                     <span className={styles.statusCell}>
-                      <span className={`${styles.activePill} ${r.isActive ? styles.activePillOn : styles.activePillOff}`}>
-                        <span className={styles.activeDot} />
+                      <Badge variant={r.isActive ? 'teal' : 'neutral'} size="sm" dot>
                         {r.isActive ? t('drivers.status.active') : t('drivers.status.inactive')}
-                      </span>
+                      </Badge>
                       <Button
                         variant={r.isActive ? 'ghost' : 'outline'}
                         size="sm"
@@ -370,7 +371,7 @@ export default function DriversPage() {
               emptyMessage=""
               keyExtractor={(r) => r.id}
             />
-          </div>
+          </Card>
         )}
       </div>
 

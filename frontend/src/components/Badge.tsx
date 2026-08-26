@@ -7,7 +7,10 @@ interface Props {
   variant?: BadgeVariant;
   size?: 'sm' | 'md';
   dot?: boolean;
+  icon?: ReactNode;
   children: ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
 const variantClassMap: Record<BadgeVariant, string> = {
@@ -25,10 +28,14 @@ const sizeClassMap: Record<'sm' | 'md', string> = {
   md: styles.sizeMd,
 };
 
-export default function Badge({ variant = 'neutral', size = 'md', dot, children }: Props) {
+export default function Badge({ variant = 'neutral', size = 'md', dot, icon, children, className, style }: Props) {
   return (
-    <span className={`${styles.root} ${sizeClassMap[size]} ${variantClassMap[variant]}`}>
+    <span
+      className={`${styles.root} ${sizeClassMap[size]} ${variantClassMap[variant]}${className ? ` ${className}` : ''}`}
+      style={style}
+    >
       {dot && <span className={styles.dot} />}
+      {icon}
       {children}
     </span>
   );

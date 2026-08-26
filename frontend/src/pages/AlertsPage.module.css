@@ -548,7 +548,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #22c55e;
+  color: var(--color-teal, #3FA796);
   font-weight: 600;
 }
 
@@ -571,9 +571,9 @@
   gap: 5px;
   padding: 6px 14px;
   border-radius: var(--radius-full, 9999px);
-  border: 1px solid rgba(34, 197, 94, 0.35);
-  background: rgba(34, 197, 94, 0.12);
-  color: #22c55e;
+  border: 1px solid color-mix(in srgb, var(--color-teal, #3FA796) 35%, transparent);
+  background: var(--color-teal-muted, rgba(63,167,150,0.15));
+  color: var(--color-teal, #3FA796);
   cursor: pointer;
   font-size: var(--text-xs, 0.625rem);
   font-weight: 600;
@@ -583,7 +583,7 @@
 }
 
 .resolveBtn:hover {
-  background: rgba(34, 197, 94, 0.22);
+  background: color-mix(in srgb, var(--color-teal, #3FA796) 22%, transparent);
   transform: translateY(-1px);
 }
 
@@ -594,9 +594,9 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full, 9999px);
-  background: rgba(34, 197, 94, 0.12);
-  border: 1px solid rgba(34, 197, 94, 0.35);
-  color: #22c55e;
+  background: var(--color-teal-muted, rgba(63,167,150,0.15));
+  border: 1px solid color-mix(in srgb, var(--color-teal, #3FA796) 35%, transparent);
+  color: var(--color-teal, #3FA796);
 }
 
 /* ─── Pagination ──────────────────────────────────────────── */
@@ -779,7 +779,7 @@
   margin-top: var(--space-sm, 8px);
   padding: var(--space-md, 12px);
   background: var(--color-surface-alt, #182339);
-  border-left: 2px solid #22c55e;
+  border-left: 2px solid var(--color-teal, #3FA796);
   border-radius: var(--radius-md, 6px);
   font-size: var(--text-sm, 0.75rem);
   color: var(--color-text-secondary, #9BA6B9);
@@ -827,7 +827,7 @@
   padding: 10px 22px;
   border-radius: var(--radius-lg, 8px);
   border: none;
-  background: #22c55e;
+  background: var(--color-teal, #3FA796);
   color: #fff;
   cursor: pointer;
   font-weight: 600;
@@ -837,7 +837,7 @@
 }
 
 .confirmBtn:hover:not(:disabled) {
-  background: #16a34a;
+  background: var(--color-teal-hover, #256B52);
 }
 
 .confirmBtn:disabled {

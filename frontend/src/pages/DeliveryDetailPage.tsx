@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { formatDate } from '../services/i18n/formatDate';
 import { formatAriary } from '../services/formatAriary';
 import api from '../services/api/client';
+import Badge from '../components/Badge';
+import { DELIVERY_STATUS_VARIANT } from '../services/deliveryStatus';
 import type { Delivery } from '../types';
 import { TILE_PROVIDERS } from '../features/map/tileProviders';
 import { enableRetinaDefaultMarker } from '../features/map/markerIcons';
@@ -14,19 +16,6 @@ import styles from './DeliveryDetailPage.module.css';
 
 // Marqueurs pickup/livraison (défaut Leaflet) en version @2x sur écrans HiDPI.
 enableRetinaDefaultMarker();
-
-// Couleurs des statuts alignées sur les tokens du thème (--color-*) au lieu de
-// valeurs hex hardcodées hors palette (ex. #3b82f6 était utilisé en dur). Le fond
-// teinté utilise le token *-muted correspondant (un hex + alpha "20" ne marcherait
-// pas sur une var() CSS). assigned et in_progress partagent le bleu du thème.
-const STATUS_COLORS: Record<string, { color: string; bg: string }> = {
-  pending: { color: 'var(--color-warning, #f59e0b)', bg: 'var(--color-warning-muted, rgba(245,158,11,0.12))' },
-  assigned: { color: 'var(--color-blue, #3b82f6)', bg: 'var(--color-blue-muted, rgba(59,130,246,0.15))' },
-  in_progress: { color: 'var(--color-blue, #3b82f6)', bg: 'var(--color-blue-muted, rgba(59,130,246,0.15))' },
-  delivered: { color: 'var(--color-teal, #3FA796)', bg: 'var(--color-teal-muted, rgba(63,167,150,0.15))' },
-  failed: { color: 'var(--color-red, #E8544C)', bg: 'var(--color-red-muted, rgba(232,84,76,0.15))' },
-  cancelled: { color: 'var(--color-text-tertiary, #7A8BA3)', bg: 'var(--color-border-subtle, rgba(232,236,243,0.08))' },
-};
 
 // Leaflet applique la couleur de la polyligne via un attribut SVG ("stroke"), qui
 // ne supporte pas les var() CSS : on résout donc le token --color-blue à l'exécution.
@@ -78,10 +67,9 @@ export default function DeliveryDetailPage() {
           <h1 className={styles.title}>{d.title}</h1>
           {d.description && <p className={styles.description}>{d.description}</p>}
         </div>
-        <span className={styles.statusBadge} style={{
-          background: STATUS_COLORS[d.status]?.bg || 'var(--color-border-subtle)',
-          color: STATUS_COLORS[d.status]?.color || 'var(--color-text-tertiary)',
-        }}>{t(`deliveryDetail.status${d.status.charAt(0).toUpperCase() + d.status.slice(1)}`)}</span>
+        <Badge variant={DELIVERY_STATUS_VARIANT[d.status] || 'neutral'}>
+          {t(`deliveryDetail.status${d.status.charAt(0).toUpperCase() + d.status.slice(1)}`)}
+        </Badge>
       </div>
 
       <div className={styles.infoGrid}>

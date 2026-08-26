@@ -5,12 +5,9 @@ import { useNavigate } from 'react-router-dom';
 import { Package, CalendarDays, StickyNote } from 'lucide-react';
 import api from '../services/api/client';
 import { formatDate } from '../services/i18n/formatDate';
+import Badge from '../components/Badge';
+import { DELIVERY_STATUS_VARIANT } from '../services/deliveryStatus';
 import type { Delivery } from '../types';
-
-const STATUS_COLORS: Record<string, string> = {
-  pending: 'var(--color-warning)', assigned: 'var(--color-cyan)', in_progress: 'var(--color-blue)',
-  delivered: 'var(--color-teal)', failed: 'var(--color-red)', cancelled: 'var(--color-text-tertiary)',
-};
 
 // Fallback 100vh → 100dvh (dynamic viewport height, WebView Android moderne) : avec le
 // clavier ouvert, 100vh dépasse la zone visible et un fond quasi-noir (le bg du thème)
@@ -196,24 +193,16 @@ export default function MyOrdersPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const { t } = useTranslation();
-  const bg = STATUS_COLORS[status] || 'var(--color-text-tertiary)';
+  const label = status === 'in_progress' ? t('myOrders.status.in_progress')
+    : status === 'delivered' ? t('myOrders.status.delivered')
+    : status === 'assigned' ? t('myOrders.status.assigned')
+    : status === 'failed' ? t('myOrders.status.failed')
+    : status === 'cancelled' ? t('myOrders.status.cancelled')
+    : status === 'pending' ? t('myOrders.status.pending')
+    : status;
   return (
-    <span style={{
-      background: `color-mix(in srgb, ${bg} 13%, transparent)`,
-      color: bg,
-      padding: '2px var(--space-sm, 8px)',
-      borderRadius: 'var(--radius-sm, 4px)',
-      fontSize: 'var(--text-xs, 0.75rem)',
-      marginLeft: 8,
-      fontWeight: 500,
-    }}>
-      {status === 'in_progress' ? t('myOrders.status.in_progress')
-        : status === 'delivered' ? t('myOrders.status.delivered')
-        : status === 'assigned' ? t('myOrders.status.assigned')
-        : status === 'failed' ? t('myOrders.status.failed')
-        : status === 'cancelled' ? t('myOrders.status.cancelled')
-        : status === 'pending' ? t('myOrders.status.pending')
-        : status}
-    </span>
+    <Badge variant={DELIVERY_STATUS_VARIANT[status] || 'neutral'} size="sm" style={{ marginLeft: 8 }}>
+      {label}
+    </Badge>
   );
 }

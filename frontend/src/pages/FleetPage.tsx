@@ -6,6 +6,8 @@ import {
   Battery, Flame, IdCard, CheckCircle2, CircleOff, UserCheck, SearchX,
 } from 'lucide-react';
 import Button from '../components/Button';
+import Badge from '../components/Badge';
+import Card from '../components/Card';
 import api from '../services/api/client';
 import DataTable from '../components/DataTable';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -440,7 +442,7 @@ export default function FleetPage() {
             )}
           </div>
         ) : (
-          <div className={styles.tableCard}>
+          <Card flush animated style={{ animationDelay: '150ms' }}>
             <DataTable
               columns={[
                 {
@@ -467,10 +469,9 @@ export default function FleetPage() {
                   key: 'isActive', label: t('fleet.table.status'),
                   render: (r: Vehicle) => (
                     <span className={styles.statusCell}>
-                      <span className={`${styles.activePill} ${r.isActive ? styles.activePillOn : styles.activePillOff}`}>
-                        <span className={styles.activeDot} />
+                      <Badge variant={r.isActive ? 'teal' : 'neutral'} size="sm" dot>
                         {r.isActive ? t('fleet.status.active') : t('fleet.status.inactive')}
-                      </span>
+                      </Badge>
                       <Button
                         variant={r.isActive ? 'ghost' : 'outline'}
                         size="sm"
@@ -493,7 +494,7 @@ export default function FleetPage() {
               emptyMessage=""
               keyExtractor={(r) => r.id}
             />
-          </div>
+          </Card>
         )}
       </div>
 

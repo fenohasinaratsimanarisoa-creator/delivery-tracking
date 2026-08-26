@@ -427,8 +427,8 @@ export default function AlertsPage() {
             </div>
 
             <div className={styles.badgeRow}>
-              <Badge color={PRIORITY_COLORS[selectedAlert.priority]}>{PRIORITY_LABELS[selectedAlert.priority]}</Badge>
-              <Badge color={selectedAlert.resolved ? 'var(--color-teal)' : 'var(--color-red)'}>{selectedAlert.resolved ? t('alerts.detail.resolved') : t('alerts.detail.active')}</Badge>
+              <PriorityBadge color={PRIORITY_COLORS[selectedAlert.priority]}>{PRIORITY_LABELS[selectedAlert.priority]}</PriorityBadge>
+              <PriorityBadge color={selectedAlert.resolved ? 'var(--color-teal)' : 'var(--color-red)'}>{selectedAlert.resolved ? t('alerts.detail.resolved') : t('alerts.detail.active')}</PriorityBadge>
             </div>
 
             <Section label={t('alerts.detail.message')}>{selectedAlert.message}</Section>
@@ -533,7 +533,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function Badge({ color, children }: { color: string; children: React.ReactNode }) {
+function PriorityBadge({ color, children }: { color: string; children: React.ReactNode }) {
   // color-mix() pour les fonds/bordures teintés : compatible avec une var() CSS
   // (le `${color}1a` historique ne l'est pas).
   return (

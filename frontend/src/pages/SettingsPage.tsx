@@ -10,6 +10,7 @@ import {
   Eye, EyeOff, Copy, CheckCheck, Server, CircleOff,
 } from 'lucide-react';
 import Button from '../components/Button';
+import Badge from '../components/Badge';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import AppearanceSection from '../features/settings/sections/AppearanceSection';
@@ -379,10 +380,9 @@ function SecuritySection({ t, toast }: {
             <h2 className={styles.cardTitle}>{t('settingsSecurity.twoFactorTitle')}</h2>
             <p className={styles.cardDesc}>{t('settingsSecurity.twoFactorSubtitle')}</p>
           </div>
-          <span className={`${styles.statusBadge} ${tfaSecret ? styles.statusOn : styles.statusOff}`}>
-            <span className={styles.statusDot} />
+          <Badge variant={tfaSecret ? 'teal' : 'neutral'} dot style={{ marginLeft: 'auto' }}>
             {tfaEnabled ? t('settingsSecurity.twoFactorEnabled') : t('settingsSecurity.twoFactorDisabled')}
-          </span>
+          </Badge>
         </div>
 
         {!tfaSecret ? (

@@ -34,14 +34,6 @@
   color: var(--color-text, #0F172A);
 }
 
-.orderStatusBadge {
-  margin-left: 8px;
-  color: #fff;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: var(--text-xs, 0.75rem);
-}
-
 .orderAddress {
   font-size: var(--text-sm, 0.875rem);
   color: var(--color-text-secondary, #334155);

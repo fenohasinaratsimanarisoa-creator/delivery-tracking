@@ -10,6 +10,8 @@ import { formatDate, formatDateShort } from '../services/i18n/formatDate';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import Button from '../components/Button';
+import Badge from '../components/Badge';
+import { DELIVERY_STATUS_VARIANT } from '../services/deliveryStatus';
 import { useDataUpdates } from '../hooks/useDataUpdates';
 import { useAuth } from '../hooks/AuthContext';
 import { useTrackingStatus } from '../services/tracking/TrackingContext';
@@ -395,14 +397,6 @@ function LivePill() {
 
 function StatusBadge({ status }: { status: string }) {
   const { t } = useTranslation();
-  const classMap: Record<string, string> = {
-    pending: styles.statusPending,
-    assigned: styles.statusAssigned,
-    in_progress: styles.statusInProgress,
-    delivered: styles.statusDelivered,
-    failed: styles.statusFailed,
-    cancelled: styles.statusCancelled,
-  };
   const labelMap: Record<string, string> = {
     pending: t('myDeliveries.status.pending'),
     assigned: t('myDeliveries.status.assigned'),
@@ -412,10 +406,9 @@ function StatusBadge({ status }: { status: string }) {
     cancelled: t('myDeliveries.status.cancelled'),
   };
   return (
-    <span className={`${styles.statusBadge} ${classMap[status] || styles.statusCancelled}`}>
-      <span className={styles.badgeDot} />
+    <Badge variant={DELIVERY_STATUS_VARIANT[status] || 'neutral'} size="sm" dot>
       {labelMap[status] || status}
-    </span>
+    </Badge>
   );
 }
 

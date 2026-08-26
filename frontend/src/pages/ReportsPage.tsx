@@ -10,6 +10,7 @@ import {
   Users, PieChart as PieIcon, Activity, Calendar, FileText, FileSpreadsheet,
 } from 'lucide-react';
 import Button from '../components/Button';
+import Badge from '../components/Badge';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import styles from './ReportsPage.module.css';
@@ -586,10 +587,9 @@ function FleetReport({ data, loading }: { data: FleetReport | undefined; loading
                     <td className={styles.tableCell}><span className={styles.cellNumber}>{formatNumber(Math.round(v.fuelLiters))} L</span></td>
                     <td className={styles.tableCell}><span className={styles.cellNumber}>{v.avgConsumption} L/100km</span></td>
                     <td className={styles.tableCell}>
-                      <span className={`${styles.statusPill} ${v.isOnline ? styles.statusPillOn : styles.statusPillOff}`}>
-                        <span className={styles.statusDot} />
+                      <Badge variant={v.isOnline ? 'teal' : 'neutral'} size="sm" dot>
                         {v.isOnline ? t('reports.table.online') : t('reports.table.offline')}
-                      </span>
+                      </Badge>
                     </td>
                   </tr>
                 ))}

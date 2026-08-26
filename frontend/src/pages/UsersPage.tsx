@@ -6,6 +6,8 @@ import {
   ShieldCheck, Shield, Mail, Clock,
 } from 'lucide-react';
 import Button from '../components/Button';
+import Badge, { type BadgeVariant } from '../components/Badge';
+import Card from '../components/Card';
 import api from '../services/api/client';
 import { formatDate } from '../services/i18n/formatDate';
 import DataTable from '../components/DataTable';
@@ -29,6 +31,15 @@ const ROLE_COLORS: Record<string, string> = {
   dispatcher: 'var(--color-accent)',
   driver: 'var(--color-teal)',
   client: 'var(--color-text-tertiary)',
+};
+
+// Utilisé par le Badge du rôle (RolePill) — mêmes couleurs que ROLE_COLORS
+// ci-dessus, exprimées en variantes Badge plutôt qu'en var() CSS brutes.
+const ROLE_VARIANT: Record<string, BadgeVariant> = {
+  admin: 'red',
+  dispatcher: 'accent',
+  driver: 'teal',
+  client: 'neutral',
 };
 
 const ROLE_ICONS: Record<string, React.ReactNode> = {
@@ -76,13 +87,10 @@ function KpiCard({ icon, label, value, color, delay }: {
 
 function RolePill({ role }: { role: string }) {
   const { t } = useTranslation();
-  const color = ROLE_COLORS[role] || 'var(--color-text-tertiary)';
   return (
-    // background via color-mix() (le `${color}18` historique ne fonctionne pas avec une var()).
-    <span className={styles.rolePill} style={{ background: `color-mix(in srgb, ${color} 9%, transparent)`, color }}>
-      {ROLE_ICONS[role]}
+    <Badge variant={ROLE_VARIANT[role] || 'neutral'} size="sm" icon={ROLE_ICONS[role]}>
       {t(`users.rolesShort.${role}`, { defaultValue: role })}
-    </span>
+    </Badge>
   );
 }
 
@@ -387,7 +395,7 @@ export default function UsersPage() {
             )}
           </div>
         ) : (
-          <div className={styles.tableCard}>
+          <Card flush animated style={{ animationDelay: '150ms' }}>
             <DataTable
               columns={[
                 {
@@ -408,10 +416,9 @@ export default function UsersPage() {
                   key: 'isActive', label: t('users.table.status'),
                   render: (r: AppUser) => (
                     <span className={styles.statusCell}>
-                      <span className={`${styles.activePill} ${r.isActive ? styles.activePillOn : styles.activePillOff}`}>
-                        <span className={styles.activeDot} />
+                      <Badge variant={r.isActive ? 'teal' : 'neutral'} size="sm" dot>
                         {r.isActive ? t('users.status.active') : t('users.status.inactive')}
-                      </span>
+                      </Badge>
                       <Button
                         variant={r.isActive ? 'ghost' : 'outline'}
                         size="sm"
@@ -440,7 +447,7 @@ export default function UsersPage() {
               emptyMessage=""
               keyExtractor={(r) => r.id}
             />
-          </div>
+          </Card>
         )}
       </div>
 

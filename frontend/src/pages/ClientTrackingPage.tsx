@@ -8,6 +8,8 @@ import { Package, User, Truck, Zap } from 'lucide-react';
 import api from '../services/api/client';
 import { TILE_PROVIDERS } from '../features/map/tileProviders';
 import { enableRetinaDefaultMarker, createPinIcon } from '../features/map/markerIcons';
+import Badge from '../components/Badge';
+import { DELIVERY_STATUS_VARIANT } from '../services/deliveryStatus';
 import styles from './ClientTrackingPage.module.css';
 
 // Marqueur par défaut en version @2x sur écrans HiDPI (Retina/4K).
@@ -112,11 +114,9 @@ export default function ClientTrackingPage() {
                 className={styles.orderCard}
               >
                 <strong className={styles.orderTitle}>{o.title}</strong>
-                <span className={styles.orderStatusBadge} style={{
-                  background: o.status === 'in_progress' ? 'var(--color-blue)' : 'var(--color-teal)',
-                }}>
+                <Badge variant={DELIVERY_STATUS_VARIANT[o.status] || 'neutral'} size="sm" style={{ marginLeft: 8 }}>
                   {o.status === 'in_progress' ? t('clientTracking.status.in_progress') : t('clientTracking.status.assigned')}
-                </span>
+                </Badge>
                 <div className={styles.orderAddress}>
                   <Package size={14} /> {o.deliveryAddress}
                 </div>

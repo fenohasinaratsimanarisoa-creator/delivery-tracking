@@ -314,37 +314,6 @@
   letter-spacing: 0.02em;
 }
 
-.statusBadge {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: var(--radius-full, 9999px);
-  font-size: var(--text-xs, 0.625rem);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.statusOn {
-  background: var(--color-teal-muted, rgba(63,167,150,0.15));
-  color: var(--color-teal, #3FA796);
-  border: 1px solid var(--color-teal-muted, rgba(63,167,150,0.15));
-}
-
-.statusOff {
-  background: var(--color-border-subtle, rgba(232,236,243,0.08));
-  color: var(--color-text-tertiary, #7A8BA3);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
-}
-
-.statusDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
 /* ─── Champs ──────────────────────────────────────────────── */
 .flexColumn {
   display: flex;
