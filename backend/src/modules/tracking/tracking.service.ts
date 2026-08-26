@@ -7,7 +7,7 @@ import {
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
-import { NotificationType, NotificationPriority, Prisma } from '@prisma/client';
+import { NotificationType, NotificationPriority, Prisma, TrackingReliability } from '@prisma/client';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { isUniqueConstraintViolation } from '../../common/prisma/unique-violation';
@@ -1903,6 +1903,28 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       }
     }
     return { reported: true, notificationId: notification.id };
+  }
+
+  /**
+   * Met à jour la fiabilité du tracking GPS-téléphone DU chauffeur authentifié
+   * (résolu depuis userId — jamais un driverId fourni par le client, pour
+   * qu'un chauffeur ne puisse modifier que son propre statut). Appelé par
+   * useDriverTracking.ts (frontend) à chaque changement détecté de
+   * batteryOptimizationIgnored/deviceOem.
+   */
+  async updateTrackingReliability(userId: string, status: TrackingReliability) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+      select: { id: true, companyId: true },
+    });
+    if (!driver) return { updated: false, reason: 'driver_not_found' as const };
+
+    await this.prisma.driver.update({
+      where: { id: driver.id },
+      data: { trackingReliability: status },
+    });
+
+    return { updated: true, trackingReliability: status };
   }
 
   async calculateDistancePostGIS(

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   Query,
@@ -25,6 +26,7 @@ import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
 import { ApiKeyScope } from '../api-keys/decorators/api-key-scope.decorator';
 import { TraccarBridgeService } from './traccar-bridge.service';
 import { Public } from '../../common/decorators/public.decorator';
+import { UpdateTrackingReliabilityDto } from './dto/update-tracking-reliability.dto';
 
 @ApiTags('Tracking')
 @Controller('tracking')
@@ -212,6 +214,22 @@ export class TrackingController {
     },
   ) {
     return this.trackingService.reportBatteryCritical(userId, body);
+  }
+
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('driver')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Mettre à jour la fiabilité du tracking GPS-téléphone du chauffeur authentifié',
+    description:
+      "Appelé par l'app mobile (useDriverTracking.ts) à chaque changement détecté de batteryOptimizationIgnored/deviceOem. Réservé au rôle driver — le statut mis à jour est TOUJOURS celui du chauffeur authentifié (résolu depuis le token, jamais un id fourni par le client) : impossible de modifier le statut d'un autre chauffeur.",
+  })
+  @Patch('reliability-status')
+  updateReliabilityStatus(
+    @CurrentUser('id') userId: string,
+    @Body() body: UpdateTrackingReliabilityDto,
+  ) {
+    return this.trackingService.updateTrackingReliability(userId, body.status);
   }
 
   @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)

@@ -207,6 +207,52 @@ describe('FleetPage', () => {
     expect(screen.getByText('Ajoutez le premier véhicule à votre flotte')).toBeInTheDocument();
   });
 
+  it("affiche un badge d'alerte quand trackingReliability !== 'reliable'", async () => {
+    const vehiclesWithUnreliableDriver = [
+      {
+        ...mockVehicles[0],
+        driver: { id: 'drv-1', firstName: 'Jean', lastName: 'Rakoto', trackingReliability: 'battery_opt_not_ignored' },
+      },
+    ];
+    const responseData = { data: vehiclesWithUnreliableDriver, meta: { total: 1, page: 1, limit: 20, totalPages: 1 } };
+    mockUseQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => {
+      if (queryKey[0] === 'traccar-devices') return { data: [], isLoading: false };
+      return { data: responseData, isLoading: false };
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Chargement...')).toBeNull();
+    });
+
+    expect(screen.getByTestId('tracking-reliability-badge')).toBeInTheDocument();
+    expect(screen.getByText('Tracking peu fiable')).toBeInTheDocument();
+  });
+
+  it("n'affiche PAS de badge d'alerte quand trackingReliability === 'reliable'", async () => {
+    const vehiclesWithReliableDriver = [
+      {
+        ...mockVehicles[0],
+        driver: { id: 'drv-1', firstName: 'Jean', lastName: 'Rakoto', trackingReliability: 'reliable' },
+      },
+    ];
+    const responseData = { data: vehiclesWithReliableDriver, meta: { total: 1, page: 1, limit: 20, totalPages: 1 } };
+    mockUseQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => {
+      if (queryKey[0] === 'traccar-devices') return { data: [], isLoading: false };
+      return { data: responseData, isLoading: false };
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Chargement...')).toBeNull();
+    });
+
+    expect(screen.getByText('Jean Rakoto')).toBeInTheDocument();
+    expect(screen.queryByTestId('tracking-reliability-badge')).not.toBeInTheDocument();
+  });
+
   it('shows skeleton loading state initially', async () => {
     mockUseQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => {
       if (queryKey[0] === 'traccar-devices') {

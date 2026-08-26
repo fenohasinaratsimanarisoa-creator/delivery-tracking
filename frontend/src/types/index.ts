@@ -44,7 +44,12 @@ export interface Vehicle {
   traccarDeviceId?: string | null;
   vin?: string | null;
   theoreticalConsumption?: number | null;
-  driver?: { id: string; firstName: string; lastName: string } | null;
+  driver?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    trackingReliability?: 'reliable' | 'battery_opt_not_ignored' | 'background_perm_missing' | 'oem_restricted';
+  } | null;
 }
 
 export interface VehicleListItem {

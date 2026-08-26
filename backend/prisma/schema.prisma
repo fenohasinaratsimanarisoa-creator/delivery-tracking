@@ -47,6 +47,21 @@ enum GpsPositionSource {
   physical_tracker
 }
 
+// Fiabilité du tracking GPS-téléphone d'un chauffeur — porte sur les réglages
+// OS du téléphone (permissions/optimisation batterie), PAS sur le
+// fonctionnement du service natif lui-même (LocationForegroundService.java,
+// déjà correct). Poussé par le frontend (useDriverTracking.ts) à chaque
+// changement détecté de batteryOptimizationIgnored/deviceOem, pour que le
+// dispatcher voie un chauffeur mal configuré AVANT que le tracking ne se
+// coupe silencieusement en Doze — plutôt que de le découvrir via un rapport
+// carburant "GPS insuffisant" des jours plus tard.
+enum TrackingReliability {
+  reliable
+  battery_opt_not_ignored
+  background_perm_missing
+  oem_restricted
+}
+
 // Sens de l'écart de consommation pour l'affichage d'une anomalie de consommation.
 // 'over' = sur-consommation (conso mesurée > théorique — évoque fuite/vol/problème
 // mécanique) ; 'under' = sous-consommation (conso mesurée < théorique — peut évoquer
@@ -286,20 +301,20 @@ model UserPreferences {
 }
 
 model UserSession {
-  id               String    @id @default(uuid()) @db.Uuid
-  userId           String    @map("user_id") @db.Uuid
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  device           String? // user agent / device info
-  ip               String? // IP address
-  location         String? // approximate location from IP
-  lastActivity     DateTime  @default(now()) @map("last_activity")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  expiresAt        DateTime  @map("expires_at")
+  id                       String   @id @default(uuid()) @db.Uuid
+  userId                   String   @map("user_id") @db.Uuid
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device                   String? // user agent / device info
+  ip                       String? // IP address
+  location                 String? // approximate location from IP
+  lastActivity             DateTime @default(now()) @map("last_activity")
+  createdAt                DateTime @default(now()) @map("created_at")
+  expiresAt                DateTime @map("expires_at")
   // Hash bcrypt du refresh token PROPRE À CETTE session : chaque appareil
   // connecté détient sa propre ligne UserSession et son propre refresh token,
   // sans écraser les autres sessions (le champ éponyme sur User est conservé
   // pour compatibilité descendante mais n'est plus utilisé par la logique).
-  refreshTokenHash String?   @map("refresh_token_hash")
+  refreshTokenHash         String?  @map("refresh_token_hash")
   // Historique de rotation (un seul niveau) : le cookie de refresh étant partagé
   // entre les onglets, deux refreshes concurrents peuvent faire la course sur le
   // hash. Sans cet historique, le perdant (mismatch) faisait révoquer la session
@@ -307,7 +322,7 @@ model UserSession {
   // (UPDATE ... SET previous = refresh_token_hash, refresh_token_hash = $1), donc
   // sous concurrence l'ancien hash du dernier gagnant est toujours dans
   // previous_refresh_token_hash : le perdant est accepté et re-rotaté (convergence).
-  previousRefreshTokenHash String? @map("previous_refresh_token_hash")
+  previousRefreshTokenHash String?  @map("previous_refresh_token_hash")
 
   @@index([userId])
   @@map("user_sessions")
@@ -384,16 +399,20 @@ model Vehicle {
 }
 
 model Driver {
-  id            String    @id @default(uuid()) @db.Uuid
-  firstName     String    @map("first_name")
-  lastName      String    @map("last_name")
-  email         String?
-  phone         String?
-  licenseNumber String    @map("license_number")
-  isActive      Boolean   @default(true) @map("is_active")
-  deletedAt     DateTime? @map("deleted_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  id                  String              @id @default(uuid()) @db.Uuid
+  firstName           String              @map("first_name")
+  lastName            String              @map("last_name")
+  email               String?
+  phone               String?
+  licenseNumber       String              @map("license_number")
+  isActive            Boolean             @default(true) @map("is_active")
+  // Cf. enum TrackingReliability : reflète les réglages OS du téléphone de
+  // CE chauffeur (pas le véhicule — un chauffeur change de véhicule, garde son
+  // téléphone), mis à jour via PATCH /tracking/reliability-status.
+  trackingReliability TrackingReliability @default(reliable) @map("tracking_reliability")
+  deletedAt           DateTime?           @map("deleted_at")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
 
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
@@ -523,10 +542,6 @@ model GpsPosition {
   // tout gpsPosition.create()/createMany() (aucun défaut silencieux possible).
   source GpsPositionSource
 
-  @@index([companyId, timestamp])
-  @@index([deliveryId])
-  @@index([vehicleId])
-  @@index([timestamp])
   // CONTRAINTE UNIQUE COMPOSITE (vehicleId, timestamp) : filet anti-doublon de
   // DERNIER recours au niveau base. La course backfill/position live du pont
   // Traccar est d'abord sérialisée PAR DEVICE (mutex en mémoire dans
@@ -537,6 +552,10 @@ model GpsPosition {
   // carburant et alertes de proximité. Les insertions (savePosition, saveBatch,
   // performBackfill) capturent la P2002 et la traitent comme "déjà présente".
   @@unique([vehicleId, timestamp])
+  @@index([companyId, timestamp])
+  @@index([deliveryId])
+  @@index([vehicleId])
+  @@index([timestamp])
   @@index([deliveryId, timestamp])
   @@map("gps_positions")
 }

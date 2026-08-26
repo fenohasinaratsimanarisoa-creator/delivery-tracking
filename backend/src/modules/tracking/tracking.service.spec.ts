@@ -8,6 +8,7 @@ const mockPrisma = {
   driver: {
     findUnique: jest.fn(),
     findFirst: jest.fn(),
+    update: jest.fn(),
   },
   vehicle: {
     findUnique: jest.fn(),
@@ -1962,6 +1963,34 @@ describe('TrackingService', () => {
       });
 
       expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateTrackingReliability', () => {
+    it("persiste le nouveau statut sur LE chauffeur résolu depuis userId (jamais un driverId fourni par l'appelant)", async () => {
+      mockPrisma.driver.findUnique.mockResolvedValue({ id: 'driver-1', companyId: 'company-1' });
+      mockPrisma.driver.update.mockResolvedValue({ id: 'driver-1', trackingReliability: 'battery_opt_not_ignored' });
+
+      const result = await service.updateTrackingReliability('user-1', 'battery_opt_not_ignored');
+
+      expect(mockPrisma.driver.findUnique).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        select: { id: true, companyId: true },
+      });
+      expect(mockPrisma.driver.update).toHaveBeenCalledWith({
+        where: { id: 'driver-1' },
+        data: { trackingReliability: 'battery_opt_not_ignored' },
+      });
+      expect(result).toEqual({ updated: true, trackingReliability: 'battery_opt_not_ignored' });
+    });
+
+    it("ne persiste rien (updated: false) si userId ne correspond à aucun chauffeur", async () => {
+      mockPrisma.driver.findUnique.mockResolvedValue(null);
+
+      const result = await service.updateTrackingReliability('user-inconnu', 'oem_restricted');
+
+      expect(mockPrisma.driver.update).not.toHaveBeenCalled();
+      expect(result).toEqual({ updated: false, reason: 'driver_not_found' });
     });
   });
 

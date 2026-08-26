@@ -92,7 +92,7 @@ export class VehiclesService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          driver: { select: { id: true, firstName: true, lastName: true } },
+          driver: { select: { id: true, firstName: true, lastName: true, trackingReliability: true } },
         },
       }),
       this.prisma.vehicle.count({ where }),

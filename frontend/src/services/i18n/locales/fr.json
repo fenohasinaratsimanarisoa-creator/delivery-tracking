@@ -419,6 +419,15 @@
     "selectDevicePlaceholder": "Sélectionnez un dispositif…",
     "addDevice": "Ajouter",
     "addDeviceHint": "Ajouter un nouveau dispositif Traccar",
+    "trackingReliability": {
+      "badge": "Tracking peu fiable",
+      "messages": {
+        "battery_opt_not_ignored": "Ce chauffeur n'a pas accordé l'exemption batterie — le tracking peut se couper en arrière-plan.",
+        "background_perm_missing": "Ce chauffeur n'a pas accordé la permission de localisation « Toujours » — le tracking peut se couper en arrière-plan.",
+        "oem_restricted": "Ce téléphone a une gestion batterie agressive (Xiaomi/Huawei/Oppo…) — le tracking peut se couper en arrière-plan sans réglage OEM supplémentaire.",
+        "default": "Ce chauffeur n'a pas accordé l'exemption batterie — le tracking peut se couper en arrière-plan."
+      }
+    },
     "kpis": {
       "total": "Véhicules",
       "active": "Actifs",

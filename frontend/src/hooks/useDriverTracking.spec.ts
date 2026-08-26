@@ -79,6 +79,7 @@ vi.mock('../services/api/client', () => ({
   default: {
     get: vi.fn().mockResolvedValue({ data: null }),
     post: vi.fn().mockResolvedValue({ data: null }),
+    patch: vi.fn().mockResolvedValue({ data: null }),
   },
 }));
 

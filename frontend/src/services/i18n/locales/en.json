@@ -419,6 +419,15 @@
     "selectDevicePlaceholder": "Select a device…",
     "addDevice": "Add",
     "addDeviceHint": "Add a new Traccar device",
+    "trackingReliability": {
+      "badge": "Unreliable tracking",
+      "messages": {
+        "battery_opt_not_ignored": "This driver hasn't granted the battery optimization exemption — tracking may drop in the background.",
+        "background_perm_missing": "This driver hasn't granted the \"Allow all the time\" location permission — tracking may drop in the background.",
+        "oem_restricted": "This phone has aggressive battery management (Xiaomi/Huawei/Oppo…) — tracking may drop in the background without an extra OEM setting.",
+        "default": "This driver hasn't granted the battery optimization exemption — tracking may drop in the background."
+      }
+    },
     "kpis": {
       "total": "Vehicles",
       "active": "Active",

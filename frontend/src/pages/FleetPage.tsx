@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Search, Power, PowerOff, Plus, Truck, CarFront, Fuel, Zap, Droplets,
   Battery, Flame, IdCard, CheckCircle2, CircleOff, UserCheck, SearchX,
+  AlertTriangle,
 } from 'lucide-react';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
@@ -111,6 +112,29 @@ function FuelCell({ fuelType }: { fuelType: string }) {
   );
 }
 
+// Tracking peu fiable : le chauffeur n'a pas accordé un réglage OS requis
+// (exemption batterie, permission "Toujours", ou surcouche OEM agressive
+// type Xiaomi/Huawei/Oppo) — le tracking peut se couper silencieusement en
+// arrière-plan (Doze) sans que rien ne le signale avant un rapport carburant
+// "GPS insuffisant" des jours plus tard. Cf. useDriverTracking.ts (source de
+// la donnée, poussée via PATCH /tracking/reliability-status).
+type TrackingReliability = 'reliable' | 'battery_opt_not_ignored' | 'background_perm_missing' | 'oem_restricted';
+
+function TrackingReliabilityBadge({ status }: { status?: TrackingReliability }) {
+  const { t } = useTranslation();
+  if (!status || status === 'reliable') return null;
+  const message = t(`fleet.trackingReliability.messages.${status}`, {
+    defaultValue: t('fleet.trackingReliability.messages.default'),
+  });
+  return (
+    <span title={message} data-testid="tracking-reliability-badge">
+      <Badge variant="orange" size="sm" icon={<AlertTriangle size={12} />}>
+        {t('fleet.trackingReliability.badge')}
+      </Badge>
+    </span>
+  );
+}
+
 function DriverCell({ driver }: { driver: Vehicle['driver'] }) {
   if (!driver) return <span className={styles.driverNone}>—</span>;
   const initials = `${(driver.firstName[0] || '').toUpperCase()}${(driver.lastName[0] || '').toUpperCase()}`;
@@ -118,6 +142,7 @@ function DriverCell({ driver }: { driver: Vehicle['driver'] }) {
     <span className={styles.driverCell}>
       <span className={styles.driverAvatar}>{initials}</span>
       <span className={styles.driverName}>{driver.firstName} {driver.lastName}</span>
+      <TrackingReliabilityBadge status={driver.trackingReliability} />
     </span>
   );
 }

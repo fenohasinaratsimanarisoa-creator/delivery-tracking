@@ -158,7 +158,7 @@ describe('VehiclesService', () => {
       take: 5,
       orderBy: { createdAt: 'desc' },
       include: {
-        driver: { select: { id: true, firstName: true, lastName: true } },
+        driver: { select: { id: true, firstName: true, lastName: true, trackingReliability: true } },
       },
     });
   });

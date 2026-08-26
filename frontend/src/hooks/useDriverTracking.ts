@@ -176,6 +176,11 @@ export function useDriverTracking() {
   // sur un "Hors ligne" générique.
   const [sessionExpired, setSessionExpired] = useState(false);
   const [deviceOem, setDeviceOem] = useState<DeviceOemInfo | null>(null);
+  // Permission de localisation "Toujours" (ACCESS_BACKGROUND_LOCATION) — lue en
+  // observant le résultat de getBackgroundLocationStatus() ci-dessous, sans
+  // modifier le flux de demande de permission existant. Défaut true (même
+  // convention optimiste que batteryOptimizationIgnored) tant que non lu.
+  const [backgroundPermGranted, setBackgroundPermGranted] = useState(true);
   const [activeDeliveryId, setActiveDeliveryId] = useState('');
   const [alerts, setAlerts] = useState<DriverAlert[]>([]);
   const alertsRef = useRef<DriverAlert[]>([]);
@@ -425,6 +430,31 @@ export function useDriverTracking() {
       // Échec d'ouverture : silencieux, la bannière OEM reste visible.
     }
   }, [refreshBatteryOptimizationStatus]);
+
+  // Remonte au backend la fiabilité réelle du tracking (réglages OS du
+  // téléphone), à chaque changement de batteryOptimizationIgnored/deviceOem —
+  // sans ça, un chauffeur mal configuré (exemption batterie refusée,
+  // permission "Toujours" absente, surcouche OEM agressive) n'est visible
+  // pour le dispatcher qu'a posteriori via un rapport carburant "GPS
+  // insuffisant" des jours plus tard. Ne modifie AUCUN comportement du
+  // tracking lui-même — pur reporting best-effort.
+  const lastPushedReliabilityRef = useRef<string | null>(null);
+  useEffect(() => {
+    const status = !batteryOptimizationIgnored
+      ? 'battery_opt_not_ignored'
+      : !backgroundPermGranted
+        ? 'background_perm_missing'
+        : deviceOem?.aggressive
+          ? 'oem_restricted'
+          : 'reliable';
+    if (lastPushedReliabilityRef.current === status) return;
+    lastPushedReliabilityRef.current = status;
+    api.patch('/tracking/reliability-status', { status }).catch(() => {
+      // Best-effort : une remontée manquée ne doit jamais bloquer le tracking
+      // réel. On efface le cache pour retenter au prochain changement d'état.
+      lastPushedReliabilityRef.current = null;
+    });
+  }, [batteryOptimizationIgnored, backgroundPermGranted, deviceOem]);
 
   const drainQueue = useCallback(async () => {
     const socket = getSocket();
@@ -835,6 +865,9 @@ export function useDriverTracking() {
     // l'écran verrouillé afin que watchPosition + setInterval continuent.
     getBackgroundLocationStatus()
       .then((status) => {
+        // Observation pure (remonte l'info de fiabilité) — ne modifie pas le
+        // flux de demande de permission ci-dessous.
+        setBackgroundPermGranted(status.permissions.backgroundGranted);
         if (!status.running) {
           return requestBackgroundLocationPermissions()
             .then(() => startBackgroundLocation())
