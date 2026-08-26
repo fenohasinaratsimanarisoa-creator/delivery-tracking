@@ -1,4 +1,4 @@
-resolver 8.8.8.8 1.1.1.1 ipv6=off;
+resolver 127.0.0.11 valid=10s ipv6=off;
 
 # Ce nginx tourne maintenant systématiquement derrière un reverse-proxy TLS
 # (Caddy sur Contabo/Oracle) qui lui parle en clair sur le réseau Docker
@@ -20,8 +20,15 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Variable (pas une valeur littérale) : force nginx à résoudre "backend" via le
+    # resolver Docker à CHAQUE requête (mise en cache 10s) plutôt qu'une seule fois
+    # au démarrage. Sans ça, un redéploiement qui recrée le container backend seul
+    # (nouvelle IP interne) laisse ce proxy pointer vers une IP morte -> 502 jusqu'au
+    # prochain restart de ce container-ci.
+    set $backend_upstream ${BACKEND_URL};
+
     location /api/ {
-        proxy_pass ${BACKEND_URL}/;
+        proxy_pass $backend_upstream/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -35,7 +42,7 @@ server {
     }
 
     location /socket.io {
-        proxy_pass ${BACKEND_URL};
+        proxy_pass $backend_upstream;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
