@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Worker natif d'envoi des positions en file (LocationQueueDb, Phase 1) vers
@@ -62,7 +63,19 @@ public class PositionUploadWorker extends Worker {
     public static final String ONE_SHOT_WORK_NAME = "logitrack_position_upload_oneshot";
 
     private static final int BATCH_LIMIT = 200;
-    private static final long PERIODIC_INTERVAL_MINUTES = 3; // dans la fourchette demandée (2-5 min)
+    // BUG CORRIGÉ (audit 2026-08-26, terrain réel) : WorkManager/JobScheduler
+    // impose un PLANCHER ABSOLU de 15 min pour tout PeriodicWorkRequest
+    // (PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MILLIS) — une valeur plus
+    // courte n'est PAS refusée, elle est silencieusement CLAMPÉE à 15 min par
+    // le framework. La valeur "3 min" ici était donc un mensonge inoffensif
+    // pour ce filet de sécurité (déjà réellement à 15 min), mais a longtemps
+    // masqué le vrai problème : le déclencheur one-shot ci-dessous (censé
+    // fournir le rythme quasi temps-réel) tombait dans le même piège.
+    private static final long PERIODIC_INTERVAL_MINUTES = 15;
+    // Anti-épuisement du quota "expedited work" (voir
+    // triggerImmediateUploadIfNetworkAvailable ci-dessous).
+    private static final long MIN_TRIGGER_INTERVAL_MS = 15_000;
+    private static final AtomicLong lastTriggerAtMs = new AtomicLong(0);
 
     public PositionUploadWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
@@ -207,16 +220,46 @@ public class PositionUploadWorker extends Worker {
     }
 
     /**
-     * Déclenche un envoi EXPEDITED immédiatement après une insertion en DB.
-     * Appelé à CHAQUE position (LocationForegroundService.handleLocationUpdate,
-     * ~toutes les 3 s en tracking actif) : sans coût grâce à
-     * ExistingWorkPolicy.KEEP — un travail déjà en attente/en cours pour ce nom
-     * unique n'est JAMAIS dupliqué, WorkManager retourne immédiatement. La
-     * contrainte NetworkType.CONNECTED fait que le travail attend nativement la
-     * reprise réseau si nécessaire ("s'il y a du réseau" est géré par WorkManager
-     * lui-même, pas par une vérification manuelle ici).
+     * Déclenche un envoi EXPEDITED après une insertion en DB, au plus une fois
+     * toutes les MIN_TRIGGER_INTERVAL_MS (throttle explicite en amont de
+     * WorkManager — voir ci-dessous).
+     *
+     * BUG CORRIGÉ (audit 2026-08-26, diagnostiqué sur DB réelle : 117 positions
+     * capturées, 0 jamais synchronisées) : ce trigger était appelé À CHAQUE
+     * position (~toutes les 3 s en tracking actif). Le commentaire d'origine
+     * ("sans coût grâce à ExistingWorkPolicy.KEEP") était trompeur : KEEP évite
+     * bien la duplication tant qu'un travail est DÉJÀ en attente/en cours, mais
+     * dès qu'un envoi réussissait (quelques secondes), le nom unique se
+     * libérait — et la position suivante (3 s plus tard) redemandait
+     * IMMÉDIATEMENT un nouveau travail EXPEDITED. Répété en continu, ce rythme
+     * épuise en quelques minutes le quota "expedited work" qu'Android accorde
+     * à une app en arrière-plan (même exemptée d'optimisation batterie,
+     * vérifié sur l'appareil de test). Une fois épuisé,
+     * RUN_AS_NON_EXPEDITED_WORK_REQUEST rétrograde chaque tentative en travail
+     * différé ordinaire — soumis au PLANCHER de 15 min de WorkManager (voir
+     * PERIODIC_INTERVAL_MINUTES) : confirmé sur l'appareil (dumpsys
+     * jobscheduler) par DEUX jobs bloqués à "Minimum latency: +14m59s". Résultat
+     * : dès que le quota était épuisé, plus AUCUN envoi avant ~15 min — perçu
+     * comme "l'app ne partage plus jamais et ne se reconnecte plus".
+     *
+     * Le throttle ci-dessous limite les DEMANDES de travail expedited à au
+     * plus une toutes les 15 s (early-return synchrone, sans toucher
+     * WorkManager si appelé trop tôt) — largement suffisant pour rester dans
+     * le quota, sans perte : chaque déclenchement envoie TOUT le lot en
+     * attente (jusqu'à BATCH_LIMIT), pas seulement la dernière position. Le
+     * pire cas passe d'un blocage de ~15 min à un simple délai de ~15 s.
      */
     public static void triggerImmediateUploadIfNetworkAvailable(Context context) {
+        long now = System.currentTimeMillis();
+        long last = lastTriggerAtMs.get();
+        if (now - last < MIN_TRIGGER_INTERVAL_MS) {
+            return; // Trop tôt : le prochain appel (position suivante) ou le
+                     // filet périodique s'en chargera — aucune position n'est
+                     // perdue, elle reste simplement en file un peu plus longtemps.
+        }
+        if (!lastTriggerAtMs.compareAndSet(last, now)) {
+            return; // Un autre thread vient de déclencher entre-temps.
+        }
         Constraints constraints = new Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build();
