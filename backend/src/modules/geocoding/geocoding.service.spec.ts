@@ -189,3 +189,160 @@ describe('GeocodingService', () => {
     });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Correctifs autocomplétion Madagascar : bbox hémisphère sud, filtrage pays
+// réel (countrycodes + bounded), et throttle ~1 req/s exigé par Nominatim.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Redis à null : force de VRAIS appels réseau (simulés) à chaque test — sinon le
+// cache court-circuiterait fetch() et les assertions ne vérifieraient plus rien.
+function makeUncachedService(): GeocodingService {
+  return new GeocodingService(null as any, {
+    get: jest.fn(() => undefined),
+  } as unknown as ConfigService);
+}
+
+function nominatimItem(lat: number, lon: number) {
+  return {
+    lat: String(lat),
+    lon: String(lon),
+    display_name: 'Ambohipo, Antananarivo, Madagascar',
+    name: 'Ambohipo',
+    address: { suburb: 'Ambohipo', city: 'Antananarivo' },
+  };
+}
+
+/**
+ * Enregistre chaque URL appelée + l'instant du départ.
+ * `items` : nombre de résultats renvoyés (10+ fait sortir search() de sa boucle
+ * après UNE seule requête — indispensable pour compter précisément les appels).
+ */
+function recordFetchCalls(items = 10) {
+  const calls: { url: string; at: number }[] = [];
+  jest.spyOn(global, 'fetch').mockImplementation((async (input: unknown) => {
+    calls.push({ url: String(input), at: Date.now() });
+    return {
+      ok: true,
+      json: async () =>
+        Array.from({ length: items }, (_, i) => nominatimItem(-18.9 - i * 0.01, 47.5 + i * 0.01)),
+    };
+  }) as unknown as typeof fetch);
+  return calls;
+}
+
+describe('GeocodingService — ciblage Madagascar (Nominatim)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("search() envoie countrycodes=mg sur l'URL Nominatim", async () => {
+    const calls = recordFetchCalls();
+    await makeUncachedService().search('Ambohipo');
+
+    expect(calls.length).toBeGreaterThan(0);
+    const url = new URL(calls[0].url);
+    expect(url.origin).toBe('https://nominatim.openstreetmap.org');
+    expect(url.searchParams.get('countrycodes')).toBe('mg');
+  });
+
+  it('le premier appel (celui qui porte le viewbox) contient bounded=1', async () => {
+    const calls = recordFetchCalls();
+    await makeUncachedService().search('Ambohipo');
+
+    const url = new URL(calls[0].url);
+    // viewbox et bounded vont de pair : viewbox seul n'est qu'un critère de tri.
+    expect(url.searchParams.get('viewbox')).toBeTruthy();
+    expect(url.searchParams.get('bounded')).toBe('1');
+  });
+
+  it("la bbox Madagascar est dans l'hémisphère sud (-11, jamais +11)", async () => {
+    const calls = recordFetchCalls();
+    await makeUncachedService().search('Ambohipo');
+
+    const viewbox = new URL(calls[0].url).searchParams.get('viewbox') as string;
+    expect(viewbox).toContain('-11');
+    expect(viewbox).not.toMatch(/,11,/);
+
+    // Toutes les latitudes de la bbox doivent être négatives : Madagascar va de
+    // -11.9 à -25.6. Format Nominatim : <lon1>,<lat1>,<lon2>,<lat2>.
+    const [, lat1, , lat2] = viewbox.split(',').map(Number);
+    expect(lat1).toBeLessThan(0);
+    expect(lat2).toBeLessThan(0);
+  });
+
+  // Timeout élargi : 0 résultat force la boucle principale (3 requêtes) PUIS la
+  // boucle de repli (3 requêtes), chacune espacée de 1100ms par le throttle →
+  // ~6,6s incompressibles. C'est le comportement voulu, pas une lenteur subie.
+  it('les requêtes de repli portent aussi countrycodes=mg', async () => {
+    const calls = recordFetchCalls(0);
+    await makeUncachedService().search('Lot II B 45 Ambohipo');
+
+    expect(calls.length).toBeGreaterThan(1);
+    // Au moins une requête de repli (limit=10) doit avoir été émise, en plus de
+    // la boucle principale (limit=20) — sinon on ne testerait pas le repli.
+    expect(calls.some((c) => new URL(c.url).searchParams.get('limit') === '10')).toBe(true);
+    for (const call of calls) {
+      expect(new URL(call.url).searchParams.get('countrycodes')).toBe('mg');
+    }
+  }, 30000);
+});
+
+describe('GeocodingService — throttle Nominatim (~1 req/s)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('sérialise deux search() concurrents à >= ~1100ms entre les départs', async () => {
+    const calls = recordFetchCalls();
+    const service = makeUncachedService();
+
+    // Deux requêtes concurrentes, termes DIFFÉRENTS (clés de cache distinctes —
+    // de toute façon Redis est null ici).
+    await Promise.all([service.search('Ambohipo'), service.search('Analakely')]);
+
+    expect(calls).toHaveLength(2);
+    const gap = calls[1].at - calls[0].at;
+    // 1100ms visés ; marge de 100ms pour l'imprécision des timers Node.
+    expect(gap).toBeGreaterThanOrEqual(1000);
+  }, 20000);
+
+  it('espace aussi des appels de méthodes différentes (file partagée)', async () => {
+    const calls = recordFetchCalls();
+    const service = makeUncachedService();
+
+    // reverse() puis search() : le throttle est au niveau du module, pas de la
+    // méthode — les deux passent par la MÊME file.
+    await Promise.all([service.reverse(-18.91, 47.52), service.search('Ambohipo')]);
+
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    const gap = calls[1].at - calls[0].at;
+    expect(gap).toBeGreaterThanOrEqual(1000);
+  }, 20000);
+
+  it('un appel en échec ne bloque pas définitivement la file', async () => {
+    const calls: { url: string; at: number }[] = [];
+    let first = true;
+    jest.spyOn(global, 'fetch').mockImplementation((async (input: unknown) => {
+      calls.push({ url: String(input), at: Date.now() });
+      if (first) {
+        first = false;
+        throw new Error('network down');
+      }
+      return {
+        ok: true,
+        json: async () =>
+          Array.from({ length: 10 }, (_, i) => nominatimItem(-18.9 - i * 0.01, 47.5)),
+      };
+    }) as unknown as typeof fetch);
+
+    const service = makeUncachedService();
+    // Le 1er appel rejette côté fetch ; le 2e doit malgré tout être émis.
+    const [a, b] = await Promise.all([service.search('Echec'), service.search('Ambohipo')]);
+
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    // search() avale les erreurs réseau (best-effort) : pas de rejet propagé.
+    expect(Array.isArray(a)).toBe(true);
+    expect(Array.isArray(b)).toBe(true);
+  }, 20000);
+});

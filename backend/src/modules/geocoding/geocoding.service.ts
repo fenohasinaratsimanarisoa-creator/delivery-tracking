@@ -15,7 +15,47 @@ export type { GeocodingResult };
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
 const USER_AGENT = 'DeliveryTrack/1.0 (logistics)';
 const CACHE_TTL_SEC = 86400; // 24h
-const MG_VIEWBOX = '43,11,51,-26';
+// Bbox Madagascar au format Nominatim <lon1>,<lat1>,<lon2>,<lat2>. Le pays est
+// ENTIÈREMENT dans l'hémisphère sud (lat -11.9 à -25.6) : le « 11 » positif
+// précédent décrivait une bbox à cheval sur l'équateur, remontant jusqu'au
+// Somaliland — les résultats malgaches n'étaient donc pas priorisés.
+const MG_VIEWBOX = '43,-11,51,-26';
+
+// ── Throttle process-wide des appels Nominatim ──────────────────────────────
+// Politique d'usage Nominatim : max ~1 req/s par IP, sinon bannissement
+// intermittent — qui se manifeste en prod par des réponses vides SILENCIEUSES
+// (HTTP 200 avec []), donc une autocomplétion qui « ne trouve rien » sans la
+// moindre erreur dans les logs. search() enchaîne jusqu'à 3 requêtes + 3 de
+// repli, et nearby() jusqu'à 3, le tout sans espacement : le quota était
+// dépassé dès la première frappe de l'utilisateur.
+// Toutes les requêtes sortantes vers Nominatim (search, reverse, nearby) sont
+// sérialisées dans une file unique au niveau du module (donc partagée par
+// toutes les instances du service dans le process).
+const NOMINATIM_MIN_INTERVAL_MS = 1100;
+let nominatimQueue: Promise<unknown> = Promise.resolve();
+let nominatimLastDispatchAt = 0;
+
+function throttleNominatim<T>(fn: () => Promise<T>): Promise<T> {
+  const run = async (): Promise<T> => {
+    const waitMs = nominatimLastDispatchAt + NOMINATIM_MIN_INTERVAL_MS - Date.now();
+    if (waitMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+    // Horodaté au DÉPART de la requête (et non à son retour) : c'est l'espacement
+    // entre départs que Nominatim mesure.
+    nominatimLastDispatchAt = Date.now();
+    return fn();
+  };
+
+  const result = nominatimQueue.then(run, run);
+  // La file ne doit jamais rester « cassée » sur un rejet : on la ré-amorce sur
+  // une promesse résolue, sinon tout appel ultérieur hériterait de l'échec.
+  nominatimQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
 
 function extractLocalLabel(item: any): string {
   const addr = item.address || {};
@@ -228,24 +268,33 @@ export class GeocodingService {
         format: 'json',
         limit: '20',
         'accept-language': 'fr',
+        // Sans countrycodes, une requête comme « Ambohipo » remonte d'abord des
+        // homonymes hors Madagascar (nearby() le posait déjà, search() non).
+        countrycodes: 'mg',
         addressdetails: '1',
         namedetails: '1',
       });
       if (results.length < 3) {
         params.set('viewbox', MG_VIEWBOX);
+        // viewbox SEUL n'est qu'un critère de tri chez Nominatim ; sans
+        // bounded=1 les résultats hors bbox remontent quand même.
+        params.set('bounded', '1');
       }
 
       const url = `${NOMINATIM_BASE}/search?${params}`;
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-
       try {
-        const res = await fetch(url, {
-          headers: { 'User-Agent': USER_AGENT },
-          signal: controller.signal,
+        // AbortController créé DANS le callback throttlé : sinon le budget de
+        // 8 s courrait pendant l'attente en file, et une requête placée en
+        // fin de file serait abandonnée avant même d'être émise.
+        const res = await throttleNominatim(() => {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 8000);
+          return fetch(url, {
+            headers: { 'User-Agent': USER_AGENT },
+            signal: controller.signal,
+          }).finally(() => clearTimeout(timeout));
         });
-        clearTimeout(timeout);
 
         if (res.ok) {
           const data: any[] = await res.json();
@@ -263,7 +312,6 @@ export class GeocodingService {
           }
         }
       } catch (err: unknown) {
-        clearTimeout(timeout);
         this.logger.warn(`Nominatim search failed for query="${q}": ${(err as Error).message}`);
       }
 
@@ -286,17 +334,19 @@ export class GeocodingService {
           format: 'json',
           limit: '10',
           'accept-language': 'fr',
+          countrycodes: 'mg',
           addressdetails: '1',
           namedetails: '1',
         });
         try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 6000);
-          const res = await fetch(`${NOMINATIM_BASE}/search?${params}`, {
-            headers: { 'User-Agent': USER_AGENT },
-            signal: controller.signal,
+          const res = await throttleNominatim(() => {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 6000);
+            return fetch(`${NOMINATIM_BASE}/search?${params}`, {
+              headers: { 'User-Agent': USER_AGENT },
+              signal: controller.signal,
+            }).finally(() => clearTimeout(timeout));
           });
-          clearTimeout(timeout);
           if (res.ok) {
             const data: any[] = await res.json();
             for (const item of data) {
@@ -345,15 +395,15 @@ export class GeocodingService {
 
     const url = `${NOMINATIM_BASE}/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=fr&addressdetails=1`;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-
     try {
-      const res = await fetch(url, {
-        headers: { 'User-Agent': USER_AGENT },
-        signal: controller.signal,
+      const res = await throttleNominatim(() => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 6000);
+        return fetch(url, {
+          headers: { 'User-Agent': USER_AGENT },
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeout));
       });
-      clearTimeout(timeout);
 
       if (!res.ok) return null;
       const data: any = await res.json();
@@ -369,7 +419,6 @@ export class GeocodingService {
 
       return result;
     } catch (err) {
-      clearTimeout(timeout);
       this.logger.debug(`Nominatim reverse geocode failed (best-effort): ${(err as Error).message}`);
       return null;
     }
@@ -418,13 +467,14 @@ export class GeocodingService {
       const url = `${NOMINATIM_BASE}/search?${params}`;
 
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        const res = await fetch(url, {
-          headers: { 'User-Agent': USER_AGENT },
-          signal: controller.signal,
+        const res = await throttleNominatim(() => {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 3000);
+          return fetch(url, {
+            headers: { 'User-Agent': USER_AGENT },
+            signal: controller.signal,
+          }).finally(() => clearTimeout(timeout));
         });
-        clearTimeout(timeout);
 
         if (res.ok) {
           const data: any[] = await res.json();
