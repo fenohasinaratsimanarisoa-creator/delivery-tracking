@@ -632,6 +632,30 @@ export class AuthService {
     if (!userRecord) {
       throw new UnauthorizedException('User not found');
     }
+
+    // BUG CORRIGÉ (audit 2026-08-26) : register()/googleLogin() appelaient ceci
+    // avec sessionId=undefined, la UserSession n'était matérialisée QU'APRÈS la
+    // signature des tokens (branche else ci-dessous, désormais supprimée) — le
+    // refresh token émis à l'inscription/première connexion Google n'embarquait
+    // donc JAMAIS de sessionId. refresh() exige ce champ (ligne ~293) et rejette
+    // tout JWT qui en est dépourvu avec un 401 définitif, AUCUNE rotation
+    // ultérieure ne pouvant réparer un token déjà signé sans lui : ces comptes ne
+    // pouvaient donc jamais rafraîchir leur session (reconnexion forcée à
+    // chaque expiration de l'access token / redémarrage de l'app). Fix : la
+    // UserSession est désormais TOUJOURS matérialisée AVANT la signature, pour
+    // que sessionId soit dans le payload dès la toute première émission.
+    if (!sessionId) {
+      const session = await this.prisma.userSession.create({
+        data: {
+          userId,
+          device: ctx?.device,
+          ip: ctx?.ip,
+          expiresAt: new Date(Date.now() + this.refreshExpirationSeconds * 1000),
+        },
+      });
+      sessionId = session.id;
+    }
+
     const payload: JwtPayload = {
       sub: userId,
       email,
@@ -639,12 +663,14 @@ export class AuthService {
       companyId,
       firstName: userRecord?.firstName || '',
       lastName: userRecord?.lastName || '',
+      // Le refresh token embarque l'identifiant de la UserSession de CETTE
+      // connexion : au refresh, on retrouve la session SANS ambiguïté (et non
+      // plus via userId seul, qui confondait tous les appareils). Exposé aussi
+      // sur l'access token pour que JwtStrategy le propage vers request.user
+      // (ex. marquage "session courante"). Toujours défini à ce stade (créé
+      // juste au-dessus si l'appelant n'en avait pas encore).
+      sessionId,
     };
-    // Le refresh token embarque l'identifiant de la UserSession de CETTE connexion :
-    // au refresh, on retrouve la session SANS ambiguïté (et non plus via userId seul,
-    // qui confondait tous les appareils). Exposé aussi sur l'access token pour que
-    // JwtStrategy le propage vers request.user (ex. marquage "session courante").
-    if (sessionId) payload.sessionId = sessionId;
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
@@ -657,43 +683,29 @@ export class AuthService {
     });
 
     const refreshTokenHash = await bcrypt.hash(refreshToken, 12);
-    if (sessionId) {
-      // Rotation ATOMIQUE du refresh token sur CETTE session : le hash courant
-      // devient previous (historique un niveau), le nouveau hash prend sa place.
-      // Les autres sessions de l'utilisateur gardent leur hash intacts. Le champ
-      // legacy User.refreshTokenHash n'est plus écrit ni lu. En concurrence
-      // (multi-onglets), l'UPDATE verrouille la ligne : le perdant du dernier
-      // gagnant reste toujours accessible via previous_refresh_token_hash et sa
-      // prochaine rotation le ré-accepte (voir refresh()).
-      const rotated = await this.prisma.$executeRaw`
-        UPDATE user_sessions
-        SET previous_refresh_token_hash = refresh_token_hash,
-            refresh_token_hash = ${refreshTokenHash},
-            last_activity = now(),
-            expires_at = GREATEST(expires_at, now() + make_interval(secs => ${this.refreshExpirationSeconds}))
-        WHERE id = ${sessionId}::uuid AND user_id = ${userId}::uuid
-      `;
-      if (rotated === 0) {
-        // Session supprimée entre la validation (refresh) et la rotation
-        // (révocation concurrente) : ne jamais émettre de tokens pour une
-        // session morte, on révoque implicitement en refusant.
-        throw new UnauthorizedException('Invalid refresh token');
-      }
-    } else {
-      // Appelant sans session existante (register / OAuth / création de session) :
-      // on matérialise la UserSession ici pour que le refresh token soit TOUJOURS
-      // rattaché à une ligne durable, jamais au champ legacy. Les métadonnées
-      // ip/device (si fournies par l'appelant) alimentent « Mes sessions » et
-      // l'historique de connexions — sinon ces lignes restaient vides.
-      await this.prisma.userSession.create({
-        data: {
-          userId,
-          device: ctx?.device,
-          ip: ctx?.ip,
-          refreshTokenHash,
-          expiresAt: new Date(Date.now() + this.refreshExpirationSeconds * 1000),
-        },
-      });
+    // Rotation ATOMIQUE du refresh token sur CETTE session : le hash courant
+    // devient previous (historique un niveau), le nouveau hash prend sa place.
+    // Les autres sessions de l'utilisateur gardent leur hash intacts. Le champ
+    // legacy User.refreshTokenHash n'est plus écrit ni lu. En concurrence
+    // (multi-onglets), l'UPDATE verrouille la ligne : le perdant du dernier
+    // gagnant reste toujours accessible via previous_refresh_token_hash et sa
+    // prochaine rotation le ré-accepte (voir refresh()). S'applique aussi à la
+    // toute première émission (session fraîchement créée ci-dessus, hash encore
+    // NULL) : previous_refresh_token_hash reste NULL, refresh_token_hash prend
+    // le premier hash — comportement identique à un INSERT direct du hash.
+    const rotated = await this.prisma.$executeRaw`
+      UPDATE user_sessions
+      SET previous_refresh_token_hash = refresh_token_hash,
+          refresh_token_hash = ${refreshTokenHash},
+          last_activity = now(),
+          expires_at = GREATEST(expires_at, now() + make_interval(secs => ${this.refreshExpirationSeconds}))
+      WHERE id = ${sessionId}::uuid AND user_id = ${userId}::uuid
+    `;
+    if (rotated === 0) {
+      // Session supprimée entre la validation (refresh) et la rotation
+      // (révocation concurrente) : ne jamais émettre de tokens pour une
+      // session morte, on révoque implicitement en refusant.
+      throw new UnauthorizedException('Invalid refresh token');
     }
 
     const user = await this.prisma.user.findUnique({

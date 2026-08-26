@@ -45,7 +45,11 @@ const mockPrisma = {
     findFirst: jest.fn(),
   },
   userSession: {
-    create: jest.fn(),
+    // Défaut résolu (survit à clearAllMocks(), écrasable via mockResolvedValueOnce
+    // par test) : generateTokens() lit désormais session.id au retour de ce create()
+    // pour les flux sans session préexistante (register/OAuth) — un jest.fn() nu
+    // résout undefined et faisait planter ces tests sur `session.id` avant ce défaut.
+    create: jest.fn().mockResolvedValue({ id: 'session-generated' }),
     update: jest.fn(),
     updateMany: jest.fn(),
     findUnique: jest.fn(),
