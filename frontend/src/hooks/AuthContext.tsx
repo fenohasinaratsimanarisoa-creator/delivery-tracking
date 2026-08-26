@@ -36,6 +36,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const initialisedRef = useRef(false);
+  // Vrai dès que login() a été appelé explicitement (callback OAuth Google,
+  // formulaire de connexion, vérification 2FA...). Le refresh silencieux
+  // lancé au montage (ci-dessous) vérifie "y a-t-il déjà une session ?" —
+  // il ne doit JAMAIS écraser une session qui vient d'être établie par un
+  // flux plus récent et plus autoritaire pendant qu'il était encore en vol.
+  // Bug réel observé : AuthCallbackPage appelle login() avec un token Google
+  // fraîchement émis, puis navigue vers '/' — mais le refresh silencieux
+  // (démarré en parallèle dès le montage du Provider) résout ENSUITE avec un
+  // 401 (son propre appel /auth/refresh, pas lié au token Google) et appelait
+  // setUser(null), déconnectant l'utilisateur qui venait tout juste de se
+  // connecter. Symptôme côté utilisateur : la connexion Google "boucle" — elle
+  // réussit bien côté serveur (vérifié dans les logs) mais l'état local est
+  // immédiatement écrasé.
+  const explicitLoginRef = useRef(false);
 
   useEffect(() => {
     if (initialisedRef.current) return;
@@ -88,6 +102,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         const outcome = await refreshAccessTokenOutcome();
+        // Un login explicite (OAuth, mot de passe, 2FA) est survenu PENDANT que
+        // ce refresh était en vol : sa session est plus fraîche et plus
+        // autoritaire — ne rien appliquer ici, quel que soit le résultat.
+        if (explicitLoginRef.current) return;
         if (outcome.token) {
           setAccessToken(outcome.token);
           const u = userFromToken(outcome.token);
@@ -101,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // on conserve le token stocké éventuel, le prochain refresh réactif
         // (intercepteur 401 ou timer socket) retentera.
       } catch {
+        if (explicitLoginRef.current) return;
         const storedToken = getAccessToken();
         if (!storedToken) {
           setAccessToken(null);
@@ -126,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const login = useCallback((userData: User, accessToken: string) => {
+    explicitLoginRef.current = true;
     setAccessToken(accessToken);
     setUser(userData);
   }, []);
