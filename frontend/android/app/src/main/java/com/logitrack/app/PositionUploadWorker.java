@@ -10,7 +10,6 @@ import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.ExistingWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.OneTimeWorkRequest;
-import androidx.work.OutOfQuotaPolicy;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 import androidx.work.WorkRequest;
@@ -43,13 +42,19 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * DEUX DÉCLENCHEURS (voir BackgroundLocationPlugin.start()/stop() et
  * LocationForegroundService.handleLocationUpdate()) :
- *  - PÉRIODIQUE (~3 min, contrainte NetworkType.CONNECTED) : filet de sécurité
- *    si le déclenchement one-shot a été manqué (ex. app tuée juste après une
- *    insertion).
- *  - ONE-SHOT EXPEDITED, immédiatement après CHAQUE insertion en DB : envoi
- *    au plus vite dès que le réseau est disponible. `enqueueUniqueWork` avec
- *    ExistingWorkPolicy.KEEP rend cet appel FRÉQUENT (à chaque position, ~3 s)
- *    sans coût : un travail déjà en attente/en cours n'est jamais dupliqué.
+ *  - PÉRIODIQUE (15 min — plancher imposé par WorkManager pour tout travail
+ *    périodique, contrainte NetworkType.CONNECTED) : filet de sécurité si le
+ *    déclenchement one-shot a été manqué (ex. app tuée juste après une insertion).
+ *  - ONE-SHOT ordinaire (JAMAIS "expedited" : voir
+ *    triggerImmediateUploadIfNetworkAvailable — sur Android < 12 le mode
+ *    expedited exige getForegroundInfoAsync(), absent de la classe Worker, ce
+ *    qui faisait échouer chaque envoi immédiat), déclenché après une insertion
+ *    en DB et throttlé à 1×/15 s. Un OneTimeWorkRequest n'a aucun plancher :
+ *    il part dès que la contrainte réseau est satisfaite.
+ *
+ * Chaque exécution VIDE TOUTE la file (boucle bornée par MAX_BATCHES_PER_RUN),
+ * pas seulement un lot : un arriéré de plusieurs milliers de positions
+ * accumulé hors ligne se résorbe en un passage.
  *
  * ÉCHECS : ne marque JAMAIS une position comme synchronisée tant que le
  * serveur n'a pas répondu 2xx — aucune perte de données possible en cas
@@ -75,6 +80,13 @@ public class PositionUploadWorker extends Worker {
     // Anti-épuisement du quota "expedited work" (voir
     // triggerImmediateUploadIfNetworkAvailable ci-dessous).
     private static final long MIN_TRIGGER_INTERVAL_MS = 15_000;
+    /**
+     * Nombre maximum de lots envoyés dans UNE exécution (vidage d'arriéré).
+     * 25 × 200 = 5 000 positions par passage — largement de quoi rattraper une
+     * nuit hors ligne, tout en restant loin de la limite d'exécution de
+     * WorkManager (10 min). Le reliquat éventuel part au cycle suivant.
+     */
+    private static final int MAX_BATCHES_PER_RUN = 25;
     private static final AtomicLong lastTriggerAtMs = new AtomicLong(0);
 
     public PositionUploadWorker(@NonNull Context context, @NonNull WorkerParameters params) {
@@ -92,6 +104,8 @@ public class PositionUploadWorker extends Worker {
             db.pruneOld(); // entretien même sans rien à envoyer ce cycle
             return Result.success();
         }
+        // Note : la boucle de vidage complet est plus bas (voir MAX_BATCHES_PER_RUN) —
+        // ce premier lot sert aussi à valider token/URL avant d'engager la boucle.
 
         // Token absent ou expiré : ne tente RIEN ce cycle, les lignes restent
         // non-synced (aucune perte) — log discret, retry au cycle suivant. Le
@@ -109,29 +123,56 @@ public class PositionUploadWorker extends Worker {
             return Result.success();
         }
 
+        // VIDAGE COMPLET EN UN PASSAGE (audit 2026-08-27) : envoyer un seul lot de
+        // BATCH_LIMIT par exécution ne suffisait pas à rattraper un arriéré — le
+        // GPS capture en continu, donc un arriéré de plusieurs milliers de
+        // positions (longue veille, tunnel, panne réseau) ne se serait JAMAIS
+        // résorbé. On boucle jusqu'à vider la file, borné par
+        // MAX_BATCHES_PER_RUN pour rester loin de la limite d'exécution de
+        // WorkManager (10 min) : le reliquat éventuel part au cycle suivant
+        // (quelques secondes plus tard), sans jamais rien perdre.
+        int totalSynced = 0;
         try {
-            int httpStatus = uploadBatch(apiUrl, token.token, batch);
-            if (httpStatus >= 200 && httpStatus < 300) {
+            for (int i = 0; i < MAX_BATCHES_PER_RUN; i++) {
+                // WorkManager demande l'arrêt (contrainte perdue, annulation) :
+                // on s'arrête proprement, ce qui est déjà envoyé reste marqué.
+                if (isStopped()) break;
+
+                int httpStatus = uploadBatch(apiUrl, token.token, batch);
+
+                if (httpStatus == 401) {
+                    // Credential refusé côté serveur (session révoquée, device
+                    // token invalidé) : ne marque RIEN et n'insiste pas — le
+                    // prochain passage du JS en poussera un nouveau.
+                    Log.w(TAG, "Upload natif : 401 — credential refusé (" + totalSynced
+                        + " position(s) déjà synchronisée(s) ce cycle), retry au prochain cycle");
+                    return Result.success();
+                }
+                if (httpStatus < 200 || httpStatus >= 300) {
+                    // Échec réseau/5xx : NE marque RIEN pour ce lot, laisse
+                    // WorkManager retenter avec son backoff exponentiel natif.
+                    // Les lots déjà confirmés plus haut restent acquis.
+                    Log.w(TAG, "Upload natif échoué (HTTP " + httpStatus + ") — retry avec backoff");
+                    return Result.retry();
+                }
+
                 List<Long> ids = new ArrayList<>(batch.size());
                 for (LocationQueueDb.QueuedPosition p : batch) ids.add(p.id);
                 db.markSynced(ids);
-                db.pruneOld();
-                Log.i(TAG, "Upload natif réussi : " + ids.size() + " position(s) synchronisée(s)");
-                return Result.success();
+                totalSynced += ids.size();
+
+                // Lot suivant : s'il est vide, la file est entièrement vidée.
+                batch = db.getUnsyncedBatch(BATCH_LIMIT);
+                if (batch.isEmpty()) break;
             }
-            if (httpStatus == 401) {
-                // Token expiré côté serveur mais pas encore rafraîchi côté JS
-                // (course possible entre les deux) : ne marque rien, retry au
-                // prochain cycle — le prochain refresh JS mettra le token à jour.
-                Log.w(TAG, "Upload natif : 401 (token pas encore rafraîchi côté JS) — retry au prochain cycle");
-                return Result.success();
-            }
-            // Échec réseau/5xx (ou tout autre code inattendu) : NE marque RIEN,
-            // laisse WorkManager retenter avec son backoff exponentiel natif.
-            Log.w(TAG, "Upload natif échoué (HTTP " + httpStatus + ") — retry avec backoff");
-            return Result.retry();
+
+            db.pruneOld();
+            Log.i(TAG, "Upload natif réussi : " + totalSynced + " position(s) synchronisée(s)");
+            return Result.success();
         } catch (IOException e) {
             Log.w(TAG, "Upload natif : erreur réseau — retry avec backoff", e);
+            // Les lots confirmés avant la coupure sont déjà marqués : le retry
+            // repartira du premier lot non encore synchronisé.
             return Result.retry();
         }
     }
@@ -263,9 +304,26 @@ public class PositionUploadWorker extends Worker {
         Constraints constraints = new Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build();
+        // PAS de setExpedited() (audit 2026-08-27, cause racine confirmée sur
+        // appareil réel Android 10 / API 29) : sur Android < 12, WorkManager
+        // implémente le travail "expedited" en le lançant comme SERVICE DE
+        // PREMIER PLAN, ce qui EXIGE que le worker fournisse une notification via
+        // getForegroundInfoAsync(). La classe Worker de base ne l'implémente pas —
+        // son implémentation par défaut LÈVE IllegalStateException. Résultat :
+        // chaque envoi one-shot mourait instantanément (~40 ms) et WorkManager
+        // marquait la tâche FAILED (constaté dans sa base interne :
+        // `PositionUploadWorker FAILED tentatives=1`, alors que ce doWork() ne
+        // retourne JAMAIS failure()). L'envoi immédiat n'a donc JAMAIS fonctionné
+        // sur les appareils < Android 12 : seule la tâche périodique (15 min,
+        // sans setExpedited) passait, plafonnée à BATCH_LIMIT — moins que ce que
+        // le GPS capture dans le même intervalle, d'où une file qui ne pouvait
+        // que croître indéfiniment ("hors ligne" permanent en veille).
+        //
+        // Un OneTimeWorkRequest ORDINAIRE n'a AUCUN plancher de 15 min (ce
+        // plancher ne concerne que PeriodicWorkRequest) : il s'exécute dès que la
+        // contrainte réseau est satisfaite, typiquement en quelques secondes.
         OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(PositionUploadWorker.class)
             .setConstraints(constraints)
-            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
             .build();
         WorkManager.getInstance(context)
