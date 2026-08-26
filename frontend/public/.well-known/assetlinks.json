@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.logitrack.app",
+      "sha256_cert_fingerprints": [
+        "E6:18:38:F0:36:EF:80:3B:76:EC:45:48:8A:6D:5D:D2:AC:82:13:FB:4B:53:86:80:5C:BE:1F:01:E8:79:B0:A4"
+      ]
+    }
+  }
+]

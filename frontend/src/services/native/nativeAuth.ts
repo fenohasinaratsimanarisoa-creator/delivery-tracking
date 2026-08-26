@@ -1,6 +1,19 @@
 "use client";
 import { getApiBaseUrl } from '../api/config';
 
+// localStorage, PAS sessionStorage (audit 2026-08-26) : entre l'ouverture du
+// Custom Tab et le retour du deep link, l'utilisateur passe potentiellement
+// 10-60s+ sur l'écran de connexion Google, temps largement suffisant pour que
+// l'OS (MIUI en particulier) tue le process de l'app en arrière-plan pour
+// libérer de la mémoire. sessionStorage ne survit PAS à un kill de process —
+// à la réouverture (process neuf), RELAY_KEY était vide, le state ne
+// correspondait jamais, et appUrlOpen rejetait le deep link en silence
+// (un simple console.warn, invisible pour l'utilisateur) : la connexion
+// Google semblait "ne rien faire", sans jamais échouer visiblement. localStorage
+// survit au kill de process (persisté sur disque, comme les cookies) — le
+// relayId/verifier restent lisibles même après un redémarrage du WebView.
+// Sans risque : valeurs à usage unique, effacées par clearOAuthNativeState()
+// dès l'échange réussi.
 const RELAY_KEY = 'dt_oauth_relay';
 const VERIFIER_KEY = 'dt_oauth_verifier';
 
@@ -8,8 +21,8 @@ export const OAUTH_VERIFIER_KEY = VERIFIER_KEY;
 
 export function clearOAuthNativeState(): void {
   try {
-    sessionStorage.removeItem(RELAY_KEY);
-    sessionStorage.removeItem(VERIFIER_KEY);
+    localStorage.removeItem(RELAY_KEY);
+    localStorage.removeItem(VERIFIER_KEY);
   } catch {}
 }
 
@@ -58,7 +71,7 @@ async function sha256Base64Url(input: string): Promise<string> {
 export async function openGoogleOAuthInNative(): Promise<void> {
   const verifier = randomBase64Url(32);
   const codeChallenge = await sha256Base64Url(verifier);
-  sessionStorage.setItem(VERIFIER_KEY, verifier);
+  localStorage.setItem(VERIFIER_KEY, verifier);
 
   let relayId = '';
   try {
@@ -71,10 +84,10 @@ export async function openGoogleOAuthInNative(): Promise<void> {
     const data = (await res.json()) as { relayId?: string };
     if (!data.relayId) throw new Error('begin returned no relayId');
     relayId = data.relayId;
-    sessionStorage.setItem(RELAY_KEY, relayId);
+    localStorage.setItem(RELAY_KEY, relayId);
   } catch (err) {
-    sessionStorage.removeItem(RELAY_KEY);
-    sessionStorage.removeItem(VERIFIER_KEY);
+    localStorage.removeItem(RELAY_KEY);
+    localStorage.removeItem(VERIFIER_KEY);
     throw err;
   }
 
@@ -104,12 +117,25 @@ export function initNativeOAuthListener(): void {
     void App.addListener('appUrlOpen', (data: { url: string }) => {
       try {
         const url = new URL(data.url);
-        if (url.protocol !== 'logitrack:') return;
+        // Deux mécanismes de relais possibles (audit 2026-08-26) : le schéma
+        // personnalisé logitrack:// (historique, dépend d'un geste utilisateur
+        // accepté par Chrome ET d'une relance d'app autorisée par l'OS — pas
+        // fiable sur MIUI même avec les bonnes permissions) et l'App Link HTTPS
+        // vérifié (frontend/public/.well-known/assetlinks.json + intent-filter
+        // autoVerify="true" dans AndroidManifest.xml) — intercepté par Android
+        // AVANT même que Chrome charge la page, donc indépendant de ces deux
+        // limites. Les deux sont acceptés ici ; le second est désormais le
+        // chemin principal (relayTokenToNativeApp cible l'URL https), le premier
+        // reste un repli manuel (lien cliquable dans AuthCallbackPage).
+        const isLegacyScheme = url.protocol === 'logitrack:';
+        const isVerifiedAppLink =
+          url.origin === window.location.origin && url.pathname.startsWith('/auth/callback');
+        if (!isLegacyScheme && !isVerifiedAppLink) return;
 
         const params = new URLSearchParams(url.hash.slice(1));
         const code = params.get('code');
         const state = params.get('state');
-        const expectedState = sessionStorage.getItem(RELAY_KEY);
+        const expectedState = localStorage.getItem(RELAY_KEY);
 
         // Un deep link est rejeté si le state (nonce serveur) est absent ou ne
         // correspond pas à celui émis avant l'ouverture du Browser.open. Le token
@@ -127,7 +153,7 @@ export function initNativeOAuthListener(): void {
           .then(({ Browser }) => Browser.close())
           .catch(() => {});
 
-        sessionStorage.removeItem(RELAY_KEY);
+        localStorage.removeItem(RELAY_KEY);
         window.location.href =
           `${window.location.origin}/auth/callback#code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
       } catch {

@@ -30,6 +30,27 @@
                 <data android:scheme="logitrack" android:host="auth" />
             </intent-filter>
 
+            <!-- App Link vérifié (Android Asset Links, voir
+                 frontend/public/.well-known/assetlinks.json) : relais OAuth Google
+                 natif (audit 2026-08-26). Remplace la dépendance au schéma
+                 personnalisé logitrack:// ci-dessus (conservé en repli) — celui-ci
+                 nécessite que Chrome accepte de naviguer vers un schéma non-http
+                 depuis un script (politique de geste utilisateur) ET que l'OS
+                 autorise le navigateur à relancer l'app en arrière-plan (bloqué en
+                 pratique sur MIUI même avec les permissions "démarrage
+                 automatique" accordées). Un App Link vérifié est intercepté par
+                 Android AVANT même que Chrome charge la page — l'OS route
+                 directement vers l'app, sans dépendre de ces deux mécanismes. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="169-58-237-88.sslip.io"
+                    android:pathPrefix="/auth/callback" />
+            </intent-filter>
+
         </activity>
 
         <provider

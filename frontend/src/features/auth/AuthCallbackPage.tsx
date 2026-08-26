@@ -55,7 +55,7 @@ export default function AuthCallbackPage() {
     async (code: string) => {
       processedRef.current = true;
       try {
-        const verifier = sessionStorage.getItem(OAUTH_VERIFIER_KEY);
+        const verifier = localStorage.getItem(OAUTH_VERIFIER_KEY);
         if (!verifier) {
           throw new Error('missing PKCE verifier');
         }
