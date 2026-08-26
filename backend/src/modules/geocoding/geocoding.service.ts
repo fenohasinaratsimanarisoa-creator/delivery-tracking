@@ -21,6 +21,18 @@ const CACHE_TTL_SEC = 86400; // 24h
 // Somaliland — les résultats malgaches n'étaient donc pas priorisés.
 const MG_VIEWBOX = '43,-11,51,-26';
 
+// ── Observabilité Google Places / Nominatim (endpoint /geocoding/health) ───
+// Sans ça, un échec Google Places (clé restreinte, billing désactivé, quota
+// dépassé) n'était visible que dans les logs error/warn — invisible pour
+// l'admin en prod. Redis si disponible (partagé entre toutes les instances
+// du process, comme le reste du fichier), sinon repli en mémoire locale à
+// l'instance (best-effort, comportement dégradé mais jamais bloquant).
+const GOOGLE_FAILURES_ZSET = 'geocoding:google:failures';
+const GOOGLE_LAST_ERROR_KEY = 'geocoding:google:lastError';
+const GOOGLE_FAILURE_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h
+const NOMINATIM_PING_CACHE_KEY = 'geocoding:nominatim:pingCache';
+const NOMINATIM_PING_CACHE_TTL_MS = 60_000; // 60s — évite de spammer Nominatim à chaque /health
+
 // ── Throttle process-wide des appels Nominatim ──────────────────────────────
 // Politique d'usage Nominatim : max ~1 req/s par IP, sinon bannissement
 // intermittent — qui se manifeste en prod par des réponses vides SILENCIEUSES
@@ -90,11 +102,124 @@ export class GeocodingService {
   private readonly logger = new Logger(GeocodingService.name);
   private readonly googleApiKey: string | undefined;
 
+  // Repli mémoire (utilisé seulement si Redis est indisponible) pour le
+  // suivi de santé Google Places / Nominatim — cf. constantes en tête de
+  // fichier pour le pourquoi.
+  private googleFailureTimestamps: number[] = [];
+  private googleLastError: { message: string; at: number } | null = null;
+  private nominatimPingCache: { reachable: boolean; at: number } | null = null;
+
   constructor(
     @Inject(REDIS_CLIENT) private redis: Redis | null,
     private configService: ConfigService,
   ) {
     this.googleApiKey = this.configService.get<string>('GOOGLE_MAPS_API_KEY');
+  }
+
+  /** Enregistre un échec HTTP non-ok ou une erreur réseau Google Places (placesAutocomplete/placeDetails). */
+  private async recordGooglePlacesFailure(message: string): Promise<void> {
+    const now = Date.now();
+    if (this.redis) {
+      try {
+        const member = `${now}-${Math.random().toString(36).slice(2, 8)}`;
+        await this.redis.zadd(GOOGLE_FAILURES_ZSET, now, member);
+        await this.redis.zremrangebyscore(GOOGLE_FAILURES_ZSET, 0, now - GOOGLE_FAILURE_WINDOW_MS);
+        // TTL de sécurité largement au-delà de 24h : purge le zset si /health
+        // n'est plus jamais interrogé (sinon il grossirait indéfiniment).
+        await this.redis.expire(GOOGLE_FAILURES_ZSET, 3 * 24 * 60 * 60);
+        await this.redis.set(GOOGLE_LAST_ERROR_KEY, JSON.stringify({ message, at: now }));
+        return;
+      } catch (err) {
+        this.logger.debug(`Redis write failed for Google Places failure tracking: ${(err as Error).message}`);
+      }
+    }
+    this.googleFailureTimestamps.push(now);
+    this.googleLastError = { message, at: now };
+  }
+
+  /** Lit le nombre d'échecs Google Places sur les dernières 24h + le dernier message d'erreur. */
+  private async getGoogleFailureStats(): Promise<{ count24h: number; lastError: string | null }> {
+    const now = Date.now();
+    if (this.redis) {
+      try {
+        await this.redis.zremrangebyscore(GOOGLE_FAILURES_ZSET, 0, now - GOOGLE_FAILURE_WINDOW_MS);
+        const count = await this.redis.zcard(GOOGLE_FAILURES_ZSET);
+        const raw = await this.redis.get(GOOGLE_LAST_ERROR_KEY);
+        const lastError = raw ? (JSON.parse(raw) as { message: string }).message : null;
+        return { count24h: count, lastError };
+      } catch (err) {
+        this.logger.debug(`Redis read failed for Google Places failure tracking: ${(err as Error).message}`);
+      }
+    }
+    const cutoff = now - GOOGLE_FAILURE_WINDOW_MS;
+    this.googleFailureTimestamps = this.googleFailureTimestamps.filter((t) => t >= cutoff);
+    return { count24h: this.googleFailureTimestamps.length, lastError: this.googleLastError?.message ?? null };
+  }
+
+  /** Ping léger Nominatim (reverse geocode sur Antananarivo), caché 60s pour ne pas spammer le service. */
+  private async checkNominatimReachable(): Promise<boolean> {
+    const now = Date.now();
+    if (this.redis) {
+      try {
+        const cached = await this.redis.get(NOMINATIM_PING_CACHE_KEY);
+        if (cached !== null) return cached === '1';
+      } catch (err) {
+        this.logger.debug(`Redis read failed for Nominatim ping cache: ${(err as Error).message}`);
+      }
+    } else if (this.nominatimPingCache && now - this.nominatimPingCache.at < NOMINATIM_PING_CACHE_TTL_MS) {
+      return this.nominatimPingCache.reachable;
+    }
+
+    let reachable = false;
+    try {
+      reachable = await throttleNominatim(async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+        try {
+          const res = await fetch(
+            `${NOMINATIM_BASE}/reverse?lat=-18.8792&lon=47.5079&format=json`,
+            { headers: { 'User-Agent': USER_AGENT }, signal: controller.signal },
+          );
+          return res.ok;
+        } finally {
+          clearTimeout(timeout);
+        }
+      });
+    } catch (err) {
+      this.logger.debug(`Nominatim health ping failed: ${(err as Error).message}`);
+      reachable = false;
+    }
+
+    if (this.redis) {
+      try {
+        await this.redis.set(NOMINATIM_PING_CACHE_KEY, reachable ? '1' : '0', 'EX', 60);
+      } catch (err) {
+        this.logger.debug(`Redis write failed for Nominatim ping cache: ${(err as Error).message}`);
+      }
+    } else {
+      this.nominatimPingCache = { reachable, at: now };
+    }
+
+    return reachable;
+  }
+
+  /** État de santé du geocoding — GET /geocoding/health. */
+  async getHealthStatus(): Promise<{
+    googlePlacesConfigured: boolean;
+    googlePlacesLastError: string | null;
+    googlePlacesFailureCount24h: number;
+    nominatimReachable: boolean;
+  }> {
+    const [googleStats, nominatimReachable] = await Promise.all([
+      this.getGoogleFailureStats(),
+      this.checkNominatimReachable(),
+    ]);
+    return {
+      googlePlacesConfigured: !!this.googleApiKey,
+      googlePlacesLastError: googleStats.lastError,
+      googlePlacesFailureCount24h: googleStats.count24h,
+      nominatimReachable,
+    };
   }
 
   async placesAutocomplete(
@@ -137,6 +262,7 @@ export class GeocodingService {
         this.logger.error(
           `Google Places API HTTP ${res.status} for input="${input}": ${errorBody.slice(0, 2000)}`,
         );
+        await this.recordGooglePlacesFailure(`HTTP ${res.status} on placesAutocomplete`);
         return [];
       }
       const data: any = await res.json();
@@ -167,6 +293,7 @@ export class GeocodingService {
       this.logger.error(
         `Google Places API fetch/parse error for input="${input}": ${(err as Error).message}`,
       );
+      await this.recordGooglePlacesFailure(`${(err as Error).message} (placesAutocomplete)`);
       return [];
     }
   }
@@ -203,6 +330,7 @@ export class GeocodingService {
         this.logger.error(
           `Google Places Details API HTTP ${res.status} for placeId="${placeId}": ${errorBody.slice(0, 2000)}`,
         );
+        await this.recordGooglePlacesFailure(`HTTP ${res.status} on placeDetails`);
         return null;
       }
       const data: any = await res.json();
@@ -233,6 +361,7 @@ export class GeocodingService {
       this.logger.error(
         `Google Places Details API fetch/parse error for placeId="${placeId}": ${(err as Error).message}`,
       );
+      await this.recordGooglePlacesFailure(`${(err as Error).message} (placeDetails)`);
       return null;
     }
   }

@@ -46,4 +46,9 @@ export class GeocodingController {
   async placeDetails(@Query('placeid') placeid: string) {
     return this.geocodingService.placeDetails(placeid);
   }
+
+  @Get('health')
+  async health() {
+    return this.geocodingService.getHealthStatus();
+  }
 }

@@ -1,4 +1,6 @@
+import { ConfigService } from '@nestjs/config';
 import { GeocodingController } from './geocoding.controller';
+import { GeocodingService } from './geocoding.service';
 // Clés de métadonnées stockées par le décorateur @Throttle (non re-exportées par
 // le package racine — import depuis les constantes internes, stable depuis v4).
 import { THROTTLER_LIMIT, THROTTLER_TTL } from '@nestjs/throttler/dist/throttler.constants';
@@ -36,4 +38,50 @@ describe('GeocodingController — rate limiting (proxy API externes coûteuses)'
     await expect(controller.placesAutocomplete('Tana')).resolves.toEqual([]);
     await expect(controller.placeDetails('abc')).resolves.toBeNull();
   });
+});
+
+describe('GeocodingController — /geocoding/health (observabilité Google Places / Nominatim)', () => {
+  // Redis null => force le repli mémoire de GeocodingService, pour un test
+  // déterministe sans dépendance externe (pas de Redis à monter).
+  function makeService(googleApiKey: string | undefined): GeocodingService {
+    const configService = {
+      get: jest.fn((key: string) => (key === 'GOOGLE_MAPS_API_KEY' ? googleApiKey : undefined)),
+    } as unknown as ConfigService;
+    return new GeocodingService(null as any, configService);
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('un échec HTTP 403 sur placesAutocomplete se reflète dans GET /geocoding/health', async () => {
+    const service = makeService('test-google-key');
+    jest.spyOn(global, 'fetch').mockImplementation((async (input: unknown) => {
+      const url = String(input);
+      if (url.includes('places.googleapis.com')) {
+        return { ok: false, status: 403, text: async () => 'PERMISSION_DENIED' } as any;
+      }
+      // Ping santé Nominatim (déclenché par getHealthStatus()) : ok, hors périmètre de ce test.
+      return { ok: true, json: async () => ({ display_name: 'Antananarivo' }) } as any;
+    }) as unknown as typeof fetch);
+
+    await service.placesAutocomplete('test');
+
+    const controller = new GeocodingController(service);
+    const health = await controller.health();
+
+    expect(health.googlePlacesFailureCount24h).toBeGreaterThanOrEqual(1);
+    expect(health.googlePlacesLastError).not.toBeNull();
+    expect(health.googlePlacesLastError).toContain('403');
+  }, 15000);
+
+  it('googlePlacesConfigured === false si GOOGLE_MAPS_API_KEY est vide dans le ConfigService', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true, json: async () => ({}) } as any);
+    const service = makeService('');
+    const controller = new GeocodingController(service);
+
+    const health = await controller.health();
+
+    expect(health.googlePlacesConfigured).toBe(false);
+  }, 15000);
 });
