@@ -67,6 +67,15 @@ import { TenantModule } from './common/tenant/tenant.module';
           paths: [
             'req.headers.authorization',
             'req.headers.cookie',
+            // Le cookie de session ENTRANT est redacté ci-dessus, mais le
+            // Set-Cookie de SORTIE (refreshToken/csrf-token fraîchement émis
+            // par /auth/login, /auth/refresh, /auth/register…) ne l'était
+            // pas : chaque rotation de refresh token écrivait le JWT en
+            // clair dans les logs applicatifs (constaté en prod le
+            // 2026-08-26 — un token de session réel visible via `docker
+            // logs`). pino-http expose les en-têtes de réponse via
+            // res.headers, sérialisés en tableau pour set-cookie.
+            'res.headers["set-cookie"]',
             'body.password',
             'body.token',
             'body.accessToken',
