@@ -42,4 +42,47 @@ public class MainActivity extends BridgeActivity {
             android.util.Log.w("MainActivity", "WebView init skipped: " + e.getMessage());
         }
     }
+
+    /**
+     * Flush EXPLICITE du CookieManager Android à chaque passage en arrière-plan.
+     *
+     * BUG CORRIGÉ (observé en usage réel, logs backend : 401 systématique sur
+     * /auth/refresh à CHAQUE réouverture après une fermeture complète de l'app) :
+     * android.webkit.CookieManager garde les cookies récemment posés/modifiés
+     * (dont le cookie refreshToken, ROTATÉ à chaque appel réussi de /auth/refresh)
+     * dans un cache mémoire avant de les écrire sur le disque (base SQLite
+     * interne à la WebView) — cette écriture n'est PAS synchrone à chaque
+     * Set-Cookie. Un kill brutal du process (swipe des tâches récentes, ou
+     * simplement l'OS qui tue le process en arrière-plan sous pression mémoire —
+     * exactement le scénario que ce chantier de persistance native adresse pour
+     * le GPS) pouvait donc perdre le tout dernier cookie refreshToken roté,
+     * avant même qu'il soit écrit sur disque : au réveil, la WebView ne
+     * connaissait plus qu'un cookie déjà périmé (ou aucun) → refresh 401 →
+     * l'utilisateur devait se reconnecter à CHAQUE réouverture, alors même que
+     * la session côté serveur restait valide.
+     *
+     * onPause()/onStop() sont les callbacks de cycle de vie les plus fiables
+     * juste avant un passage en arrière-plan (appelés même si le process est
+     * ensuite tué peu après) — flush() est un appel synchrone bon marché,
+     * jamais bloquant pour l'UI (il écrit juste le cache déjà en mémoire).
+     */
+    private void flushCookies() {
+        try {
+            android.webkit.CookieManager.getInstance().flush();
+        } catch (Exception e) {
+            android.util.Log.w("MainActivity", "Cookie flush failed: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        flushCookies();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        flushCookies();
+    }
 }

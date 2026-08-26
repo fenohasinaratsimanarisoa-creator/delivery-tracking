@@ -522,6 +522,36 @@ public class BackgroundLocationPlugin extends Plugin {
     }
 
     /**
+     * Force l'écriture sur disque du CookieManager Android (refreshToken httpOnly
+     * roté à chaque /auth/login ou /auth/refresh réussi).
+     *
+     * BUG CORRIGÉ : un flush() déclenché uniquement sur onPause()/onStop()
+     * (MainActivity) suppose que l'OS appelle bien ces callbacks avant de tuer le
+     * process — hypothèse fausse sur MIUI, dont le nettoyage mémoire/le balayage
+     * "Effacer tout" dans les tâches récentes peut SIGKILL le process sans passer
+     * par le cycle de vie normal de l'Activity. Un flush uniquement basé sur le
+     * cycle de vie perd alors quand même le dernier cookie roté.
+     *
+     * Fix robuste : le JS appelle CETTE méthode immédiatement après CHAQUE réponse
+     * 200 de /auth/login ou /auth/refresh (voir AuthContext.tsx et
+     * refreshToken.ts) — à ce instant, le Set-Cookie est déjà traité par le moteur
+     * WebView (JS ne voit la réponse qu'une fois les headers appliqués), donc le
+     * flush() est synchronisé sur l'événement réel d'écriture du cookie, pas sur
+     * un proxy (passage en arrière-plan) que l'OS peut contourner.
+     * Le flush onPause()/onStop() dans MainActivity reste en place en défense
+     * complémentaire (coût négligeable), mais celui-ci est la garantie principale.
+     */
+    @PluginMethod
+    public void flushCookies(PluginCall call) {
+        try {
+            android.webkit.CookieManager.getInstance().flush();
+        } catch (Exception e) {
+            // Non bloquant : le flush onPause()/onStop() reste un filet de sécurité.
+        }
+        call.resolve();
+    }
+
+    /**
      * Met à jour le contexte véhicule/livraison pour le fallback natif HTTP.
      * Appelé par le JS quand le vehicleId ou deliveryId change.
      */

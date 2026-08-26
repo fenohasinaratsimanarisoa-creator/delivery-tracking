@@ -91,6 +91,8 @@ interface BackgroundLocationNative {
   setNativeTrackingContext(options: { vehicleId: string; deliveryId: string }): Promise<void>;
   // --- Pont du token d'auth vers le worker natif (Phase 3, PositionUploadWorker) ---
   setAuthToken(options: { accessToken: string; expiresAtEpochMs: number }): Promise<void>;
+  // --- Flush explicite du CookieManager (fix déconnexion forcée après kill process) ---
+  flushCookies(): Promise<void>;
   addListener(
     eventName: 'locationUpdate' | 'batteryCritical',
     listenerFunc: (data: NativeLocationUpdate | BatteryCriticalEvent) => void,
@@ -356,6 +358,28 @@ export async function setNativeAuthToken(accessToken: string, expiresAtEpochMs: 
   } catch {
     // Silencieux : PositionUploadWorker retentera avec l'ancien token/rien au
     // prochain cycle, ce n'est jamais bloquant pour l'app.
+  }
+}
+
+/**
+ * Force l'écriture sur disque du cookie refreshToken httpOnly (Android
+ * CookieManager) — à appeler IMMÉDIATEMENT après chaque 200 de /auth/login ou
+ * /auth/refresh (le Set-Cookie est déjà appliqué par le moteur WebView dès que
+ * le JS voit la réponse). Corrige la déconnexion forcée après fermeture
+ * complète de l'app : un flush uniquement basé sur onPause()/onStop()
+ * (MainActivity) suppose que l'OS appelle ces callbacks avant de tuer le
+ * process, ce qui est faux sur MIUI (balayage "Effacer tout" → SIGKILL direct,
+ * sans cycle de vie). Ici le flush est synchronisé sur l'écriture réelle du
+ * cookie, pas sur un proxy que l'OS peut contourner. No-op silencieux sur
+ * iOS/web.
+ */
+export async function flushNativeCookies(): Promise<void> {
+  const p = resolvePlugin();
+  if (!p) return;
+  try {
+    await p.flushCookies();
+  } catch {
+    // Non bloquant : le flush onPause()/onStop() reste un filet de sécurité.
   }
 }
 

@@ -13,12 +13,14 @@ import type { User } from '../types';
 // ne tourne pas.
 // =============================================================================
 
-const { mockSetNativeAuthToken } = vi.hoisted(() => ({
+const { mockSetNativeAuthToken, mockFlushNativeCookies } = vi.hoisted(() => ({
   mockSetNativeAuthToken: vi.fn(),
+  mockFlushNativeCookies: vi.fn(),
 }));
 
 vi.mock('../services/tracking/backgroundLocation', () => ({
   setNativeAuthToken: mockSetNativeAuthToken,
+  flushNativeCookies: mockFlushNativeCookies,
 }));
 
 vi.mock('../services/api/client', () => ({

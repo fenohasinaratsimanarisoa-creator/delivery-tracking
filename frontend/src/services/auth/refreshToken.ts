@@ -2,7 +2,7 @@ import axios from 'axios';
 import { fetchCsrfToken, getCsrfHeaders } from '../api/csrf';
 import { getApiBaseUrl } from '../api/config';
 import { setAccessToken, getTokenExpiryMs } from './tokenStore';
-import { setNativeAuthToken } from '../tracking/backgroundLocation';
+import { setNativeAuthToken, flushNativeCookies } from '../tracking/backgroundLocation';
 
 export interface RefreshOutcome {
   token: string | null;
@@ -123,6 +123,13 @@ async function doRefresh(): Promise<RefreshOutcome> {
       if (expiresAtEpochMs !== null) {
         void setNativeAuthToken(token, expiresAtEpochMs);
       }
+      // Le refreshToken httpOnly vient d'être ROTATÉ par le serveur (Set-Cookie
+      // déjà appliqué par la WebView à cet instant). Flush synchrone sur disque :
+      // ne pas dépendre uniquement d'onPause()/onStop() (MainActivity), que MIUI
+      // peut contourner en tuant le process directement (SIGKILL sans cycle de
+      // vie) — c'est précisément ce qui causait la déconnexion forcée après
+      // fermeture complète de l'app.
+      void flushNativeCookies();
     }
     return { token: token ?? null, reason: 'expired' };
   } catch (err: unknown) {

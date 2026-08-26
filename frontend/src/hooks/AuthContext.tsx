@@ -7,7 +7,7 @@ import { refreshAccessTokenOutcome } from '../services/auth/refreshToken';
 import { disconnectSocket } from '../services/socket/socket';
 import { parseToken } from '../services/jwt';
 import { setSentryUser } from '../services/monitoring/sentry';
-import { setNativeAuthToken } from '../services/tracking/backgroundLocation';
+import { setNativeAuthToken, flushNativeCookies } from '../services/tracking/backgroundLocation';
 
 interface AuthState {
   user: User | null;
@@ -156,6 +156,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (expiresAtEpochMs !== null) {
       void setNativeAuthToken(accessToken, expiresAtEpochMs);
     }
+    // Le cookie refreshToken httpOnly vient d'être posé par le serveur (Set-Cookie
+    // déjà appliqué par la WebView à cet instant, puisque le JS ne voit la réponse
+    // qu'après). Flush synchrone sur disque : ne PAS dépendre d'onPause()/onStop()
+    // (MainActivity), que MIUI peut contourner en tuant le process directement.
+    void flushNativeCookies();
   }, []);
 
   const logout = useCallback(async () => {

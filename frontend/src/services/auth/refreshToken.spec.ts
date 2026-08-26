@@ -41,8 +41,10 @@ vi.mock('./tokenStore', () => ({
 }));
 
 const setNativeAuthTokenMock = vi.fn().mockResolvedValue(undefined);
+const flushNativeCookiesMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('../tracking/backgroundLocation', () => ({
   setNativeAuthToken: (...args: unknown[]) => setNativeAuthTokenMock(...args),
+  flushNativeCookies: (...args: unknown[]) => flushNativeCookiesMock(...args),
 }));
 
 vi.mock('../api/config', () => ({
