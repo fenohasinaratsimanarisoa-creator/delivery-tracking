@@ -21,6 +21,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { TrackingService } from './tracking.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { DeviceTrackingAuthGuard } from '../../common/guards/device-tracking-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -237,7 +238,15 @@ export class TrackingController {
     return this.trackingService.updateTrackingReliability(userId, body.status);
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  // DeviceTrackingAuthGuard (et NON JwtAuthGuard) : ce chemin est appelé par le
+  // worker natif Android, qui utilise un credential LONGUE DURÉE de scope
+  // 'device_tracking' — volontairement rejeté par JwtStrategy partout ailleurs.
+  // Voir device-tracking-auth.guard.ts et AuthService.issueDeviceTrackingToken :
+  // sans ce credential, le worker perdait toute authentification 15 min après le
+  // dernier passage du JS (WebView gelée en veille) et cessait SILENCIEUSEMENT
+  // d'envoyer — la panne exacte remontée sur le terrain. Un access token normal
+  // reste accepté (compatibilité).
+  @UseGuards(DeviceTrackingAuthGuard, CompanyScopeGuard, RolesGuard)
   @Roles('driver')
   @ApiBearerAuth()
   @ApiOperation({

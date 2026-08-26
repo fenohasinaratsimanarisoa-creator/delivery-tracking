@@ -7,6 +7,7 @@ import { TrackingController } from './tracking.controller';
 import { TrackingService } from './tracking.service';
 import { TraccarBridgeService } from './traccar-bridge.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { DeviceTrackingAuthGuard } from '../../common/guards/device-tracking-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
@@ -45,6 +46,8 @@ describe('TrackingController — PATCH /tracking/reliability-status (autorisatio
       ],
     })
       .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(DeviceTrackingAuthGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(CompanyScopeGuard)
       .useValue({ canActivate: () => true })
@@ -168,7 +171,7 @@ describe('TrackingController — POST /tracking/positions/native-batch', () => {
       // (rejette sans Authorization, peuple req.user sinon) sans dépendre de la
       // stratégie Passport réelle (hors périmètre ici — testée ailleurs) : c'est
       // précisément le comportement "sans JWT valide → 401" qu'on veut vérifier.
-      .overrideGuard(JwtAuthGuard)
+      .overrideGuard(DeviceTrackingAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
           const req = context.switchToHttp().getRequest();
@@ -183,6 +186,8 @@ describe('TrackingController — POST /tracking/positions/native-batch', () => {
           return true;
         },
       })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
       .overrideGuard(CompanyScopeGuard)
       .useValue({ canActivate: () => true })
       // RolesGuard NON mocké : @Roles('driver') doit rester appliqué.

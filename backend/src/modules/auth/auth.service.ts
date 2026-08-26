@@ -28,6 +28,11 @@ export class AuthService {
   private readonly accessExpiration: jwt.SignOptions['expiresIn'];
   private readonly refreshExpiration: jwt.SignOptions['expiresIn'];
   private readonly tempTokenExpiration: jwt.SignOptions['expiresIn'] = '5m';
+  // Credential LONGUE DURÉE du worker natif Android (voir
+  // issueDeviceTrackingToken). 30 jours par défaut : le worker doit survivre à
+  // des jours de veille/hors-ligne sans JS pour le renouveler — c'est
+  // précisément sa raison d'être.
+  private readonly deviceTokenExpiration: jwt.SignOptions['expiresIn'];
   // Durée de vie des UserSession : alignée sur JWT_REFRESH_EXPIRATION (avant :
   // 7 jours codés en dur, incohérents si la config changeait).
   private readonly refreshExpirationSeconds: number;
@@ -56,6 +61,80 @@ export class AuthService {
       '7d',
     ) as jwt.SignOptions['expiresIn'];
     this.refreshExpirationSeconds = this.parseExpirationSeconds(this.refreshExpiration);
+    this.deviceTokenExpiration = this.configService.get<string>(
+      'JWT_DEVICE_TOKEN_EXPIRATION',
+      '30d',
+    ) as jwt.SignOptions['expiresIn'];
+  }
+
+  /**
+   * Émet le credential LONGUE DURÉE du worker natif de tracking
+   * (PositionUploadWorker, Android/WorkManager).
+   *
+   * POURQUOI (audit 2026-08-27, diagnostiqué sur appareil réel) : le worker
+   * natif s'authentifiait avec l'ACCESS TOKEN (15 min), que SEUL le JS sait
+   * renouveler (refreshToken.ts → setNativeAuthToken). Or quand l'appareil
+   * dort, la WebView est gelée : passé 15 min, le worker n'avait plus aucun
+   * credential valide et s'arrêtait SILENCIEUSEMENT (retour success sans rien
+   * envoyer) — exactement le scénario pour lequel ce chemin natif existe.
+   * Preuve terrain : 168 positions bloquées pendant 11 min (le worker tournait
+   * bien toutes les ~20 s, sans rien envoyer), toutes parties d'un coup à la
+   * seconde où le JS a rafraîchi le token.
+   *
+   * SÉCURITÉ — ce token est STRICTEMENT plus faible qu'un access token :
+   *  - scope 'device_tracking' : JwtStrategy rejette tout scope !== 'access'
+   *    (voir jwt.strategy.ts), il ne peut donc JAMAIS authentifier une autre
+   *    route, même s'il fuitait ;
+   *  - seul DeviceTrackingAuthGuard l'accepte, et uniquement sur
+   *    POST /tracking/positions/native-batch (pousser des positions GPS pour
+   *    SES propres véhicules — aucune lecture, aucune mutation métier) ;
+   *  - porte le sessionId : révoqué avec la session (revoked:session:* Redis,
+   *    suppression de la UserSession) et avec le compte (revoked:user:*) ;
+   *  - stocké côté appareil en EncryptedSharedPreferences (clé matérielle
+   *    Android Keystore), jamais en clair — voir NativeAuthTokenStore.java.
+   */
+  async issueDeviceTrackingToken(
+    userId: string,
+    sessionId?: string,
+  ): Promise<{ deviceToken: string; expiresAt: number }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        companyId: true,
+        firstName: true,
+        lastName: true,
+        isActive: true,
+      },
+    });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('User not found or inactive');
+    }
+
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role as JwtPayload['role'],
+      companyId: user.companyId,
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      scope: 'device_tracking',
+    };
+    if (sessionId) payload.sessionId = sessionId;
+
+    const deviceToken = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
+      expiresIn: this.deviceTokenExpiration,
+    });
+
+    const decoded = this.jwtService.decode(deviceToken) as { exp?: number } | null;
+    const expiresAt = decoded?.exp
+      ? decoded.exp * 1000
+      : Date.now() + this.parseExpirationSeconds(this.deviceTokenExpiration as string) * 1000;
+
+    return { deviceToken, expiresAt };
   }
 
   private parseExpirationSeconds(expiration: string | number | undefined): number {

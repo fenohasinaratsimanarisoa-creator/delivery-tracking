@@ -233,6 +233,23 @@ export class AuthController {
     res.clearCookie('csrf-token', { ...this.getCsrfCookieOpts(), maxAge: undefined });
   }
 
+  /**
+   * Émet le credential longue durée du worker natif de tracking (Android).
+   * Appelé par le JS après login et à chaque refresh réussi — voir
+   * AuthService.issueDeviceTrackingToken pour le pourquoi et le périmètre de
+   * sécurité (scope 'device_tracking', utilisable UNIQUEMENT sur
+   * POST /tracking/positions/native-batch).
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('device-token')
+  @HttpCode(HttpStatus.OK)
+  async issueDeviceToken(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('sessionId') sessionId: string | undefined = undefined,
+  ): Promise<{ deviceToken: string; expiresAt: number }> {
+    return this.authService.issueDeviceTrackingToken(userId, sessionId);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('sessions')
   async getSessions(@CurrentUser('id') userId: string, @Req() req: Request) {

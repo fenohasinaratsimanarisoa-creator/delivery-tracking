@@ -1,21 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, act } from '@testing-library/react';
+import { render, act, waitFor } from '@testing-library/react';
 import { AuthProvider, useAuth } from './AuthContext';
 import type { User } from '../types';
 
 // =============================================================================
-// Phase 3 — Pont du token d'authentification vers le natif.
+// Pont du credential vers le worker natif de tracking.
 //
-// Vérifie que login() (state React uniquement, invisible côté natif) pousse
-// aussi le token vers PositionUploadWorker (Phase 4, natif) via
-// setNativeAuthToken(), avec l'expiration extraite du claim `exp` du JWT —
-// sans ce pont, le worker natif n'aurait jamais de token valide quand le JS
-// ne tourne pas.
+// RÉGRESSION COUVERTE ICI (audit 2026-08-27, panne terrain) : le natif recevait
+// l'ACCESS TOKEN (15 min), renouvelable uniquement par le JS. En veille, la
+// WebView est gelée : passé 15 min le worker natif n'avait plus de credential
+// valide et cessait SILENCIEUSEMENT d'envoyer les positions accumulées.
+// login() doit donc pousser le DEVICE TOKEN longue durée (30 j) obtenu via
+// POST /auth/device-token — et JAMAIS l'access token.
 // =============================================================================
 
-const { mockSetNativeAuthToken, mockFlushNativeCookies } = vi.hoisted(() => ({
+const { mockSetNativeAuthToken, mockFlushNativeCookies, mockApiPost } = vi.hoisted(() => ({
   mockSetNativeAuthToken: vi.fn(),
   mockFlushNativeCookies: vi.fn(),
+  mockApiPost: vi.fn(),
 }));
 
 vi.mock('../services/tracking/backgroundLocation', () => ({
@@ -25,7 +27,7 @@ vi.mock('../services/tracking/backgroundLocation', () => ({
 
 vi.mock('../services/api/client', () => ({
   default: {
-    post: vi.fn(),
+    post: mockApiPost,
     interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
   },
 }));
@@ -55,65 +57,87 @@ function TestComponent({ onReady }: { onReady: (login: ReturnType<typeof useAuth
   return null;
 }
 
-describe('AuthContext — pont du token vers le worker natif (Phase 3)', () => {
+const ACCESS_TOKEN = makeJwt({
+  sub: 'user-1',
+  email: 'driver@test.com',
+  role: 'driver',
+  companyId: 'company-1',
+  exp: Math.floor(Date.now() / 1000) + 900, // +15 min — volontairement court
+});
+
+const USER: User = {
+  id: 'user-1',
+  email: 'driver@test.com',
+  firstName: 'Jean',
+  lastName: 'Rakoto',
+  role: 'driver',
+  companyId: 'company-1',
+};
+
+async function renderAndLogin(accessToken = ACCESS_TOKEN) {
+  let loginFn: ReturnType<typeof useAuth>['login'] = () => {};
+  render(
+    <AuthProvider>
+      <TestComponent onReady={(l) => { loginFn = l; }} />
+    </AuthProvider>,
+  );
+  await act(async () => {
+    loginFn(USER, accessToken);
+  });
+}
+
+describe('AuthContext — credential longue durée poussé au worker natif', () => {
   beforeEach(() => {
     mockSetNativeAuthToken.mockClear();
+    mockFlushNativeCookies.mockClear();
+    mockApiPost.mockReset();
+    localStorage.clear();
   });
 
-  it('login() appelle setNativeAuthToken avec le token et son expiration (claim exp du JWT)', async () => {
-    let loginFn: ReturnType<typeof useAuth>['login'] = () => {};
-    render(
-      <AuthProvider>
-        <TestComponent onReady={(l) => { loginFn = l; }} />
-      </AuthProvider>,
-    );
+  it('login() récupère le device token (30 j) et le pousse au natif', async () => {
+    const deviceToken = 'device-token-longue-duree';
+    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    mockApiPost.mockResolvedValue({ data: { deviceToken, expiresAt } });
 
-    const expSeconds = Math.floor(Date.now() / 1000) + 900; // +15 min
-    const token = makeJwt({
-      sub: 'user-1',
-      email: 'driver@test.com',
-      role: 'driver',
-      companyId: 'company-1',
-      exp: expSeconds,
-    });
-    const user: User = {
-      id: 'user-1',
-      email: 'driver@test.com',
-      firstName: 'Jean',
-      lastName: 'Rakoto',
-      role: 'driver',
-      companyId: 'company-1',
-    };
+    await renderAndLogin();
 
-    await act(async () => {
-      loginFn(user, token);
-    });
-
-    expect(mockSetNativeAuthToken).toHaveBeenCalledTimes(1);
-    expect(mockSetNativeAuthToken).toHaveBeenCalledWith(token, expSeconds * 1000);
+    await waitFor(() => expect(mockSetNativeAuthToken).toHaveBeenCalledTimes(1));
+    expect(mockApiPost).toHaveBeenCalledWith('/auth/device-token');
+    expect(mockSetNativeAuthToken).toHaveBeenCalledWith(deviceToken, expiresAt);
   });
 
-  it("n'appelle PAS setNativeAuthToken si le token est malformé (pas de claim exp exploitable)", async () => {
-    let loginFn: ReturnType<typeof useAuth>['login'] = () => {};
-    render(
-      <AuthProvider>
-        <TestComponent onReady={(l) => { loginFn = l; }} />
-      </AuthProvider>,
-    );
-
-    const user: User = {
-      id: 'user-1',
-      email: 'driver@test.com',
-      firstName: 'Jean',
-      lastName: 'Rakoto',
-      role: 'driver',
-      companyId: 'company-1',
-    };
-
-    await act(async () => {
-      loginFn(user, 'not-a-valid-jwt');
+  it("ne pousse JAMAIS l'access token court au natif (régression : arrêt d'envoi en veille)", async () => {
+    const deviceToken = 'device-token-longue-duree';
+    mockApiPost.mockResolvedValue({
+      data: { deviceToken, expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 },
     });
 
+    await renderAndLogin();
+
+    await waitFor(() => expect(mockSetNativeAuthToken).toHaveBeenCalled());
+    for (const call of mockSetNativeAuthToken.mock.calls) {
+      expect(call[0]).not.toBe(ACCESS_TOKEN);
+    }
+  });
+
+  it("n'écrit rien au natif si le serveur ne renvoie pas de device token exploitable", async () => {
+    mockApiPost.mockResolvedValue({ data: { deviceToken: '', expiresAt: 'pas-un-nombre' } });
+
+    await renderAndLogin();
+
+    await waitFor(() => expect(mockApiPost).toHaveBeenCalled());
     expect(mockSetNativeAuthToken).not.toHaveBeenCalled();
+  });
+
+  it("n'échoue pas et ne bloque pas le login si /auth/device-token est injoignable", async () => {
+    mockApiPost.mockRejectedValue(new Error('network down'));
+
+    await renderAndLogin();
+
+    await waitFor(() => expect(mockApiPost).toHaveBeenCalled());
+    expect(mockSetNativeAuthToken).not.toHaveBeenCalled();
+    // Le flush cookie (autre effet de login) a bien eu lieu : l'échec réseau du
+    // device token n'interrompt pas la séquence de connexion.
+    expect(mockFlushNativeCookies).toHaveBeenCalled();
   });
 });

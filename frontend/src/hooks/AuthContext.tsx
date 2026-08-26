@@ -2,12 +2,13 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, ty
 import api from '../services/api/client';
 import { fetchCsrfToken } from '../services/api/csrf';
 import type { User } from '../types';
-import { setAccessToken, getAccessToken, getTokenExpiryMs } from '../services/auth/tokenStore';
+import { setAccessToken, getAccessToken } from '../services/auth/tokenStore';
 import { refreshAccessTokenOutcome } from '../services/auth/refreshToken';
 import { disconnectSocket } from '../services/socket/socket';
 import { parseToken } from '../services/jwt';
 import { setSentryUser } from '../services/monitoring/sentry';
-import { setNativeAuthToken, flushNativeCookies } from '../services/tracking/backgroundLocation';
+import { flushNativeCookies } from '../services/tracking/backgroundLocation';
+import { ensureNativeDeviceToken, clearDeviceTokenPushCache } from '../services/auth/deviceToken';
 
 interface AuthState {
   user: User | null;
@@ -111,6 +112,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAccessToken(outcome.token);
           const u = userFromToken(outcome.token);
           if (u) setUser(u);
+          // Session restaurée au démarrage : garantit que le worker natif a bien
+          // un credential longue durée (cas d'une réinstallation de l'app, d'un
+          // stockage natif vidé, ou d'un appareil resté connecté depuis une
+          // version antérieure à ce mécanisme). Throttlé à 1×/24 h en interne.
+          void ensureNativeDeviceToken();
         } else if (outcome.reason === 'expired') {
           // Refresh authentiquement échoué (401) : session réellement révoquée.
           setAccessToken(null);
@@ -149,13 +155,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     explicitLoginRef.current = true;
     setAccessToken(accessToken);
     setUser(userData);
-    // Pont vers PositionUploadWorker (Phase 4, natif) : sans ce token, le
-    // worker ne peut authentifier aucun envoi tant que le JS ne tourne pas.
-    // No-op silencieux sur web/iOS (setNativeAuthToken → resolvePlugin() null).
-    const expiresAtEpochMs = getTokenExpiryMs(accessToken);
-    if (expiresAtEpochMs !== null) {
-      void setNativeAuthToken(accessToken, expiresAtEpochMs);
-    }
+    // Pont vers PositionUploadWorker (Phase 4, natif) : on pousse le credential
+    // LONGUE DURÉE (device token, 30 j) et NON l'access token (15 min) —
+    // celui-ci expirait pendant la veille, quand le JS gelé ne peut plus le
+    // renouveler, ce qui arrêtait silencieusement tout envoi natif. Voir
+    // services/auth/deviceToken.ts.
+    void ensureNativeDeviceToken(true);
     // Le cookie refreshToken httpOnly vient d'être posé par le serveur (Set-Cookie
     // déjà appliqué par la WebView à cet instant, puisque le JS ne voit la réponse
     // qu'après). Flush synchrone sur disque : ne PAS dépendre d'onPause()/onStop()
@@ -174,6 +179,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setAccessToken(null);
     setUser(null);
+    // Le device token natif est invalidé côté serveur par la révocation de
+    // session (DeviceTrackingAuthGuard vérifie que la UserSession existe encore) ;
+    // on efface juste le cache anti-répétition pour qu'un nouveau login en
+    // repousse un immédiatement.
+    clearDeviceTokenPushCache();
     disconnectSocket();
   }, []);
 

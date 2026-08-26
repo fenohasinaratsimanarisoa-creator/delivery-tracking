@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { fetchCsrfToken, getCsrfHeaders } from '../api/csrf';
 import { getApiBaseUrl } from '../api/config';
-import { setAccessToken, getTokenExpiryMs } from './tokenStore';
-import { setNativeAuthToken, flushNativeCookies } from '../tracking/backgroundLocation';
+import { setAccessToken } from './tokenStore';
+import { flushNativeCookies } from '../tracking/backgroundLocation';
 
 export interface RefreshOutcome {
   token: string | null;
@@ -116,13 +116,12 @@ async function doRefresh(): Promise<RefreshOutcome> {
     const token: string | undefined = res.data?.accessToken;
     if (token) {
       setAccessToken(token);
-      // Pont vers PositionUploadWorker (Phase 4, natif) : chaque refresh réussi
-      // met à jour le token chiffré lu par le worker WorkManager, indépendant
-      // du JS. No-op silencieux sur web/iOS.
-      const expiresAtEpochMs = getTokenExpiryMs(token);
-      if (expiresAtEpochMs !== null) {
-        void setNativeAuthToken(token, expiresAtEpochMs);
-      }
+      // NE PAS pousser cet access token vers le natif (audit 2026-08-27) : le
+      // stockage natif détient désormais un DEVICE TOKEN longue durée (30 j,
+      // voir services/auth/deviceToken.ts). L'écraser ici à chaque refresh
+      // remettrait un credential de 15 min — exactement le bug corrigé : en
+      // veille, le JS ne tourne plus pour le renouveler et le worker natif
+      // cessait silencieusement d'envoyer les positions.
       // Le refreshToken httpOnly vient d'être ROTATÉ par le serveur (Set-Cookie
       // déjà appliqué par la WebView à cet instant). Flush synchrone sur disque :
       // ne pas dépendre uniquement d'onPause()/onStop() (MainActivity), que MIUI

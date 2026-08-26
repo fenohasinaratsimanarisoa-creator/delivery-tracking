@@ -13,6 +13,7 @@ import { TrackingController } from './tracking.controller';
 import { GeofenceController } from './geofence.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
+import { DeviceTrackingAuthGuard } from '../../common/guards/device-tracking-auth.guard';
 import { CacheModule } from '../../common/cache/cache.module';
 import { RedisModule } from '../../common/redis/redis.module';
 
@@ -45,6 +46,7 @@ import { RedisModule } from '../../common/redis/redis.module';
     WsJwtGuard,
     WsAuthService,
     ApiKeyOrJwtGuard,
+    DeviceTrackingAuthGuard,
   ],
   exports: [
     TrackingService,
