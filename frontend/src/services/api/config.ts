@@ -81,6 +81,35 @@ export function initApiOverrideBanner(): void {
   document.body.prepend(banner);
 }
 
+/**
+ * Version ABSOLUE de getApiBaseUrl(), pour les contextes qui ne peuvent pas
+ * résoudre une URL relative comme "/api" faute de moteur de rendu HTTP
+ * (le worker natif Android — PositionUploadWorker/NativeHttpFallback — reçoit
+ * cette valeur via storeNativeFallbackApiUrl et construit lui-même l'URL
+ * complète avec HttpURLConnection, sans jamais passer par le navigateur).
+ *
+ * BUG CORRIGÉ (audit 2026-08-26, confirmé sur appareil réel : 242 positions
+ * en attente, 0 jamais synchronisées même après la correction CSRF) :
+ * useDriverTracking.ts appelait storeNativeFallbackApiUrl(getSocketBaseUrl())
+ * — getSocketBaseUrl() est conçue pour Socket.IO, qui se connecte À LA
+ * RACINE de l'origine (nginx route /socket.io sans préfixe /api). Réutilisée
+ * ici, elle produisait une URL SANS /api (ex. https://host au lieu de
+ * https://host/api) ; le worker natif construisait alors
+ * https://host/tracking/positions/native-batch — une route qui n'existe pas
+ * côté nginx (seul /api/tracking/... est proxifié vers le backend) →
+ * 405 Not Allowed à CHAQUE tentative, confirmé via curl direct sur l'URL
+ * exacte construite par le code natif. Aucune position n'a donc jamais pu
+ * être synchronisée par ce chemin depuis sa création.
+ */
+export function getAbsoluteApiBaseUrl(): string {
+  const base = getApiBaseUrl();
+  if (/^https?:\/\//.test(base)) return base.replace(/\/+$/, '');
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin.replace(/\/+$/, '')}/${base.replace(/^\/+/, '')}`;
+  }
+  return base;
+}
+
 export function getSocketBaseUrl(): string {
   const base = getApiBaseUrl();
   if (/^https?:\/\//.test(base)) {

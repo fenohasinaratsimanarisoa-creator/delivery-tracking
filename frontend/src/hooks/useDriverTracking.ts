@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../services/api/client';
 import { getSocket, onSocketSessionExpired } from '../services/socket/socket';
 import { getAccessToken } from '../services/auth/tokenStore';
-import { getSocketBaseUrl } from '../services/api/config';
+import { getAbsoluteApiBaseUrl } from '../services/api/config';
 import { enqueuePosition, queueSize, flushQueue, QUEUE_WARN_SIZE } from '../services/offlineQueue';
 import { KalmanFilter } from '../services/tracking/KalmanFilter';
 import { sensorFusion, simulateStationaryFromSpeed } from '../services/tracking/sensorFusion';
@@ -888,7 +888,10 @@ export function useDriverTracking() {
     if (currentToken) {
       storeNativeFallbackToken(currentToken).catch(() => {});
     }
-    storeNativeFallbackApiUrl(getSocketBaseUrl()).catch(() => {});
+    // getAbsoluteApiBaseUrl(), PAS getSocketBaseUrl() : ce dernier vise la
+    // racine de l'origine (Socket.IO), le natif a besoin du préfixe /api
+    // pour que nginx route vers le backend (voir getAbsoluteApiBaseUrl).
+    storeNativeFallbackApiUrl(getAbsoluteApiBaseUrl()).catch(() => {});
 
     // DÉTECTION D'INTERRUPTION RÉSIDUELLE (force-stop, service tué) : le marqueur
     // natif (SharedPreferences, écrit par le watchdog ou onDestroy non-volontaire)

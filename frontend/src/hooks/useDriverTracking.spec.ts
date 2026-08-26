@@ -105,6 +105,7 @@ vi.mock('../services/auth/tokenStore', () => ({
 
 vi.mock('../services/api/config', () => ({
   getSocketBaseUrl: vi.fn().mockReturnValue('http://localhost:4000'),
+  getAbsoluteApiBaseUrl: vi.fn().mockReturnValue('http://localhost:4000/api'),
 }));
 
 // Capture du handler natif LocationForegroundService : le test l'invoque directement
