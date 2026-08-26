@@ -115,6 +115,17 @@ done
 echo "Migrations Prisma..."
 docker compose -f "$COMPOSE_FILE" exec -T backend npx prisma migrate deploy
 
+# nginx (frontend) résout le nom 'backend' UNE SEULE FOIS au démarrage et garde
+# cette IP en cache pour toute la durée du process (proxy_pass sur un host
+# littéral, pas une variable — pas de re-résolution dynamique). Un déploiement
+# qui ne touche que le backend laisse l'image frontend inchangée : Compose ne
+# recrée alors pas 'frontend', qui continue de pointer vers l'IP de l'ANCIEN
+# conteneur backend (détruit) → 502 Bad Gateway sur toute l'API, y compris le
+# login, jusqu'au prochain redémarrage manuel de frontend. On force donc un
+# redémarrage à chaque déploiement, backend-only ou pas.
+echo "Redémarrage du frontend (nginx doit re-résoudre l'IP du backend)..."
+docker compose -f "$COMPOSE_FILE" restart frontend
+
 echo ""
 echo "══════════════════════════════════════════════════════"
 echo " 6/6 — Vérification"
