@@ -64,6 +64,12 @@
     "closeMenu": "Fermer le menu",
     "openMenu": "Ouvrir le menu",
     "notifications": "Notifications",
+    "sections": {
+      "overview": "Vue d'ensemble",
+      "operations": "Opérations",
+      "fleet": "Flotte",
+      "admin": "Administration"
+    },
     "title": "Navigation principale",
     "more": "Plus",
     "moreTitle": "Plus d'options",
