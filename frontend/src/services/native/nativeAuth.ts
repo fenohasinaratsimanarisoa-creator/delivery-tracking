@@ -88,10 +88,14 @@ export async function openGoogleOAuthInNative(): Promise<void> {
   await Browser.open({ url: authUrl });
 }
 
+/** URL du deep link natif — exportée pour permettre un lien <a> cliquable en
+ * secours (voir buildRelayDeepLink), en plus de la navigation JS automatique. */
+export function buildRelayDeepLink(code: string, state: string): string {
+  return `logitrack://auth#code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+}
+
 export function relayTokenToNativeApp(code: string, state: string): void {
-  window.location.replace(
-    `logitrack://auth#code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
-  );
+  window.location.replace(buildRelayDeepLink(code, state));
 }
 
 export function initNativeOAuthListener(): void {
@@ -114,6 +118,14 @@ export function initNativeOAuthListener(): void {
           console.warn('[nativeAuth] deep link rejeté : state invalide ou token non échangeable');
           return;
         }
+
+        // Ferme le Custom Tab dès réception du deep link : sinon il reste ouvert
+        // en arrière-plan (l'utilisateur peut y revenir par erreur, ou croire que
+        // la connexion a échoué alors que l'app vient de recevoir le code) —
+        // best-effort, non bloquant si @capacitor/browser échoue à fermer.
+        void import('@capacitor/browser')
+          .then(({ Browser }) => Browser.close())
+          .catch(() => {});
 
         sessionStorage.removeItem(RELAY_KEY);
         window.location.href =

@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/AuthContext';
 import { setAccessToken } from '../../services/auth/tokenStore';
 import { parseToken } from '../../services/jwt';
 import { getApiBaseUrl } from '../../services/api/config';
-import { isNativeApp, isWebView, isMobileBrowser, relayTokenToNativeApp, OAUTH_VERIFIER_KEY, clearOAuthNativeState } from '../../services/native/nativeAuth';
+import { isNativeApp, isWebView, isMobileBrowser, relayTokenToNativeApp, buildRelayDeepLink, OAUTH_VERIFIER_KEY, clearOAuthNativeState } from '../../services/native/nativeAuth';
 import type { User } from '../../types';
 import { Loader2, AlertCircle } from 'lucide-react';
 import styles from './AuthCallbackPage.module.css';
@@ -23,8 +23,9 @@ export default function AuthCallbackPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { isInitializing, isAuthenticated, user, login } = useAuth();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'relay'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  const [relayLink, setRelayLink] = useState('');
   const processedRef = useRef(false);
   const loginRef = useRef(login);
   loginRef.current = login;
@@ -106,7 +107,22 @@ export default function AuthCallbackPage() {
         // Custom tab : on relaie code + state vers l'app native via le custom
         // scheme. L'app vérifie le state dans appUrlOpen, puis échange le code
         // dans le WebView (elle seule détient le verifier PKCE).
+        //
+        // BUG CORRIGÉ (audit 2026-08-26) : la redirection JS automatique
+        // (window.location.replace vers logitrack://...) peut être silencieusement
+        // ignorée par Chrome (politique de navigation vers un schéma personnalisé
+        // sans geste utilisateur direct) ou bloquée par des restrictions
+        // constructeur (MIUI, notamment, limite l'ouverture d'apps en arrière-plan
+        // depuis une autre application) — observé en usage réel : la connexion
+        // Google réussissait côté serveur, mais le code n'atteignait JAMAIS
+        // l'app (aucun appel à /auth/exchange), laissant l'utilisateur "connecté"
+        // dans l'onglet du navigateur système tandis que l'app elle-même restait
+        // déconnectée en permanence. On tente la redirection automatique, ET on
+        // affiche IMMÉDIATEMENT un lien manuel cliquable identique (un vrai <a>,
+        // donc un geste utilisateur garanti) en secours si elle échoue.
         relayTokenToNativeApp(codeFromHash, stateFromHash);
+        setRelayLink(buildRelayDeepLink(codeFromHash, stateFromHash));
+        setStatus('relay');
         return;
       }
       // WebView native : échange immédiat du code contre une session.
@@ -147,6 +163,17 @@ export default function AuthCallbackPage() {
         <>
           <Loader2 size={32} className={styles.loadingIcon} />
           <div className={styles.loadingText}>{t('auth.callback.connecting')}</div>
+        </>
+      )}
+
+      {status === 'relay' && (
+        <>
+          <div className={styles.loadingText}>{t('auth.callback.connecting')}</div>
+          {relayLink && (
+            <a href={relayLink} className={styles.backLink}>
+              {t('auth.callback.openApp', "L'application ne s'est pas ouverte ? Appuyez ici")}
+            </a>
+          )}
         </>
       )}
 
