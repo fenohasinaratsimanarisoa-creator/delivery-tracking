@@ -42,9 +42,25 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { SessionsService } from '../sessions/sessions.service';
 
-const isProduction = process.env.NODE_ENV === 'production';
-const isSecure = isProduction || (process.env.CORS_ORIGIN || '').startsWith('https');
-const sameSite = isProduction ? ('none' as const) : ('lax' as const);
+// La sécurité des cookies (Secure, SameSite) doit refléter le protocole RÉEL
+// de déploiement, pas NODE_ENV. Un VPS de prod sans domaine/TLS (ex. Contabo,
+// IP nue servie en http://) est un cas de prod légitime — or NODE_ENV=production
+// forçait Secure+SameSite=None ici, que des flags que TOUS les navigateurs
+// rejettent silencieusement sur une origine http:// (aucune erreur réseau
+// visible : le cookie n'est simplement jamais stocké). Résultat en prod HTTP :
+// refreshToken ET csrf-token ne survivent jamais → "Missing CSRF token" sur
+// toute mutation, session qui ne survit pas à un refresh. APP_URL (URL
+// publique canonique de CE déploiement, toujours définie — voir .env.*.example
+// et render.yaml) est le bon signal : il reflète le protocole réellement servi,
+// contrairement à NODE_ENV qui ne dit rien du transport.
+const primaryOrigin =
+  process.env.APP_URL || (process.env.CORS_ORIGIN || '').split(',')[0]?.trim() || '';
+const isSecure = primaryOrigin.startsWith('https://');
+// SameSite=None sans Secure est rejeté par tous les navigateurs modernes — et
+// sur une origine http:// sans TLS, 'lax' suffit de toute façon : frontend et
+// API sont same-origin (nginx proxy /api en interne, voir nginx.conf.template),
+// jamais de vraie requête cross-site à couvrir.
+const sameSite = isSecure ? ('none' as const) : ('lax' as const);
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
