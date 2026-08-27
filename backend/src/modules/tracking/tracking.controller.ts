@@ -333,7 +333,17 @@ export class TrackingController {
    *
    * Pas de vehicleId dans le body (voir SmsRelayPositionDto) : résolu
    * côté service à partir du numéro d'envoi (TrackingService.ingestSmsRelayPosition).
+   *
+   * BUG CORRIGÉ (audit terrain 2026-08-27, découvert au premier test réel de
+   * la clé API — même classe que le bug FATALE corrigé la veille sur
+   * native-batch) : @SkipCsrf() manquant → 403 "Missing CSRF token" sur
+   * TOUT appel, y compris légitime. La protection CSRF n'a de toute façon
+   * aucun sens ici : ce endpoint n'est authentifié QUE par X-API-Key (jamais
+   * par cookie), et l'appelant (GatewaySmsReceiver.java, HttpURLConnection
+   * natif) n'a et ne peut avoir aucun moyen d'obtenir un jeton CSRF (flux
+   * JS/cookie que le code natif n'exécute jamais).
    */
+  @SkipCsrf()
   @UseGuards(ApiKeyOrJwtGuard)
   @ApiKeyScope('tracking:sms-relay')
   @ApiHeader({

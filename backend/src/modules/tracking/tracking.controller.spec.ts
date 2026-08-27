@@ -1,9 +1,11 @@
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe, UnauthorizedException, ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import * as request from 'supertest';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { TrackingController } from './tracking.controller';
+import { SKIP_CSRF_KEY } from '../../common/decorators/skip-csrf.decorator';
 import { TrackingService } from './tracking.service';
 import { TraccarBridgeService } from './traccar-bridge.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -460,5 +462,11 @@ describe('TrackingController — POST /tracking/positions/sms-relay', () => {
 
     expect(res.status).toBe(400);
     expect(mockTrackingService.ingestSmsRelayPosition).not.toHaveBeenCalled();
+  });
+
+  it("porte @SkipCsrf() (audit terrain 2026-08-27, régression réelle : 403 \"Missing CSRF token\" sur TOUT appel jusqu'à ce que la clé API vienne d'être testée en conditions réelles — l'appelant natif ne peut structurellement jamais fournir de jeton CSRF, comme native-batch)", () => {
+    const reflector = new Reflector();
+    const skipCsrf = reflector.get(SKIP_CSRF_KEY, TrackingController.prototype.ingestSmsRelay);
+    expect(skipCsrf).toBe(true);
   });
 });
