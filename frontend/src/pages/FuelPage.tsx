@@ -250,12 +250,19 @@ export default function FuelPage() {
     staleTime: 15000,
   });
 
-  const { data: reports, isLoading: reportsLoading } = useQuery({
+  const {
+    data: reports,
+    isLoading: reportsLoading,
+    error: reportsError,
+  } = useQuery({
     queryKey: ["fuel-daily-reports", reportDate],
+    // BUG CORRIGÉ (audit carburant 2026-08-27, MOYENNE) : `r.data ?? r ?? []`
+    // était le seul fallback du fichier à retomber sur l'objet Response Axios
+    // brut si `r.data` est falsy — `reportList.length` devenait alors
+    // `undefined`, ni l'état vide ni le tableau ne s'affichaient (silencieux).
+    // Toutes les autres requêtes de cette page utilisent `.then((r) => r.data)`.
     queryFn: () =>
-      api
-        .get(`/fuel-consumption/daily-reports?date=${reportDate}`)
-        .then((r) => r.data ?? r ?? []),
+      api.get(`/fuel-consumption/daily-reports?date=${reportDate}`).then((r) => r.data),
     enabled: tab === "gps",
     // Le rapport est « temps réel » comme le diagnostic : le QueryClient global a
     // refetchOnWindowFocus:false + staleTime 2 min, ce qui gardait le rapport figé
@@ -468,8 +475,31 @@ export default function FuelPage() {
     setCreating(false);
   };
 
+  // BUG CORRIGÉ (audit carburant 2026-08-27, HAUTE) : cette validation n'existait
+  // QUE dans saveCreate — saveEdit soumettait le formulaire tel quel. Vider le
+  // champ date pendant une édition faisait planter `new Date("").toISOString()`
+  // (RangeError: Invalid time value, non interceptée) ; vider liters/kilometers/
+  // cost envoyait silencieusement 0 au serveur (donnée carburant corrompue sans
+  // aucun avertissement). Factorisé ici pour que les deux formulaires partagent
+  // exactement la même garde.
+  const validateForm = (): boolean => {
+    if (
+      !form.vehicleId ||
+      !form.liters ||
+      !form.kilometers ||
+      !form.cost ||
+      !form.fillDate ||
+      Number.isNaN(Date.parse(form.fillDate))
+    ) {
+      toast(t("fuel.requiredFields"), "error");
+      return false;
+    }
+    return true;
+  };
+
   const saveEdit = () => {
     if (!editing) return;
+    if (!validateForm()) return;
     const payload: Record<string, unknown> = {
       liters: Number(form.liters),
       kilometers: Number(form.kilometers),
@@ -482,16 +512,7 @@ export default function FuelPage() {
   };
 
   const saveCreate = () => {
-    if (
-      !form.vehicleId ||
-      !form.liters ||
-      !form.kilometers ||
-      !form.cost ||
-      !form.fillDate
-    ) {
-      toast(t("fuel.requiredFields"), "error");
-      return;
-    }
+    if (!validateForm()) return;
     const payload: Record<string, unknown> = {
       liters: Number(form.liters),
       kilometers: Number(form.kilometers),
@@ -598,7 +619,17 @@ export default function FuelPage() {
     },
   ];
 
-  if (isLoading || reportsLoading || pricesLoading) {
+  // BUG CORRIGÉ (audit carburant 2026-08-27, HAUTE) : ce garde-fou remplaçait
+  // TOUTE la page (header, onglets, contenu déjà chargé) par le skeleton
+  // complet dès qu'UN SEUL des trois chargements était actif — y compris
+  // `reportsLoading`/`pricesLoading`, qui ne se déclenchent qu'au premier
+  // clic sur un onglet jamais visité (`enabled: tab === "gps"/"prices"`).
+  // Chaque première visite d'un onglet donnait donc l'impression de tout
+  // recharger depuis zéro. Seul le chargement INITIAL de la page (`isLoading`,
+  // onglet "Saisie manuelle" par défaut) justifie le skeleton plein écran ;
+  // les onglets GPS/Prix affichent désormais leur propre état de chargement
+  // scopé à leur contenu (voir plus bas), le reste de la page restant visible.
+  if (isLoading) {
     return (
       <div className={styles.pageContainer}>
         <div className={styles.pageHeader}>
@@ -1008,7 +1039,31 @@ export default function FuelPage() {
             <p className={styles.errorTextMsg}>{t("fuel.generateError")}</p>
           )}
 
-          {reportList.length === 0 && (
+          {/* États scopés à cet onglet (audit carburant 2026-08-27) — voir le
+              commentaire sur `if (isLoading)` plus haut : le reste de la page
+              (header, onglets) reste visible pendant ce chargement local. */}
+          {reportsLoading && (
+            <div className={styles.tableSkeleton}>
+              <div className={`${styles.shimmer} ${styles.shimmerTableHeader}`} />
+              {[0, 1, 2].map((r) => (
+                <div key={r} className={styles.skeletonRowLine}>
+                  {[24, 12, 12, 16, 14, 18].map((w, c) => (
+                    <div
+                      key={c}
+                      className={`${styles.shimmer} ${styles.shimmerCell}`}
+                      style={{ width: `${w}%`, animationDelay: `${(r + c) * 50}ms` }}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!reportsLoading && reportsError && (
+            <p className={styles.errorTextMsg}>{t("fuel.error")}</p>
+          )}
+
+          {!reportsLoading && !reportsError && reportList.length === 0 && (
             <div className={styles.emptyState}>
               <span className={styles.emptyIcon}>
                 <Radar size={24} />
@@ -1018,7 +1073,7 @@ export default function FuelPage() {
             </div>
           )}
 
-          {reportList.length > 0 && (
+          {!reportsLoading && !reportsError && reportList.length > 0 && (
             <div className={styles.tableCard}>
               <div className={styles.tableWrap}>
                 <table className={styles.table}>
@@ -1397,7 +1452,26 @@ export default function FuelPage() {
             </div>
             <p className={styles.helpText}>{t("fuel.historyHelp")}</p>
 
-            {priceHistory.length === 0 && (
+            {/* Chargement scopé à cet onglet (audit carburant 2026-08-27) —
+                voir le commentaire sur `if (isLoading)` plus haut. */}
+            {pricesLoading && (
+              <div className={styles.tableSkeleton}>
+                <div className={`${styles.shimmer} ${styles.shimmerTableHeader}`} />
+                {[0, 1, 2].map((r) => (
+                  <div key={r} className={styles.skeletonRowLine}>
+                    {[24, 16, 16, 16, 16].map((w, c) => (
+                      <div
+                        key={c}
+                        className={`${styles.shimmer} ${styles.shimmerCell}`}
+                        style={{ width: `${w}%`, animationDelay: `${(r + c) * 50}ms` }}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!pricesLoading && priceHistory.length === 0 && (
               <div className={styles.emptyState}>
                 <span className={styles.emptyIcon}>
                   <CircleDollarSign size={24} />
@@ -1407,7 +1481,7 @@ export default function FuelPage() {
               </div>
             )}
 
-            {priceHistory.length > 0 && (
+            {!pricesLoading && priceHistory.length > 0 && (
               <div className={styles.tableCard}>
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>

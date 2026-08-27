@@ -108,6 +108,33 @@ export class FuelConsumptionService {
     return 'essence';
   }
 
+  /**
+   * BUG CORRIGÉ (audit carburant 2026-08-27, HAUTE) : normalizeFuelType()
+   * ci-dessus retombe silencieusement sur 'essence' pour toute chaîne non
+   * reconnue — sûr en LECTURE (une valeur véhicule vide/inattendue ne doit
+   * jamais faire échouer un calcul de coût), mais dangereux en ÉCRITURE : une
+   * faute de frappe sur un prix carburant ("Elecrtique", "gazole") créait
+   * silencieusement une entrée de prix ESSENCE, corrompant l'historique de
+   * prix essence sans aucune erreur ni avertissement. Utilisé UNIQUEMENT aux
+   * points d'écriture (create/updateFuelPrice) — la lecture garde le repli
+   * permissif de normalizeFuelType().
+   */
+  private normalizeFuelTypeStrict(raw: string): string {
+    const s = raw
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    const recognized = ['elect', 'gasoil', 'gazoil', 'diesel', 'essence', 'hybr'].some((k) =>
+      s.includes(k),
+    );
+    if (!recognized) {
+      throw new BadRequestException(
+        `Unrecognized fuel type "${raw}" — expected essence/diesel/gasoil/electric/hybrid (or a French display variant).`,
+      );
+    }
+    return this.normalizeFuelType(raw);
+  }
+
   private async getFuelPriceForDate(
     companyId: string,
     fuelType: string,
@@ -661,7 +688,19 @@ export class FuelConsumptionService {
     // avant, un prix créé pour « Hybride Essence »/« Électrique » était stocké brut
     // (hybride essence / electrique) et ne correspondait JAMAIS au token cherché
     // (hybrid / electric) → prix jamais appliqué, coût estimé faux.
-    const fuelType = this.normalizeFuelType(dto.fuelType);
+    const fuelType = this.normalizeFuelTypeStrict(dto.fuelType);
+    // BUG CORRIGÉ (audit carburant 2026-08-27, FAIBLE) : getFuelPriceForDate
+    // renvoie `null` (« aucun prix configuré ») pour un prix à 0 Ar UNIQUEMENT
+    // via le repli sur les valeurs par défaut de la company — jamais pour une
+    // entrée FuelPriceHistory EXPLICITEMENT créée à 0. Un diesel/essence à 0 Ar
+    // (faute de saisie) serait alors renvoyé tel quel et affiché comme un coût
+    // calculé normal, indiscernable d'une vraie absence de prix. Seul
+    // 'electric' à 0 Ar est un cas légitime (recharge gratuite/non facturée).
+    if (fuelType !== 'electric' && dto.pricePerLiter === 0) {
+      throw new BadRequestException(
+        `A price of 0 is only valid for fuelType "electric" — "${fuelType}" requires a positive pricePerLiter.`,
+      );
+    }
     const effectiveFrom = new Date(dto.effectiveFrom);
     const effectiveUntil = dto.effectiveUntil ? new Date(dto.effectiveUntil) : null;
 
@@ -714,11 +753,54 @@ export class FuelConsumptionService {
     if (!existing) throw new NotFoundException('Fuel price not found');
 
     const data: any = {};
-    if (dto.fuelType !== undefined) data.fuelType = this.normalizeFuelType(dto.fuelType);
+    if (dto.fuelType !== undefined) data.fuelType = this.normalizeFuelTypeStrict(dto.fuelType);
     if (dto.pricePerLiter !== undefined) data.pricePerLiter = dto.pricePerLiter;
     if (dto.effectiveFrom !== undefined) data.effectiveFrom = new Date(dto.effectiveFrom);
     if (dto.effectiveUntil !== undefined) {
       data.effectiveUntil = dto.effectiveUntil ? new Date(dto.effectiveUntil) : null;
+    }
+
+    // BUG CORRIGÉ (audit carburant 2026-08-27, HAUTE) : contrairement à
+    // createFuelPrice (garde-fou anti-chevauchement ci-dessus), updateFuelPrice
+    // ne revérifiait JAMAIS le chevauchement après modification de
+    // fuelType/effectiveFrom/effectiveUntil — on pouvait étendre une plage pour
+    // qu'elle recouvre une autre entrée existante sans aucune erreur.
+    // getFuelPriceForDate (tri effectiveFrom desc + findFirst) choisit alors
+    // silencieusement l'un des deux prix pour toute date du chevauchement :
+    // coût faux propagé à tous les DailyFuelReport et cross-checks GPS
+    // concernés. Même garde que createFuelPrice, appliquée sur l'état RÉSULTANT
+    // (existing + changements), excluant l'entrée elle-même de la recherche.
+    const resultingFuelType = data.fuelType ?? existing.fuelType;
+    const resultingFrom = data.effectiveFrom ?? existing.effectiveFrom;
+    const resultingUntil =
+      'effectiveUntil' in data ? data.effectiveUntil : existing.effectiveUntil;
+    const resultingPricePerLiter = data.pricePerLiter ?? existing.pricePerLiter;
+
+    // Voir createFuelPrice (audit carburant 2026-08-27, FAIBLE) — même garde,
+    // appliquée sur l'état résultant (existing + changements).
+    if (resultingFuelType !== 'electric' && resultingPricePerLiter === 0) {
+      throw new BadRequestException(
+        `A price of 0 is only valid for fuelType "electric" — "${resultingFuelType}" requires a positive pricePerLiter.`,
+      );
+    }
+
+    const overlapping = await this.prisma.fuelPriceHistory.findFirst({
+      where: {
+        id: { not: id },
+        companyId,
+        fuelType: resultingFuelType,
+        ...(resultingUntil ? { effectiveFrom: { lte: resultingUntil } } : {}),
+        OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: resultingFrom } }],
+      },
+    });
+    if (overlapping) {
+      const existingRange = `${overlapping.effectiveFrom.toISOString()} → ${
+        overlapping.effectiveUntil ? overlapping.effectiveUntil.toISOString() : '∞'
+      }`;
+      throw new BadRequestException(
+        `Fuel price for "${resultingFuelType}" overlaps the existing range [${existingRange}]. ` +
+          `Close or remove it before creating an overlapping price.`,
+      );
     }
 
     return this.prisma.fuelPriceHistory.update({ where: { id }, data });
@@ -1252,8 +1334,37 @@ export class FuelConsumptionService {
     return Math.min(1, coveredMs / spanMs);
   }
 
+  // BUG CORRIGÉ (audit carburant 2026-08-27, HAUTE) : les gardes ci-dessous
+  // (`if (!fuelLog.gpsCoverageInsufficientFlag)`) lisent un SNAPSHOT figé
+  // (l'objet `fuelLog` passé en paramètre, capturé avant les lectures async),
+  // jamais une relecture atomique de la ligne en base. Deux appels concurrents
+  // (double-clic sur "Enregistrer", deux PATCH quasi simultanés sur le même
+  // fuel log) exécutent chacun leur propre cross-check avec le même snapshot
+  // obsolète et peuvent chacun écrire le flag + envoyer une notification
+  // "anomalie"/"couverture insuffisante" IDENTIQUE en double. Même famille de
+  // bug que celle corrigée aujourd'hui côté PositionUploadWorker (GPS) — verrou
+  // en mémoire par fuelLogId, valable car ce service tourne dans un SEUL
+  // process Node (event loop mono-thread, pas de scaling horizontal du
+  // conteneur `backend` sur ce déploiement).
+  private readonly crossCheckInProgress = new Set<string>();
+
   private async crossCheckFuelLogWithGps(fuelLog: any, companyId: string) {
     if (!fuelLog.kilometers || fuelLog.kilometers <= 0) return;
+    if (this.crossCheckInProgress.has(fuelLog.id)) {
+      this.logger.warn(
+        `Cross-check GPS déjà en cours pour le fuel log ${fuelLog.id} — appel concurrent ignoré (rien perdu, le check en cours couvre déjà cette donnée)`,
+      );
+      return;
+    }
+    this.crossCheckInProgress.add(fuelLog.id);
+    try {
+      await this.crossCheckFuelLogWithGpsLocked(fuelLog, companyId);
+    } finally {
+      this.crossCheckInProgress.delete(fuelLog.id);
+    }
+  }
+
+  private async crossCheckFuelLogWithGpsLocked(fuelLog: any, companyId: string) {
 
     // Trouver le dernier plein avant celui-ci pour le même véhicule
     const prevLog = await this.prisma.fuelLog.findFirst({
@@ -1383,6 +1494,14 @@ export class FuelConsumptionService {
     });
     const crossCheckThreshold = settings?.crossCheckThreshold ?? 1.3;
 
+    // BUG CORRIGÉ (audit carburant 2026-08-27, MOYENNE #8) : les trajets courts
+    // (< FUEL_COVERAGE_MIN_MANUAL_KM) sont déjà exemptés du garde-fou de
+    // couverture GPS ci-dessus, mais restaient soumis au ratio dès que
+    // gpsKm > 0 — sur une courte distance, le bruit GPS/haversine pèse
+    // proportionnellement bien plus lourd, source de faux positifs fréquents.
+    // Même seuil d'exemption que la couverture, pour cohérence.
+    if (manualKm < FUEL_COVERAGE_MIN_MANUAL_KM) return;
+
     if (ratio > crossCheckThreshold) {
       // Ce détecteur n'écrit QUE sa propre paire (gpsAnomalyFlag/gpsAnomalyReason).
       // Il ne touche jamais aux champs consommation ni au champ dérivé anomalyFlag :
@@ -1399,6 +1518,31 @@ export class FuelConsumptionService {
         priority: NotificationPriority.high,
         title: 'Fuel Consumption Anomaly',
         message: `Vehicle ${fuelLog.vehicle?.licensePlate || fuelLog.vehicleId}: manual km (${manualKm}) vs GPS km (${gpsKm.toFixed(1)}) — ratio ${ratio.toFixed(1)}x`,
+        link: `/fuel-consumption`,
+        deliveryId: undefined,
+        userId: fuelLog.vehicle?.driver?.userId ?? undefined,
+      });
+      return;
+    }
+
+    // BUG CORRIGÉ (audit carburant 2026-08-27, MOYENNE #7) : seule la
+    // SUR-déclaration (ratio > seuil, kilométrage saisi ≫ GPS) était détectée.
+    // Une SOUS-déclaration (kilométrage saisi très inférieur au GPS) — usage
+    // non autorisé du véhicule masqué par une saisie minorée — passait
+    // totalement inaperçue. Seuil symétrique : 1/crossCheckThreshold.
+    if (ratio < 1 / crossCheckThreshold) {
+      await this.prisma.fuelLog.update({
+        where: { id: fuelLog.id },
+        data: {
+          gpsAnomalyFlag: true,
+          gpsAnomalyReason: `Distance saisie (${manualKm}km) très inférieure à la distance GPS (${gpsKm.toFixed(1)}km) sur la période — sous-déclaration possible, rapport ×${ratio.toFixed(2)}`,
+        },
+      });
+      await this.notifications.create(companyId, {
+        type: NotificationType.fuel_anomaly,
+        priority: NotificationPriority.high,
+        title: 'Fuel Consumption Anomaly',
+        message: `Vehicle ${fuelLog.vehicle?.licensePlate || fuelLog.vehicleId}: manual km (${manualKm}) très inférieur au GPS km (${gpsKm.toFixed(1)}) — sous-déclaration possible, ratio ${ratio.toFixed(2)}x`,
         link: `/fuel-consumption`,
         deliveryId: undefined,
         userId: fuelLog.vehicle?.driver?.userId ?? undefined,

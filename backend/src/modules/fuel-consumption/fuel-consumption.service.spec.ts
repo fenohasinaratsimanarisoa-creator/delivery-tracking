@@ -381,6 +381,80 @@ describe('FuelConsumptionService', () => {
       expect(updateData).not.toHaveProperty('anomalyFlag');
       expect(updateData).not.toHaveProperty('anomalyReason');
     });
+
+    // ----------------------------------------------------------------
+    // RÉGRESSIONS — audit carburant 2026-08-27
+    // ----------------------------------------------------------------
+    it('HAUTE #6 : deux appels CONCURRENTS sur le même fuel log ne notifient/écrivent qu\'UNE SEULE fois (verrou en mémoire)', async () => {
+      const fuelLog = {
+        id: 'fuel-log-concurrent',
+        vehicleId: 'vehicle-a',
+        kilometers: 200,
+        fillDate: new Date('2026-07-25'),
+        vehicle: { licensePlate: 'TRK-A' },
+      };
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({ fillDate: new Date('2026-07-15') });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positionsForKm(100));
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({ crossCheckThreshold: 1.3 });
+
+      // Même objet fuelLog (même snapshot figé), deux appels lancés en même temps —
+      // simule un double-clic / deux PATCH quasi simultanés sur le même log.
+      await Promise.all([
+        (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1'),
+        (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1'),
+      ]);
+
+      // Le second appel doit avoir été bloqué AVANT toute lecture DB — sinon
+      // c'est le lot GPS lui-même qui serait interrogé deux fois.
+      expect(mockPrisma.gpsPosition.findMany).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledTimes(1);
+      expect(mockNotifications.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('MOYENNE #7 : détecte aussi la SOUS-déclaration (kilométrage saisi très inférieur au GPS)', async () => {
+      const fuelLog = {
+        id: 'fuel-log-underreport',
+        vehicleId: 'vehicle-a',
+        kilometers: 50,
+        fillDate: new Date('2026-07-25'),
+        vehicle: { licensePlate: 'TRK-A' },
+      };
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({ fillDate: new Date('2026-07-15') });
+      // ratio = 50/200 = 0.25 < 1/1.3 (≈0.77) → sous-déclaration.
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positionsForKm(200));
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({ crossCheckThreshold: 1.3 });
+
+      await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
+
+      expect(mockPrisma.fuelLog.update).toHaveBeenCalledWith({
+        where: { id: 'fuel-log-underreport' },
+        data: expect.objectContaining({
+          gpsAnomalyFlag: true,
+          gpsAnomalyReason: expect.stringContaining('sous-déclaration'),
+        }),
+      });
+      expect(mockNotifications.create).toHaveBeenCalled();
+    });
+
+    it('MOYENNE #8 : un trajet court (< 5km) est EXEMPTÉ du ratio (bruit GPS proportionnellement trop élevé)', async () => {
+      const fuelLog = {
+        id: 'fuel-log-short-trip',
+        vehicleId: 'vehicle-a',
+        kilometers: 2,
+        fillDate: new Date('2026-07-25'),
+        vehicle: { licensePlate: 'TRK-A' },
+      };
+      mockPrisma.fuelLog.findFirst.mockResolvedValueOnce({ fillDate: new Date('2026-07-15') });
+      // ratio = 2/20 = 0.1, très en dehors du seuil — mais le trajet est trop
+      // court pour que le ratio soit fiable, l'exemption doit primer.
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positionsForKm(20));
+      mockPrisma.companyFuelSettings.findUnique.mockResolvedValueOnce({ crossCheckThreshold: 1.3 });
+
+      await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
+
+      expect(mockPrisma.fuelLog.update).not.toHaveBeenCalled();
+      expect(mockNotifications.create).not.toHaveBeenCalled();
+    });
   });
 
   // ----------------------------------------------------------------
@@ -1626,10 +1700,10 @@ describe('FuelConsumptionService', () => {
     });
 
     it('updateFuelPrice normalise aussi le fuelType (H4)', async () => {
-      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce({
-        id: 'fp-1',
-        companyId: 'company-1',
-      });
+      mockPrisma.fuelPriceHistory.findFirst
+        .mockResolvedValueOnce({ id: 'fp-1', companyId: 'company-1', pricePerLiter: 5000 })
+        // 2e appel : garde-fou anti-chevauchement (audit 2026-08-27) — aucune entrée conflictuelle.
+        .mockResolvedValueOnce(null);
       mockPrisma.fuelPriceHistory.update.mockResolvedValueOnce({ id: 'fp-1' });
 
       await service.updateFuelPrice('company-1', 'fp-1', { fuelType: 'Gazoil' });
@@ -1637,6 +1711,83 @@ describe('FuelConsumptionService', () => {
         where: { id: 'fp-1' },
         data: { fuelType: 'gasoil' },
       });
+    });
+
+    it('HAUTE #1 : updateFuelPrice REJETTE un changement qui ferait chevaucher une autre entrée', async () => {
+      mockPrisma.fuelPriceHistory.findFirst
+        .mockResolvedValueOnce({
+          id: 'fp-jan',
+          companyId: 'company-1',
+          fuelType: 'diesel',
+          pricePerLiter: 5000,
+          effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+          effectiveUntil: new Date('2026-01-31T00:00:00.000Z'),
+        })
+        // 2e appel : garde-fou anti-chevauchement — l'entrée [1 fév → ∞] existe déjà.
+        .mockResolvedValueOnce({
+          id: 'fp-feb',
+          fuelType: 'diesel',
+          effectiveFrom: new Date('2026-02-01T00:00:00.000Z'),
+          effectiveUntil: null,
+        });
+
+      // On étend fp-jan jusqu'au 15 février → chevauche fp-feb de 14 jours.
+      await expect(
+        service.updateFuelPrice('company-1', 'fp-jan', {
+          effectiveUntil: '2026-02-15',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.fuelPriceHistory.update).not.toHaveBeenCalled();
+    });
+
+    it('HAUTE #2 : createFuelPrice REJETTE un fuelType non reconnu (faute de frappe) au lieu de le stocker silencieusement en "essence"', async () => {
+      await expect(
+        service.createFuelPrice('company-1', {
+          fuelType: 'Elecrtique', // faute de frappe volontaire
+          pricePerLiter: 3000,
+          effectiveFrom: '2026-04-01',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.fuelPriceHistory.create).not.toHaveBeenCalled();
+    });
+
+    it('HAUTE #2 : updateFuelPrice REJETTE aussi un fuelType non reconnu', async () => {
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce({
+        id: 'fp-1',
+        companyId: 'company-1',
+        fuelType: 'diesel',
+        pricePerLiter: 5000,
+      });
+
+      await expect(
+        service.updateFuelPrice('company-1', 'fp-1', { fuelType: 'gazole mal ecrit' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.fuelPriceHistory.update).not.toHaveBeenCalled();
+    });
+
+    it('FAIBLE #13 : createFuelPrice REJETTE un prix à 0 pour un carburant non-électrique', async () => {
+      await expect(
+        service.createFuelPrice('company-1', {
+          fuelType: 'diesel',
+          pricePerLiter: 0,
+          effectiveFrom: '2026-04-01',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.fuelPriceHistory.create).not.toHaveBeenCalled();
+    });
+
+    it('FAIBLE #13 : createFuelPrice ACCEPTE un prix à 0 pour "electric" (recharge gratuite)', async () => {
+      mockPrisma.fuelPriceHistory.updateMany.mockResolvedValueOnce({ count: 0 });
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.fuelPriceHistory.create.mockResolvedValueOnce({ id: 'fp-elec-free' });
+
+      await expect(
+        service.createFuelPrice('company-1', {
+          fuelType: 'electric',
+          pricePerLiter: 0,
+          effectiveFrom: '2026-04-01',
+        }),
+      ).resolves.toBeDefined();
     });
 
     it('getDailyReports rejette une date invalide en 400 (M5)', async () => {

@@ -653,6 +653,15 @@ model FuelLog {
 
   @@index([vehicleId])
   @@index([fillDate])
+  // BUG CORRIGÉ (audit carburant 2026-08-27, HAUTE) : aucun index ne couvrait
+  // companyId, alors que findAll()/findOne()/getConsumptionStats() filtrent
+  // TOUS par companyId en premier — getConsumptionStats() en particulier fait
+  // un findMany({where: {companyId}}) SANS aucune limite ni filtre de date.
+  // Sur une flotte avec des années d'historique, chaque appel (page d'accueil
+  // du module carburant) déclenchait un scan complet de table. Index composite
+  // (companyId, fillDate) : couvre le filtre companyId seul (préfixe gauche)
+  // ET les requêtes par plage de date, sans dupliquer l'index fillDate seul.
+  @@index([companyId, fillDate])
   @@map("fuel_logs")
 }
 
