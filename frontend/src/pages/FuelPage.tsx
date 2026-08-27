@@ -596,7 +596,7 @@ export default function FuelPage() {
     driverName?: string;
     vehiclePlate?: string;
     distanceKm?: number;
-    gpsDataQuality?: "sufficient" | "insufficient";
+    gpsDataQuality?: "sufficient" | "insufficient" | "suspicious";
     consumptionLPer100Km?: number;
     estimatedCost?: number;
     reportDate?: string;
@@ -1135,6 +1135,22 @@ export default function FuelPage() {
                               >
                                 <HelpCircle size={12} />{" "}
                                 {t("fuel.gpsQualityBadge")}
+                              </span>
+                            )}
+                            {r.gpsDataQuality === "suspicious" && (
+                              // gpsDataQuality='suspicious' (audit 2026-08-27) : la distance a bien
+                              // été calculée mais porte la signature d'une dérive GPS stationnaire
+                              // (nombreux allers-retours sans progression réelle + accuracy dégradée)
+                              // plutôt qu'un vrai trajet — cas réel confirmé : 68 km calculés pour un
+                              // véhicule resté immobile toute la nuit. Distinct du badge "GPS faible"
+                              // (donnée simplement insuffisante) : ici un chiffre existe mais il ne
+                              // faut PAS lui faire confiance sans vérification.
+                              <span
+                                className={`${styles.badge} ${styles.badgeWarn}`}
+                                title={t("fuel.gpsQualitySuspicious")}
+                              >
+                                <AlertTriangle size={12} />{" "}
+                                {t("fuel.gpsQualitySuspiciousBadge")}
                               </span>
                             )}
                           </div>

@@ -41,6 +41,90 @@ export const MOVEMENT_SPEED_THRESHOLD_MS = 1.0;
 // faire confiance à sa vitesse.
 export const MOVEMENT_TRUST_MAX_ACCURACY_M = 30;
 
+// FENÊTRE D'ARRÊT (audit terrain 2026-08-27, complément du garde-fou ci-dessus) :
+// la sommation PAIRWISE (segment à segment) accumule TOUJOURS un peu de dérive
+// GPS à l'arrêt, même après les deux correctifs déjà appliqués — chaque
+// micro-segment individuellement plausible finit par s'additionner sur des
+// heures. Repli conservateur : si une SUITE de positions reste entièrement
+// dans un rayon de STATIONARY_RADIUS_M pendant au moins
+// STATIONARY_MIN_DURATION_S, elle est traitée comme un arrêt UNIQUE (un seul
+// point représentatif, aucune distance accumulée à l'intérieur) plutôt que
+// comme une série de micro-déplacements.
+//
+// Rayon volontairement MODESTE (30m, sous les segments réels ~22m des tests de
+// circulation lente en ville visés par la RÈGLE VITESSE) : un rayon plus large
+// (vérifié empiriquement sur un cas réel de dérive GPS extrême, ~800m
+// nécessaires pour l'annuler entièrement) effacerait aussi de VRAIS trajets
+// courts ailleurs dans la flotte. Cette fenêtre aide donc le cas COURANT
+// (dérive indoor/parking modérée, quelques dizaines de mètres) ; les nuits à
+// dérive extrême restent signalées séparément via gpsDataQuality='suspicious'
+// (voir upsertDailyReportForVehicleGroup, fuel-consumption.service.ts) plutôt
+// que « corrigées » par un rayon trop large pour être sûr.
+export const STATIONARY_RADIUS_M = 30;
+export const STATIONARY_MIN_DURATION_S = 300;
+
+// BUG CORRIGÉ (première version de cette fenêtre, audit terrain 2026-08-27) :
+// sans garde-fou sur la densité d'échantillonnage, une progression RÉELLE mais
+// échantillonnée peu fréquemment (ex. un fix par heure — scénario testé dans
+// "Non-régression (b)") se faisait collapser à tort : deux fixes espacés d'1h
+// mais à seulement 22m l'un de l'autre ressemblent, sur le seul critère
+// rayon+durée, à un arrêt de longue durée. Repris du seuil DÉJÀ établi ailleurs
+// dans ce fichier pour signaler une couverture GPS clairsemée (voir
+// upsertDailyReportForVehicleGroup, "avgGapSec > 60") : un arrêt n'est confirmé
+// que si l'échantillonnage reste dense (chaque fix à ≤ 60s du précédent) sur
+// TOUTE la fenêtre — une progression réelle mais rarement échantillonnée n'est
+// alors JAMAIS assez "dense" pour être confondue avec un arrêt.
+export const STATIONARY_MAX_SAMPLE_GAP_S = 60;
+
+/**
+ * Réduit une suite de positions en collapsant les fenêtres d'ARRÊT CONFIRMÉ
+ * (voir STATIONARY_RADIUS_M / STATIONARY_MIN_DURATION_S / STATIONARY_MAX_SAMPLE_GAP_S)
+ * à un seul point représentatif chacune. No-op silencieux si un timestamp
+ * manque (repli sûr : computeFilteredDistance() retombe alors sur son
+ * comportement pairwise habituel, inchangé).
+ */
+export function collapseStationaryWindows<
+  T extends { latitude: number; longitude: number; timestamp?: Date | null },
+>(positions: T[]): T[] {
+  if (positions.length < 3 || positions.some((p) => !p.timestamp)) return positions;
+
+  const out: T[] = [];
+  let i = 0;
+  const n = positions.length;
+  while (i < n) {
+    let j = i + 1;
+    while (j < n) {
+      const gapS =
+        (positions[j].timestamp!.getTime() - positions[j - 1].timestamp!.getTime()) / 1000;
+      if (gapS > STATIONARY_MAX_SAMPLE_GAP_S) break;
+      if (
+        haversineDistance(
+          positions[i].latitude,
+          positions[i].longitude,
+          positions[j].latitude,
+          positions[j].longitude,
+        ) > STATIONARY_RADIUS_M
+      ) {
+        break;
+      }
+      j++;
+    }
+    const windowEnd = j - 1;
+    const durationS =
+      (positions[windowEnd].timestamp!.getTime() - positions[i].timestamp!.getTime()) / 1000;
+    if (windowEnd > i && durationS >= STATIONARY_MIN_DURATION_S) {
+      // Arrêt confirmé : un seul point représentatif (le dernier de la fenêtre,
+      // pour préserver la continuité chronologique avec ce qui suit).
+      out.push(positions[windowEnd]);
+      i = windowEnd + 1;
+    } else {
+      out.push(positions[i]);
+      i++;
+    }
+  }
+  return out;
+}
+
 /**
  * Distance cumulée d'un trajet en filtrant le bruit GPS, avec un seuil pondéré par
  * l'accuracy moyenne de chaque segment ET plafonné (GPS_NOISE_MAX_ACCURACY_SCALE).
@@ -51,7 +135,8 @@ export const MOVEMENT_TRUST_MAX_ACCURACY_M = 30;
  * restent cohérents pour le même (véhicule, jour).
  *
  * RÈGLE VITESSE (corrige le sous-comptage massif) : si l'une des deux extrémités d'un
- * segment est en mouvement (speed > MOVEMENT_SPEED_THRESHOLD_MS), le segment est TOUJOURS
+ * segment est en mouvement (speed > MOVEMENT_SPEED_THRESHOLD_MS) ET que sa position est
+ * suffisamment précise (accuracy ≤ MOVEMENT_TRUST_MAX_ACCURACY_M), le segment est TOUJOURS
  * compté, même sous le seuil de distance. L'ancienne logique (seuil 5m × max(1, accuracy/10)
  * SANS plafond) supprimait les segments courts des trajets urbains lents — un véhicule à
  * 10-30 km/h couvre 8-25 m en 3 s, sous les thresholds 15-40 m induits par une accuracy
@@ -61,6 +146,9 @@ export const MOVEMENT_TRUST_MAX_ACCURACY_M = 30;
  * RÈGLE SEUIL (conservée pour l'arrêt) : sans vitesse (ou vitesse≈0 → véhicule à l'arrêt),
  * on filtre le bruit de dérive avec le seuil pondéré par l'accuracy, plafonné à
  * GPS_NOISE_MAX_ACCURACY_SCALE (→ max 7,5 m) pour ne jamais effacer un réel court trajet.
+ *
+ * FENÊTRE D'ARRÊT (pré-passe, voir collapseStationaryWindows) : appliquée AVANT le calcul
+ * pairwise ci-dessus, uniquement si tous les timestamps sont présents.
  *
  * DÉVIATION ASSUMÉE vs calculateDistancePostGIS : celui-ci garde un seuil FIXE à 5m (aucune
  * pondération accuracy) — acceptable, car le PostGIS ne sert qu'au rapport de trajet
@@ -72,8 +160,10 @@ export function computeFilteredDistance(
     longitude: number;
     accuracy?: number | null;
     speed?: number | null;
+    timestamp?: Date | null;
   }>,
 ): number {
+  positions = collapseStationaryWindows(positions);
   let totalDistance = 0;
   for (let i = 1; i < positions.length; i++) {
     const p1 = positions[i - 1];

@@ -36,6 +36,12 @@ enum FuelUnit {
 enum GpsDataQuality {
   sufficient
   insufficient
+  // Distance calculée mais motif de méfiance réel : la distance filtrée est très
+  // supérieure au déplacement net (aller-retour/dérive plutôt qu'un vrai trajet)
+  // ET l'accuracy moyenne de la période est dégradée — signature d'un bruit GPS
+  // stationnaire (intérieur/signal faible), pas d'une fraude ni d'un vrai trajet.
+  // Ajouté audit 2026-08-27 (cas réel : 68km calculés pour un véhicule immobile).
+  suspicious
 }
 
 // Source d'émission d'une position GPS. Renseigné obligatoirement à l'insertion

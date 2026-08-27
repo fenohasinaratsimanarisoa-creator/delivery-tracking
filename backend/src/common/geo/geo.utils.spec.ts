@@ -1,4 +1,4 @@
-import { computeFilteredDistance } from './geo.utils';
+import { computeFilteredDistance, collapseStationaryWindows } from './geo.utils';
 
 // =============================================================================
 // RÉGRESSION COUVERTE ICI (audit terrain 2026-08-27, confirmé sur données réelles
@@ -80,5 +80,78 @@ describe('computeFilteredDistance — garde-fou accuracy sur la règle vitesse (
     // 4 segments × ~22.3m (0.0002° de latitude à l'équateur) ≈ 89m attendus.
     expect(distance).toBeGreaterThan(80);
     expect(distance).toBeLessThan(100);
+  });
+});
+
+// =============================================================================
+// RÉGRESSION COUVERTE ICI (audit terrain 2026-08-27, complément) : même après le
+// garde-fou d'accuracy ci-dessus, la sommation pairwise accumule encore de la
+// dérive GPS sur de longues périodes stationnaires (chaque micro-segment reste
+// individuellement plausible). collapseStationaryWindows() traite une suite de
+// positions RESTANT DANS UN PETIT RAYON, ÉCHANTILLONNÉE DENSÉMENT, PENDANT
+// LONGTEMPS comme un arrêt unique — mais seulement si TOUTES ces conditions
+// tiennent, pour ne jamais effacer un vrai trajet lent et rarement échantillonné.
+// =============================================================================
+describe('collapseStationaryWindows — arrêt confirmé (rayon + densité + durée) (audit 2026-08-27)', () => {
+  const T0 = new Date('2026-08-27T00:00:00.000Z').getTime();
+
+  it('collapse un arrêt confirmé : dérive < 30m, échantillonnage dense (≤60s), durée ≥5min', () => {
+    // 40 positions sur 10 minutes (15s d'intervalle), dérive aléatoire mais bornée
+    // à ~10m autour d'un point fixe — un arrêt réel typique (accuracy correcte,
+    // léger bruit de position).
+    const positions = Array.from({ length: 40 }, (_, i) => ({
+      latitude: 0 + (i % 2 === 0 ? 0.00005 : -0.00003), // ~5.5m / 3.3m d'oscillation
+      longitude: 0,
+      timestamp: new Date(T0 + i * 15_000),
+    }));
+    const collapsed = collapseStationaryWindows(positions);
+    expect(collapsed.length).toBeLessThan(positions.length);
+    expect(collapsed.length).toBe(1); // toute la fenêtre est un seul arrêt
+  });
+
+  it("NE collapse PAS une progression réelle mais peu échantillonnée (>60s entre fixes), même si chaque saut est < 30m", () => {
+    // Reproduit exactement le scénario "Non-régression (b)" de
+    // fuel-consumption.service.spec.ts : 9 positions à 1h d'intervalle, ~22m par
+    // saut. Sans le garde-fou de densité, ceci serait à tort traité comme un
+    // arrêt de 8h.
+    const positions = Array.from({ length: 9 }, (_, i) => ({
+      latitude: i * 0.0002,
+      longitude: 0,
+      timestamp: new Date(T0 + i * 3_600_000), // 1h d'intervalle
+    }));
+    const collapsed = collapseStationaryWindows(positions);
+    expect(collapsed.length).toBe(positions.length); // rien collapsé
+  });
+
+  it("NE collapse PAS une fenêtre trop courte (< 5 min), même dense et immobile", () => {
+    const positions = Array.from({ length: 10 }, (_, i) => ({
+      latitude: 0,
+      longitude: 0,
+      timestamp: new Date(T0 + i * 10_000), // 10s d'intervalle, 100s au total < 5min
+    }));
+    const collapsed = collapseStationaryWindows(positions);
+    expect(collapsed.length).toBe(positions.length); // rien collapsé (fenêtre trop courte)
+  });
+
+  it('repli sûr : ne modifie rien si un timestamp manque', () => {
+    const positions = [
+      { latitude: 0, longitude: 0, timestamp: new Date(T0) },
+      { latitude: 0, longitude: 0 }, // timestamp manquant
+      { latitude: 0, longitude: 0, timestamp: new Date(T0 + 1000) },
+    ];
+    const collapsed = collapseStationaryWindows(positions as any);
+    expect(collapsed).toEqual(positions);
+  });
+
+  it('réduit significativement la distance calculée pour un arrêt confirmé, via computeFilteredDistance', () => {
+    const positions = Array.from({ length: 40 }, (_, i) => ({
+      latitude: 0 + (i % 3 === 0 ? 0.00006 : i % 3 === 1 ? -0.00004 : 0),
+      longitude: 0,
+      accuracy: 15,
+      speed: null,
+      timestamp: new Date(T0 + i * 15_000),
+    }));
+    const distance = computeFilteredDistance(positions);
+    expect(distance).toBe(0); // arrêt entièrement collapsé : un seul point restant
   });
 });

@@ -1203,6 +1203,53 @@ export class FuelConsumptionService {
       if (computedKm >= 0.1) {
         distanceKm = computedKm;
         gpsDataQuality = GpsDataQuality.sufficient;
+
+        // GARDE-FOU ANOMALIE (audit terrain 2026-08-27, cas réel confirmé en
+        // production : 68 km calculés pour un véhicule resté immobile toute la
+        // nuit — accuracy moyenne dégradée à ~67m, chauffeur n'ayant fait
+        // aucun trajet réel). Les correctifs de computeFilteredDistance/
+        // evaluateTeleportation réduisent ce genre de dérive mais ne
+        // l'éliminent pas entièrement pour des conditions GPS extrêmes
+        // (multipath intérieur soutenu) — un rayon d'arrêt assez large pour
+        // l'annuler complètement effacerait aussi de VRAIS courts trajets
+        // ailleurs dans la flotte (vérifié empiriquement : ~800m de rayon
+        // nécessaires pour ce cas précis).
+        //
+        // Repli : ne PAS prétendre que le chiffre est fiable quand deux
+        // signaux convergent vers du bruit plutôt qu'un vrai trajet :
+        //  - le déplacement NET (premier point → dernier point) est minuscule
+        //    comparé à la distance cumulée (beaucoup d'aller-retours sans
+        //    progression réelle — signature typique de la dérive GPS, pas
+        //    d'une tournée à arrêts multiples qui progresse globalement) ;
+        //  - l'accuracy moyenne de la période est dégradée (signal faible).
+        // Seuils volontairement conservateurs (ratio ×4, accuracy 35m, plancher
+        // 3km) pour ne jamais flaguer à tort une vraie tournée de livraison à
+        // arrêts multiples (ratio naturellement élevé mais accuracy correcte).
+        const withTs = positions.filter((p) => p.timestamp);
+        if (computedKm >= 3 && withTs.length >= 2) {
+          const first = withTs[0];
+          const last = withTs[withTs.length - 1];
+          const netDisplacementKm =
+            haversineDistance(first.latitude, first.longitude, last.latitude, last.longitude) /
+            1000;
+          const accuracies = positions
+            .map((p) => p.accuracy)
+            .filter((a): a is number => a != null);
+          const avgAccuracy =
+            accuracies.length > 0
+              ? accuracies.reduce((sum, a) => sum + a, 0) / accuracies.length
+              : 0;
+          const wanderRatio = netDisplacementKm > 0 ? computedKm / netDisplacementKm : Infinity;
+          if (wanderRatio > 4 && avgAccuracy > 35) {
+            gpsDataQuality = GpsDataQuality.suspicious;
+            this.logger.warn(
+              `[fuel-report] Distance suspecte: vehicle=${vehicleId} driver=${driver.id} ` +
+                `distanceKm=${computedKm.toFixed(2)} netDisplacementKm=${netDisplacementKm.toFixed(2)} ` +
+                `ratio=${wanderRatio.toFixed(1)} avgAccuracy=${avgAccuracy.toFixed(0)}m — ` +
+                `probable bruit GPS stationnaire, pas un trajet réel`,
+            );
+          }
+        }
       }
 
       // Signal de couverture clairsemée : quand les fixes sont trop rares (app fermée,

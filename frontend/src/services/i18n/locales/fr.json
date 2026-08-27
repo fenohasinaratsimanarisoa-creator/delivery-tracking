@@ -677,6 +677,8 @@
     "gpsDistance": "Distance GPS",
     "gpsQualityBadge": "GPS faible",
     "gpsQualityInsufficient": "Distance GPS trop faible pour être fiable ce jour-là (positions présentes mais déplacement < 0,1 km).",
+    "gpsQualitySuspiciousBadge": "À vérifier",
+    "gpsQualitySuspicious": "Cette distance ressemble à du bruit GPS (véhicule probablement resté immobile) plutôt qu'à un vrai trajet — vérifiez avant de vous y fier.",
     "estimatedCost": "Coût estimé",
     "date": "Date",
     "gpsDiagTitle": "Diagnostic des positions GPS brutes",

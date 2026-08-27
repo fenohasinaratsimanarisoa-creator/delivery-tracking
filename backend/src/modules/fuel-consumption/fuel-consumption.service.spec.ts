@@ -1359,6 +1359,113 @@ describe('FuelConsumptionService', () => {
   });
 
   // ----------------------------------------------------------------
+  // GARDE-FOU ANOMALIE (audit terrain 2026-08-27) : gpsDataQuality='suspicious'
+  // quand la distance calculée porte la signature d'une dérive GPS stationnaire
+  // (aller-retours sans progression nette, accuracy dégradée) plutôt qu'un vrai
+  // trajet — cas réel confirmé : 68 km calculés pour un véhicule immobile toute
+  // la nuit. Voir upsertDailyReportForVehicleGroup, fuel-consumption.service.ts.
+  // ----------------------------------------------------------------
+  describe('gpsDataQuality suspicious — dérive GPS stationnaire détectée (audit 2026-08-27)', () => {
+    const TARGET_DATE = new Date('2026-07-20T12:00:00.000Z');
+    const driver = { id: 'driver-1', firstName: 'Jean', lastName: 'Rakoto' };
+    const VEHICLE = {
+      id: 'vehicle-1',
+      licensePlate: 'TRK-001',
+      fuelType: 'Diesel',
+      theoreticalConsumption: 10,
+    };
+
+    it('marque suspicious : nombreux allers-retours (~300m), accuracy dégradée (40m), déplacement net minuscule', async () => {
+      // 12 positions alternant entre deux points ~300m l'un de l'autre — 11
+      // segments × 300m = 3.3 km cumulés, mais le point de départ et le point
+      // d'arrivée sont quasi identiques (aller-retour, pas de progression
+      // réelle). Signature typique d'une dérive GPS à l'arrêt.
+      const A = { latitude: 0, longitude: 0 };
+      const B = { latitude: 0.0027, longitude: 0 }; // ≈300m
+      const positions = Array.from({ length: 12 }, (_, i) => ({
+        ...(i % 2 === 0 ? A : B),
+        accuracy: 40,
+        vehicleId: 'vehicle-1',
+        driverId: 'driver-1',
+        timestamp: new Date(2026, 6, 20, 2, i, 0), // 1 min d'intervalle
+      }));
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(positions as any);
+      mockPrisma.vehicle.findUnique.mockResolvedValue(VEHICLE as any);
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 5000 });
+      mockPrisma.vehicle.findMany.mockResolvedValue([]);
+      let captured: any;
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (a: any) => {
+        captured = a;
+        return a;
+      });
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      expect(captured.create.distanceKm).toBeGreaterThanOrEqual(3);
+      expect(captured.create.gpsDataQuality).toBe(GpsDataQuality.suspicious);
+    });
+
+    it('reste sufficient : une VRAIE tournée à arrêts multiples (accuracy correcte) n\'est jamais flaguée à tort', async () => {
+      // 5 points en ligne, ~1km chacun, accuracy correcte (10m) : ratio
+      // distance/déplacement net naturellement élevé pour une tournée avec
+      // détour, mais l'accuracy correcte doit empêcher tout flag suspicious.
+      const positions = Array.from({ length: 5 }, (_, i) => ({
+        latitude: 0,
+        longitude: i * 0.009, // ≈1km par segment
+        accuracy: 10,
+        vehicleId: 'vehicle-1',
+        driverId: 'driver-1',
+        timestamp: new Date(2026, 6, 20, 8, i * 10, 0),
+      }));
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(positions as any);
+      mockPrisma.vehicle.findUnique.mockResolvedValue(VEHICLE as any);
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 5000 });
+      mockPrisma.vehicle.findMany.mockResolvedValue([]);
+      let captured: any;
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (a: any) => {
+        captured = a;
+        return a;
+      });
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      expect(captured.create.gpsDataQuality).toBe(GpsDataQuality.sufficient);
+    });
+
+    it('ne flague PAS un petit trajet (< 3km) même avec accuracy dégradée et un fort ratio (plancher de sécurité)', async () => {
+      // 10 segments × ~150m ≈ 1.5 km cumulés (sous le plancher de 3km), retour
+      // au point de départ (déplacement net ≈ 0, ratio infini) — vérifie que le
+      // PLANCHER (pas juste le ratio/l'accuracy) protège les petits trajets.
+      const A = { latitude: 0, longitude: 0 };
+      const B = { latitude: 0, longitude: 0.00135 }; // ≈150m à l'équateur
+      const positions = Array.from({ length: 11 }, (_, i) => ({
+        ...(i % 2 === 0 ? A : B),
+        accuracy: 40,
+        vehicleId: 'vehicle-1',
+        driverId: 'driver-1',
+        timestamp: new Date(2026, 6, 20, 2, i, 0),
+      }));
+      mockPrisma.driver.findFirst.mockResolvedValue(driver);
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(positions as any);
+      mockPrisma.vehicle.findUnique.mockResolvedValue(VEHICLE as any);
+      mockPrisma.fuelPriceHistory.findFirst.mockResolvedValue({ pricePerLiter: 5000 });
+      mockPrisma.vehicle.findMany.mockResolvedValue([]);
+      let captured: any;
+      mockPrisma.dailyFuelReport.upsert.mockImplementation(async (a: any) => {
+        captured = a;
+        return a;
+      });
+
+      await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
+
+      expect(captured.create.distanceKm).toBeLessThan(3);
+      expect(captured.create.gpsDataQuality).toBe(GpsDataQuality.sufficient);
+    });
+  });
+
+  // ----------------------------------------------------------------
   // BUG RACINE : changement de véhicule en cours de journée (V1 matin → V2 après-midi)
   // ----------------------------------------------------------------
   describe('generateDailyReportForSingleDriver — changement de véhicule en cours de journée', () => {
