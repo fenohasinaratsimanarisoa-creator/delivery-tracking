@@ -1,9 +1,12 @@
 import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, Inject, Optional } from '@nestjs/common';
 import { Job, Queue } from 'bullmq';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as crypto from 'crypto';
+import type Redis from 'ioredis';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { REDIS_CLIENT } from '../common/redis/redis.module';
+import { acquireCronLock } from '../common/scheduling/cron-lock';
 import { assertSafeWebhookUrl } from '../modules/webhooks/webhook-url-validator';
 
 function signPayload(payload: string, secret: string): string {
@@ -17,6 +20,7 @@ export class WebhookRetryProcessor extends WorkerHost {
   constructor(
     private prisma: PrismaService,
     @InjectQueue('webhook-retry') private retryQueue: Queue,
+    @Optional() @Inject(REDIS_CLIENT) private readonly redis: Redis | null = null,
   ) {
     super();
   }
@@ -120,6 +124,12 @@ export class WebhookRetryProcessor extends WorkerHost {
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async enqueueFailedDeliveries() {
+    // Ce @Cron tourne dans le process API (QueueModule @Global) ET dans le
+    // worker dédié, plus une fois par réplica API. Verrou distribué (TTL 240s <
+    // 5 min) pour qu'une seule instance enfile les relances par cycle. Filet
+    // supplémentaire : jobId déterministe côté add() → BullMQ dédoublonne même
+    // si deux instances passent la fenêtre.
+    if (!(await acquireCronLock(this.redis, 'webhook.enqueueFailedDeliveries', 240))) return;
     const now = new Date();
     // Limite de tentatives alignée sur maxAttempts de CHAQUE livraison (pas un 5 en dur) :
     // le process() du worker s'arrête à delivery.maxAttempts, la sélection du cron doit
@@ -145,6 +155,9 @@ export class WebhookRetryProcessor extends WorkerHost {
         'retry',
         { webhookDeliveryId: delivery.id },
         {
+          // jobId déterministe (livraison + n° de tentative) : deux enqueues
+          // concurrents produisent le MÊME jobId → BullMQ n'en garde qu'un.
+          jobId: `retry:${delivery.id}:${delivery.attempts}`,
           attempts: 1,
           removeOnComplete: { age: 3600 },
           removeOnFail: { age: 86400 },

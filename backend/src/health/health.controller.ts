@@ -34,16 +34,32 @@ export class HealthController {
     checks.redis = await this.checkRedis();
     checks.queue = await this.checkQueue();
 
-    const allOk = Object.values(checks).every((c) => c.status === 'ok');
+    // SEULE la base de données est un critère de vie/mort pour le load balancer.
+    // AVANT : `allOk = every(status === 'ok')` renvoyait 503 dès que :
+    //   - Redis n'était pas configuré (status 'skipped') → /health en 503 permanent
+    //     sur tout déploiement sans Redis ;
+    //   - la file fuel-analysis accumulait failed>=10 ou active>=5 (status
+    //     'degraded') → un simple retard de tâche de fond faisait retirer /
+    //     redémarrer en boucle un backend qui servait parfaitement les requêtes.
+    // Redis et les files sont donc rapportés (observabilité) mais NON fatals ici.
+    const databaseDown = checks.database.status === 'error';
 
-    if (!allOk) {
+    if (databaseDown) {
       throw new HttpException(
-        { status: 'degraded', timestamp: new Date().toISOString(), checks },
+        { status: 'unavailable', timestamp: new Date().toISOString(), checks },
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
 
-    return { status: 'ok', timestamp: new Date().toISOString(), checks };
+    const degraded = Object.values(checks).some(
+      (c) => c.status === 'error' || c.status === 'degraded',
+    );
+
+    return {
+      status: degraded ? 'degraded' : 'ok',
+      timestamp: new Date().toISOString(),
+      checks,
+    };
   }
 
   private async checkDatabase() {

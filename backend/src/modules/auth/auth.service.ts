@@ -110,9 +110,7 @@ export class AuthService {
     // un vrai risque : on refuse maintenant de l'émettre plutôt que de
     // l'émettre affaibli.
     if (!sessionId) {
-      throw new UnauthorizedException(
-        'Cannot issue device tracking token without a session',
-      );
+      throw new UnauthorizedException('Cannot issue device tracking token without a session');
     }
 
     const user = await this.prisma.user.findUnique({
@@ -171,6 +169,45 @@ export class AuthService {
     return `login_fail:${hash.slice(0, 32)}`;
   }
 
+  // Verrou par compte sur les échecs de code 2FA (défense contre le brute-force
+  // du TOTP 6 chiffres). Le throttle HTTP est par IP uniquement — insuffisant
+  // pour un attaquant qui possède déjà le mot de passe et re-génère un tempToken
+  // à volonté, et contournable via des IP multiples. Uniquement actif si Redis
+  // est disponible ; ne doit JAMAIS lever d'erreur Redis.
+  private readonly twoFaFailMaxAttempts = 8;
+  private twoFaFailKey(userId: string): string {
+    return `2fa_fail:${userId}`;
+  }
+  private async check2faLockout(userId: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const count = await this.redis.get(this.twoFaFailKey(userId));
+      if (count && parseInt(count, 10) >= this.twoFaFailMaxAttempts) {
+        throw new UnauthorizedException('Too many invalid 2FA codes. Please try again later.');
+      }
+    } catch (err) {
+      if (err instanceof UnauthorizedException) throw err;
+    }
+  }
+  private async record2faFailure(userId: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const key = this.twoFaFailKey(userId);
+      const count = await this.redis.incr(key);
+      if (count === 1) await this.redis.expire(key, this.loginFailWindowSeconds);
+    } catch {
+      // jamais bloquant
+    }
+  }
+  private async clear2faFailures(userId: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      await this.redis.del(this.twoFaFailKey(userId));
+    } catch {
+      // ignore
+    }
+  }
+
   /**
    * Refuse le login si le compte est déjà verrouillé (échecs répétés).
    * Ne doit jamais échouer sur une erreur Redis : sans Redis, pas de lockout.
@@ -212,7 +249,11 @@ export class AuthService {
 
   private getDummyHash(): string {
     if (!this.dummyHash) {
-      this.dummyHash = bcrypt.hashSync('dummy-timing-attack-mitigation', 10);
+      // Coût 12 — DOIT être identique au coût des vrais hash de mot de passe
+      // (bcrypt.hash(..., 12) dans register/resetPassword). Avant : coût 10, soit
+      // un bcrypt.compare ~4× plus rapide pour un compte inexistant → oracle
+      // temporel d'énumération de comptes, malgré l'intention de ce dummy hash.
+      this.dummyHash = bcrypt.hashSync('dummy-timing-attack-mitigation', 12);
     }
     return this.dummyHash;
   }
@@ -352,10 +393,14 @@ export class AuthService {
       throw new UnauthorizedException('User not found or 2FA not enabled');
     }
 
+    await this.check2faLockout(user.id);
+
     const isValid = this.totpService.verifyToken(user.totpSecret, dto.token);
     if (!isValid) {
+      await this.record2faFailure(user.id);
       throw new UnauthorizedException('Invalid 2FA code');
     }
+    await this.clear2faFailures(user.id);
 
     // Étape 2 du 2FA : c'est ici que la session est matérialisée (l'étape 1 n'en
     // crée pas), avec le contexte ip/device de la requête.
@@ -595,14 +640,10 @@ export class AuthService {
         throw new UnauthorizedException('Account deactivated');
       }
       refuseTotp(user);
-      return this.generateTokens(
-        user.id,
-        user.email,
-        user.role,
-        user.companyId,
-        undefined,
-        { ip, device: userAgent },
-      );
+      return this.generateTokens(user.id, user.email, user.role, user.companyId, undefined, {
+        ip,
+        device: userAgent,
+      });
     }
 
     user = await this.prisma.user.findUnique({ where: { email } });
@@ -615,14 +656,10 @@ export class AuthService {
         where: { id: user.id },
         data: { googleId },
       });
-      return this.generateTokens(
-        user.id,
-        user.email,
-        user.role,
-        user.companyId,
-        undefined,
-        { ip, device: userAgent },
-      );
+      return this.generateTokens(user.id, user.email, user.role, user.companyId, undefined, {
+        ip,
+        device: userAgent,
+      });
     }
 
     const pendingInvitation = await this.prisma.invitation.findFirst({
@@ -663,14 +700,10 @@ export class AuthService {
       });
     }
 
-    return this.generateTokens(
-      user.id,
-      user.email,
-      user.role,
-      user.companyId,
-      undefined,
-      { ip, device: userAgent },
-    );
+    return this.generateTokens(user.id, user.email, user.role, user.companyId, undefined, {
+      ip,
+      device: userAgent,
+    });
   }
 
   /**
@@ -704,14 +737,10 @@ export class AuthService {
     if (user.totpEnabled) {
       throw new UnauthorizedException('Two-factor authentication required');
     }
-    return this.generateTokens(
-      user.id,
-      user.email,
-      user.role,
-      user.companyId,
-      undefined,
-      { ip, device: userAgent },
-    );
+    return this.generateTokens(user.id, user.email, user.role, user.companyId, undefined, {
+      ip,
+      device: userAgent,
+    });
   }
 
   private async generateTokens(

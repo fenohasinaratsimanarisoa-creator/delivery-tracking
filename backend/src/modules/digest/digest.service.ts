@@ -1,8 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import type Redis from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
+import { acquireCronLock } from '../../common/scheduling/cron-lock';
 import { formatDate, type Language } from '../../common/i18n';
 import { hasFuelAnomaly } from '../../common/fuel/fuel-anomaly.utils';
 
@@ -14,15 +17,19 @@ export class DigestService {
     private prisma: PrismaService,
     private emailService: EmailService,
     private notificationsService: NotificationsService,
+    @Optional() @Inject(REDIS_CLIENT) private readonly redis: Redis | null = null,
   ) {}
 
   @Cron('0 8 * * 1')
   async sendWeeklyDigest() {
+    // Verrou distribué : sinon chaque réplica API enverrait le digest → doublons.
+    if (!(await acquireCronLock(this.redis, 'digest.weekly', 3600))) return;
     await this.sendDigest(7);
   }
 
   @Cron('0 20 * * *')
   async sendDailyDigest() {
+    if (!(await acquireCronLock(this.redis, 'digest.daily', 3600))) return;
     await this.sendDigest(1);
   }
 

@@ -1,8 +1,18 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+  Inject,
+  Optional,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import type Redis from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
+import { acquireCronLock } from '../../common/scheduling/cron-lock';
 import { UpdateCompanySettingsDto, UpdateCompanyFuelSettingsDto } from './dto/company-settings.dto';
 
 const PURGE_GRACE_DAYS = parseInt(process.env.COMPANY_PURGE_GRACE_DAYS || '30', 10);
@@ -14,10 +24,14 @@ export class CompaniesService {
   constructor(
     private prisma: PrismaService,
     @InjectQueue('company-purge') private purgeQueue: Queue,
+    @Optional() @Inject(REDIS_CLIENT) private readonly redis: Redis | null = null,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async schedulePendingPurges() {
+    // Verrou distribué : une seule instance planifie les purges (les jobs BullMQ
+    // sont idempotents mais inutile de les enfiler N fois).
+    if (!(await acquireCronLock(this.redis, 'companies.schedulePendingPurges', 3600))) return;
     const cutoff = new Date(Date.now() - PURGE_GRACE_DAYS * 24 * 60 * 60 * 1000);
     const expired = await this.prisma.company.findMany({
       where: { deletedAt: { not: null, lte: cutoff } },

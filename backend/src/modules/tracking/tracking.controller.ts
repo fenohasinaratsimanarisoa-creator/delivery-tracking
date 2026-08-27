@@ -69,12 +69,7 @@ export class TrackingController {
     // négatif → exception Prisma → 500.
     const safePage = Math.max(1, Math.floor(Number(page) || 1));
     const safeLimit = Math.min(1000, Math.max(1, Math.floor(Number(limit) || 200)));
-    return this.trackingService.getPositionsByDelivery(
-      deliveryId,
-      companyId,
-      safePage,
-      safeLimit,
-    );
+    return this.trackingService.getPositionsByDelivery(deliveryId, companyId, safePage, safeLimit);
   }
 
   @UseGuards(ApiKeyOrJwtGuard)
@@ -515,7 +510,16 @@ export class TrackingController {
         payload.companyId,
       );
 
-      if (delivery.publicTrackingRevokedAt) {
+      // Un token émis APRÈS une révocation redevient valide (le dispatcher a
+      // regénéré/re-partagé un lien) : on compare l'instant d'émission
+      // (payload.iat, en secondes) à publicTrackingRevokedAt. AVANT, le test
+      // portait sur un booléen absolu — une seule révocation condamnait
+      // DÉFINITIVEMENT tous les liens publics futurs de cette livraison, car
+      // rien ne remet jamais publicTrackingRevokedAt à null.
+      if (
+        delivery.publicTrackingRevokedAt &&
+        (payload.iat ?? 0) * 1000 < delivery.publicTrackingRevokedAt.getTime()
+      ) {
         throw new UnauthorizedException('This tracking link has been revoked');
       }
 

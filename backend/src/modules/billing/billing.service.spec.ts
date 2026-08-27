@@ -73,7 +73,10 @@ const mockEmailService = {
 
 const mockRedis = {
   get: jest.fn(),
-  set: jest.fn(),
+  // Défaut 'OK' : acquireCronLock() (verrou distribué des crons) considère alors
+  // que ce process a obtenu le verrou et exécute la tâche. jest.clearAllMocks()
+  // n'efface pas l'implémentation par défaut, seulement l'historique d'appels.
+  set: jest.fn().mockResolvedValue('OK'),
 };
 
 describe('BillingService', () => {

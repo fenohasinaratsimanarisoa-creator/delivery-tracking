@@ -19,6 +19,7 @@ import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { BillingProvider, SubscriptionStatus } from '@prisma/client';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
+import { acquireCronLock } from '../../common/scheduling/cron-lock';
 import { t, formatLongDate, type Language } from '../../common/i18n';
 
 @Injectable()
@@ -592,6 +593,7 @@ export class BillingService {
 
   @Cron('0 3 * * *')
   async handleExpiredSubscriptions() {
+    if (!(await acquireCronLock(this.redis, 'billing.expiredSubscriptions', 3600))) return;
     if (this.configService.get<string>('BILLING_ENABLED') !== 'true') {
       this.logger.log('BILLING_ENABLED=false — skipping expired subscription check');
       return;
@@ -624,6 +626,7 @@ export class BillingService {
 
   @Cron('0 4 * * *')
   async handleUnpaidSubscriptions() {
+    if (!(await acquireCronLock(this.redis, 'billing.unpaidSubscriptions', 3600))) return;
     if (this.configService.get<string>('BILLING_ENABLED') !== 'true') {
       this.logger.log('BILLING_ENABLED=false — skipping unpaid subscription follow-up');
       return;

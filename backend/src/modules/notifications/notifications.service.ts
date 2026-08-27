@@ -1,9 +1,19 @@
-import { Injectable, Logger, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ForbiddenException,
+  NotFoundException,
+  Inject,
+  Optional,
+} from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { NotificationType, NotificationPriority } from '@prisma/client';
+import type Redis from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsGateway } from './notifications.gateway';
 import { EmailService } from '../email/email.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
+import { acquireCronLock } from '../../common/scheduling/cron-lock';
 
 @Injectable()
 export class NotificationsService {
@@ -13,6 +23,7 @@ export class NotificationsService {
     private prisma: PrismaService,
     private gateway: NotificationsGateway,
     private emailService: EmailService,
+    @Optional() @Inject(REDIS_CLIENT) private readonly redis: Redis | null = null,
   ) {}
 
   async findAll(companyId: string, userId?: string, limit = 50) {
@@ -193,6 +204,7 @@ export class NotificationsService {
 
   @Cron('0 3 * * 0')
   async purgeOldReadNotifications() {
+    if (!(await acquireCronLock(this.redis, 'notifications.purgeOldRead', 3600))) return;
     this.logger.log('Purging read notifications older than 90 days...');
     const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     const result = await this.prisma.notification.deleteMany({

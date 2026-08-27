@@ -4,13 +4,17 @@ import {
   BadRequestException,
   NotFoundException,
   Optional,
+  Inject,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NotificationType, NotificationPriority, GpsDataQuality } from '@prisma/client';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import type Redis from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
+import { acquireCronLock } from '../../common/scheduling/cron-lock';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
@@ -64,6 +68,7 @@ export class FuelConsumptionService {
     private notifications: NotificationsService,
     @Optional() @InjectQueue('fuel-analysis') private fuelAnalysisQueue: Queue,
     private trackingGateway: TrackingGateway,
+    @Optional() @Inject(REDIS_CLIENT) private readonly redis: Redis | null = null,
   ) {
     // B9 : défaut 15 ALIGNÉ sur le schéma (companyFuelSettings.anomalyThreshold @default(15))
     // et sur le processor (fuel-analysis.processor.ts). Avant : 20 ici, 15 en base → verdicts
@@ -772,8 +777,7 @@ export class FuelConsumptionService {
     // (existing + changements), excluant l'entrée elle-même de la recherche.
     const resultingFuelType = data.fuelType ?? existing.fuelType;
     const resultingFrom = data.effectiveFrom ?? existing.effectiveFrom;
-    const resultingUntil =
-      'effectiveUntil' in data ? data.effectiveUntil : existing.effectiveUntil;
+    const resultingUntil = 'effectiveUntil' in data ? data.effectiveUntil : existing.effectiveUntil;
     const resultingPricePerLiter = data.pricePerLiter ?? existing.pricePerLiter;
 
     // Voir createFuelPrice (audit carburant 2026-08-27, FAIBLE) — même garde,
@@ -815,6 +819,10 @@ export class FuelConsumptionService {
 
   @Cron(CronExpression.EVERY_DAY_AT_10PM)
   async generateDailyReports() {
+    // Verrou distribué : la contrainte @@unique([driverId, vehicleId, reportDate])
+    // empêche les doublons en base, mais sans ce verrou chaque réplica referait
+    // tout le calcul GPS (coûteux) et générerait des P2002 en pagaille.
+    if (!(await acquireCronLock(this.redis, 'fuel.generateDailyReports', 3600))) return;
     this.logger.log('Starting daily fuel report generation...');
 
     const companies = await this.prisma.company.findMany({ select: { id: true } });
@@ -1232,9 +1240,7 @@ export class FuelConsumptionService {
           const netDisplacementKm =
             haversineDistance(first.latitude, first.longitude, last.latitude, last.longitude) /
             1000;
-          const accuracies = positions
-            .map((p) => p.accuracy)
-            .filter((a): a is number => a != null);
+          const accuracies = positions.map((p) => p.accuracy).filter((a): a is number => a != null);
           const avgAccuracy =
             accuracies.length > 0
               ? accuracies.reduce((sum, a) => sum + a, 0) / accuracies.length
@@ -1412,7 +1418,6 @@ export class FuelConsumptionService {
   }
 
   private async crossCheckFuelLogWithGpsLocked(fuelLog: any, companyId: string) {
-
     // Trouver le dernier plein avant celui-ci pour le même véhicule
     const prevLog = await this.prisma.fuelLog.findFirst({
       where: { vehicleId: fuelLog.vehicleId, companyId, fillDate: { lt: fuelLog.fillDate } },

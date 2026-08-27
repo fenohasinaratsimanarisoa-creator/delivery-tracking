@@ -3,11 +3,14 @@ import {
   IsArray,
   IsUrl,
   IsOptional,
+  IsIn,
   ArrayNotEmpty,
+  ArrayUnique,
   MinLength,
   MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { WEBHOOK_EVENTS } from '../webhook-events';
 
 export class CreateWebhookDto {
   @ApiProperty({
@@ -20,9 +23,17 @@ export class CreateWebhookDto {
   @ApiProperty({
     description: 'Events to subscribe to',
     example: ['delivery.status_changed', 'delivery.delivered'],
+    enum: WEBHOOK_EVENTS,
+    isArray: true,
   })
   @IsArray()
   @ArrayNotEmpty()
+  @ArrayUnique()
+  @IsString({ each: true })
+  @IsIn(WEBHOOK_EVENTS as unknown as string[], {
+    each: true,
+    message: `Chaque événement doit être l'un de : ${WEBHOOK_EVENTS.join(', ')}`,
+  })
   events: string[];
 
   @ApiPropertyOptional({

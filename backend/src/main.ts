@@ -62,6 +62,21 @@ async function bootstrap() {
     );
   }
 
+  // REDIS_URL obligatoire en production : sans Redis, plusieurs contrôles de
+  // sécurité se désactivent SILENCIEUSEMENT — verrou anti-brute-force du login,
+  // révocation d'access token au logout, rate-limiting partagé entre instances,
+  // idempotence des webhooks Stripe, verrou distribué des crons. Même garde-fou
+  // que JWT/CSRF/ENCRYPTION : échec au boot en prod, simple avertissement en dev.
+  if (!configService.get<string>('REDIS_URL')) {
+    if (nodeEnv === 'production') {
+      throw new Error(
+        'REDIS_URL is required in production (login lockout, token revocation, ' +
+          'shared rate-limiting, cron locking all silently disable without it).',
+      );
+    }
+    app.get(Logger).warn('[STARTUP] REDIS_URL not set — security controls degraded (dev only)');
+  }
+
   // Secrets JWT : même garde-fou que CSRF_SECRET / ENCRYPTION_KEY. Sans eux, le
   // JwtModule s'enregistre avec un secret undefined et les premiers sign()
   // échouent au runtime avec des erreurs cryptiques. En prod, échec au boot ;
