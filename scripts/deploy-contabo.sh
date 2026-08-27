@@ -77,6 +77,18 @@ if ! curl -sf -o /dev/null http://localhost:8080/health; then
   FAILED=1
 fi
 
+# Migrations Prisma : APRÈS que le nouveau backend soit sain (le schéma/client
+# Prisma embarqué dans l'image doit correspondre au code qu'on vient de
+# démarrer). `migrate deploy` est idempotent — sans migration en attente, il
+# ne fait rien et ressort à 0.
+if [ "$FAILED" = "0" ]; then
+  log "prisma migrate deploy"
+  if ! $COMPOSE exec -T backend npx prisma migrate deploy; then
+    log "ERREUR — migration Prisma échouée"
+    FAILED=1
+  fi
+fi
+
 if [ "$FAILED" = "1" ]; then
   log "récupération des 50 dernières lignes de logs avant rollback"
   # shellcheck disable=SC2086
