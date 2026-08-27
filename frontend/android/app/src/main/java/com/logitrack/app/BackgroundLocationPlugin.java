@@ -58,6 +58,17 @@ import java.util.concurrent.TimeUnit;
         }),
         @Permission(alias = "notifications", strings = {
             Manifest.permission.POST_NOTIFICATIONS
+        }),
+        // Canal de secours SMS zéro-connectivité (audit terrain 2026-08-27) :
+        // "sms" (émission) n'est demandée que si le chauffeur configure un numéro
+        // de passerelle ; "smsReceive" (réception) n'est demandée QUE sur le
+        // téléphone activé en mode passerelle — voir SmsFallbackManager /
+        // GatewaySmsReceiver. Jamais demandées au démarrage normal de l'app.
+        @Permission(alias = "sms", strings = {
+            Manifest.permission.SEND_SMS
+        }),
+        @Permission(alias = "smsReceive", strings = {
+            Manifest.permission.RECEIVE_SMS
         })
     }
 )
@@ -454,6 +465,95 @@ public class BackgroundLocationPlugin extends Plugin {
         String opened = DeviceOemInfo.openBatterySaverSettings(getContext());
         JSObject ret = new JSObject();
         ret.put("opened", opened);
+        call.resolve(ret);
+    }
+
+    // =========================================================================
+    // Canal de secours SMS zéro-connectivité (audit terrain 2026-08-27) — voir
+    // SmsFallbackManager.java (émission, côté chauffeur) et
+    // GatewaySmsReceiver.java (réception, côté téléphone-passerelle).
+    // =========================================================================
+
+    private static final String CALLBACK_SMS = "smsPermissionCallback";
+    private static final String CALLBACK_SMS_RECEIVE = "smsReceivePermissionCallback";
+
+    /** Demande SEND_SMS (côté chauffeur) — no-op si déjà accordée. */
+    @PluginMethod
+    public void requestSmsPermission(PluginCall call) {
+        if (SmsFallbackManager.hasSendSmsPermission(getContext())) {
+            JSObject ret = new JSObject();
+            ret.put("granted", true);
+            call.resolve(ret);
+            return;
+        }
+        requestPermissionForAlias("sms", call, CALLBACK_SMS);
+    }
+
+    @PermissionCallback
+    private void smsPermissionCallback(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("granted", SmsFallbackManager.hasSendSmsPermission(getContext()));
+        call.resolve(ret);
+    }
+
+    /** Configure le numéro du téléphone-passerelle (côté chauffeur). */
+    @PluginMethod
+    public void setSmsGatewayNumber(PluginCall call) {
+        String number = call.getString("number");
+        SmsFallbackManager.setGatewayNumber(getContext(), number);
+        call.resolve();
+    }
+
+    /** État courant du secours SMS émission (côté chauffeur), pour l'UI. */
+    @PluginMethod
+    public void getSmsFallbackStatus(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("smsPermissionGranted", SmsFallbackManager.hasSendSmsPermission(getContext()));
+        String number = SmsFallbackManager.getGatewayNumber(getContext());
+        ret.put("gatewayNumber", number != null ? number : "");
+        call.resolve(ret);
+    }
+
+    /** Demande RECEIVE_SMS (côté téléphone-passerelle uniquement). */
+    @PluginMethod
+    public void requestSmsReceivePermission(PluginCall call) {
+        if (hasAndroidPermission(Manifest.permission.RECEIVE_SMS)) {
+            JSObject ret = new JSObject();
+            ret.put("granted", true);
+            call.resolve(ret);
+            return;
+        }
+        requestPermissionForAlias("smsReceive", call, CALLBACK_SMS_RECEIVE);
+    }
+
+    @PermissionCallback
+    private void smsReceivePermissionCallback(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("granted", hasAndroidPermission(Manifest.permission.RECEIVE_SMS));
+        call.resolve(ret);
+    }
+
+    /**
+     * Active/désactive ce téléphone comme passerelle SMS et configure où
+     * relayer (apiUrl + apiKey scopée 'tracking:sms-relay', voir
+     * ApiKeysModule côté backend). Un seul téléphone-passerelle par
+     * entreprise, fixe, avec sa propre connexion internet.
+     */
+    @PluginMethod
+    public void setGatewayMode(PluginCall call) {
+        boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
+        String apiUrl = call.getString("apiUrl");
+        String apiKey = call.getString("apiKey");
+        GatewaySmsReceiver.setGatewayMode(getContext(), enabled, apiUrl, apiKey);
+        call.resolve();
+    }
+
+    /** État courant du mode passerelle, pour l'UI. */
+    @PluginMethod
+    public void getGatewayModeStatus(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("enabled", GatewaySmsReceiver.isGatewayModeEnabled(getContext()));
+        ret.put("smsReceivePermissionGranted", hasAndroidPermission(Manifest.permission.RECEIVE_SMS));
         call.resolve(ret);
     }
 

@@ -1,0 +1,107 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--color-surface, #121B2E);
+  border: 1px solid var(--color-border-subtle, rgba(232, 236, 243, 0.08));
+  border-radius: var(--radius-lg, 10px);
+  padding: 14px 16px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.iconChip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-teal, #3fa796) 15%, transparent);
+  color: var(--color-teal, #3fa796);
+}
+
+.title {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--color-text, #E8ECF3);
+}
+
+.message {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary, #9ba6b9);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.input {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-subtle, rgba(232, 236, 243, 0.15));
+  background: var(--color-surface-alt, #182339);
+  color: var(--color-text, #E8ECF3);
+  font-size: 0.85rem;
+  min-height: 44px;
+}
+
+.saveBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-teal, #3fa796);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.doneChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: var(--text-xs, 0.625rem);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--color-teal, #3fa796) 12%, transparent);
+  color: var(--color-teal, #3fa796);
+  border: 1px solid color-mix(in srgb, var(--color-teal, #3fa796) 30%, transparent);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--color-text-tertiary, #7a8ba3);
+}

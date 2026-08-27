@@ -9,6 +9,7 @@ import { TraccarBridgeService } from './traccar-bridge.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { DeviceTrackingAuthGuard } from '../../common/guards/device-tracking-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
+import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
 // =============================================================================
@@ -27,6 +28,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 const mockTrackingService = {
   updateTrackingReliability: jest.fn(),
   validateAndSaveBatch: jest.fn(),
+  ingestSmsRelayPosition: jest.fn(),
 };
 
 describe('TrackingController — PATCH /tracking/reliability-status (autorisation)', () => {
@@ -319,5 +321,144 @@ describe('TrackingController — POST /tracking/positions/native-batch', () => {
 
     expect(res.status).toBe(403);
     expect(mockTrackingService.validateAndSaveBatch).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// POST /tracking/positions/sms-relay — canal de secours zéro-connectivité
+// (audit terrain 2026-08-27). Authentifié par clé API (ApiKeyOrJwtGuard),
+// PAS par JWT de session chauffeur : le téléphone-passerelle relaie pour
+// toute la flotte, sans lien avec un chauffeur en particulier.
+// =============================================================================
+
+function makeValidSmsRelayBody() {
+  return {
+    senderPhone: '+261341234567',
+    latitude: -18.8792,
+    longitude: 47.5079,
+    accuracy: 15,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+describe('TrackingController — POST /tracking/positions/sms-relay', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [TrackingController],
+      providers: [
+        { provide: TrackingService, useValue: mockTrackingService },
+        { provide: JwtService, useValue: {} },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
+        { provide: TraccarBridgeService, useValue: {} },
+        { provide: PrismaService, useValue: {} },
+      ],
+    })
+      // Simule le comportement observable d'ApiKeyOrJwtGuard authentifié par
+      // clé API : req.user.companyId peuplé, aucun lien chauffeur (contrairement
+      // aux autres routes de ce fichier, authentifiées par session driver).
+      .overrideGuard(ApiKeyOrJwtGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          const req = context.switchToHttp().getRequest();
+          if (!req.headers['x-api-key']) {
+            throw new UnauthorizedException('Missing X-API-Key header');
+          }
+          req.user = { companyId: 'company-1', type: 'api_key' };
+          return true;
+        },
+      })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(DeviceTrackingAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(CompanyScopeGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('position valide → 200, service appelé avec companyId + dto normalisé', async () => {
+    mockTrackingService.ingestSmsRelayPosition.mockResolvedValueOnce({ status: 'ok' });
+    const body = makeValidSmsRelayBody();
+
+    const res = await request(app.getHttpServer())
+      .post('/tracking/positions/sms-relay')
+      .set('x-api-key', 'test-key')
+      .send(body);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: 'ok' });
+    expect(mockTrackingService.ingestSmsRelayPosition).toHaveBeenCalledWith(
+      'company-1',
+      expect.objectContaining({ senderPhone: body.senderPhone, latitude: body.latitude }),
+    );
+  });
+
+  it('sans clé API → 401, service jamais appelé', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/tracking/positions/sms-relay')
+      .send(makeValidSmsRelayBody());
+
+    expect(res.status).toBe(401);
+    expect(mockTrackingService.ingestSmsRelayPosition).not.toHaveBeenCalled();
+  });
+
+  it('aucun chauffeur ne correspond au numéro émetteur (no_driver_match) → 422, jamais 200', async () => {
+    mockTrackingService.ingestSmsRelayPosition.mockResolvedValueOnce({ status: 'no_driver_match' });
+
+    const res = await request(app.getHttpServer())
+      .post('/tracking/positions/sms-relay')
+      .set('x-api-key', 'test-key')
+      .send(makeValidSmsRelayBody());
+
+    // Même politique que 'no_driver' sur native-batch : jamais un 200 trompeur
+    // qui ferait croire à la passerelle que la position a été attribuée.
+    expect(res.status).toBe(422);
+  });
+
+  it('position rejetée par savePosition (dédoublonnée/téléportation/véhicule invalide) → 422', async () => {
+    mockTrackingService.ingestSmsRelayPosition.mockResolvedValueOnce({ status: 'rejected' });
+
+    const res = await request(app.getHttpServer())
+      .post('/tracking/positions/sms-relay')
+      .set('x-api-key', 'test-key')
+      .send(makeValidSmsRelayBody());
+
+    expect(res.status).toBe(422);
+  });
+
+  it('latitude hors bornes (400, ValidationPipe) — jamais transmis au service', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/tracking/positions/sms-relay')
+      .set('x-api-key', 'test-key')
+      .send({ ...makeValidSmsRelayBody(), latitude: 999 });
+
+    expect(res.status).toBe(400);
+    expect(mockTrackingService.ingestSmsRelayPosition).not.toHaveBeenCalled();
+  });
+
+  it("champ vehicleId injecté dans le body est rejeté (400, forbidNonWhitelisted) — le véhicule ne peut être choisi que par le serveur", async () => {
+    const res = await request(app.getHttpServer())
+      .post('/tracking/positions/sms-relay')
+      .set('x-api-key', 'test-key')
+      .send({ ...makeValidSmsRelayBody(), vehicleId: '11111111-1111-4111-8111-111111111111' });
+
+    expect(res.status).toBe(400);
+    expect(mockTrackingService.ingestSmsRelayPosition).not.toHaveBeenCalled();
   });
 });

@@ -8,6 +8,7 @@ const mockPrisma = {
   driver: {
     findUnique: jest.fn(),
     findFirst: jest.fn(),
+    findMany: jest.fn(),
     update: jest.fn(),
   },
   vehicle: {
@@ -2776,6 +2777,110 @@ describe('TrackingService', () => {
         expect(result[0].driverName).toBe('John Doe');
         expect(result[0].latitude).toBe(-18.8794);
       });
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // ingestSmsRelayPosition — canal de secours zéro-connectivité (audit
+  // terrain 2026-08-27). Le SMS ne transporte pas de vehicleId (trop long) :
+  // le véhicule est résolu à partir du numéro d'envoi (Driver.phone).
+  // ----------------------------------------------------------------
+  describe('ingestSmsRelayPosition (audit terrain 2026-08-27)', () => {
+    const validDto = {
+      senderPhone: '+261341234567',
+      latitude: -18.8792,
+      longitude: 47.5079,
+      accuracy: 15,
+      timestamp: new Date().toISOString(),
+    };
+
+    it('rapproche le numéro émetteur malgré des formats différents (indicatif pays vs numéro local)', async () => {
+      // Driver.phone stocké au format local (034 12 345 67), SMS reçu au
+      // format international (+261341234567) — les 9 derniers chiffres
+      // doivent matcher malgré la différence de préfixe.
+      mockPrisma.driver.findMany.mockResolvedValueOnce([
+        { id: 'driver-1', phone: '034 12 345 67', vehicleId: '11111111-1111-4111-8111-111111111111' },
+      ]);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        companyId: 'company-1',
+        positionSource: 'phone',
+      });
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null); // pas de doublon
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'pos-1', suspect: false });
+
+      const result = await service.ingestSmsRelayPosition('company-1', validDto as any);
+
+      expect(result).toEqual({ status: 'ok' });
+      expect(mockPrisma.gpsPosition.create).toHaveBeenCalled();
+    });
+
+    it("aucun chauffeur actif ne correspond au numéro → no_driver_match, AUCUNE écriture", async () => {
+      mockPrisma.driver.findMany.mockResolvedValueOnce([
+        { id: 'driver-1', phone: '034 99 999 99', vehicleId: '11111111-1111-4111-8111-111111111111' },
+      ]);
+
+      const result = await service.ingestSmsRelayPosition('company-1', validDto as any);
+
+      expect(result).toEqual({ status: 'no_driver_match' });
+      expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
+    });
+
+    it('aucun chauffeur avec téléphone renseigné dans la company → no_driver_match', async () => {
+      mockPrisma.driver.findMany.mockResolvedValueOnce([]);
+
+      const result = await service.ingestSmsRelayPosition('company-1', validDto as any);
+
+      expect(result).toEqual({ status: 'no_driver_match' });
+    });
+
+    it("le numéro émetteur est scopé à la company demandée (isolation multi-tenant)", async () => {
+      mockPrisma.driver.findMany.mockResolvedValueOnce([
+        { id: 'driver-1', phone: '034 12 345 67', vehicleId: '11111111-1111-4111-8111-111111111111' },
+      ]);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        companyId: 'company-1',
+        positionSource: 'phone',
+      });
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'pos-1', suspect: false });
+
+      await service.ingestSmsRelayPosition('company-1', validDto as any);
+
+      expect(mockPrisma.driver.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ companyId: 'company-1' }),
+        }),
+      );
+    });
+
+    it('savePosition() rejette (ex. véhicule inactif) → rejected, jamais ok', async () => {
+      mockPrisma.driver.findMany.mockResolvedValueOnce([
+        { id: 'driver-1', phone: '034 12 345 67', vehicleId: '11111111-1111-4111-8111-111111111111' },
+      ]);
+      // Aucun véhicule actif trouvé → savePosition() renvoie null.
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(null);
+
+      const result = await service.ingestSmsRelayPosition('company-1', validDto as any);
+
+      expect(result).toEqual({ status: 'rejected' });
+    });
+
+    it('marque la position avec attributes.viaSms=true pour la traçabilité', async () => {
+      mockPrisma.driver.findMany.mockResolvedValueOnce([
+        { id: 'driver-1', phone: '034 12 345 67', vehicleId: '11111111-1111-4111-8111-111111111111' },
+      ]);
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        companyId: 'company-1',
+        positionSource: 'phone',
+      });
+      mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.gpsPosition.create.mockResolvedValueOnce({ id: 'pos-1', suspect: false });
+
+      await service.ingestSmsRelayPosition('company-1', validDto as any);
+
+      const createCall = mockPrisma.gpsPosition.create.mock.calls[0][0];
+      expect(createCall.data.attributes).toEqual({ viaSms: true });
     });
   });
 });

@@ -94,6 +94,13 @@ interface BackgroundLocationNative {
   getDeviceInfo(): Promise<DeviceOemInfo>;
   openOemBatterySettings(): Promise<{ opened: string }>;
   openOemBatterySaverSettings(): Promise<{ opened: string }>;
+  // --- Canal de secours SMS zéro-connectivité (audit terrain 2026-08-27) ---
+  requestSmsPermission(): Promise<{ granted: boolean }>;
+  setSmsGatewayNumber(options: { number: string }): Promise<void>;
+  getSmsFallbackStatus(): Promise<{ smsPermissionGranted: boolean; gatewayNumber: string }>;
+  requestSmsReceivePermission(): Promise<{ granted: boolean }>;
+  setGatewayMode(options: { enabled: boolean; apiUrl?: string; apiKey?: string }): Promise<void>;
+  getGatewayModeStatus(): Promise<{ enabled: boolean; smsReceivePermissionGranted: boolean }>;
   updateTrackingStatus(options: { status: string }): Promise<void>;
   getInterruptionInfo(): Promise<TrackingInterruptionInfo>;
   // storeNativeFallbackToken et markNativeJsAck retirées de l'interface
@@ -255,6 +262,95 @@ export async function openOemBatterySaverSettings(): Promise<string> {
     return res.opened;
   } catch {
     return 'failed';
+  }
+}
+
+// =============================================================================
+// Canal de secours SMS zéro-connectivité (audit terrain 2026-08-27). Voir
+// SmsFallbackManager.java (émission, côté chauffeur) et
+// GatewaySmsReceiver.java (réception, côté téléphone-passerelle).
+// =============================================================================
+
+export interface SmsFallbackStatus {
+  smsPermissionGranted: boolean;
+  gatewayNumber: string;
+}
+
+export interface GatewayModeStatus {
+  enabled: boolean;
+  smsReceivePermissionGranted: boolean;
+}
+
+/** Demande SEND_SMS (côté chauffeur). No-op (retourne false) sur iOS/web. */
+export async function requestSmsPermission(): Promise<boolean> {
+  const p = resolvePlugin();
+  if (!p) return false;
+  try {
+    const res = await p.requestSmsPermission();
+    return res.granted;
+  } catch {
+    return false;
+  }
+}
+
+/** Configure le numéro du téléphone-passerelle (côté chauffeur). No-op sur iOS/web. */
+export async function setSmsGatewayNumber(number: string): Promise<void> {
+  const p = resolvePlugin();
+  if (!p) return;
+  try {
+    await p.setSmsGatewayNumber({ number });
+  } catch {
+    /* jamais bloquant */
+  }
+}
+
+export async function getSmsFallbackStatus(): Promise<SmsFallbackStatus> {
+  const p = resolvePlugin();
+  if (!p) return { smsPermissionGranted: false, gatewayNumber: '' };
+  try {
+    return await p.getSmsFallbackStatus();
+  } catch {
+    return { smsPermissionGranted: false, gatewayNumber: '' };
+  }
+}
+
+/** Demande RECEIVE_SMS (côté téléphone-passerelle uniquement). No-op sur iOS/web. */
+export async function requestSmsReceivePermission(): Promise<boolean> {
+  const p = resolvePlugin();
+  if (!p) return false;
+  try {
+    const res = await p.requestSmsReceivePermission();
+    return res.granted;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Active/désactive ce téléphone comme passerelle SMS. apiUrl/apiKey requis
+ * uniquement quand enabled=true (ignorés à la désactivation).
+ */
+export async function setGatewayMode(
+  enabled: boolean,
+  apiUrl?: string,
+  apiKey?: string,
+): Promise<void> {
+  const p = resolvePlugin();
+  if (!p) return;
+  try {
+    await p.setGatewayMode({ enabled, apiUrl, apiKey });
+  } catch {
+    /* jamais bloquant */
+  }
+}
+
+export async function getGatewayModeStatus(): Promise<GatewayModeStatus> {
+  const p = resolvePlugin();
+  if (!p) return { enabled: false, smsReceivePermissionGranted: false };
+  try {
+    return await p.getGatewayModeStatus();
+  } catch {
+    return { enabled: false, smsReceivePermissionGranted: false };
   }
 }
 

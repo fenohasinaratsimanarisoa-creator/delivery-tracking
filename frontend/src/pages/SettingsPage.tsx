@@ -14,6 +14,7 @@ import Badge from '../components/Badge';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import AppearanceSection from '../features/settings/sections/AppearanceSection';
+import SmsFallbackSettings from '../features/tracking/SmsFallbackSettings';
 import styles from './SettingsPage.module.css';
 
 type ApiError = { response?: { data?: { message?: string } } };
@@ -206,6 +207,7 @@ export default function SettingsPage() {
           <div className={styles.sectionGap}>
             <ProfileSection user={user} updateUser={updateUser} t={t} toast={toast} key="profile" />
             <AppearanceSection />
+            <SmsFallbackSettings />
           </div>
         )}
         {activeTab === 'security' && <SecuritySection t={t} toast={toast} key="security" />}

@@ -20,6 +20,7 @@ import { ConfigService } from '@nestjs/config';
 import { CacheService } from '../../common/cache/cache.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { UpdatePositionDto } from './dto/update-position.dto';
+import { SmsRelayPositionDto } from './dto/sms-relay-position.dto';
 import {
   haversineDistance,
   GPS_NOISE_THRESHOLD_M,
@@ -2279,5 +2280,71 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
 
     const buf = await doc.save();
     return Buffer.from(buf);
+  }
+
+  /**
+   * Ne garde que les chiffres d'un numéro de téléphone, puis compare les 9
+   * DERNIERS chiffres (longueur d'un numéro mobile malgache sans indicatif :
+   * 03X XX XXX XX = 9 chiffres). Permet de rapprocher deux formats du même
+   * numéro sans connaître l'indicatif exact envoyé par l'opérateur/le SDK
+   * Android (+261341234567, 0034 1234567, 034 12 345 67…) — comparer sur un
+   * indicatif fixe casserait le rapprochement selon le format utilisé.
+   */
+  private static normalizePhoneTail(raw: string): string {
+    const digits = raw.replace(/\D/g, '');
+    return digits.slice(-9);
+  }
+
+  /**
+   * Ingestion d'une position reçue par relais SMS (audit terrain 2026-08-27) —
+   * canal de secours pour les zones sans DATA ni WiFi mais avec réseau GSM
+   * (fréquent en zone rurale à Madagascar). Le SMS ne transporte pas de
+   * vehicleId (trop long) : le véhicule est résolu ici à partir du numéro
+   * d'envoi (Driver.phone), rapproché via normalizePhoneTail.
+   *
+   * Réutilise savePosition() (dédoublonnage, téléportation, isolation
+   * multi-tenant/source — TOUT le pipeline existant) plutôt que de dupliquer
+   * cette logique : source='phone' comme n'importe quelle position émise par
+   * un téléphone chauffeur, avec attributes.viaSms=true pour la traçabilité.
+   */
+  async ingestSmsRelayPosition(
+    companyId: string,
+    dto: SmsRelayPositionDto,
+  ): Promise<{ status: 'ok' } | { status: 'no_driver_match' } | { status: 'rejected' }> {
+    const targetTail = TrackingService.normalizePhoneTail(dto.senderPhone);
+    if (targetTail.length < 9) {
+      this.logger.warn(`SMS relay rejected: senderPhone "${dto.senderPhone}" too short after normalization`);
+      return { status: 'no_driver_match' };
+    }
+
+    const candidates = await this.prisma.driver.findMany({
+      where: { companyId, deletedAt: null, isActive: true, phone: { not: null }, vehicleId: { not: null } },
+      select: { id: true, phone: true, vehicleId: true },
+    });
+    const driver = candidates.find(
+      (d) => d.phone && TrackingService.normalizePhoneTail(d.phone) === targetTail,
+    );
+    if (!driver || !driver.vehicleId) {
+      this.logger.warn(
+        `SMS relay: no active driver matches sender phone (company=${companyId}) — position not attributable`,
+      );
+      return { status: 'no_driver_match' };
+    }
+
+    const positionDto: UpdatePositionDto = {
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      accuracy: dto.accuracy,
+      timestamp: dto.timestamp,
+      vehicleId: driver.vehicleId,
+    };
+
+    const saved = await this.savePosition(driver.id, positionDto, companyId, 'phone', { viaSms: true });
+    if (!saved) {
+      // savePosition() a déjà loggué la raison précise (dédoublonnée, véhicule
+      // inactif, cross-tenant…) — pas de log dupliqué ici.
+      return { status: 'rejected' };
+    }
+    return { status: 'ok' };
   }
 }

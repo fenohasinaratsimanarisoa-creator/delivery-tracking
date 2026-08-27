@@ -83,6 +83,22 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
+
+        <!-- Canal de secours SMS zéro-connectivité (audit terrain 2026-08-27) : reçoit
+             les positions relayées par SMS des chauffeurs sans data/WiFi, UNIQUEMENT
+             sur le téléphone-passerelle (mode activé explicitement, voir
+             GatewaySmsReceiver.PREF_GATEWAY_MODE_ENABLED) — un téléphone chauffeur
+             normal ignore tout SMS entrant sans effet de bord. Priorité élevée pour
+             recevoir la diffusion même si une app SMS tierce est présente. -->
+        <receiver
+            android:name=".GatewaySmsReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <!-- Permissions -->
@@ -104,4 +120,13 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Permet au BootReceiver de relancer le service après un reboot téléphone. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Canal de secours SMS zéro-connectivité (audit terrain 2026-08-27), voir
+         SmsFallbackManager.java / GatewaySmsReceiver.java. SEND_SMS n'est demandée
+         à l'exécution QUE si le chauffeur configure un numéro de passerelle ;
+         RECEIVE_SMS n'est demandée QUE sur le téléphone activé en mode passerelle —
+         un téléphone chauffeur normal ne déclenche jamais ces invites. Distribution
+         hors Play Store (APK interne) : la politique Play sur les permissions SMS
+         (réservée aux apps SMS par défaut) ne s'applique pas à ce déploiement. -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
 </manifest>

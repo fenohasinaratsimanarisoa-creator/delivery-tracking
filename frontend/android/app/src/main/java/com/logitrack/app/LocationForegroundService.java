@@ -513,6 +513,10 @@ public class LocationForegroundService extends Service {
      */
     static void handleLocationUpdate(Context appContext, Location loc) {
         latestLocation = loc;
+        // Canal de secours SMS zéro-connectivité (audit terrain 2026-08-27) : no-op
+        // immédiat tant que le chemin HTTP normal fonctionne (voir SmsFallbackManager
+        // pour les conditions exactes — throttlé, jamais un SMS par fix GPS).
+        SmsFallbackManager.maybeSendFallbackSms(appContext, loc);
         // --- Persistance native immédiate (indépendante du JS/WebView) ---
         // Écrit CHAQUE position en SQLite AVANT toute tentative de la faire
         // parvenir au JS (sink.onLocationUpdate ci-dessous, qui déclenche

@@ -33,6 +33,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
 import { UpdateTrackingReliabilityDto } from './dto/update-tracking-reliability.dto';
 import { BatchPositionDto } from './dto/update-position.dto';
+import { SmsRelayPositionDto } from './dto/sms-relay-position.dto';
 
 @ApiTags('Tracking')
 @Controller('tracking')
@@ -318,6 +319,48 @@ export class TrackingController {
     // (vehicleId, timestamp) — skipDuplicates dans saveBatch, INCHANGÉ ici.
     const duplicates = Math.max(0, result.validatedCount - result.saved.length);
     return { saved: result.saved.length, duplicates };
+  }
+
+  /**
+   * Ingestion d'une position relayée par SMS (audit terrain 2026-08-27) —
+   * canal de secours zéro-connectivité : un chauffeur sans data ni WiFi envoie
+   * sa position par SMS à un téléphone-passerelle fixe (au bureau, avec sa
+   * propre connexion internet), qui relaie chaque SMS reçu ici. Authentifié
+   * par clé API dédiée (scope 'tracking:sms-relay') — le téléphone-passerelle
+   * n'est lié à AUCUN chauffeur en particulier, il relaie pour toute la
+   * flotte : une clé API scopée à l'entreprise, pas un token de session
+   * chauffeur, est le bon modèle d'authentification ici.
+   *
+   * Pas de vehicleId dans le body (voir SmsRelayPositionDto) : résolu
+   * côté service à partir du numéro d'envoi (TrackingService.ingestSmsRelayPosition).
+   */
+  @UseGuards(ApiKeyOrJwtGuard)
+  @ApiKeyScope('tracking:sms-relay')
+  @ApiHeader({
+    name: 'X-API-Key',
+    required: true,
+    description: 'Clé API scopée tracking:sms-relay, configurée sur le téléphone-passerelle',
+  })
+  @ApiOperation({
+    summary: 'Ingestion relais SMS — canal de secours sans data/WiFi',
+    description:
+      "Point d'entrée pour le téléphone-passerelle (GatewaySmsReceiver, Android) : relaie une position reçue par SMS quand le chauffeur émetteur n'avait ni data ni WiFi.",
+  })
+  @HttpCode(HttpStatus.OK)
+  @Post('positions/sms-relay')
+  async ingestSmsRelay(
+    @CurrentUser('companyId') companyId: string,
+    @Body() dto: SmsRelayPositionDto,
+  ): Promise<{ status: string }> {
+    const result = await this.trackingService.ingestSmsRelayPosition(companyId, dto);
+    if (result.status === 'no_driver_match' || result.status === 'rejected') {
+      // Même politique que 'no_driver' sur le chemin natif-batch (audit
+      // 2026-08-27) : un statut non-2xx signale explicitement l'échec au lieu
+      // d'un 200 trompeur — la passerelle peut logger/alerter au lieu de
+      // croire à tort que la position a été attribuée à un chauffeur.
+      throw new HttpException({ status: result.status }, HttpStatus.UNPROCESSABLE_ENTITY);
+    }
+    return result;
   }
 
   @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)

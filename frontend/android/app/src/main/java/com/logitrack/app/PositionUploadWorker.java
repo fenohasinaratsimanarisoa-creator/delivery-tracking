@@ -189,6 +189,9 @@ public class PositionUploadWorker extends Worker {
                 for (LocationQueueDb.QueuedPosition p : batch) ids.add(p.id);
                 db.markSynced(ids);
                 totalSynced += ids.size();
+                // Canal de secours SMS (audit terrain 2026-08-27) : chaque upload HTTP
+                // réussi repousse le seuil "hors ligne depuis" — voir SmsFallbackManager.
+                SmsFallbackManager.markSyncSuccess(context);
 
                 // Lot suivant : s'il est vide, la file est entièrement vidée.
                 batch = db.getUnsyncedBatch(BATCH_LIMIT);
