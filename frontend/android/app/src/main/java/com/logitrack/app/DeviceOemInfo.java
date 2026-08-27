@@ -23,15 +23,26 @@ import java.util.Locale;
  * fiable par du code.
  *
  * Ce helper détecte la marque (Build.MANUFACTURER / Build.BRAND, insensibles à
- * la casse) et expose :
- *  - les instructions spécifiques à afficher au chauffeur (JS),
- *  - un intent deep-link vers l'écran système concerné (le plus fiable par
- *    marque), avec repli systématique sur la page de détails de l'app (présente
- *    sur TOUTES les surcouches, contient le réglage Batterie → Sans restriction).
+ * la casse) et expose DEUX familles de deep-link système, car certaines
+ * marques (Xiaomi/MIUI en tête, cause racine confirmée audit 2026-08-27)
+ * séparent en DEUX écrans distincts ce qui est nécessaire pour survivre en
+ * arrière-plan :
+ *  - autostartIntent() : "démarrage automatique" — l'app peut se relancer
+ *    elle-même après avoir été balayée des tâches récentes ;
+ *  - batterySaverIntent() : "économie d'énergie par application" — l'OS ne
+ *    gèle pas le process (WorkManager inclus) en arrière-plan prolongé.
+ * Avec repli systématique sur la page de détails de l'app (présente sur
+ * TOUTES les surcouches, contient le réglage Batterie → Sans restriction) si
+ * la marque n'a pas d'écran dédié connu, ou si l'écran a été renommé/supprimé
+ * sur la version d'OS installée.
  *
  * Les noms de package/activité ci-dessous sont stables historiquement mais
  * varient selon les versions d'OS : chaque ouverture est protégée par
- * resolveActivity() et retombe proprement sur le repli.
+ * resolveActivity() et retombe proprement sur le repli. Niveau de confiance
+ * détaillé sur chaque méthode : certains composants sont vérifiés sur un
+ * appareil physique (Xiaomi), d'autres reposent sur une documentation
+ * communautaire large mais non vérifiée localement (Huawei/Honor/Vivo) — dans
+ * les deux cas, un échec ne bloque jamais le chauffeur : repli automatique.
  */
 public final class DeviceOemInfo {
 
@@ -78,11 +89,10 @@ public final class DeviceOemInfo {
             ret.put("autostartAction", autostart[1]);
         }
         // hasBatterySaverScreen : indique au JS s'il faut afficher un DEUXIÈME
-        // bouton de réglage (voir openBatterySaverSettings ci-dessous) — MIUI
-        // sépare "démarrage automatique" et "économie d'énergie par application"
-        // en DEUX écrans système distincts, contrairement à EMUI/ColorOS qui les
-        // regroupent généralement dans l'écran de démarrage automatique.
-        ret.put("hasBatterySaverScreen", OEM_XIAOMI.equals(oem));
+        // bouton de réglage (voir openBatterySaverSettings ci-dessous) — certaines
+        // marques séparent "démarrage automatique" et "économie d'énergie par
+        // application" en DEUX écrans système distincts (voir batterySaverIntent).
+        ret.put("hasBatterySaverScreen", batterySaverIntent(oem) != null);
         return ret;
     }
 
@@ -215,49 +225,87 @@ public final class DeviceOemInfo {
     /**
      * BUG CORRIGÉ (audit terrain 2026-08-27, cause racine confirmée sur appareil
      * réel — 3 coupures de tracking de 1h30-2h en une journée, malgré l'exemption
-     * Android standard ET l'autostart tous deux déjà accordés). MIUI/HyperOS a
-     * une TROISIÈME couche de restriction, INDÉPENDANTE des deux premières :
-     * l'« économie d'énergie » PAR APPLICATION (省电策略), avec 3 niveaux — Sans
-     * restriction / Économie intelligente (défaut) / Économie renforcée. Même
-     * avec REQUEST_IGNORE_BATTERY_OPTIMIZATIONS accordé (confirmé via
-     * `dumpsys deviceidle whitelist` sur l'appareil de test) et le démarrage
-     * automatique activé, ce troisième réglage — LAISSÉ SUR SA VALEUR PAR DÉFAUT
-     * "Économie intelligente" — suffit à MIUI pour geler périodiquement l'app en
-     * arrière-plan (y compris WorkManager, ce qui explique pourquoi le watchdog
-     * de 15 min mettait 1h30-2h à redémarrer le service : ses propres exécutions
-     * étaient elles-mêmes gelées).
+     * Android standard ET l'autostart tous deux déjà accordés). Plusieurs
+     * surcouches ont une TROISIÈME couche de restriction, INDÉPENDANTE des deux
+     * premières : une « économie d'énergie » PAR APPLICATION, distincte de
+     * l'autostart. Même avec REQUEST_IGNORE_BATTERY_OPTIMIZATIONS accordé
+     * (confirmé sur l'appareil de test via `dumpsys deviceidle whitelist`) et le
+     * démarrage automatique activé, ce troisième réglage — laissé sur sa valeur
+     * par défaut — suffit à geler périodiquement l'app en arrière-plan (y
+     * compris WorkManager, ce qui explique pourquoi le watchdog de 15 min
+     * mettait 1h30-2h à redémarrer le service : ses propres exécutions étaient
+     * elles-mêmes gelées).
      *
-     * Écran cible vérifié DIRECTEMENT sur l'appareil réel (adb, resolveActivity +
-     * confirmation ResumedActivity) : com.miui.powerkeeper/.ui.HiddenAppsConfigActivity,
-     * action miui.intent.action.HIDDEN_APPS_CONFIG_ACTIVITY, extra package_name.
-     * Action/composant stables depuis plusieurs générations de MIUI (documentés
-     * dans plusieurs bibliothèques open-source de guidage batterie constructeur),
-     * mais comme pour l'autostart, protégés par resolveActivity() + repli sur la
-     * page de détails de l'app si l'écran a été renommé sur une version future.
-     *
-     * UNIQUEMENT Xiaomi ici (voir hasBatterySaverScreen dans detect()) : EMUI et
-     * ColorOS regroupent généralement ce réglage dans leur écran de démarrage
-     * automatique déjà couvert — ajouter un deep-link non vérifié pour ces
-     * marques risquerait d'ouvrir un mauvais écran sans qu'on puisse le tester.
+     * NIVEAU DE CONFIANCE PAR MARQUE (voir batterySaverIntent ci-dessous) :
+     *  - Xiaomi/MIUI : VÉRIFIÉ DIRECTEMENT sur l'appareil réel de test (adb,
+     *    resolveActivity + confirmation ResumedActivity après lancement).
+     *  - Huawei/Honor/Vivo : composants documentés de façon stable et répétée
+     *    dans plusieurs bibliothèques open-source de guidage batterie
+     *    constructeur (à large diffusion), mais PAS vérifiés sur un appareil
+     *    physique de cette marque — protégés comme l'autostart par
+     *    resolveActivity() + repli sur la page de détails de l'app si l'écran a
+     *    été renommé/supprimé sur une version d'OS donnée.
+     *  - Oppo/Realme/OnePlus : PAS de deep-link ajouté ici — la variabilité des
+     *    noms d'écran entre versions ColorOS est trop grande pour un choix
+     *    fiable sans appareil de test ; ces marques regroupent de toute façon
+     *    souvent ce réglage dans l'écran de démarrage automatique déjà couvert.
+     *  - Samsung (One UI) : pas de couche propriétaire séparée connue au-delà de
+     *    l'API Android standard (Batterie → Sans restriction, déjà couverte par
+     *    l'exemption standard) — aucun deep-link nécessaire.
      */
-    public static String openBatterySaverSettings(Context context) {
-        String oem = detectOem(safe(Build.MANUFACTURER), safe(Build.BRAND));
-        if (OEM_XIAOMI.equals(oem)) {
-            try {
-                Intent intent = new Intent("miui.intent.action.HIDDEN_APPS_CONFIG_ACTIVITY");
-                intent.setComponent(new android.content.ComponentName(
+    private static String[] batterySaverIntent(String oem) {
+        switch (oem) {
+            case OEM_XIAOMI:
+                // MIUI / HyperOS : "Économie d'énergie" par application (省电策略).
+                return new String[]{
                     "com.miui.powerkeeper",
                     "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"
-                ));
-                intent.putExtra("package_name", context.getPackageName());
-                intent.putExtra("package_label", context.getApplicationInfo().loadLabel(context.getPackageManager()));
+                };
+            case OEM_HUAWEI:
+            case OEM_HONOR:
+                // EMUI / Magic UI : "Applications protégées" (受保护应用) — distinct
+                // de l'écran de démarrage automatique (StartupNormalAppListActivity).
+                return new String[]{
+                    "com.huawei.systemmanager",
+                    "com.huawei.systemmanager.optimize.process.ProtectActivity"
+                };
+            case OEM_VIVO:
+                // Funtouch / OriginOS : gestion des applications à forte
+                // consommation en arrière-plan.
+                return new String[]{
+                    "com.vivo.abe",
+                    "com.vivo.abe.PurviewTabActivity"
+                };
+            default:
+                return null;
+        }
+    }
+
+    public static String openBatterySaverSettings(Context context) {
+        String oem = detectOem(safe(Build.MANUFACTURER), safe(Build.BRAND));
+        String[] target = batterySaverIntent(oem);
+        if (target != null) {
+            try {
+                Intent intent = new Intent();
+                if (OEM_XIAOMI.equals(oem)) {
+                    // MIUI exige l'action explicite ET les extras package_name/
+                    // package_label (sans l'action, certaines versions ignorent
+                    // silencieusement l'intent malgré une resolveActivity() positive).
+                    intent.setAction("miui.intent.action.HIDDEN_APPS_CONFIG_ACTIVITY");
+                    intent.putExtra("package_name", context.getPackageName());
+                    intent.putExtra(
+                        "package_label",
+                        context.getApplicationInfo().loadLabel(context.getPackageManager())
+                    );
+                }
+                intent.setClassName(target[0], target[1]);
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 if (intent.resolveActivity(context.getPackageManager()) != null) {
                     context.startActivity(intent);
-                    return "battery_saver:xiaomi";
+                    return "battery_saver:" + oem;
                 }
             } catch (Exception ignored) {
-                // Écran renommé/supprimé sur cette version MIUI → repli ci-dessous.
+                // Écran renommé/supprimé sur cette version d'OS → repli ci-dessous.
             }
         }
         // Repli universel : page de détails de l'app (même repli que openBestSettings).

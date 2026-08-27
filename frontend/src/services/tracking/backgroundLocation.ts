@@ -51,11 +51,13 @@ export interface DeviceOemInfo {
   batteryOptimizationIgnored: boolean;
   /**
    * true = la marque a un écran SÉPARÉ "économie d'énergie par application"
-   * (audit terrain 2026-08-27 — actuellement Xiaomi/MIUI uniquement, vérifié
-   * sur appareil réel). Cause racine confirmée de coupures de tracking de
-   * 1h30-2h malgré l'exemption batterie Android ET l'autostart déjà
-   * accordés : ce TROISIÈME réglage MIUI, laissé sur sa valeur par défaut,
-   * suffit à geler périodiquement l'app en arrière-plan (WorkManager inclus).
+   * (audit terrain 2026-08-27 — Xiaomi/MIUI vérifié sur appareil réel,
+   * Huawei/Honor/Vivo ajoutés sur base documentaire large mais non vérifiée
+   * localement, voir DeviceOemInfo.batterySaverIntent côté natif). Cause
+   * racine confirmée de coupures de tracking de 1h30-2h malgré l'exemption
+   * batterie Android ET l'autostart déjà accordés : ce TROISIÈME réglage,
+   * laissé sur sa valeur par défaut, suffit à geler périodiquement l'app en
+   * arrière-plan (WorkManager inclus).
    */
   hasBatterySaverScreen?: boolean;
 }
