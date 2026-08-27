@@ -16,6 +16,7 @@ scripts/*
 !scripts/backup.sh
 !scripts/oracle-vm-setup.sh
 !scripts/migrate-from-render.sh
+!scripts/deploy-contabo.sh
 start.sh
 
 # Audit / diagnostic files (never committed)
