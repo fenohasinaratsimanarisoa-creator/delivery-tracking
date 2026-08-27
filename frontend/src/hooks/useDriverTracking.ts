@@ -2,7 +2,6 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api/client';
 import { getSocket, onSocketSessionExpired } from '../services/socket/socket';
-import { getAccessToken } from '../services/auth/tokenStore';
 import { getAbsoluteApiBaseUrl } from '../services/api/config';
 import { enqueuePosition, queueSize, flushQueue, QUEUE_WARN_SIZE } from '../services/offlineQueue';
 import { KalmanFilter } from '../services/tracking/KalmanFilter';
@@ -20,9 +19,7 @@ import {
   subscribeToNativeBatteryCritical,
   subscribeToNativeLocations,
   updateNativeTrackingStatus,
-  storeNativeFallbackToken,
   storeNativeFallbackApiUrl,
-  markNativeJsAck,
   setNativeTrackingContext,
   type DeviceOemInfo,
 } from '../services/tracking/backgroundLocation';
@@ -106,6 +103,8 @@ export interface DriverPosition {
   heading?: number;
   altitude?: number;
   accuracy?: number;
+  /** Epoch ms d'ACQUISITION du fix GPS (pas d'envoi) — voir buildPositionPayload. */
+  timestamp?: number;
 }
 
 export interface DriverAlert {
@@ -171,6 +170,20 @@ export function useDriverTracking() {
   const [networkOnline, setNetworkOnline] = useState(
     typeof navigator !== 'undefined' ? navigator.onLine !== false : true,
   );
+  // BUG CORRIGÉ (audit 2026-08-27, MOYENNE) : le garde-fou temporel (watchdog,
+  // voir plus bas) tourne dans un useEffect volontairement stable
+  // ([drainQueue, addAlert] uniquement — le réexécuter à chaque flip
+  // online/offline redémarrerait le socket ET recréerait le timer). Son
+  // setInterval lisait directement `networkOnline` par closure : cette
+  // valeur reste figée à celle du RENDU où l'effet a été monté, pour toute la
+  // durée de vie du composant — le watchdog jugeait donc en permanence l'état
+  // réseau du tout premier rendu, jamais son état réel. Un ref, mis à jour à
+  // chaque changement d'état sans dépendre du gros effet, donne au watchdog
+  // une lecture toujours fraîche sans le faire redémarrer.
+  const networkOnlineRef = useRef(networkOnline);
+  useEffect(() => {
+    networkOnlineRef.current = networkOnline;
+  }, [networkOnline]);
   // Session révoquée côté serveur (refresh échoué après 'Invalid token' du socket) :
   // le badge affiche "Session expirée — reconnexion nécessaire" au lieu de boucler
   // sur un "Hors ligne" générique.
@@ -516,11 +529,30 @@ export function useDriverTracking() {
     const sendLat = raw ? raw.lat : p.lat;
     const sendLng = raw ? raw.lng : p.lng;
 
+    // BUG CORRIGÉ (audit 2026-08-27, DOUBLONS RÉELS confirmés) : ce timestamp
+    // partait auparavant en `new Date().toISOString()` — l'heure d'ENVOI JS,
+    // jamais l'heure d'ACQUISITION du fix GPS. Le pipeline natif
+    // (LocationForegroundService → LocationQueueDb → PositionUploadWorker),
+    // qui tourne en PARALLÈLE dès que l'app est au premier plan (pas
+    // seulement en veille), envoie la MÊME position physique avec SON PROPRE
+    // timestamp (loc.getTime(), l'heure d'acquisition natif). Deux
+    // timestamps différents pour un seul fix réel → la contrainte unique
+    // (vehicleId, timestamp) en base (schema.prisma, filet anti-doublon)
+    // ne les reconnaissait JAMAIS comme identiques : chaque position en
+    // premier plan pouvait être comptée deux fois (distance/carburant
+    // faussés). p.timestamp (epoch ms du fix, capturé dans processCoords
+    // depuis pos.timestamp ou NativeLocationUpdate.timestamp) aligne les deux
+    // chemins sur la MÊME valeur pour le même fix physique, rendant la
+    // déduplication déjà existante réellement efficace. Repli sur l'heure
+    // d'envoi UNIQUEMENT si le fix n'en porte vraiment aucune (cas web/iOS
+    // très ancien navigateur) — mieux qu'une valeur manquante, mais alors
+    // sans garantie de déduplication contre le natif pour ce fix précis.
+    const timestampMs = p.timestamp ?? Date.now();
     const payload: Record<string, unknown> = {
       latitude: sendLat, longitude: sendLng,
       speed: p.speed ?? undefined, heading: p.heading,
       altitude: p.altitude, accuracy: p.accuracy ?? 50,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date(timestampMs).toISOString(),
     };
     if (vId) payload.vehicleId = vId;
     if (dId) payload.deliveryId = dId;
@@ -712,6 +744,9 @@ export function useDriverTracking() {
     heading?: number | null;
     altitude?: number | null;
     accuracy?: number | null;
+    /** Epoch ms d'acquisition du fix (position.timestamp du navigateur, ou
+     * NativeLocationUpdate.timestamp côté natif) — voir buildPositionPayload. */
+    timestamp?: number | null;
   };
 
   const processCoords = useCallback((coords: GeoCoords) => {
@@ -740,6 +775,7 @@ export function useDriverTracking() {
       heading: heading ?? undefined,
       altitude: altitude ?? undefined,
       accuracy: acc,
+      timestamp: coords.timestamp ?? undefined,
     };
     setPosition(p);
     // Mise à jour SYNCHRONE de posRef : le callback natif appelle sendPosition()
@@ -788,6 +824,9 @@ export function useDriverTracking() {
           heading: pos.coords.heading,
           altitude: pos.coords.altitude,
           accuracy: pos.coords.accuracy,
+          // pos.timestamp (PAS pos.coords.timestamp, inexistant) : epoch ms
+          // standard de l'API Geolocation, horodatage RÉEL du fix.
+          timestamp: pos.timestamp,
         });
       },
       (err) => {
@@ -881,13 +920,8 @@ export function useDriverTracking() {
         console.warn('[tracking] native background status check failed:', err);
       });
 
-    // --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
-    // Stocke le token et l'URL API dans SharedPreferences natifs pour que
-    // NativeHttpFallback puisse envoyer des positions quand la WebView est gelée.
-    const currentToken = getAccessToken();
-    if (currentToken) {
-      storeNativeFallbackToken(currentToken).catch(() => {});
-    }
+    // storeNativeFallbackToken retiré (audit 2026-08-27, voir NativeHttpFallback.java) —
+    // seule l'URL API native reste nécessaire, lue par PositionUploadWorker.
     // getAbsoluteApiBaseUrl(), PAS getSocketBaseUrl() : ce dernier vise la
     // racine de l'origine (Socket.IO), le natif a besoin du préfixe /api
     // pour que nginx route vers le backend (voir getAbsoluteApiBaseUrl).
@@ -962,10 +996,9 @@ export function useDriverTracking() {
         heading: nativePos.heading,
         altitude: nativePos.altitude,
         accuracy: nativePos.accuracy,
+        timestamp: nativePos.timestamp,
       });
       sendPosition(); // envoi immédiat, ne dépend plus du timer throttlé
-      // Notifie le fallback natif que le JS traite les positions (reset du timer de silence).
-      markNativeJsAck().catch(() => {});
     })
       .then((sub) => {
         nativeSubscriptionRef.current = sub;
@@ -1168,7 +1201,7 @@ export function useDriverTracking() {
     let watchdogLastTrigger = 0;
     const watchdogTimer = setInterval(() => {
       const s = getSocket();
-      const isOnline = networkOnline;
+      const isOnline = networkOnlineRef.current;
       if (!s.connected && isOnline) {
         if (watchdogDisconnectedSince === 0) {
           watchdogDisconnectedSince = Date.now();

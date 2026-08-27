@@ -275,7 +275,7 @@ describe('TrackingGateway — cross-tenant security', () => {
             heading: 90,
             altitude: 0,
             accuracy: 5,
-            timestamp: '2026-07-21T10:00:00.000Z',
+            timestamp: new Date().toISOString(),
             deliveryId: '33333333-3333-4333-8333-333333333333',
             vehicleId: '22222222-2222-4222-8222-222222222222',
           },
@@ -324,7 +324,7 @@ describe('TrackingGateway — cross-tenant security', () => {
           {
             latitude: 3,
             longitude: 4,
-            timestamp: '2026-07-21T10:00:00.000Z',
+            timestamp: new Date().toISOString(),
             vehicleId: '22222222-2222-4222-8222-222222222222',
           },
         ],

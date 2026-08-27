@@ -40,7 +40,16 @@ export async function ensureNativeDeviceToken(force = false): Promise<void> {
     if (typeof deviceToken !== 'string' || !deviceToken) return;
     if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) return;
 
-    await setNativeAuthToken(deviceToken, expiresAt);
+    // BUG CORRIGÉ (audit 2026-08-27, HAUTE) : le cache anti-répétition (24h)
+    // était écrit inconditionnellement, MÊME si l'écriture native avait
+    // réellement échoué (Keystore matériel indisponible/corrompu). Sur un
+    // appareil où ça arrive, plus aucune tentative pendant 24h — recréant la
+    // même panne que celle corrigée le même jour, avec un blocage de 24h au
+    // lieu de permanent. Le cache n'est désormais écrit QUE si l'écriture a
+    // réellement abouti (setNativeAuthToken renvoie maintenant un booléen
+    // exploitable — voir backgroundLocation.ts).
+    const written = await setNativeAuthToken(deviceToken, expiresAt);
+    if (!written) return;
     try {
       localStorage.setItem(LAST_PUSH_KEY, String(Date.now()));
     } catch {

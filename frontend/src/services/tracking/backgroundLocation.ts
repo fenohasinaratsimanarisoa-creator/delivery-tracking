@@ -84,10 +84,9 @@ interface BackgroundLocationNative {
   openOemBatterySettings(): Promise<{ opened: string }>;
   updateTrackingStatus(options: { status: string }): Promise<void>;
   getInterruptionInfo(): Promise<TrackingInterruptionInfo>;
-  // --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
-  storeNativeFallbackToken(options: { token: string }): Promise<void>;
+  // storeNativeFallbackToken et markNativeJsAck retirées de l'interface
+  // (audit 2026-08-27) — voir NativeHttpFallback.java.
   storeNativeFallbackApiUrl(options: { apiUrl: string }): Promise<void>;
-  markNativeJsAck(): Promise<void>;
   setNativeTrackingContext(options: { vehicleId: string; deliveryId: string }): Promise<void>;
   // --- Pont du token d'auth vers le worker natif (Phase 3, PositionUploadWorker) ---
   setAuthToken(options: { accessToken: string; expiresAtEpochMs: number }): Promise<void>;
@@ -310,25 +309,16 @@ export async function subscribeToNativeLocations(
   }
 }
 
-// --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
+// storeNativeFallbackToken SUPPRIMÉE (audit 2026-08-27) : ne servait qu'au
+// mécanisme d'envoi HTTP direct de secours (NativeHttpFallback.sendPosition,
+// Android), lui-même retiré — voir NativeHttpFallback.java pour le détail
+// (route serveur inexistante depuis toujours, redondant avec le pipeline
+// SQLite+WorkManager désormais fiable).
 
 /**
- * Écrit le token d'accès dans SharedPreferences natif pour le fallback HTTP.
- * Appelé par le JS à chaque refresh de token.
- */
-export async function storeNativeFallbackToken(token: string): Promise<void> {
-  const p = resolvePlugin();
-  if (!p) return;
-  try {
-    await p.storeNativeFallbackToken({ token });
-  } catch {
-    // Silencieux : le fallback natif est un filet de sécurité, pas critique.
-  }
-}
-
-/**
- * Écrit l'URL de base de l'API dans SharedPreferences natif.
- * Appelé par le JS au démarrage du tracking.
+ * Écrit l'URL de base de l'API dans SharedPreferences natif — TOUJOURS
+ * nécessaire : lue par PositionUploadWorker (Phase 4) pour construire
+ * l'endpoint natif. Appelé par le JS au démarrage du tracking.
  */
 export async function storeNativeFallbackApiUrl(apiUrl: string): Promise<void> {
   const p = resolvePlugin();
@@ -350,14 +340,28 @@ export async function storeNativeFallbackApiUrl(apiUrl: string): Promise<void> {
  * (services/auth/refreshToken.ts). No-op silencieux sur iOS/web (resolvePlugin()
  * → null), même pattern que le reste de ce fichier.
  */
-export async function setNativeAuthToken(accessToken: string, expiresAtEpochMs: number): Promise<void> {
+// BUG CORRIGÉ (audit 2026-08-27, HAUTE) : cette fonction ne renvoyait jamais
+// rien d'exploitable — l'appelant (deviceToken.ts) ne pouvait pas distinguer
+// "écrit avec succès" de "l'écriture native a échoué en silence" (Keystore
+// matériel indisponible/corrompu, cf. NativeAuthTokenStore.java) et marquait
+// son cache anti-répétition (24h) comme si tout allait bien. Résultat : sur
+// un appareil où l'écriture échoue vraiment, plus AUCUNE nouvelle tentative
+// pendant 24h — recréant la MÊME panne que celle corrigée le même jour
+// (worker natif sans credential valide), simplement avec un blocage de 24h
+// au lieu de permanent. Renvoie maintenant true UNIQUEMENT si l'écriture a
+// réellement abouti (ou n'avait rien à faire — web/iOS, resolvePlugin() nul,
+// rien à perdre là non plus) ; false si le plugin natif a existé mais a
+// rejeté l'appel.
+export async function setNativeAuthToken(accessToken: string, expiresAtEpochMs: number): Promise<boolean> {
   const p = resolvePlugin();
-  if (!p) return;
+  if (!p) return true;
   try {
     await p.setAuthToken({ accessToken, expiresAtEpochMs });
+    return true;
   } catch {
-    // Silencieux : PositionUploadWorker retentera avec l'ancien token/rien au
-    // prochain cycle, ce n'est jamais bloquant pour l'app.
+    // Échec réel de l'écriture native — l'appelant doit le savoir (voir
+    // deviceToken.ts) pour ne PAS geler ses tentatives pendant 24h.
+    return false;
   }
 }
 
@@ -383,22 +387,12 @@ export async function flushNativeCookies(): Promise<void> {
   }
 }
 
-/**
- * Notifie le service natif qu'unACK JS a été traité (le pipeline JS a reçu
- * et traité une position). Réinitialise le timer de silence JS.
- */
-export async function markNativeJsAck(): Promise<void> {
-  const p = resolvePlugin();
-  if (!p) return;
-  try {
-    await p.markNativeJsAck();
-  } catch {
-    // Silencieux.
-  }
-}
+// markNativeJsAck SUPPRIMÉE (audit 2026-08-27) : même retrait que
+// storeNativeFallbackToken ci-dessus, ne servait qu'au fallback HTTP direct.
 
 /**
- * Met à jour le contexte véhicule/livraison pour le fallback natif HTTP.
+ * Met à jour le contexte véhicule/livraison — lu par handleLocationUpdate
+ * (natif) pour l'insertion en file SQLite.
  */
 export async function setNativeTrackingContext(vehicleId: string, deliveryId: string): Promise<void> {
   const p = resolvePlugin();

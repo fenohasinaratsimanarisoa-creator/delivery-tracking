@@ -1,4 +1,5 @@
 import { IsNumber, Min, Max, IsDateString, IsOptional, IsArray, IsUUID } from 'class-validator';
+import { IsPlausibleTimestamp } from '../../../common/validators/plausible-timestamp';
 
 export class UpdatePositionDto {
   @IsNumber()
@@ -33,6 +34,7 @@ export class UpdatePositionDto {
   accuracy?: number;
 
   @IsDateString()
+  @IsPlausibleTimestamp()
   timestamp: string;
 
   @IsOptional()

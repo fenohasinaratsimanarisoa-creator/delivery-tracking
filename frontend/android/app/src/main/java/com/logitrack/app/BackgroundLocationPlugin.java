@@ -458,25 +458,15 @@ public class BackgroundLocationPlugin extends Plugin {
         call.resolve();
     }
 
-    // --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
+    // storeNativeFallbackToken et markNativeJsAck SUPPRIMÉS (audit 2026-08-27) :
+    // servaient exclusivement le mécanisme d'envoi HTTP direct de secours
+    // (NativeHttpFallback.sendPosition), lui-même retiré — voir NativeHttpFallback.java
+    // pour le détail (route inexistante côté serveur depuis toujours, devenu
+    // redondant avec le pipeline SQLite+WorkManager désormais fiable).
 
     /**
-     * Stocke le token d'accès dans SharedPreferences pour le fallback natif HTTP.
-     * Appelé par le JS à chaque refresh de token (tokenStore.setAccessToken()).
-     */
-    @PluginMethod
-    public void storeNativeFallbackToken(PluginCall call) {
-        String token = call.getString("token");
-        if (token == null || token.isEmpty()) {
-            call.reject("TOKEN_REQUIRED");
-            return;
-        }
-        NativeHttpFallback.storeToken(getContext(), token);
-        call.resolve();
-    }
-
-    /**
-     * Stocke l'URL de base de l'API pour le fallback natif HTTP.
+     * Stocke l'URL de base de l'API — TOUJOURS nécessaire : lue par
+     * PositionUploadWorker (Phase 4) pour construire l'endpoint natif.
      * Appelé par le JS au démarrage du tracking.
      */
     @PluginMethod
@@ -487,17 +477,6 @@ public class BackgroundLocationPlugin extends Plugin {
             return;
         }
         NativeHttpFallback.storeApiUrl(getContext(), apiUrl);
-        call.resolve();
-    }
-
-    /**
-     * Notifie le service qu'unACK JS a été traité (le pipeline JS a reçu
-     * et traité une position). Réinitialise le timer de silence JS utilisé
-     * par le fallback natif pour décider de s'activer (> 2 min sans ACK).
-     */
-    @PluginMethod
-    public void markNativeJsAck(PluginCall call) {
-        LocationForegroundService.markJsAck();
         call.resolve();
     }
 
@@ -517,8 +496,18 @@ public class BackgroundLocationPlugin extends Plugin {
             call.reject("TOKEN_AND_EXPIRY_REQUIRED");
             return;
         }
-        NativeAuthTokenStore.setAuthToken(getContext(), accessToken, expiresAtEpochMs);
-        call.resolve();
+        // BUG CORRIGÉ (audit GPS 2026-08-27, MOYENNE) : call.resolve() était
+        // inconditionnel — un échec Keystore (voir NativeAuthTokenStore) restait
+        // invisible du JS, qui marquait alors à tort le push comme réussi dans
+        // son cache anti-répétition de 24h. reject() permet à setNativeAuthToken()
+        // côté JS (backgroundLocation.ts) de renvoyer false et à l'appelant
+        // (deviceToken.ts) de ne PAS écrire ce cache, pour retenter au prochain appel.
+        boolean written = NativeAuthTokenStore.setAuthToken(getContext(), accessToken, expiresAtEpochMs);
+        if (written) {
+            call.resolve();
+        } else {
+            call.reject("NATIVE_TOKEN_WRITE_FAILED");
+        }
     }
 
     /**

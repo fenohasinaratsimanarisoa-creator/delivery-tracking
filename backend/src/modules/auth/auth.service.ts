@@ -97,6 +97,24 @@ export class AuthService {
     userId: string,
     sessionId?: string,
   ): Promise<{ deviceToken: string; expiresAt: number }> {
+    // BUG CORRIGÉ (audit 2026-08-27, HAUTE) : sessionId était optionnel. Or
+    // c'est le SEUL ancrage de révocation ciblée de ce token 30 jours
+    // (DeviceTrackingAuthGuard vérifie l'existence de la UserSession
+    // correspondante — revokeSession/logout la suppriment). Un appelant sans
+    // sessionId dans son propre access token (fenêtre résiduelle : tokens émis
+    // avant le fix generateTokens du même jour, encore valides jusqu'à 15 min
+    // après déploiement ; ou toute régression future réintroduisant ce cas)
+    // aurait fait émettre un device token qu'AUCUNE révocation de session ne
+    // peut jamais invalider — seule une révocation globale du compte le
+    // couperait. Un credential de 30 jours qui résiste à un logout normal est
+    // un vrai risque : on refuse maintenant de l'émettre plutôt que de
+    // l'émettre affaibli.
+    if (!sessionId) {
+      throw new UnauthorizedException(
+        'Cannot issue device tracking token without a session',
+      );
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -121,8 +139,8 @@ export class AuthService {
       firstName: user.firstName || '',
       lastName: user.lastName || '',
       scope: 'device_tracking',
+      sessionId,
     };
-    if (sessionId) payload.sessionId = sessionId;
 
     const deviceToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,

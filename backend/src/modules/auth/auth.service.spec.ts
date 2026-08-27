@@ -67,6 +67,7 @@ const mockPrisma = {
 const mockJwtService = {
   sign: jest.fn(),
   verify: jest.fn(),
+  decode: jest.fn(),
 };
 
 const mockConfigService = {
@@ -1321,6 +1322,63 @@ describe('AuthService', () => {
 
       await svc.login(dto);
       expect(redis.del).toHaveBeenCalledWith(expect.stringMatching(/^login_fail:/));
+    });
+  });
+
+  describe('issueDeviceTrackingToken (audit 2026-08-27)', () => {
+    it('émet un token de scope device_tracking portant le sessionId fourni', async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'driver@test.com',
+        role: 'driver',
+        companyId: 'comp-1',
+        firstName: 'Jean',
+        lastName: 'Rakoto',
+        isActive: true,
+      });
+      mockJwtService.sign.mockReturnValueOnce('device-token-value');
+      mockJwtService.decode.mockReturnValueOnce({ exp: Math.floor(Date.now() / 1000) + 2_592_000 });
+
+      const result = await service.issueDeviceTrackingToken('user-1', 'session-1');
+
+      expect(result.deviceToken).toBe('device-token-value');
+      expect(result.expiresAt).toBeGreaterThan(Date.now());
+      expect(mockJwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sub: 'user-1',
+          scope: 'device_tracking',
+          sessionId: 'session-1',
+        }),
+        expect.objectContaining({ expiresIn: '30d' }),
+      );
+    });
+
+    it("RÉGRESSION (HAUTE) : refuse d'émettre SANS sessionId — sinon le token échapperait à toute révocation ciblée par session (seule ancre de révocation vérifiée par DeviceTrackingAuthGuard pour ce scope)", async () => {
+      await expect(service.issueDeviceTrackingToken('user-1', undefined)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(mockJwtService.sign).not.toHaveBeenCalled();
+      expect(mockPrisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("refuse d'émettre pour un compte désactivé", async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce({
+        id: 'user-1',
+        isActive: false,
+      });
+
+      await expect(service.issueDeviceTrackingToken('user-1', 'session-1')).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(mockJwtService.sign).not.toHaveBeenCalled();
+    });
+
+    it("refuse d'émettre pour un userId inexistant", async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.issueDeviceTrackingToken('ghost', 'session-1')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 });

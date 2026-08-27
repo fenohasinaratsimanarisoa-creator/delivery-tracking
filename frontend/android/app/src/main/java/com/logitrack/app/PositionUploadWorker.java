@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -88,6 +89,22 @@ public class PositionUploadWorker extends Worker {
      */
     private static final int MAX_BATCHES_PER_RUN = 25;
     private static final AtomicLong lastTriggerAtMs = new AtomicLong(0);
+    // Verrou anti-concurrence (audit 2026-08-27, HAUTE) : le worker PÉRIODIQUE
+    // (15 min, nom unique PERIODIC_WORK_NAME) et le worker ONE-SHOT (nom unique
+    // ONE_SHOT_WORK_NAME) vivent dans DEUX espaces de noms WorkManager
+    // DIFFÉRENTS — ExistingWorkPolicy.KEEP protège chacun contre sa propre
+    // duplication, mais RIEN n'empêche les deux de tourner EN MÊME TEMPS.
+    // Sans ce verrou, les deux `doWork()` peuvent lire le même
+    // getUnsyncedBatch() AVANT que l'un des deux ait appelé markSynced(), et
+    // poster deux fois le même lot au serveur — la contrainte unique
+    // (vehicleId, timestamp) en base ne protège que contre un REJEU du même
+    // timestamp, pas contre deux INSERTIONS légitimes concurrentes du même lot
+    // envoyé deux fois avec succès (deux requêtes HTTP distinctes, chacune
+    // passant son propre contrôle avant que l'autre n'ait écrit). Non
+    // bloquant : le worker qui perd la course rend la main immédiatement
+    // (Result.success(), rien retenté ici — le PROCHAIN cycle s'en chargera),
+    // jamais de deadlock.
+    private static final AtomicBoolean uploadInProgress = new AtomicBoolean(false);
 
     public PositionUploadWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
@@ -96,6 +113,18 @@ public class PositionUploadWorker extends Worker {
     @NonNull
     @Override
     public Result doWork() {
+        if (!uploadInProgress.compareAndSet(false, true)) {
+            Log.i(TAG, "Un envoi natif est déjà en cours (periodic/one-shot concurrents) — cycle ignoré, rien perdu");
+            return Result.success();
+        }
+        try {
+            return doWorkLocked();
+        } finally {
+            uploadInProgress.set(false);
+        }
+    }
+
+    private Result doWorkLocked() {
         Context context = getApplicationContext();
         LocationQueueDb db = LocationQueueDb.getInstance(context);
 

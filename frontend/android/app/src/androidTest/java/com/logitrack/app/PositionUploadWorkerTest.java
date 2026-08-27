@@ -15,8 +15,11 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Tests instrumentés de PositionUploadWorker (Phase 4 — worker natif d'envoi,
@@ -94,6 +97,67 @@ public class PositionUploadWorkerTest {
             0, db.countUnsynced()
         );
         assertEquals(1, server.getRequestCount());
+    }
+
+    /**
+     * RÉGRESSION (audit 2026-08-27, HAUTE) : le worker périodique (15 min) et le
+     * worker one-shot (throttlé 15 s) vivent dans deux espaces de noms
+     * WorkManager différents — ExistingWorkPolicy.KEEP protège chacun contre sa
+     * propre duplication, mais RIEN n'empêchait auparavant les DEUX de tourner
+     * en même temps et de poster deux fois le même lot. Simule cette course :
+     * deux instances de PositionUploadWorker appellent doWork() au même instant
+     * (CountDownLatch), sur la MÊME file. Un seul doit réellement contacter le
+     * serveur — l'autre doit rendre la main immédiatement (Success, sans effet)
+     * grâce au verrou statique `uploadInProgress`.
+     */
+    @Test
+    public void concurrentPeriodicAndOneShot_onlyOneActuallyUploads_noDuplicateSend() throws Exception {
+        server = new TinyTestHttpServer(200);
+        NativeHttpFallback.storeApiUrl(context, "http://127.0.0.1:" + server.getPort());
+        configureValidToken();
+        insertUnsyncedPositions(30);
+        assertEquals(30, db.countUnsynced());
+
+        PositionUploadWorker workerA = TestWorkerBuilder.from(
+            context, PositionUploadWorker.class, Executors.newSingleThreadExecutor()
+        ).build();
+        PositionUploadWorker workerB = TestWorkerBuilder.from(
+            context, PositionUploadWorker.class, Executors.newSingleThreadExecutor()
+        ).build();
+
+        CountDownLatch startGate = new CountDownLatch(1);
+        AtomicReference<ListenableWorker.Result> resultA = new AtomicReference<>();
+        AtomicReference<ListenableWorker.Result> resultB = new AtomicReference<>();
+
+        Thread threadA = new Thread(() -> {
+            try {
+                startGate.await();
+            } catch (InterruptedException ignored) {}
+            resultA.set(workerA.doWork());
+        });
+        Thread threadB = new Thread(() -> {
+            try {
+                startGate.await();
+            } catch (InterruptedException ignored) {}
+            resultB.set(workerB.doWork());
+        });
+        threadA.start();
+        threadB.start();
+        startGate.countDown(); // relâche les deux threads au même instant
+        threadA.join(15_000);
+        threadB.join(15_000);
+
+        assertTrue("Les deux appels doivent réussir (le perdant rend juste la main sans rien envoyer)",
+            resultA.get() instanceof ListenableWorker.Result.Success
+                && resultB.get() instanceof ListenableWorker.Result.Success);
+        assertEquals(
+            "UN SEUL des deux doit avoir réellement contacté le serveur — sinon le lot part en double",
+            1, server.getRequestCount()
+        );
+        assertEquals(
+            "Les 30 positions doivent malgré tout être synchronisées (le gagnant vide toute la file)",
+            0, db.countUnsynced()
+        );
     }
 
     @Test

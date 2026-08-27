@@ -49,13 +49,28 @@ public class NativeAuthTokenStoreTest {
         String token = "eyFAKE.JWT.TOKEN-abc123XYZ";
         long expiresAt = System.currentTimeMillis() + 900_000L; // +15 min
 
-        NativeAuthTokenStore.setAuthToken(context, token, expiresAt);
+        boolean written = NativeAuthTokenStore.setAuthToken(context, token, expiresAt);
+        assertTrue("Une écriture réussie doit renvoyer true (audit GPS 2026-08-27)", written);
 
         NativeAuthTokenStore.StoredToken stored = NativeAuthTokenStore.getAuthToken(context);
         assertNotNull("Le token doit être lisible immédiatement après écriture", stored);
         assertEquals(token, stored.token);
         assertEquals(expiresAt, stored.expiresAtEpochMs);
         assertFalse("Un token qui expire dans 15 min ne doit pas être considéré expiré", stored.isExpired());
+    }
+
+    /**
+     * RÉGRESSION (audit GPS 2026-08-27, MOYENNE) : setAuthToken() avec un token
+     * vide/null doit renvoyer false (échec) plutôt que réussir silencieusement —
+     * BackgroundLocationPlugin en dépend pour rejeter l'appel JS au lieu de le
+     * résoudre à tort (ce qui écrirait un faux positif dans le cache
+     * anti-répétition de deviceToken.ts côté JS).
+     */
+    @Test
+    public void setAuthToken_withEmptyToken_returnsFalse() {
+        assertFalse(NativeAuthTokenStore.setAuthToken(context, "", System.currentTimeMillis() + 900_000L));
+        assertFalse(NativeAuthTokenStore.setAuthToken(context, null, System.currentTimeMillis() + 900_000L));
+        assertNull("Rien ne doit être stocké après un appel refusé", NativeAuthTokenStore.getAuthToken(context));
     }
 
     @Test

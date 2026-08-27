@@ -135,10 +135,7 @@ vi.mock('../services/tracking/backgroundLocation', () => ({
     nativeSubscriptions.push(sub);
     return Promise.resolve(sub);
   }),
-  // --- Fallback HTTP natif (Option B) ---
-  storeNativeFallbackToken: vi.fn().mockResolvedValue(undefined),
   storeNativeFallbackApiUrl: vi.fn().mockResolvedValue(undefined),
-  markNativeJsAck: vi.fn().mockResolvedValue(undefined),
   setNativeTrackingContext: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -833,5 +830,46 @@ describe('useDriverTracking core logic', () => {
     expect(result.current.poorAccuracy).toBe(false);
     act(() => { nativeHandler(badFix(5)); });
     expect(result.current.poorAccuracy).toBe(false);
+  });
+
+  it("RÉGRESSION (audit 2026-08-27) : le payload envoyé porte l'horodatage RÉEL du fix GPS, pas l'heure d'envoi — sinon le chemin socket et le chemin natif (LocationForegroundService, timestamp d'acquisition) désaccordent sur le timestamp d'une même position physique, et la contrainte anti-doublon (vehicleId, timestamp) en base ne les reconnaît jamais comme identiques", async () => {
+    vi.useRealTimers();
+    socketConnected = true;
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/drivers/profile') {
+        return Promise.resolve({
+          data: { id: 'd1', firstName: 'A', lastName: 'B', vehicle: { id: 'v1', brand: 'X', model: 'Y', licensePlate: 'Z', positionSource: 'phone' } },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    renderHook(() => useDriverTracking(), { wrapper });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 1600)); });
+
+    expect(nativeLocationHandler.current).not.toBeNull();
+
+    // Fix GPS "acquis" il y a 7 secondes (simule le délai entre acquisition
+    // native et traitement JS) — c'est CET horodatage qui doit partir au
+    // serveur, pas `Date.now()` au moment de l'envoi.
+    const acquisitionEpochMs = Date.now() - 7000;
+    act(() => {
+      nativeLocationHandler.current!({
+        latitude: -18.8792,
+        longitude: 47.5079,
+        speed: 10,
+        heading: 0,
+        altitude: 0,
+        accuracy: 10,
+        timestamp: acquisitionEpochMs,
+      });
+    });
+
+    const emitted = socketEmits.find((e) => e.event === 'updatePosition');
+    expect(emitted).toBeDefined();
+    const payload = emitted!.payload as { timestamp: string };
+    expect(payload.timestamp).toBe(new Date(acquisitionEpochMs).toISOString());
+    expect(payload.timestamp).not.toBe(new Date().toISOString());
   });
 });

@@ -14,10 +14,11 @@ import type { User } from '../types';
 // POST /auth/device-token — et JAMAIS l'access token.
 // =============================================================================
 
-const { mockSetNativeAuthToken, mockFlushNativeCookies, mockApiPost } = vi.hoisted(() => ({
+const { mockSetNativeAuthToken, mockFlushNativeCookies, mockApiPost, mockDisconnectSocket } = vi.hoisted(() => ({
   mockSetNativeAuthToken: vi.fn(),
   mockFlushNativeCookies: vi.fn(),
   mockApiPost: vi.fn(),
+  mockDisconnectSocket: vi.fn(),
 }));
 
 vi.mock('../services/tracking/backgroundLocation', () => ({
@@ -38,7 +39,7 @@ vi.mock('../services/auth/refreshToken', () => ({
   refreshAccessTokenOutcome: vi.fn().mockResolvedValue({ token: null, reason: 'expired' }),
 }));
 vi.mock('../services/socket/socket', () => ({
-  disconnectSocket: vi.fn(),
+  disconnectSocket: mockDisconnectSocket,
 }));
 vi.mock('../services/monitoring/sentry', () => ({
   setSentryUser: vi.fn(),
@@ -91,7 +92,18 @@ describe('AuthContext — credential longue durée poussé au worker natif', () 
     mockSetNativeAuthToken.mockClear();
     mockFlushNativeCookies.mockClear();
     mockApiPost.mockReset();
+    mockDisconnectSocket.mockClear();
     localStorage.clear();
+  });
+
+  it("RÉGRESSION (audit 2026-08-27, HAUTE) : login() force un socket neuf (disconnectSocket) — sinon une reconnexion manuelle sans redémarrage complet de l'app garde le flag interne sessionExpired bloqué à true, empêchant TOUTE reconnexion automatique malgré le nouveau token valide", async () => {
+    mockApiPost.mockResolvedValue({
+      data: { deviceToken: 'device-token', expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 },
+    });
+
+    await renderAndLogin();
+
+    expect(mockDisconnectSocket).toHaveBeenCalledTimes(1);
   });
 
   it('login() récupère le device token (30 j) et le pousse au natif', async () => {

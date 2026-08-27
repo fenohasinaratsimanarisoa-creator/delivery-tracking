@@ -155,6 +155,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     explicitLoginRef.current = true;
     setAccessToken(accessToken);
     setUser(userData);
+    // BUG CORRIGÉ (audit 2026-08-27, HAUTE) : le flag interne `sessionExpired`
+    // de socket.ts (posé par handleInvalidToken quand un refresh de session
+    // échoue) ne repassait à false QUE dans disconnectSocket() ou dans un
+    // refresh réussi DEPUIS CE MÊME socket — jamais ici. Un chauffeur dont la
+    // session expire pendant l'usage, qui se reconnecte via le formulaire SANS
+    // fermer complètement l'app, gardait un socket existant (non nullé) avec
+    // sessionExpired=true : le garde-fou anti-reconnexion-en-boucle de
+    // 'disconnect' (`!sessionExpired`) bloquait alors TOUTE reconnexion
+    // automatique, MÊME avec le nouveau token valide — badge "hors ligne/
+    // reconnexion" bloqué indéfiniment jusqu'au prochain redémarrage complet.
+    // disconnectSocket() ici force un socket ENTIÈREMENT NEUF (getSocket()
+    // recrée, puisque `socket` redevient null) au prochain appel, avec le
+    // nouveau token et sessionExpired réinitialisé.
+    disconnectSocket();
     // Pont vers PositionUploadWorker (Phase 4, natif) : on pousse le credential
     // LONGUE DURÉE (device token, 30 j) et NON l'access token (15 min) —
     // celui-ci expirait pendant la veille, quand le JS gelé ne peut plus le

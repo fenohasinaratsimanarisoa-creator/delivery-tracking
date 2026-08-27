@@ -66,20 +66,33 @@ public final class NativeAuthTokenStore {
      * Écrit le token d'accès + son expiration. Appelé par le JS (via
      * BackgroundLocationPlugin.setAuthToken) à chaque login() ET à chaque
      * refresh réussi.
+     *
+     * BUG CORRIGÉ (audit GPS 2026-08-27, MOYENNE) : cette méthode était `void` —
+     * un échec Keystore matériel (indisponible/corrompu, cas réel sur certains
+     * appareils bas de gamme après une mise à jour OEM) était avalé ici SANS
+     * remonter au JS, qui croyait le push réussi. Conséquence en aval :
+     * deviceToken.ts écrivait quand même son cache anti-répétition de 24h,
+     * bloquant tout nouveau essai pendant 24h alors que le worker natif n'avait
+     * JAMAIS reçu de credential exploitable — reproduisant la panne "arrêt
+     * d'envoi en veille" corrigée le même jour. Retourne désormais si
+     * l'écriture a réellement abouti, pour que l'appelant (BackgroundLocationPlugin)
+     * puisse rejeter l'appel plutôt que le résoudre à tort.
      */
-    public static void setAuthToken(Context context, String accessToken, long expiresAtEpochMs) {
-        if (accessToken == null || accessToken.isEmpty()) return;
+    public static boolean setAuthToken(Context context, String accessToken, long expiresAtEpochMs) {
+        if (accessToken == null || accessToken.isEmpty()) return false;
         try {
             SharedPreferences prefs = openEncryptedPrefs(context);
             prefs.edit()
                 .putString(KEY_TOKEN, accessToken)
                 .putLong(KEY_EXPIRES_AT, expiresAtEpochMs)
                 .apply();
+            return true;
         } catch (GeneralSecurityException | IOException e) {
             // Ne JAMAIS logger l'exception avec le token en paramètre (aucun risque
             // ici : `e` ne contient pas le token). PositionUploadWorker retentera
             // au cycle suivant si aucun token n'est lisible.
             Log.e(TAG, "Echec ecriture token natif chiffre", e);
+            return false;
         }
     }
 

@@ -207,9 +207,10 @@ public class LocationForegroundService extends Service {
     /** Dernière position acquise, pour qu'un abonné tardif reçoive l'état courant. */
     private static volatile Location latestLocation = null;
 
-    // --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
-    /** Horodatage du dernier ACK JS (notifyListeners traité par le pipeline JS). */
-    private static volatile long lastJsAckTime = 0;
+    // lastJsAckTime SUPPRIMÉ (audit 2026-08-27) : ne servait qu'au fallback HTTP
+    // direct de secours, lui-même retiré (route serveur inexistante depuis
+    // toujours, redondant avec le pipeline SQLite+WorkManager) — voir
+    // NativeHttpFallback.java.
     /** ID du véhicule courant (pour le fallback natif). */
     private static volatile String nativeVehicleId = null;
     /** ID de la livraison courante (pour le fallback natif). */
@@ -241,18 +242,9 @@ public class LocationForegroundService extends Service {
         return latestLocation;
     }
 
-    // --- Fallback HTTP natif :ACK JS + contexte véhicule/livraison ---
+    // --- Contexte véhicule/livraison (lu par handleLocationUpdate pour l'insertion SQLite) ---
 
-    /**
-     * Notifie le service qu'un ACK JS a été traité (le pipeline JS a reçu et
-     * traité une position via notifyListeners). Utilisé par le fallback natif
-     * pour détecter quand la WebView est silencieuse depuis > 2 min.
-     */
-    public static void markJsAck() {
-        lastJsAckTime = System.currentTimeMillis();
-    }
-
-    /** Met à jour les IDs véhicule/livraison pour le fallback natif. */
+    /** Met à jour les IDs véhicule/livraison pour l'insertion en file native. */
     public static void setNativeContext(String vehicleId, String deliveryId) {
         nativeVehicleId = vehicleId;
         nativeDeliveryId = deliveryId;
@@ -515,8 +507,8 @@ public class LocationForegroundService extends Service {
      * EXACTEMENT cette méthode, rien n'est dupliqué.
      *
      * static/package-visible à dessein (visibilité de test) : lit/écrit les
-     * champs statiques nativeVehicleId/nativeDeliveryId/latestLocation/
-     * lastJsAckTime, cohérent avec le reste de la classe (LOCATION_SINKS statique
+     * champs statiques nativeVehicleId/nativeDeliveryId/latestLocation,
+     * cohérent avec le reste de la classe (LOCATION_SINKS statique
      * partagé entre toutes les instances du service).
      */
     static void handleLocationUpdate(Context appContext, Location loc) {
@@ -567,16 +559,22 @@ public class LocationForegroundService extends Service {
         for (LocationSink sink : LOCATION_SINKS) {
             sink.onLocationUpdate(loc);
         }
-        // --- Fallback HTTP natif (Option B, audit 21/08/2026) ---
-        // Si le JS est silencieux depuis > 2 min (la WebView est gelée), on envoie
-        // la position directement via HTTP pour ne pas la perdre. Ne s'active que
-        // si lastJsAckTime > 0 (le JS a déjà communiqué au moins une fois) et si
-        // le token/API URL sont disponibles.
-        if (lastJsAckTime > 0
-            && NativeHttpFallback.shouldActivate(lastJsAckTime)
-            && vehicleIdForDb != null && !vehicleIdForDb.isEmpty()) {
-            NativeHttpFallback.sendPosition(appContext, loc, vehicleIdForDb, nativeDeliveryId);
-        }
+        // Fallback HTTP natif direct (Option B, audit 21/08/2026) SUPPRIMÉ (audit
+        // 2026-08-27) : NativeHttpFallback.sendPosition() postait vers
+        // "{apiUrl}/tracking/batch-position" — une route qui n'a JAMAIS existé
+        // côté backend (seul /tracking/positions/native-batch existe). Ce
+        // mécanisme retournait donc 404 à CHAQUE activation depuis sa création,
+        // invisible en pratique (l'échec n'est loggué qu'en Log.w, et logcat est
+        // bloqué par MIUI sur l'appareil de test — confirmé ce jour). Il est de
+        // toute façon désormais REDONDANT : le pipeline LocationQueueDb →
+        // PositionUploadWorker (Phase 1-4, corrigé aujourd'hui — CSRF, URL,
+        // expedited work) déclenche déjà un envoi au plus tard 15 s après
+        // CHAQUE insertion, largement plus réactif que le seuil de 2 min de
+        // silence JS que ce fallback attendait. Le garder aurait en plus
+        // réintroduit la MÊME classe de bug que le doublon socket/natif corrigé
+        // juste au-dessus (buildPositionPayload, useDriverTracking.ts) : un
+        // troisième chemin d'envoi avec sa propre base de timestamp, hors de la
+        // file SQLite et donc hors de toute déduplication avec elle.
     }
 
     /**

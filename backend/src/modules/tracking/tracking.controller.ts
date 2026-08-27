@@ -290,8 +290,26 @@ export class TrackingController {
       // silencieuse.
       throw new HttpException({ saved: 0, duplicates: 0 }, HttpStatus.TOO_MANY_REQUESTS);
     }
-    if (result.status === 'empty' || result.status === 'no_driver') {
+    if (result.status === 'empty') {
+      // Lot vide envoyé par erreur (ne devrait pas arriver côté natif, qui ne
+      // déclenche jamais avec une file vide) : rien à synchroniser, 200 légitime.
       return { saved: 0, duplicates: 0 };
+    }
+    if (result.status === 'no_driver') {
+      // BUG CORRIGÉ (audit 2026-08-27) : renvoyer 200/{saved:0} ici était une
+      // PERTE DE DONNÉES SILENCIEUSE. PositionUploadWorker.java ne lit JAMAIS
+      // le corps de la réponse — il appelle markSynced() (suppression locale
+      // définitive) dès qu'il voit un statut 2xx, quel qu'il soit. Un batch
+      // VALIDÉ mais rejeté faute de profil Driver résolvable (compte pas
+      // encore provisionné, désaffectation en cours) était donc supprimé de la
+      // file native SANS jamais avoir été persisté côté serveur — perte
+      // définitive. Un statut non-2xx force le natif à conserver les
+      // positions (Result.retry() n'est PAS déclenché ici côté worker, mais
+      // seul le chemin 2xx marque synced — voir doWork()) : elles restent en
+      // file, retentées au cycle suivant, jusqu'à ce qu'un profil Driver
+      // existe (ou survivent jusqu'à la purge par ancienneté, dernier
+      // recours, jamais silencieuse).
+      throw new HttpException({ saved: 0, duplicates: 0 }, HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     // duplicates = positions validées mais NON persistées par saveBatch(). En

@@ -291,6 +291,25 @@ describe('TrackingController — POST /tracking/positions/native-batch', () => {
     expect(mockTrackingService.validateAndSaveBatch).toHaveBeenCalledTimes(1);
   });
 
+  it("aucun profil Driver résolvable (no_driver) → 422, PAS 200 — sinon PositionUploadWorker marquerait synced un lot jamais persisté (perte silencieuse, audit 2026-08-27)", async () => {
+    mockTrackingService.validateAndSaveBatch.mockResolvedValueOnce({ status: 'no_driver' });
+
+    const positions = Array.from({ length: 5 }, (_, i) => makeValidPosition(i));
+    const res = await request(app.getHttpServer())
+      .post('/tracking/positions/native-batch')
+      .set('authorization', 'Bearer fake-token')
+      .send({ positions });
+
+    // PositionUploadWorker.java ne lit JAMAIS le corps de la réponse : il
+    // appelle markSynced() dès qu'il voit un statut 2xx, quel qu'il soit. Un
+    // 200/{saved:0} ici ferait supprimer ces positions de la file SQLite
+    // native alors qu'AUCUNE n'a été persistée côté serveur — perte
+    // définitive. Un statut non-2xx est la SEULE façon de garantir qu'elles
+    // restent en file pour retry.
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({ saved: 0, duplicates: 0 });
+  });
+
   it("rôle non-driver (dispatcher) rejeté (403) — même garde @Roles('driver') que les autres routes chauffeur", async () => {
     const res = await request(app.getHttpServer())
       .post('/tracking/positions/native-batch')
