@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'fs';
+import { join } from 'path';
 import { ConfigService } from '@nestjs/config';
 import { TraccarBridgeService } from './traccar-bridge.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -439,8 +441,6 @@ describe('TraccarBridgeService — sérialisation PAR DEVICE (backfill vs flux l
   });
 
   it('garde statique : la contrainte unique (vehicleId, timestamp) est déclarée dans le schéma ET appliquée par la migration', () => {
-    const { readFileSync, readdirSync } = require('fs');
-    const { join } = require('path');
     const root = join(__dirname, '..', '..', '..');
 
     const schema = readFileSync(join(root, 'prisma', 'schema.prisma'), 'utf8');
