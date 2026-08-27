@@ -50,21 +50,28 @@ export function evaluateTeleportation(
   const speedMs = distance / timeDiffSec;
 
   // Si l'accuracy est dégradée, l'apparente téléportation peut être du bruit GPS :
-  // les seuils sont échelonnés par l'accuracy (même échelle que computeFilteredDistance),
-  // MAIS PLAFONNÉS (GPS_NOISE_MAX_ACCURACY_SCALE = 1.5 — cohérent avec le filtre de bruit
-  // geo.utils, source unique). Sans plafond, un traceur inconnu rapportant une accuracy
-  // aberrante (ex. 500m, ou le repli 50m de computeCombinedAccuracy pour un device sans
-  // accuracy) gonflait le seuil de vitesse à x5-50 (277-2778 m/s) → la détection de
-  // téléportation était désactivée EN PRATIQUE (faux négatifs : vrais sauts GPS non
-  // signalés). Le plafond 1.5 borne le seuil à 83 m/s (300 km/h) — jamais atteint par un
-  // véhicule réel (aucun faux positif), mais un vrai saut reste toujours détecté.
+  // le seuil de SAUT COURT (distance, ci-dessous) reste échelonné par l'accuracy
+  // (même échelle que computeFilteredDistance), PLAFONNÉ (GPS_NOISE_MAX_ACCURACY_SCALE
+  // = 1.5 — cohérent avec le filtre de bruit geo.utils, source unique).
   const accuracyScale = accuracy
     ? Math.max(1, Math.min(accuracy / 10, GPS_NOISE_MAX_ACCURACY_SCALE))
     : 1;
-  const adjustedSpeedThreshold = TELEPORT_SPEED_THRESHOLD_MS * accuracyScale;
   const adjustedDistanceThreshold = TELEPORT_DISTANCE_THRESHOLD_M * accuracyScale;
 
-  if (speedMs > adjustedSpeedThreshold) {
+  // BUG CORRIGÉ (audit terrain 2026-08-27, confirmé sur données réelles en production) :
+  // le seuil de VITESSE était lui aussi échelonné par l'accuracy (jusqu'à 55,56 × 1,5 =
+  // 83 m/s = 300 km/h) — pensé pour éviter les faux positifs sur du bruit GPS avec
+  // accuracy dégradée. Cas réel : chauffeur resté chez lui toute la nuit, téléphone
+  // immobile en intérieur — un saut GPS de 720 m en 9 s (≈80 m/s = 288 km/h, physiquement
+  // impossible pour un véhicule) avec une accuracy de seulement 20,9 m (scale plafonné à
+  // 1,5, seuil relevé à 300 km/h) est passé SOUS ce seuil élargi → suspect=false → le
+  // point a alimenté le calcul de distance carburant sans aucun garde-fou, contribuant à
+  // un rapport de 68 km pour un véhicule qui n'a pas bougé. Aucun véhicule de flotte réel
+  // ne dépasse 200 km/h (TELEPORT_SPEED_THRESHOLD_MS) : contrairement au seuil de
+  // distance ci-dessous (qui protège un usage GPS générique plus large), la vitesse reste
+  // désormais NON échelonnée — un point dont l'accuracy est dégradée au point de sembler
+  // franchir 200 km/h est du bruit, jamais un déplacement réel.
+  if (speedMs > TELEPORT_SPEED_THRESHOLD_MS) {
     return { suspect: true, reason: 'vitesse', timeDiffSec, distance, speedMs };
   }
 

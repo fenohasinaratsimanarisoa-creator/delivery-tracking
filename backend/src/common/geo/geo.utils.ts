@@ -24,6 +24,23 @@ export const GPS_NOISE_MAX_ACCURACY_SCALE = 1.5;
 // (vitesse>0, petit segment) — la longueur seule ne pouvait pas.
 export const MOVEMENT_SPEED_THRESHOLD_MS = 1.0;
 
+// BUG CORRIGÉ (audit terrain 2026-08-27, confirmé sur données réelles en
+// production) : la RÈGLE VITESSE ci-dessous comptait un segment en ENTIER dès
+// qu'une vitesse > MOVEMENT_SPEED_THRESHOLD_MS était rapportée, SANS AUCUNE
+// condition sur l'accuracy — alors qu'une vitesse GPS (Doppler/delta entre
+// fixes) est elle-même dérivée du signal satellite et devient bruitée
+// exactement quand l'accuracy se dégrade (multipath en intérieur, signal
+// faible). Cas réel : chauffeur resté chez lui toute la nuit, téléphone
+// immobile en intérieur — 2583 positions sur 7h38, accuracy moyenne 46 m
+// (jusqu'à 451 m), 108 positions cumulant vitesse > seuil ET accuracy > 50 m.
+// Chacune de ces positions faisait compter en entier son segment (parfois
+// des dizaines de mètres de bruit de position pur), pour un total de 68,1 km
+// « parcourus » alors que le véhicule n'a pas bougé. Un fix GPS dont
+// l'accuracy dépasse ce plafond ne peut plus authentifier un déplacement :
+// on retombe alors sur la RÈGLE SEUIL (bruit filtré, plafonnée) au lieu de
+// faire confiance à sa vitesse.
+export const MOVEMENT_TRUST_MAX_ACCURACY_M = 30;
+
 /**
  * Distance cumulée d'un trajet en filtrant le bruit GPS, avec un seuil pondéré par
  * l'accuracy moyenne de chaque segment ET plafonné (GPS_NOISE_MAX_ACCURACY_SCALE).
@@ -63,10 +80,19 @@ export function computeFilteredDistance(
     const p2 = positions[i];
     const segDist = haversineDistance(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
 
-    // RÈGLE VITESSE : un déplacement avéré est compté intégralement.
+    // RÈGLE VITESSE : un déplacement avéré est compté intégralement — mais
+    // UNIQUEMENT si la position qui rapporte cette vitesse est elle-même
+    // suffisamment précise (accuracy ≤ MOVEMENT_TRUST_MAX_ACCURACY_M) pour
+    // que sa vitesse soit exploitable. Voir le commentaire de la constante :
+    // sans ce garde-fou, du bruit GPS indoor/stationnaire pouvait gonfler la
+    // distance de dizaines de km sans aucun déplacement réel.
     const moving =
-      (p1.speed != null && p1.speed > MOVEMENT_SPEED_THRESHOLD_MS) ||
-      (p2.speed != null && p2.speed > MOVEMENT_SPEED_THRESHOLD_MS);
+      (p1.speed != null &&
+        p1.speed > MOVEMENT_SPEED_THRESHOLD_MS &&
+        (p1.accuracy == null || p1.accuracy <= MOVEMENT_TRUST_MAX_ACCURACY_M)) ||
+      (p2.speed != null &&
+        p2.speed > MOVEMENT_SPEED_THRESHOLD_MS &&
+        (p2.accuracy == null || p2.accuracy <= MOVEMENT_TRUST_MAX_ACCURACY_M));
     if (moving) {
       totalDistance += segDist;
       continue;
