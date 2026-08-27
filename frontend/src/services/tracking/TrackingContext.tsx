@@ -23,6 +23,7 @@ export const TrackingContext = createContext<TrackingStatus>({
   requestBatteryExemption: () => Promise.resolve(),
   deviceOem: null,
   openOemSettings: () => Promise.resolve(),
+  openOemBatterySaverSettings: () => Promise.resolve(),
 });
 
 export function useTrackingStatus() {

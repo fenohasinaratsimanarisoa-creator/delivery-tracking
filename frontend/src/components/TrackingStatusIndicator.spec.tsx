@@ -26,6 +26,7 @@ function baseStatus(overrides: Partial<TrackingStatus> = {}): TrackingStatus {
     requestBatteryExemption: async () => {},
     deviceOem: null,
     openOemSettings: async () => {},
+    openOemBatterySaverSettings: async () => {},
     ...overrides,
   };
 }

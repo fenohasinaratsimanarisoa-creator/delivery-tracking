@@ -443,6 +443,21 @@ public class BackgroundLocationPlugin extends Plugin {
     }
 
     /**
+     * Ouvre l'écran MIUI "économie d'énergie par application" (audit terrain
+     * 2026-08-27) — DISTINCT de l'écran de démarrage automatique ci-dessus.
+     * Voir DeviceOemInfo.openBatterySaverSettings pour le pourquoi : cause
+     * racine confirmée des coupures de tracking de 1h30-2h observées malgré
+     * l'exemption batterie Android ET l'autostart déjà accordés.
+     */
+    @PluginMethod
+    public void openOemBatterySaverSettings(PluginCall call) {
+        String opened = DeviceOemInfo.openBatterySaverSettings(getContext());
+        JSObject ret = new JSObject();
+        ret.put("opened", opened);
+        call.resolve(ret);
+    }
+
+    /**
      * Met à jour le texte de statut de la notification persistante du foreground
      * service (état RÉEL du suivi côté JS : actif / hors ligne avec file locale /
      * en pause). Le chauffeur voit ainsi l'état du tracking sans ouvrir l'app.

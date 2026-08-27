@@ -49,6 +49,15 @@ export interface DeviceOemInfo {
   autostartIntent?: string;
   autostartAction?: string;
   batteryOptimizationIgnored: boolean;
+  /**
+   * true = la marque a un écran SÉPARÉ "économie d'énergie par application"
+   * (audit terrain 2026-08-27 — actuellement Xiaomi/MIUI uniquement, vérifié
+   * sur appareil réel). Cause racine confirmée de coupures de tracking de
+   * 1h30-2h malgré l'exemption batterie Android ET l'autostart déjà
+   * accordés : ce TROISIÈME réglage MIUI, laissé sur sa valeur par défaut,
+   * suffit à geler périodiquement l'app en arrière-plan (WorkManager inclus).
+   */
+  hasBatterySaverScreen?: boolean;
 }
 
 export interface BackgroundLocationStatus {
@@ -82,6 +91,7 @@ interface BackgroundLocationNative {
   requestBatteryOptimizationExemption(): Promise<BatteryOptimizationStatus>;
   getDeviceInfo(): Promise<DeviceOemInfo>;
   openOemBatterySettings(): Promise<{ opened: string }>;
+  openOemBatterySaverSettings(): Promise<{ opened: string }>;
   updateTrackingStatus(options: { status: string }): Promise<void>;
   getInterruptionInfo(): Promise<TrackingInterruptionInfo>;
   // storeNativeFallbackToken et markNativeJsAck retirées de l'interface
@@ -222,6 +232,24 @@ export async function openOemBatterySettings(): Promise<string> {
   if (!p) return 'unsupported';
   try {
     const res = await p.openOemBatterySettings();
+    return res.opened;
+  } catch {
+    return 'failed';
+  }
+}
+
+/**
+ * Ouvre l'écran MIUI "économie d'énergie par application" (audit terrain
+ * 2026-08-27) — DISTINCT de l'écran de démarrage automatique ci-dessus. Voir
+ * DeviceOemInfo.hasBatterySaverScreen pour le pourquoi. No-op sur iOS/web et
+ * sur les marques sans écran dédié connu (repli sur la page de détails de
+ * l'app, comme openOemBatterySettings).
+ */
+export async function openOemBatterySaverSettings(): Promise<string> {
+  const p = resolvePlugin();
+  if (!p) return 'unsupported';
+  try {
+    const res = await p.openOemBatterySaverSettings();
     return res.opened;
   } catch {
     return 'failed';

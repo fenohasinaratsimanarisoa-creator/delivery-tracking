@@ -12,6 +12,7 @@ import {
   getDeviceOemInfo,
   getNativeInterruptionInfo,
   openOemBatterySettings,
+  openOemBatterySaverSettings,
   requestBackgroundLocationPermissions,
   requestBatteryOptimizationExemption,
   startBackgroundLocation,
@@ -148,6 +149,8 @@ export interface TrackingStatus {
   deviceOem: DeviceOemInfo | null;
   /** Ouvre l'écran système "démarrage automatique" propre à la marque (repli : détails app). */
   openOemSettings: () => Promise<void>;
+  /** Ouvre l'écran MIUI "économie d'énergie par application" (audit 2026-08-27) — voir deviceOem.hasBatterySaverScreen. */
+  openOemBatterySaverSettings: () => Promise<void>;
 }
 
 export function useDriverTracking() {
@@ -441,6 +444,19 @@ export function useDriverTracking() {
       await refreshBatteryOptimizationStatus();
     } catch {
       // Échec d'ouverture : silencieux, la bannière OEM reste visible.
+    }
+  }, [refreshBatteryOptimizationStatus]);
+
+  // BUG CORRIGÉ (audit terrain 2026-08-27) : réglage MIUI "économie d'énergie
+  // par application", DISTINCT de l'autostart — cause racine confirmée de
+  // coupures de tracking de 1h30-2h malgré exemption batterie ET autostart
+  // déjà accordés. Voir DeviceOemInfo.hasBatterySaverScreen (backgroundLocation.ts).
+  const openOemBatterySaver = useCallback(async () => {
+    try {
+      await openOemBatterySaverSettings();
+      await refreshBatteryOptimizationStatus();
+    } catch {
+      // Échec d'ouverture : silencieux, le bouton reste visible pour réessayer.
     }
   }, [refreshBatteryOptimizationStatus]);
 
@@ -1308,6 +1324,7 @@ export function useDriverTracking() {
     requestBatteryExemption,
     deviceOem,
     openOemSettings,
+    openOemBatterySaverSettings: openOemBatterySaver,
   };
 
   return trackingStatus;

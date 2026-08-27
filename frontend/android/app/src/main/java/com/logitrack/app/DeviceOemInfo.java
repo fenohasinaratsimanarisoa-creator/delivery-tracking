@@ -77,6 +77,12 @@ public final class DeviceOemInfo {
             ret.put("autostartIntent", autostart[0]);
             ret.put("autostartAction", autostart[1]);
         }
+        // hasBatterySaverScreen : indique au JS s'il faut afficher un DEUXIÈME
+        // bouton de réglage (voir openBatterySaverSettings ci-dessous) — MIUI
+        // sépare "démarrage automatique" et "économie d'énergie par application"
+        // en DEUX écrans système distincts, contrairement à EMUI/ColorOS qui les
+        // regroupent généralement dans l'écran de démarrage automatique.
+        ret.put("hasBatterySaverScreen", OEM_XIAOMI.equals(oem));
         return ret;
     }
 
@@ -193,6 +199,68 @@ public final class DeviceOemInfo {
             }
         }
         // Repli universel : page de détails de l'app (Batterie → Sans restriction).
+        try {
+            Intent appDetails = new Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:" + context.getPackageName())
+            );
+            appDetails.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(appDetails);
+            return "app_details";
+        } catch (Exception e) {
+            return "failed";
+        }
+    }
+
+    /**
+     * BUG CORRIGÉ (audit terrain 2026-08-27, cause racine confirmée sur appareil
+     * réel — 3 coupures de tracking de 1h30-2h en une journée, malgré l'exemption
+     * Android standard ET l'autostart tous deux déjà accordés). MIUI/HyperOS a
+     * une TROISIÈME couche de restriction, INDÉPENDANTE des deux premières :
+     * l'« économie d'énergie » PAR APPLICATION (省电策略), avec 3 niveaux — Sans
+     * restriction / Économie intelligente (défaut) / Économie renforcée. Même
+     * avec REQUEST_IGNORE_BATTERY_OPTIMIZATIONS accordé (confirmé via
+     * `dumpsys deviceidle whitelist` sur l'appareil de test) et le démarrage
+     * automatique activé, ce troisième réglage — LAISSÉ SUR SA VALEUR PAR DÉFAUT
+     * "Économie intelligente" — suffit à MIUI pour geler périodiquement l'app en
+     * arrière-plan (y compris WorkManager, ce qui explique pourquoi le watchdog
+     * de 15 min mettait 1h30-2h à redémarrer le service : ses propres exécutions
+     * étaient elles-mêmes gelées).
+     *
+     * Écran cible vérifié DIRECTEMENT sur l'appareil réel (adb, resolveActivity +
+     * confirmation ResumedActivity) : com.miui.powerkeeper/.ui.HiddenAppsConfigActivity,
+     * action miui.intent.action.HIDDEN_APPS_CONFIG_ACTIVITY, extra package_name.
+     * Action/composant stables depuis plusieurs générations de MIUI (documentés
+     * dans plusieurs bibliothèques open-source de guidage batterie constructeur),
+     * mais comme pour l'autostart, protégés par resolveActivity() + repli sur la
+     * page de détails de l'app si l'écran a été renommé sur une version future.
+     *
+     * UNIQUEMENT Xiaomi ici (voir hasBatterySaverScreen dans detect()) : EMUI et
+     * ColorOS regroupent généralement ce réglage dans leur écran de démarrage
+     * automatique déjà couvert — ajouter un deep-link non vérifié pour ces
+     * marques risquerait d'ouvrir un mauvais écran sans qu'on puisse le tester.
+     */
+    public static String openBatterySaverSettings(Context context) {
+        String oem = detectOem(safe(Build.MANUFACTURER), safe(Build.BRAND));
+        if (OEM_XIAOMI.equals(oem)) {
+            try {
+                Intent intent = new Intent("miui.intent.action.HIDDEN_APPS_CONFIG_ACTIVITY");
+                intent.setComponent(new android.content.ComponentName(
+                    "com.miui.powerkeeper",
+                    "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"
+                ));
+                intent.putExtra("package_name", context.getPackageName());
+                intent.putExtra("package_label", context.getApplicationInfo().loadLabel(context.getPackageManager()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (intent.resolveActivity(context.getPackageManager()) != null) {
+                    context.startActivity(intent);
+                    return "battery_saver:xiaomi";
+                }
+            } catch (Exception ignored) {
+                // Écran renommé/supprimé sur cette version MIUI → repli ci-dessous.
+            }
+        }
+        // Repli universel : page de détails de l'app (même repli que openBestSettings).
         try {
             Intent appDetails = new Intent(
                 Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
