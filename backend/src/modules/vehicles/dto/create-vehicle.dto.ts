@@ -1,4 +1,15 @@
-import { IsString, IsInt, IsOptional, IsBoolean, Min, Max, MinLength, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsOptional,
+  IsBoolean,
+  IsNumber,
+  Min,
+  Max,
+  MinLength,
+  MaxLength,
+  IsIn,
+} from 'class-validator';
 
 export class CreateVehicleDto {
   @IsString()
@@ -26,6 +37,9 @@ export class CreateVehicleDto {
   fuelType: string;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
   theoreticalConsumption?: number;
 
   @IsOptional()
@@ -38,5 +52,6 @@ export class CreateVehicleDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(128)
   traccarDeviceId?: string;
 }

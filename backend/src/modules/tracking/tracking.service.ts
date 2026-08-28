@@ -17,6 +17,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
 import { isUniqueConstraintViolation } from '../../common/prisma/unique-violation';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GeofenceService } from './geofence.service';
@@ -1588,17 +1589,25 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
 
-    const otherVehicle = await this.prisma.vehicle.findFirst({
-      where: {
-        traccarDeviceId,
-        isActive: true,
-        deletedAt: null,
-        id: { not: vehicleId },
-      },
-    });
+    // Contrôle GLOBAL (tous tenants, tous états) : traccarDeviceId est @unique en
+    // base. CompanyScopedContext.run(null) désactive l'injection du companyId par
+    // le middleware tenant — sinon on ne détecterait qu'une collision INTRA-
+    // entreprise et une collision cross-tenant tomberait en P2002 → 500.
+    // LIMITE CONNUE : un traceur jamais lié reste revendicable par tout tenant
+    // qui en connaît l'ID (cf. AUDIT_APPROFONDI_2026-08-28) — mitigation complète
+    // = preuve de possession, non faite ici.
+    const otherVehicle = await CompanyScopedContext.run(null, () =>
+      this.prisma.vehicle.findFirst({
+        where: {
+          traccarDeviceId,
+          id: { not: vehicleId },
+        },
+        select: { id: true },
+      }),
+    );
     if (otherVehicle) {
       throw new ConflictException(
-        `traccarDeviceId "${traccarDeviceId}" is already assigned to another active vehicle`,
+        `traccarDeviceId "${traccarDeviceId}" is already assigned to another vehicle`,
       );
     }
 

@@ -28,17 +28,28 @@ export class VehiclesService {
   }
 
   private async checkTraccarDeviceIdUniqueness(traccarDeviceId: string, excludeId?: string) {
-    const existing = await this.prisma.vehicle.findFirst({
-      where: {
-        traccarDeviceId,
-        isActive: true,
-        deletedAt: null,
-        ...(excludeId ? { id: { not: excludeId } } : {}),
-      },
-    });
+    // On vérifie TOUS les états (actif/inactif/soft-deleted), pas seulement les
+    // véhicules actifs : un `traccarDeviceId` est GLOBALEMENT unique en base
+    // (contrainte @unique) — laisser passer ici un doublon inactif produisait un
+    // P2002 → 500 au lieu d'un 409 explicite. Le `where` n'est PAS scopé par
+    // companyId : c'est volontaire, la collision peut venir d'un autre tenant.
+    //
+    // LIMITE CONNUE (non corrigée ici — nécessite une preuve de possession) : un
+    // traceur qu'AUCUNE entreprise n'a encore lié peut être revendiqué par
+    // n'importe quel tenant qui en connaît l'ID → il capterait alors le flux GPS
+    // du traceur physique d'un tiers. Cf. AUDIT_APPROFONDI_2026-08-28.
+    const existing = await CompanyScopedContext.run(null, () =>
+      this.prisma.vehicle.findFirst({
+        where: {
+          traccarDeviceId,
+          ...(excludeId ? { id: { not: excludeId } } : {}),
+        },
+        select: { id: true },
+      }),
+    );
     if (existing) {
       throw new ConflictException(
-        `traccarDeviceId "${traccarDeviceId}" is already assigned to another active vehicle`,
+        `traccarDeviceId "${traccarDeviceId}" is already assigned to another vehicle`,
       );
     }
   }
@@ -92,7 +103,9 @@ export class VehiclesService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          driver: { select: { id: true, firstName: true, lastName: true, trackingReliability: true } },
+          driver: {
+            select: { id: true, firstName: true, lastName: true, trackingReliability: true },
+          },
         },
       }),
       this.prisma.vehicle.count({ where }),

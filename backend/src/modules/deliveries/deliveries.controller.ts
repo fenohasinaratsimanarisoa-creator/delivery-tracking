@@ -73,6 +73,8 @@ export class DeliveriesController {
     return this.deliveriesService.findMyOrders(userId, companyId, p, l);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('driver')
   @Get('my-deliveries')
   findMyDeliveries(
     @CurrentUser('id') userId: string,

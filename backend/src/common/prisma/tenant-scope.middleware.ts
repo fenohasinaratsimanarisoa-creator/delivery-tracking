@@ -32,7 +32,11 @@ export async function tenantScopeMiddleware(
     return next(params);
   }
 
-  const { action, args } = params;
+  const { action } = params;
+  // params.args peut être totalement absent (ex. `prisma.model.findMany()` sans
+  // argument) : on le matérialise pour pouvoir y injecter le filtre tenant.
+  if (!params.args) params.args = {};
+  const args = params.args;
 
   if (action === 'create' && args?.data && !args.data.companyId) {
     args.data.companyId = companyId;
@@ -45,8 +49,26 @@ export async function tenantScopeMiddleware(
     }
   }
 
-  if (args?.where) {
+  // Actions de lecture / mutation de masse : le filtre tenant DOIT s'appliquer
+  // même quand l'appelant n'a fourni AUCUN `where` (ex. `findMany()`,
+  // `count()`, `updateMany({ data })`). Avant, `if (args?.where)` sautait
+  // silencieusement l'injection dans ce cas → le « dernier rempart » ne
+  // rattrapait plus un oubli de scoping applicatif (fuite cross-tenant totale).
+  const SCOPED_BULK_ACTIONS = new Set([
+    'findFirst',
+    'findFirstOrThrow',
+    'findMany',
+    'count',
+    'aggregate',
+    'groupBy',
+    'updateMany',
+    'deleteMany',
+  ]);
+
+  if (args.where) {
     args.where = { ...args.where, companyId };
+  } else if (SCOPED_BULK_ACTIONS.has(action)) {
+    args.where = { companyId };
   }
 
   return next(params);

@@ -24,6 +24,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { DeviceTrackingAuthGuard } from '../../common/guards/device-tracking-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
@@ -433,8 +434,10 @@ export class TrackingController {
     return { message: 'Public tracking link revoked' };
   }
 
-  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
-  @Roles('admin', 'dispatcher')
+  // Compteurs PROCESS-WIDE (toute la plateforme, pas scopés par entreprise) :
+  // réservés au platform-admin. Avant, exposés à tout admin/dispatcher d'entreprise
+  // → fuite d'information cross-tenant (volume d'activité agrégé de la plateforme).
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get tracking reliability metrics (received/saved/deduped/teleported)' })
   @Get('metrics')

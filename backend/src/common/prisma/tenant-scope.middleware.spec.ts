@@ -44,6 +44,43 @@ describe('tenantScopeMiddleware', () => {
     );
   });
 
+  it('injects companyId even when the query has NO where (findMany without args)', async () => {
+    const params = { model: 'Vehicle', action: 'findMany' };
+
+    await CompanyScopedContext.run('company-1', () =>
+      tenantScopeMiddleware(params as any, nextSpy),
+    );
+
+    expect(nextSpy.mock.calls[0][0].args).toEqual({ where: { companyId: 'company-1' } });
+  });
+
+  it('injects companyId into a where-less count / updateMany', async () => {
+    const countParams = { model: 'Delivery', action: 'count', args: {} };
+    await CompanyScopedContext.run('company-1', () =>
+      tenantScopeMiddleware(countParams as any, nextSpy),
+    );
+    expect(nextSpy.mock.calls[0][0].args.where).toEqual({ companyId: 'company-1' });
+
+    nextSpy.mockClear();
+    const updateParams = {
+      model: 'Delivery',
+      action: 'updateMany',
+      args: { data: { title: 'x' } },
+    };
+    await CompanyScopedContext.run('company-1', () =>
+      tenantScopeMiddleware(updateParams as any, nextSpy),
+    );
+    expect(nextSpy.mock.calls[0][0].args.where).toEqual({ companyId: 'company-1' });
+  });
+
+  it('does NOT inject a where into create when none is present', async () => {
+    const params = { model: 'Delivery', action: 'create', args: { data: { title: 'T' } } };
+    await CompanyScopedContext.run('company-1', () =>
+      tenantScopeMiddleware(params as any, nextSpy),
+    );
+    expect(nextSpy.mock.calls[0][0].args.where).toBeUndefined();
+  });
+
   it('bypasses when no context is set', async () => {
     const params = {
       model: 'Vehicle',

@@ -125,6 +125,20 @@ export class InvitationsService {
           role: invitation.role,
           companyId: invitation.companyId,
         },
+        // select EXPLICITE : ne JAMAIS renvoyer passwordHash / resetTokenHash /
+        // totpSecret / refreshTokenHash dans la réponse HTTP (le contrôleur
+        // renvoie cet objet tel quel). Cohérent avec users.service.create().
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          role: true,
+          isActive: true,
+          companyId: true,
+          createdAt: true,
+        },
       });
 
       if (invitation.role === 'driver') {

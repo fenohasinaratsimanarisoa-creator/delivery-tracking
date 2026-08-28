@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsDateString, IsEnum, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsEnum,
+  MinLength,
+  IsNumber,
+  IsLatitude,
+  IsLongitude,
+} from 'class-validator';
 import { DeliveryStatus } from '@prisma/client';
 
 export class CreateDeliveryDto {
@@ -19,9 +28,13 @@ export class CreateDeliveryDto {
   pickupAddress: string;
 
   @IsOptional()
+  @IsNumber()
+  @IsLatitude()
   pickupLat?: number;
 
   @IsOptional()
+  @IsNumber()
+  @IsLongitude()
   pickupLng?: number;
 
   @IsOptional()
@@ -33,9 +46,13 @@ export class CreateDeliveryDto {
   deliveryAddress: string;
 
   @IsOptional()
+  @IsNumber()
+  @IsLatitude()
   deliveryLat?: number;
 
   @IsOptional()
+  @IsNumber()
+  @IsLongitude()
   deliveryLng?: number;
 
   @IsOptional()

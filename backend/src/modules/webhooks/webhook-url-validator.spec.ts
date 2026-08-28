@@ -60,6 +60,36 @@ describe('assertSafeWebhookUrl', () => {
     await expect(assertSafeWebhookUrl('https://example.com/webhook')).resolves.toBeUndefined();
   });
 
+  it('rejects a dual-stack host with a public A record but a private AAAA record', async () => {
+    dns.resolve4.mockResolvedValueOnce(['93.184.216.34']);
+    dns.resolve6.mockResolvedValueOnce(['::1']);
+    await expect(assertSafeWebhookUrl('https://dual.example/webhook')).rejects.toThrow(
+      'public (non-private) IP',
+    );
+  });
+
+  it('rejects CGNAT / shared address space 100.64.0.0/10', async () => {
+    dns.resolve4.mockResolvedValueOnce(['100.100.50.1']);
+    await expect(assertSafeWebhookUrl('https://cgnat.example/webhook')).rejects.toThrow(
+      'public (non-private) IP',
+    );
+  });
+
+  it('rejects IPv4-mapped IPv6 pointing at metadata (::ffff:169.254.169.254)', async () => {
+    dns.resolve4.mockRejectedValueOnce(new Error('no ipv4'));
+    dns.resolve6.mockResolvedValueOnce(['::ffff:169.254.169.254']);
+    await expect(assertSafeWebhookUrl('https://mapped.example/webhook')).rejects.toThrow(
+      'public (non-private) IP',
+    );
+  });
+
+  it('rejects an IP-literal hostname in the private range without any DNS lookup', async () => {
+    await expect(assertSafeWebhookUrl('https://10.0.0.5/webhook')).rejects.toThrow(
+      'public (non-private) IP',
+    );
+    expect(dns.resolve4).not.toHaveBeenCalled();
+  });
+
   it('rejects invalid URL strings', async () => {
     await expect(assertSafeWebhookUrl('not-a-url')).rejects.toThrow(BadRequestException);
   });

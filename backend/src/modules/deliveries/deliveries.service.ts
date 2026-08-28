@@ -576,11 +576,29 @@ export class DeliveriesService {
   ): Promise<Record<string, any>> {
     const proofData: Record<string, any> = {};
 
-    if (
-      (dto.status !== DeliveryStatus.delivered && dto.status !== DeliveryStatus.failed) ||
-      dto.latitude === undefined ||
-      dto.longitude === undefined
-    ) {
+    const isTerminalProofStatus =
+      dto.status === DeliveryStatus.delivered || dto.status === DeliveryStatus.failed;
+
+    // Statut non terminal : aucune preuve attendue.
+    if (!isTerminalProofStatus) {
+      return proofData;
+    }
+
+    // Statut terminal SANS coordonnées : on ne laisse plus passer une complétion
+    // « livré/échec » sans AUCUNE preuve de localisation (le dispositif anti-fraude
+    // — deliveryProofDistance, cross-check trace GPS — était entièrement contourné
+    // en omettant deux champs facultatifs). On marque la livraison comme
+    // incohérence à revoir par l'admin (elle remonte dans /deliveries/proofs et se
+    // résout via resolve-mismatch). Pas de notification ici : le flag suffit à la
+    // surfacer, et verifyDeliveryLocation s'exécute AVANT le verrou optimiste —
+    // notifier ferait partir l'alerte même pour la requête concurrente perdante.
+    if (dto.latitude === undefined || dto.longitude === undefined) {
+      this.logger.warn(
+        `Delivery ${delivery.id}: transition "${dto.status}" SANS coordonnées de preuve — ` +
+          `marquée locationMismatch (preuve absente, à vérifier par un admin)`,
+      );
+      proofData.locationMismatch = true;
+      proofData.mismatchResolved = false;
       return proofData;
     }
 

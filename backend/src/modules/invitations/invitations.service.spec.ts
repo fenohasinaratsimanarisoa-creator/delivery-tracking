@@ -205,6 +205,18 @@ describe('InvitationsService', () => {
         role: UserRole.driver,
         companyId: 'company-1',
       },
+      // select explicite : la réponse ne doit jamais contenir passwordHash & co.
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        companyId: true,
+        createdAt: true,
+      },
     });
     expect(mockPrisma.invitation.update).toHaveBeenCalledWith({
       where: { id: 'inv-1' },

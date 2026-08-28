@@ -276,6 +276,16 @@ export class UsersService {
     });
     if (!user) throw new NotFoundException('User not found');
 
+    // Même liste blanche qu'à la création (create()) : ne jamais accepter un rôle
+    // hors périmètre (défense en profondeur si l'enum UserRole gagne un jour une
+    // valeur privilégiée — ex. un rôle plateforme — que ce PATCH ne doit pas poser).
+    if (dto.role !== undefined) {
+      const validRoles: string[] = ['admin', 'dispatcher', 'driver', 'client'];
+      if (!validRoles.includes(dto.role)) {
+        throw new BadRequestException('Invalid user role');
+      }
+    }
+
     if (dto.email && dto.email !== user.email) {
       const existing = await CompanyScopedContext.run(null, () =>
         this.prisma.user.findUnique({

@@ -21,6 +21,7 @@ import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -36,15 +37,18 @@ export class BillingController {
     return this.billingService.getPlans();
   }
 
-  @UseGuards(RolesGuard)
-  @Roles('admin')
+  // Les forfaits (BillingPlan) sont une ressource GLOBALE de la plateforme, non
+  // tenant-scopée, et pilotent les quotas de TOUTES les entreprises via UsageGuard.
+  // Leur gestion est donc réservée au platform-admin (SuperAdminGuard) — jamais à
+  // un admin d'entreprise, qui pourrait sinon relever/casser les limites de tous
+  // les tenants (bypass facturation généralisé, sabotage cross-tenant).
+  @UseGuards(SuperAdminGuard)
   @Post('plans')
   createPlan(@Body() dto: CreatePlanDto) {
     return this.billingService.createPlan(dto);
   }
 
-  @UseGuards(RolesGuard)
-  @Roles('admin')
+  @UseGuards(SuperAdminGuard)
   @Patch('plans/:id')
   updatePlan(@Param('id') id: string, @Body() dto: Partial<CreatePlanDto>) {
     return this.billingService.updatePlan(id, dto);
