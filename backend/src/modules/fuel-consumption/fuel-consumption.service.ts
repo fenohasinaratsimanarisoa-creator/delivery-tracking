@@ -1360,22 +1360,18 @@ export class FuelConsumptionService {
     const consumption = vehicle.theoreticalConsumption || 8;
     const pricePerLiter = await this.getFuelPriceForDate(companyId, fuelType, targetDate);
     // pricePerLiter === null ⇔ véhicule ÉLECTRIQUE sans prix configuré (voir
-    // getFuelPriceForDate) : on ne produit PAS un montant fiable — un "0 Ar"
-    // calculé serait confondu avec un vrai coût nul. estimatedCost reste 0
-    // (colonne NOT NULL) mais pricePerLiterUsed = null signale de façon fiable
-    // l'absence de prix (le front peut alors afficher "non configuré"). Pour les
-    // autres carburants, pricePerLiter est toujours un nombre → coût calculé normal.
-    // BUG CORRIGÉ (audit terrain 2026-08-28) : quand gpsDataQuality === 'suspicious'
-    // (distance dominée par du bruit GPS stationnaire — cas réel : 87 km affichés
-    // pour ~40 km réels), on affichait quand même un estimatedCost calculé sur
-    // cette distance fausse, présenté comme un vrai montant (8524 Ar). On NE
-    // chiffre PAS un coût sur une distance dont on sait qu'elle n'est pas fiable :
-    // pricePerLiterUsed = null (même signal que « prix non configuré ») pour que
-    // le frontend affiche « non fiable » au lieu d'un montant trompeur. La
-    // distance reste stockée (meilleure estimation disponible) mais explicitement
-    // marquée suspecte.
-    const costUnreliable = pricePerLiter === null || gpsDataQuality === GpsDataQuality.suspicious;
-    const estimatedCost = costUnreliable
+    // getFuelPriceForDate) : on ne produit PAS un montant — un "0 Ar" calculé
+    // serait confondu avec un vrai coût nul. estimatedCost reste 0 (colonne NOT
+    // NULL) mais pricePerLiterUsed = null signale de façon fiable l'absence de
+    // prix (le front affiche "non configuré").
+    //
+    // gpsDataQuality === 'suspicious' : le coût EST calculé et affiché — depuis
+    // le correctif de distance du 2026-08-28, distanceKm est ~2× plus fiable
+    // (51 km au lieu de 87). Cacher le montant (« — ») était pire pour
+    // l'utilisateur qu'un montant indicatif : le badge ⚠️ « GPS peu fiable »
+    // porte l'avertissement, le chiffre reste utile comme ordre de grandeur.
+    const costNoPrice = pricePerLiter === null;
+    const estimatedCost = costNoPrice
       ? 0
       : Math.round(((distanceKm * consumption) / 100) * pricePerLiter * 100) / 100;
 
@@ -1401,7 +1397,7 @@ export class FuelConsumptionService {
         gpsDataQuality,
         consumptionLPer100Km: consumption,
         estimatedCost,
-        pricePerLiterUsed: costUnreliable ? null : pricePerLiter,
+        pricePerLiterUsed: costNoPrice ? null : pricePerLiter,
         companyId,
       },
       update: {
@@ -1411,7 +1407,7 @@ export class FuelConsumptionService {
         fuelType,
         consumptionLPer100Km: consumption,
         vehiclePlate: vehicle.licensePlate || 'N/A',
-        pricePerLiterUsed: costUnreliable ? null : pricePerLiter,
+        pricePerLiterUsed: costNoPrice ? null : pricePerLiter,
       },
     });
 

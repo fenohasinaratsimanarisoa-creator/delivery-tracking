@@ -1168,14 +1168,15 @@ export default function FuelPage() {
                         <td
                           className={`${styles.tableCell} ${styles.tableCellRight}`}
                         >
+                          {/* Coût indicatif : un chiffre est TOUJOURS affiché
+                              quand un prix carburant est configuré (même si la
+                              qualité GPS est "suspicious" — le badge ⚠️ porte
+                              l'avertissement). "—" uniquement si aucun prix
+                              n'existe (véhicule électrique non configuré). */}
                           {r.pricePerLiterUsed == null ? (
                             <span
                               className={styles.costCellAr}
-                              title={
-                                r.gpsDataQuality === "suspicious"
-                                  ? t("fuel.costUnreliableGps")
-                                  : t("fuel.costNoPrice")
-                              }
+                              title={t("fuel.costNoPrice")}
                             >
                               —
                             </span>

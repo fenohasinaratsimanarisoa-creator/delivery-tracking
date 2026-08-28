@@ -685,7 +685,6 @@
     "gpsQualityBadge": "GPS faible",
     "gpsQualityInsufficient": "Distance GPS trop faible pour être fiable ce jour-là (positions présentes mais déplacement < 0,1 km).",
     "gpsQualitySuspiciousBadge": "À vérifier",
-      "costUnreliableGps": "Coût non chiffré : la distance GPS de ce jour n'est pas fiable (dérive du signal).",
       "costNoPrice": "Coût non chiffré : prix du carburant non configuré pour ce véhicule.",
     "gpsQualitySuspicious": "Cette distance ressemble à du bruit GPS (véhicule probablement resté immobile) plutôt qu'à un vrai trajet — vérifiez avant de vous y fier.",
     "estimatedCost": "Coût estimé",
