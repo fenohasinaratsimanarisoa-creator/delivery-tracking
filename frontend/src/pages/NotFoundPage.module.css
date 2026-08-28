@@ -6,27 +6,27 @@
   height: 100%;
   padding: 40px;
   text-align: center;
-  background: var(--color-bg, var(--color-bg));
+  background: var(--color-bg);
 }
 
 .errorCode {
   font-size: 4rem;
   font-weight: 700;
-  color: var(--color-red, var(--color-red));
+  color: var(--color-red);
   margin-bottom: 8px;
   font-family: var(--font-display, Space Grotesk, sans-serif);
 }
 
 .heading {
   margin: 0 0 8px;
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   font-family: var(--font-display, Space Grotesk, sans-serif);
 }
 
 .message {
   margin: 0 0 24px;
   font-size: var(--text-sm, 0.875rem);
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
 }
 
 .button {
@@ -34,8 +34,8 @@
   align-items: center;
   gap: 8px;
   padding: 11px 24px;
-  background: var(--color-accent, var(--color-accent));
-  color: var(--color-bg, var(--color-bg));
+  background: var(--color-accent);
+  color: var(--color-bg);
   border: none;
   border-radius: var(--radius-md, 6px);
   cursor: pointer;

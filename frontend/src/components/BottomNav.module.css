@@ -8,7 +8,7 @@
   align-items: stretch;
   gap: 2px;
   padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
-  background: var(--color-bg, var(--color-bg));
+  background: var(--color-bg);
   border-top: 1px solid var(--color-border, rgba(242, 169, 60, 0.2));
   backdrop-filter: blur(18px) saturate(1.2);
   -webkit-backdrop-filter: blur(18px) saturate(1.2);
@@ -55,7 +55,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   font-family: var(--font-body);
   -webkit-tap-highlight-color: transparent;
   transition: color 0.18s ease, transform 0.12s ease;
@@ -82,7 +82,7 @@
   height: 17px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--color-red, var(--color-red));
+  background: var(--color-red);
   color: #fff;
   font-size: 0.625rem;
   font-weight: 700;
@@ -106,7 +106,7 @@
   width: 32px;
   height: 3px;
   border-radius: 999px;
-  background: var(--color-accent, var(--color-accent));
+  background: var(--color-accent);
   opacity: 0;
   transition: opacity 0.18s ease, transform 0.18s ease;
 }
@@ -123,7 +123,7 @@
 }
 
 .itemActive {
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
 }
 
 .itemActive .itemGlow {
@@ -148,7 +148,7 @@
 }
 
 .sheet {
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   border: 1px solid var(--color-border-subtle, rgba(232, 236, 243, 0.08));
   box-shadow: var(--shadow-2xl, 0 -12px 40px rgba(0, 0, 0, 0.5));
@@ -169,7 +169,7 @@
 .sheetTitle {
   font-family: var(--font-display);
   font-size: var(--text-sm);
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
   padding: 3px 16px 10px;
   letter-spacing: 0.01em;
 }
@@ -194,8 +194,8 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--color-surface-alt, var(--color-surface-alt));
-  color: var(--color-accent, var(--color-accent));
+  background: var(--color-surface-alt);
+  color: var(--color-accent);
   flex-shrink: 0;
 }
 
@@ -208,7 +208,7 @@
 
 .sheetUserName {
   font-size: var(--text-sm);
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -217,7 +217,7 @@
 
 .sheetUserRole {
   font-size: 0.6875rem;
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
   text-transform: capitalize;
 }
 
@@ -230,7 +230,7 @@
   background: none;
   border: none;
   border-radius: var(--radius-md);
-  color: var(--color-red, var(--color-red));
+  color: var(--color-red);
   font-family: var(--font-body);
   font-size: var(--text-base, 0.9375rem);
   cursor: pointer;
@@ -251,7 +251,7 @@
   background: none;
   border: none;
   border-radius: var(--radius-md);
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   cursor: pointer;
   font-family: var(--font-body);
   font-size: var(--text-base, 0.9375rem);
@@ -261,12 +261,12 @@
 
 .sheetItem:hover,
 .sheetItem:focus-visible {
-  background: var(--color-surface-hover, var(--color-surface-hover));
+  background: var(--color-surface-hover);
   color: var(--color-text);
 }
 
 .sheetItemActive {
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
 }
 
 .sheetItemIcon {
@@ -284,7 +284,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-accent, var(--color-accent));
+  background: var(--color-accent);
   flex-shrink: 0;
 }
 

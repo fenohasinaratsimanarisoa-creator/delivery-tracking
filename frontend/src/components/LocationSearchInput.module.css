@@ -18,7 +18,7 @@
   left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--color-text-tertiary, var(--color-text-secondary));
+  color: var(--color-text-tertiary);
   pointer-events: none;
   z-index: 1;
 }
@@ -33,7 +33,7 @@
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--color-text-tertiary, var(--color-text-secondary));
+  color: var(--color-text-tertiary);
   animation: dt-spin 0.6s linear infinite;
 }
 
@@ -83,7 +83,7 @@
   right: 0;
   z-index: 9999;
   margin-top: 4px;
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-md, 8px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
@@ -116,7 +116,7 @@
 .mapIcon {
   margin-top: 2px;
   flex-shrink: 0;
-  color: var(--color-accent, var(--color-teal));
+  color: var(--color-accent);
 }
 
 .resultContent {
@@ -134,7 +134,7 @@
 
 .resultSub {
   font-size: 0.7rem;
-  color: var(--color-text-tertiary, var(--color-text-secondary));
+  color: var(--color-text-tertiary);
   margin-top: 1px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -149,8 +149,8 @@
   border-radius: 4px;
   flex-shrink: 0;
   margin-top: 2px;
-  background: var(--color-surface-alt, var(--color-surface-alt));
-  color: var(--color-text-tertiary, var(--color-text-secondary));
+  background: var(--color-surface-alt);
+  color: var(--color-text-tertiary);
 }
 
 .noResults {
@@ -161,12 +161,12 @@
   z-index: 9999;
   margin-top: 4px;
   padding: 12px 16px;
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-md, 8px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   font-size: 0.8rem;
-  color: var(--color-text-tertiary, var(--color-text-secondary));
+  color: var(--color-text-tertiary);
   text-align: center;
 }
 
@@ -181,7 +181,7 @@
 .mapHint {
   padding: 4px 8px;
   font-size: 0.7rem;
-  color: var(--color-text-tertiary, var(--color-text-secondary));
+  color: var(--color-text-tertiary);
   text-align: center;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border-subtle, rgba(11,18,32,0.06));

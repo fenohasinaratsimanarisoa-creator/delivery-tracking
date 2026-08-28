@@ -27,7 +27,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-lg, 16px);
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   font-family: var(--font-body, Inter, sans-serif);
   min-height: 100vh;
 }
@@ -51,13 +51,13 @@
   justify-content: center;
   border-radius: var(--radius-xl, 12px);
   background: var(--color-accent-muted, rgba(242,169,60,0.15));
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
   border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
   flex-shrink: 0;
 }
 
 .pageTitle {
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   font-family: var(--font-display, 'Space Grotesk', sans-serif);
   font-size: var(--text-2xl, 1.5rem);
   font-weight: 700;
@@ -68,7 +68,7 @@
 .pageSubtitle {
   margin: 2px 0 0;
   font-size: var(--text-sm, 0.75rem);
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
 }
 
 /* ─── Loading ─────────────────────────────────────────────── */
@@ -89,25 +89,25 @@
 .emptyState {
   padding: var(--space-2xl, 32px);
   text-align: center;
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
-  background: var(--color-surface, var(--color-surface));
+  color: var(--color-text-tertiary);
+  background: var(--color-surface);
   border: 1px dashed var(--color-border, rgba(242,169,60,0.2));
   border-radius: var(--radius-xl, 12px);
 }
 
 .emptyStateTitle {
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   font-family: var(--font-display, 'Space Grotesk', sans-serif);
   font-size: var(--text-md, 1rem);
 }
 
 .emptyStateText {
   font-size: var(--text-sm, 0.75rem);
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
 }
 
 .noVehicleCard {
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   border-radius: var(--radius-xl, 12px);
   padding: var(--space-3xl) var(--space-2xl);
   text-align: center;
@@ -116,25 +116,25 @@
 
 .noVehicleIcon {
   margin-bottom: var(--space-lg);
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 .noVehicleText {
   font-size: 1.1rem;
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   font-weight: 600;
   font-family: var(--font-display, 'Space Grotesk', sans-serif);
 }
 
 .noVehicleSubtext {
   font-size: 0.85rem;
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
 }
 
 /* ─── Carte véhicule ──────────────────────────────────────── */
 .vehicleCard {
   position: relative;
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   border-radius: var(--radius-2xl, 16px);
   overflow: hidden;
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
@@ -148,8 +148,8 @@
 
 .vehicleHeader {
   position: relative;
-  background: var(--color-accent, var(--color-accent));
-  color: var(--color-bg, var(--color-bg));
+  background: var(--color-accent);
+  color: var(--color-bg);
   padding: var(--space-xl, 20px) var(--space-2xl, 28px);
   display: flex;
   align-items: center;
@@ -162,7 +162,7 @@
   height: 60px;
   border-radius: var(--radius-xl, 12px);
   background: rgba(11, 18, 32, 0.9);
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -184,7 +184,7 @@
   font-weight: 700;
   font-family: var(--font-display, 'Space Grotesk', sans-serif);
   letter-spacing: -0.01em;
-  color: var(--color-bg, var(--color-bg));
+  color: var(--color-bg);
 }
 
 .plateRow {
@@ -199,7 +199,7 @@
   font-weight: 700;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   letter-spacing: 0.04em;
-  color: var(--color-bg, var(--color-bg));
+  color: var(--color-bg);
   background: rgba(255, 255, 255, 0.35);
   border: 1px solid rgba(11, 18, 32, 0.2);
   padding: var(--space-xs) var(--space-sm);
@@ -209,7 +209,7 @@
 .yearChip {
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--color-bg, var(--color-bg));
+  color: var(--color-bg);
   opacity: 0.8;
 }
 
@@ -221,7 +221,7 @@
   padding: 6px 14px;
   border-radius: var(--radius-full, 9999px);
   background: rgba(11, 18, 32, 0.92);
-  color: var(--color-teal, var(--color-teal));
+  color: var(--color-teal);
   font-size: var(--text-xs, 0.625rem);
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -240,7 +240,7 @@
   align-items: center;
   gap: var(--space-md, 12px);
   padding: var(--space-md, 14px) var(--space-lg, 18px);
-  background: var(--color-surface-alt, var(--color-surface-alt));
+  background: var(--color-surface-alt);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-lg, 10px);
   transition: border-color var(--duration-fast, 120ms) var(--ease-smooth, ease),
@@ -258,7 +258,7 @@
   height: 36px;
   border-radius: var(--radius-md, 8px);
   background: var(--color-accent-muted, rgba(242,169,60,0.12));
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -277,12 +277,12 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 .specValue {
   font-size: var(--text-sm, 0.8rem);
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -348,7 +348,7 @@
 
 :global([data-context="field"]) .specLabel {
   font-size: var(--text-xs);
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 :global([data-context="field"]) .specValue {

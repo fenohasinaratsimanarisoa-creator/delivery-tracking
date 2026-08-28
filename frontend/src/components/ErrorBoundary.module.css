@@ -7,7 +7,7 @@
 }
 
 .heading {
-  color: var(--color-red, var(--color-red));
+  color: var(--color-red);
   margin-bottom: 16px;
 }
 
@@ -15,7 +15,7 @@
   white-space: pre-wrap;
   font-size: 13px;
   line-height: 1.5;
-  color: var(--color-red, var(--color-red));
+  color: var(--color-red);
   margin-bottom: 20px;
 }
 
@@ -23,14 +23,14 @@
   white-space: pre-wrap;
   font-size: 11px;
   line-height: 1.4;
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   opacity: 0.8;
 }
 
 .retryBtn {
   margin-top: 24px;
   padding: 10px 24px;
-  background: var(--color-accent, var(--color-accent));
+  background: var(--color-accent);
   color: var(--color-bg);
   border: none;
   border-radius: 6px;

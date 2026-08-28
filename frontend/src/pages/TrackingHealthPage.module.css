@@ -8,7 +8,7 @@
   overflow: auto;
   max-width: 1200px;
   margin: 0 auto;
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   font-family: var(--font-body, Inter, sans-serif);
 }
 
@@ -27,7 +27,7 @@
   justify-content: center;
   border-radius: var(--radius-2xl, 16px);
   background: linear-gradient(135deg, var(--color-accent-muted, rgba(242,169,60,0.18)), transparent);
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
   border: 1px solid var(--color-glass-border, rgba(242,169,60,0.2));
   box-shadow: var(--shadow-glow, 0 0 14px rgba(242,169,60,0.35));
   flex-shrink: 0;
@@ -44,7 +44,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
   margin-bottom: 2px;
 }
 
@@ -53,14 +53,14 @@
   font-size: var(--text-2xl, 2rem);
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   margin: 0;
 }
 
 .pageSubtitle {
   margin: 2px 0 0;
   font-size: var(--text-sm, 0.75rem);
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
 }
 
 .refreshBtn {
@@ -70,8 +70,8 @@
   padding: 8px 14px;
   border: 1px solid var(--color-border, rgba(242,169,60,0.2));
   border-radius: var(--radius-lg, 8px);
-  background: var(--color-surface-alt, var(--color-surface-alt));
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  background: var(--color-surface-alt);
+  color: var(--color-text-secondary);
   font-size: var(--text-xs, 0.625rem);
   font-weight: 600;
   cursor: pointer;
@@ -80,8 +80,8 @@
 }
 
 .refreshBtn:hover:not(:disabled) {
-  border-color: var(--color-accent, var(--color-accent));
-  color: var(--color-accent, var(--color-accent));
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .refreshBtn:disabled {
@@ -105,7 +105,7 @@
   flex-direction: column;
   gap: var(--space-sm, 8px);
   padding: var(--space-lg, 16px);
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-xl, 12px);
   overflow: hidden;
@@ -152,19 +152,19 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 .sectionTitle {
   font-family: var(--font-display, 'Space Grotesk', sans-serif);
   font-size: var(--text-md, 1rem);
   font-weight: 700;
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   margin-top: var(--space-sm, 8px);
 }
 
 .tableCard {
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-2xl, 16px);
   overflow: auto;
@@ -178,7 +178,7 @@
 }
 
 .tableHeadRow {
-  background: var(--color-surface-alt, var(--color-surface-alt));
+  background: var(--color-surface-alt);
   border-bottom: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
 }
 
@@ -188,7 +188,7 @@
   font-size: var(--text-xs, 0.625rem);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   text-align: left;
   white-space: nowrap;
 }
@@ -203,7 +203,7 @@
 
 .tableCell {
   padding: var(--space-md, 12px) var(--space-lg, 16px);
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
@@ -213,9 +213,9 @@
   gap: 6px;
   padding: 3px 10px;
   border-radius: var(--radius-full, 9999px);
-  background: var(--color-surface-alt, var(--color-surface-alt));
+  background: var(--color-surface-alt);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   font-size: var(--text-xs, 0.75rem);
   font-weight: 600;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
@@ -223,7 +223,7 @@
 
 .vehicleModel {
   font-size: var(--text-xs, 0.625rem);
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 .sourcePill {
@@ -231,8 +231,8 @@
   align-items: center;
   padding: 2px 9px;
   border-radius: var(--radius-full, 9999px);
-  background: color-mix(in srgb, var(--color-blue, var(--color-blue)) 12%, transparent);
-  color: var(--color-blue, var(--color-blue));
+  background: color-mix(in srgb, var(--color-blue) 12%, transparent);
+  color: var(--color-blue);
   font-size: var(--text-xs, 0.625rem);
   font-weight: 600;
 }
@@ -245,7 +245,7 @@
 .silenceSince {
   display: block;
   font-size: var(--text-xs, 0.625rem);
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 .statusPill {
@@ -264,12 +264,12 @@
   max-width: 300px;
   font-size: var(--text-xs, 0.625rem);
   line-height: var(--lh-normal, 1.5);
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
 }
 
 .causeMuted {
   font-size: var(--text-xs, 0.625rem);
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 .statusPillOn {
@@ -313,8 +313,8 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full, 9999px);
-  background: var(--color-surface-hover, var(--color-surface-hover));
-  color: var(--color-accent, var(--color-accent));
+  background: var(--color-surface-hover);
+  color: var(--color-accent);
   margin-bottom: var(--space-sm, 8px);
 }
 
@@ -322,13 +322,13 @@
   margin: 0;
   font-size: var(--text-md, 1rem);
   font-weight: 600;
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
 }
 
 .emptyDesc {
   margin: 0;
   font-size: var(--text-sm, 0.75rem);
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
   max-width: 440px;
   line-height: var(--lh-normal);
 }
@@ -336,7 +336,7 @@
 .loading {
   padding: var(--space-4xl, 48px);
   text-align: center;
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
   font-size: var(--text-sm, 0.75rem);
 }
 

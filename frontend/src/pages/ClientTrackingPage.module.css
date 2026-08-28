@@ -11,7 +11,7 @@
 .emptyState {
   text-align: center;
   padding: var(--space-3xl) var(--space-lg);
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 .orderList {
@@ -31,7 +31,7 @@
 
 .orderTitle {
   font-weight: bold;
-  color: var(--color-text, var(--color-bg));
+  color: var(--color-text);
 }
 
 .orderAddress {
@@ -54,7 +54,7 @@
 
 .deliveryTitle {
   margin: 0 0 8px;
-  color: var(--color-text, var(--color-bg));
+  color: var(--color-text);
 }
 
 .deliveryDetails {

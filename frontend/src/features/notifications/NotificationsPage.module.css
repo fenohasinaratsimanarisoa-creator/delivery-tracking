@@ -36,7 +36,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-xl, 24px);
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   font-family: var(--font-body, Inter, sans-serif);
 }
 
@@ -69,7 +69,7 @@
   justify-content: center;
   border-radius: var(--radius-xl, 12px);
   background: linear-gradient(135deg, var(--color-accent-muted, rgba(242,169,60,0.15)), transparent);
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
   border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
   box-shadow: var(--shadow-glow, 0 0 12px rgba(242,169,60,0.35));
   flex-shrink: 0;
@@ -81,13 +81,13 @@
   font-size: var(--text-2xl, 2rem);
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
 }
 
 .pageSubtitle {
   margin: 0;
   font-size: var(--text-sm, 0.75rem);
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   max-width: 580px;
 }
 
@@ -100,7 +100,7 @@
   padding: 5px 13px;
   border-radius: var(--radius-full, 9999px);
   background: var(--color-red-muted, rgba(232,84,76,0.15));
-  color: var(--color-red, var(--color-red));
+  color: var(--color-red);
   border: 1px solid rgba(232, 84, 76, 0.25);
 }
 
@@ -108,7 +108,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-red, var(--color-red));
+  background: var(--color-red);
   animation: dt-pulse-moving 1.6s infinite;
 }
 
@@ -130,7 +130,7 @@
   padding: 6px 14px;
   border-radius: var(--radius-full, 9999px);
   background: var(--color-teal-muted, rgba(63,167,150,0.15));
-  color: var(--color-teal, var(--color-teal));
+  color: var(--color-teal);
   border: 1px solid rgba(63, 167, 150, 0.3);
   box-shadow: 0 0 16px rgba(63, 167, 150, 0.18);
 }
@@ -139,8 +139,8 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--color-teal, var(--color-teal));
-  box-shadow: 0 0 8px var(--color-teal, var(--color-teal));
+  background: var(--color-teal);
+  box-shadow: 0 0 8px var(--color-teal);
   animation: dt-pulse-moving 1.4s infinite;
 }
 
@@ -151,8 +151,8 @@
   padding: 7px 14px;
   border-radius: var(--radius-full, 9999px);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.1));
-  background: var(--color-surface, var(--color-surface));
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
   font-size: var(--text-xs, 0.625rem);
   font-weight: 600;
   cursor: pointer;
@@ -165,31 +165,31 @@
 }
 
 .backBtn:hover {
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
   border-color: var(--color-glass-border, rgba(242,169,60,0.25));
   background: var(--color-accent-muted, rgba(242,169,60,0.1));
 }
 
 .bulkMarkRead {
-  color: var(--color-teal, var(--color-teal));
+  color: var(--color-teal);
   border-color: rgba(63, 167, 150, 0.3);
   background: var(--color-teal-muted, rgba(63,167,150,0.1));
 }
 
 .bulkMarkRead:hover {
-  border-color: var(--color-teal, var(--color-teal));
+  border-color: var(--color-teal);
   box-shadow: 0 0 0 3px rgba(63, 167, 150, 0.18);
   transform: translateY(-1px);
 }
 
 .bulkDelete {
-  color: var(--color-red, var(--color-red));
+  color: var(--color-red);
   border-color: rgba(232, 84, 76, 0.3);
   background: var(--color-red-muted, rgba(232,84,76,0.1));
 }
 
 .bulkDelete:hover {
-  border-color: var(--color-red, var(--color-red));
+  border-color: var(--color-red);
   box-shadow: 0 0 0 3px rgba(232, 84, 76, 0.18);
   transform: translateY(-1px);
 }
@@ -206,7 +206,7 @@
   flex-direction: column;
   gap: var(--space-sm, 8px);
   padding: var(--space-lg, 16px);
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-xl, 12px);
   overflow: hidden;
@@ -248,7 +248,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 .kpiValue {
@@ -264,7 +264,7 @@
   flex-direction: column;
   gap: var(--space-lg, 16px);
   padding: var(--space-lg, 16px) var(--space-xl, 24px);
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-2xl, 16px);
   box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.35));
@@ -285,7 +285,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 .resetBtn {
@@ -296,7 +296,7 @@
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-full, 9999px);
   background: transparent;
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   font-size: var(--text-xs, 0.625rem);
   font-weight: 600;
   cursor: pointer;
@@ -307,7 +307,7 @@
 }
 
 .resetBtn:hover {
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
   border-color: var(--color-glass-border, rgba(242,169,60,0.15));
   background: var(--color-accent-muted, rgba(242,169,60,0.1));
 }
@@ -323,7 +323,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 .filterChipsRow {
@@ -340,7 +340,7 @@
   border-radius: var(--radius-full, 9999px);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   background: transparent;
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   font-size: var(--text-sm, 0.75rem);
   font-weight: 500;
   cursor: pointer;
@@ -350,7 +350,7 @@
 
 .filterChip:hover {
   border-color: var(--chip, var(--color-accent));
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
 }
 
 .filterChipActive {
@@ -373,8 +373,8 @@
   padding: 9px 34px 9px 14px;
   border-radius: var(--radius-lg, 8px);
   border: 1px solid var(--color-input-border, rgba(232,236,243,0.15));
-  background-color: var(--color-input-bg, var(--color-bg));
-  color: var(--color-text, var(--color-text));
+  background-color: var(--color-input-bg);
+  color: var(--color-text);
   font-size: var(--text-sm, 0.75rem);
   font-family: var(--font-body, Inter, sans-serif);
   cursor: pointer;
@@ -387,7 +387,7 @@
 }
 
 .typeSelect:hover, .typeSelect:focus {
-  border-color: var(--color-accent, var(--color-accent));
+  border-color: var(--color-accent);
   outline: none;
   box-shadow: 0 0 0 3px var(--color-accent-muted, rgba(242,169,60,0.15));
 }
@@ -416,15 +416,15 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
 }
 
 .groupCount {
   font-size: var(--text-xs, 0.625rem);
   font-weight: 700;
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
-  background: var(--color-surface, var(--color-surface));
+  color: var(--color-text-tertiary);
+  background: var(--color-surface);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-full, 9999px);
   width: 20px;
@@ -441,7 +441,7 @@
   align-items: flex-start;
   gap: var(--space-md, 12px);
   padding: var(--space-md, 12px) var(--space-lg, 16px);
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-left-width: 3px;
   border-radius: var(--radius-xl, 12px);
@@ -461,7 +461,7 @@
 }
 
 .notifCardUnread {
-  background: linear-gradient(135deg, var(--color-accent-muted, rgba(242,169,60,0.08)), var(--color-surface, var(--color-surface)));
+  background: linear-gradient(135deg, var(--color-accent-muted, rgba(242,169,60,0.08)), var(--color-surface));
 }
 
 .notifIconChip {
@@ -490,7 +490,7 @@
 .notifTitle {
   font-size: var(--text-sm, 0.75rem);
   font-weight: 600;
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -498,7 +498,7 @@
 }
 
 .notifCardUnread .notifTitle {
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
   font-weight: 700;
 }
 
@@ -517,7 +517,7 @@
 
 .notifMessage {
   font-size: var(--text-sm, 0.75rem);
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   line-height: 1.5;
   margin-top: 3px;
   display: -webkit-box;
@@ -536,7 +536,7 @@
 
 .metaTime {
   font-size: var(--text-xs, 0.625rem);
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
 }
 
@@ -545,7 +545,7 @@
   align-items: center;
   gap: 5px;
   font-size: var(--text-xs, 0.625rem);
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 .metaTypeDot {
@@ -559,7 +559,7 @@
   align-items: center;
   gap: 4px;
   font-size: var(--text-xs, 0.625rem);
-  color: var(--color-teal, var(--color-teal));
+  color: var(--color-teal);
 }
 
 .notifActions {
@@ -591,22 +591,22 @@
 }
 
 .markReadBtn {
-  color: var(--color-teal, var(--color-teal));
+  color: var(--color-teal);
 }
 
 .markReadBtn:hover {
   background: var(--color-teal-muted, rgba(63,167,150,0.12));
-  border-color: var(--color-teal, var(--color-teal));
+  border-color: var(--color-teal);
 }
 
 .deleteBtn {
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 
 .deleteBtn:hover {
-  color: var(--color-red, var(--color-red));
+  color: var(--color-red);
   background: var(--color-red-muted, rgba(232,84,76,0.12));
-  border-color: var(--color-red, var(--color-red));
+  border-color: var(--color-red);
 }
 
 .checkSeal {
@@ -615,7 +615,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-teal, var(--color-teal));
+  color: var(--color-teal);
   background: var(--color-teal-muted, rgba(63,167,150,0.1));
   border-radius: var(--radius-full, 9999px);
   animation: dt-seal-pop 0.3s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
@@ -629,7 +629,7 @@
 .skeletonCard {
   height: 84px;
   border-radius: var(--radius-xl, 12px);
-  background: linear-gradient(90deg, var(--color-surface, var(--color-surface)) 25%, rgba(122,139,163,0.1) 50%, var(--color-surface, var(--color-surface)) 75%);
+  background: linear-gradient(90deg, var(--color-surface) 25%, rgba(122,139,163,0.1) 50%, var(--color-surface) 75%);
   background-size: 200% 100%;
   animation: dt-shimmer 1.4s linear infinite;
 }
@@ -651,7 +651,7 @@
   justify-content: center;
   border-radius: var(--radius-full, 9999px);
   background: var(--color-accent-muted, rgba(242,169,60,0.12));
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
   margin-bottom: var(--space-sm, 8px);
   box-shadow: inset 0 0 0 1px var(--color-glass-border, rgba(242,169,60,0.15));
 }
@@ -663,13 +663,13 @@
 .emptyTitle {
   font-size: var(--text-lg, 1rem);
   font-weight: 700;
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   font-family: var(--font-display, 'Space Grotesk', sans-serif);
 }
 
 .emptyDesc {
   font-size: var(--text-sm, 0.75rem);
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
   max-width: 420px;
 }
 

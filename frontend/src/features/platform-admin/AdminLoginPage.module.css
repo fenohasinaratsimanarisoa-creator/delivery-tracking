@@ -5,7 +5,7 @@
   justify-content: center;
   background:
     radial-gradient(1200px 500px at 50% -10%, var(--color-accent-muted, rgba(242,169,60,0.12)), transparent 60%),
-    var(--color-bg, var(--color-bg));
+    var(--color-bg);
   font-family: var(--font-body, Inter, sans-serif);
   padding: var(--space-lg);
 }
@@ -13,7 +13,7 @@
   width: 420px;
   max-width: 90vw;
   padding: var(--space-2xl);
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   border-radius: var(--radius-2xl);
   border: 1px solid var(--color-border, rgba(242,169,60,0.2));
   box-shadow: var(--shadow-dialog, 0 2px 8px rgba(0,0,0,0.3), 0 20px 60px rgba(0,0,0,0.4));
@@ -27,7 +27,7 @@
   height: 60px;
   border-radius: var(--radius-full);
   background: var(--color-accent-muted, rgba(242,169,60,0.15));
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -39,11 +39,11 @@
   font-size: var(--text-lg);
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   margin: 0;
 }
 .cardSubtitle {
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   font-size: var(--text-sm);
   margin-top: 4px;
 }
@@ -51,7 +51,7 @@
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-full);
   background: var(--color-red-muted, rgba(232,84,76,0.15));
-  color: var(--color-red, var(--color-red));
+  color: var(--color-red);
   font-size: var(--text-sm);
   font-weight: 500;
   margin-bottom: var(--space-md);
@@ -61,7 +61,7 @@
   padding: var(--space-md);
   border-radius: var(--radius-md);
   background: var(--color-accent-muted, rgba(242,169,60,0.15));
-  color: var(--color-accent, var(--color-accent));
+  color: var(--color-accent);
   font-size: var(--text-sm);
   line-height: 1.5;
   margin-bottom: var(--space-lg);
@@ -85,12 +85,12 @@
 .otpUrlBox {
   margin-bottom: var(--space-lg);
   padding: var(--space-sm) var(--space-md);
-  background: var(--color-input-bg, var(--color-input-bg));
+  background: var(--color-input-bg);
   border-radius: var(--radius-md);
   font-size: var(--text-xs);
   word-break: break-all;
-  color: var(--color-text-secondary, var(--color-text-secondary));
-  border: 1px solid var(--color-input-border, var(--color-surface-hover));
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-input-border);
 }
 .formField {
   margin-bottom: var(--space-md);
@@ -99,7 +99,7 @@
   display: block;
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   margin-bottom: 6px;
 }
 .inputWrapper {
@@ -110,15 +110,15 @@
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--color-text-tertiary, var(--color-text-tertiary));
+  color: var(--color-text-tertiary);
 }
 .inputField {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--color-input-border, var(--color-surface-hover));
+  border: 1px solid var(--color-input-border);
   border-radius: var(--radius-md);
-  background: var(--color-input-bg, var(--color-input-bg));
-  color: var(--color-text, var(--color-text));
+  background: var(--color-input-bg);
+  color: var(--color-text);
   font-size: var(--text-sm);
   font-family: var(--font-body, Inter, sans-serif);
   outline: none;
@@ -127,7 +127,7 @@
     box-shadow var(--duration-fast) var(--ease-smooth, ease);
 }
 .inputField:focus {
-  border-color: var(--color-accent, var(--color-accent));
+  border-color: var(--color-accent);
   box-shadow: 0 0 0 3px var(--color-accent-muted, rgba(242,169,60,0.15));
 }
 .inputFieldWithIcon {
@@ -144,8 +144,8 @@
 .submitBtn {
   width: 100%;
   padding: 10px;
-  background: var(--color-accent, var(--color-accent));
-  color: var(--color-bg, var(--color-bg));
+  background: var(--color-accent);
+  color: var(--color-bg);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;

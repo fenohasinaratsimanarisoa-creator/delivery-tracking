@@ -151,7 +151,7 @@
 }
 
 .dismissBtn:hover {
-  color: var(--color-red, var(--color-red));
+  color: var(--color-red);
   background: var(--color-red-muted, rgba(232,84,76,0.12));
   transform: translateY(-1px);
 }
@@ -175,7 +175,7 @@
   gap: 6px;
   padding: 9px 16px;
   flex: 1;
-  color: var(--color-bg, var(--color-bg));
+  color: var(--color-bg);
   border: none;
   border-radius: var(--radius-md, 8px);
   font-weight: 700;
@@ -207,9 +207,9 @@
   gap: 6px;
   padding: 10px 14px;
   border-radius: var(--radius-lg, 10px);
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   border: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.2));
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
   font-size: 0.78rem;
   font-weight: 600;
   pointer-events: auto;
@@ -218,5 +218,5 @@
 }
 
 .moreBadge:hover {
-  background: color-mix(in srgb, var(--color-text-secondary, var(--color-text-secondary)) 10%, transparent);
+  background: color-mix(in srgb, var(--color-text-secondary) 10%, transparent);
 }

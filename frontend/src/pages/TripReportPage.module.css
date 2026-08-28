@@ -1,11 +1,11 @@
 .page {
   padding: var(--space-2xl, 32px);
-  background: var(--color-bg, var(--color-bg));
+  background: var(--color-bg);
   min-height: 100vh;
 }
 
 .title {
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   font-family: var(--font-display, Space Grotesk, sans-serif);
   font-size: var(--text-2xl, 1.5rem);
   font-weight: 700;
@@ -25,8 +25,8 @@
   max-width: 400px;
   border: 1px solid var(--color-input-border, rgba(232,236,243,0.15));
   border-radius: var(--radius-md, 6px);
-  background: var(--color-input-bg, var(--color-surface));
-  color: var(--color-text, var(--color-text));
+  background: var(--color-input-bg);
+  color: var(--color-text);
   font-size: var(--text-sm, 0.875rem);
   outline: none;
   font-family: var(--font-body, Inter, sans-serif);
@@ -37,8 +37,8 @@
   align-items: center;
   gap: 6px;
   padding: var(--space-sm, 8px) var(--space-lg, 16px);
-  background: var(--color-accent, var(--color-accent));
-  color: var(--color-bg, var(--color-bg));
+  background: var(--color-accent);
+  color: var(--color-bg);
   border: none;
   border-radius: var(--radius-md, 6px);
   cursor: pointer;
@@ -48,11 +48,11 @@
 }
 
 .loading {
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
 }
 
 .reportCard {
-  background: var(--color-surface, var(--color-surface));
+  background: var(--color-surface);
   padding: var(--space-xl, 20px);
   border-radius: var(--radius-xl, 12px);
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
@@ -61,7 +61,7 @@
 
 .reportTitle {
   margin-bottom: var(--space-lg, 16px);
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
   font-family: var(--font-display, Space Grotesk, sans-serif);
 }
 
@@ -73,7 +73,7 @@
 }
 
 .reportItem {
-  color: var(--color-text, var(--color-text));
+  color: var(--color-text);
 }
 
 /* Info-bulle sur les libellés de distance : les deux chiffres peuvent
@@ -81,7 +81,7 @@
    le trajet ne soit faux — expliqué en une phrase au survol. */
 .distanceLabel {
   cursor: help;
-  border-bottom: 1px dashed var(--color-text-tertiary, var(--color-text-tertiary));
+  border-bottom: 1px dashed var(--color-text-tertiary);
 }
 
 /* Badge discret signalant un écart > 10 % entre les deux distances : visible
@@ -92,8 +92,8 @@
   padding: 1px 8px;
   border-radius: var(--radius-full, 999px);
   background: var(--color-accent-muted, rgba(242, 169, 60, 0.15));
-  border: 1px solid var(--color-accent, var(--color-accent));
-  color: var(--color-accent, var(--color-accent));
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
   font-size: 0.65rem;
   font-weight: 600;
   cursor: help;
@@ -103,5 +103,5 @@
 .reportFooter {
   margin-top: var(--space-lg, 16px);
   font-size: var(--text-sm, 0.85rem);
-  color: var(--color-text-secondary, var(--color-text-secondary));
+  color: var(--color-text-secondary);
 }
