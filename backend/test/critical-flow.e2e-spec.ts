@@ -99,6 +99,13 @@ describe('Critical delivery flow (e2e)', () => {
         title: `Critical delivery ${runId}`,
         pickupAddress: 'Warehouse A',
         deliveryAddress: 'Customer B',
+        // Coordonnées EXPLICITES : sans elles, DeliveriesService.create tente un
+        // géocodage Nominatim (réseau + file d'attente throttlée 1,1 s partagée
+        // par tout le process). En CI ou quand d'autres suites e2e géocodent en
+        // parallèle, l'appel dépassait le timeout du test → 500 (la company est
+        // alors supprimée par un afterAll concurrent) puis échec en cascade.
+        deliveryLat: -18.8792,
+        deliveryLng: 47.5079,
         vehicleId: vehicleRes.body.id,
       })
       .expect(201);
@@ -153,5 +160,5 @@ describe('Critical delivery flow (e2e)', () => {
       link: `/deliveries/${deliveryRes.body.id}`,
     });
     expect(notification?.message).toContain('est maintenant assigned');
-  });
+  }, 30000);
 });

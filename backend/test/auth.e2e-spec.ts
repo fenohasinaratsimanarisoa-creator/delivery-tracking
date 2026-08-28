@@ -7,6 +7,21 @@ import * as cookieParser from 'cookie-parser';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { AppModule } from '../src/app.module';
 
+/**
+ * Les handlers d'auth émettent délibérément DEUX Set-Cookie pour un même nom :
+ * d'abord un `clearCookie` (valeur vide, `Expires=Thu, 01 Jan 1970`), puis le
+ * cookie réel (garde-fou COOKIE_DOMAIN, cf. auth.controller.ts). Le navigateur
+ * applique les en-têtes dans l'ordre → la valeur finale est la bonne, mais un
+ * `.find(c => c.startsWith('refreshToken='))` naïf attrape le cookie VIDÉ.
+ * Ce helper renvoie toujours l'entrée qui porte réellement une valeur.
+ */
+function pickSetCookie(setCookie: string | string[] | undefined, name: string): string | undefined {
+  const arr = Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [];
+  const named = arr.filter((c) => c.startsWith(`${name}=`));
+  const withValue = named.filter((c) => !c.startsWith(`${name}=;`));
+  return (withValue.length ? withValue : named).pop();
+}
+
 describe('Authentication (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -50,9 +65,7 @@ describe('Authentication (e2e)', () => {
   // helper pour récupérer un couple csrf valide avant chaque refresh.
   async function fetchCsrf() {
     const res = await request(app.getHttpServer()).get('/auth/csrf-token').expect(200);
-    const cookie = Array.isArray(res.headers['set-cookie'])
-      ? res.headers['set-cookie'].find((c: string) => c.startsWith('csrf-token='))
-      : res.headers['set-cookie'];
+    const cookie = pickSetCookie(res.headers['set-cookie'], 'csrf-token');
     const cookieValue = (cookie || '').split(';')[0];
     return {
       cookie: cookieValue,
@@ -165,9 +178,7 @@ describe('Authentication (e2e)', () => {
 
       const cookies = res.headers['set-cookie'];
       expect(cookies).toBeDefined();
-      const refreshCookie = Array.isArray(cookies)
-        ? cookies.find((c: string) => c.startsWith('refreshToken='))
-        : cookies;
+      const refreshCookie = pickSetCookie(cookies, 'refreshToken');
       expect(refreshCookie).toBeDefined();
       expect(refreshCookie).toContain('HttpOnly');
       expect(refreshCookie).toContain('Path=/');
@@ -289,7 +300,7 @@ describe('Authentication (e2e)', () => {
         .post('/auth/refresh')
         .set(
           'Cookie',
-          `${Array.isArray(refreshCookie) ? `${refreshCookie[0].split(';')[0]}; ` : ''}${csrf.cookie}`,
+          `${(pickSetCookie(refreshCookie, 'refreshToken') ?? '').split(';')[0]}; ${csrf.cookie}`,
         )
         .set('X-CSRF-Token', csrf.token)
         .set('X-CSRF-HMAC', csrf.hmac)
@@ -330,10 +341,7 @@ describe('Authentication (e2e)', () => {
 
       await request(app.getHttpServer())
         .post('/auth/refresh')
-        .set(
-          'Cookie',
-          Array.isArray(refreshCookie) ? refreshCookie.join('; ') : refreshCookie || '',
-        )
+        .set('Cookie', (pickSetCookie(refreshCookie, 'refreshToken') ?? '').split(';')[0])
         .expect(403);
     });
 
@@ -349,7 +357,7 @@ describe('Authentication (e2e)', () => {
         .post('/auth/refresh')
         .set(
           'Cookie',
-          `${Array.isArray(refreshCookie) ? `${refreshCookie[0].split(';')[0]}; ` : ''}${csrf.cookie}`,
+          `${(pickSetCookie(refreshCookie, 'refreshToken') ?? '').split(';')[0]}; ${csrf.cookie}`,
         )
         .set('X-CSRF-Token', csrf.token)
         .set('X-CSRF-HMAC', csrf.hmac)
@@ -427,13 +435,9 @@ describe('Authentication (e2e)', () => {
       expect(res.body.user.email).toBe(twoFaUser.email);
       const cookies = res.headers['set-cookie'];
       expect(cookies).toBeDefined();
-      const refreshCookie = Array.isArray(cookies)
-        ? cookies.find((c: string) => c.startsWith('refreshToken='))
-        : cookies;
+      const refreshCookie = pickSetCookie(cookies, 'refreshToken');
       expect(refreshCookie).toBeDefined();
-      const csrfCookie = Array.isArray(cookies)
-        ? cookies.find((c: string) => c.startsWith('csrf-token='))
-        : cookies;
+      const csrfCookie = pickSetCookie(cookies, 'csrf-token');
       expect(csrfCookie).toBeDefined();
     });
 
@@ -467,13 +471,11 @@ describe('Authentication (e2e)', () => {
         .post('/auth/login')
         .send({ email: testUser.email, password: PASSWORD })
         .expect(200);
-      const refreshCookie = res.headers['set-cookie'];
       return {
         accessToken: res.body.accessToken as string,
-        refreshCookie: (Array.isArray(refreshCookie)
-          ? refreshCookie[0]
-          : refreshCookie || ''
-        ).split(';')[0],
+        refreshCookie: (pickSetCookie(res.headers['set-cookie'], 'refreshToken') ?? '').split(
+          ';',
+        )[0],
       };
     }
 

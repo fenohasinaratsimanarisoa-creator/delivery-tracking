@@ -202,8 +202,16 @@ describe('Tracking GPS (e2e)', () => {
 
     // Horloge monotone : le serveur rejette (dedup par timestamp, fenêtre 1s) toute
     // position au même instant ou antérieure à la dernière. Chaque test avance donc
-    // l'horloge de +5s pour que chaque position soit réellement persistée.
-    let wsClock = Date.parse('2025-01-01T10:00:00Z');
+    // l'horloge pour que chaque position soit réellement persistée.
+    //
+    // La base est RELATIVE à maintenant (et non une date absolue figée) : le DTO
+    // impose @IsPlausibleTimestamp (fenêtre passé tolérée = 30 j). Une constante
+    // 2025-01-01 finissait fatalement par sortir de la fenêtre avec le temps —
+    // toutes les positions étaient alors rejetées (invalid_payload) et les 5
+    // tests WebSocket échouaient. On part 30 min dans le passé : marge large
+    // devant les ~8 min de pas cumulés sur l'ensemble des tests, jamais dans le
+    // futur, toujours dans la fenêtre plausible.
+    let wsClock = Date.now() - 30 * 60 * 1000;
     const nextTimestamp = (stepMs: number) => {
       wsClock += stepMs;
       return new Date(wsClock).toISOString();

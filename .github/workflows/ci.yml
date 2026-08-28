@@ -130,7 +130,12 @@ jobs:
         continue-on-error: true
 
       - name: Run E2E tests
-        run: npm run test:e2e -- --passWithNoTests
+        # --runInBand : les suites e2e partagent UNE base Postgres. En parallèle,
+        # le afterAll d'une suite (company.deleteMany) supprime des lignes qu'une
+        # autre suite encore en cours référence → violations de clé étrangère
+        # intermittentes (deliveries_company_id_fkey). En série, chaque suite a la
+        # base pour elle le temps de son exécution.
+        run: npm run test:e2e -- --passWithNoTests --runInBand
 
       - name: Run Traccar integration tests (against PostGIS test DB)
         run: npx jest traccar-alert-chain traccar-postgis -- --passWithNoTests
