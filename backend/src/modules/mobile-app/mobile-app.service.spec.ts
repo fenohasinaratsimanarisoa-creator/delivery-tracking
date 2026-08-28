@@ -29,6 +29,10 @@ describe('MobileAppService', () => {
     version: '1.2.3',
     versionCode: 42,
     sha256: 'abc123',
+    // Empreinte du certificat de signature, publiée par la CI depuis le
+    // 2026-08-28 : permet à l'app de détecter qu'une mise à jour signée avec une
+    // AUTRE clé ne pourra pas s'installer par-dessus (Android l'interdit).
+    signerSha256: 'ff648d75',
     buildDate: '2026-08-15T09:00:00Z',
     changelog: 'fix: tracking',
   };
@@ -64,6 +68,7 @@ describe('MobileAppService', () => {
       versionCode: 42,
       url: 'https://example.com/deliverytrack.apk',
       sha256: 'abc123',
+      signerSha256: 'ff648d75',
       buildDate: '2026-08-15T09:00:00Z',
       changelog: 'fix: tracking',
     });

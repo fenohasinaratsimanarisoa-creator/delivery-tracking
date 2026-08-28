@@ -383,11 +383,37 @@ jobs:
           ls -la app/build/outputs/apk/release/
 
       - name: Verify APK is signed
+        id: signing
         working-directory: ./frontend/android
         run: |
           # apksigner: vérifie que l'APK est signé avec une vraie clé (pas debug).
-          APKSIGNER=$ANDROID_HOME/build-tools/*/apksigner
-          $APKSIGNER verify --print-certs app/build/outputs/apk/release/app-release.apk | head -5
+          APKSIGNER=$(ls $ANDROID_HOME/build-tools/*/apksigner | head -n 1)
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk | head -5
+
+          # Empreinte SHA-256 du CERTIFICAT DE SIGNATURE, publiée dans manifest.json.
+          #
+          # POURQUOI (incident 2026-08-28) : Android refuse d'installer une mise à
+          # jour signée avec une clé DIFFÉRENTE de l'app déjà installée — l'écran
+          # affiche seulement « Application non installée », sans expliquer
+          # pourquoi. C'est arrivé en vrai : les chauffeurs avaient un APK de DEBUG
+          # (CN=Android Debug, versionCode 1) et l'APK de la CI est signé avec la
+          # clé de release LogiTrack. La bannière de mise à jour renvoyait donc
+          # vers un fichier qui ne pouvait PAS s'installer.
+          # En publiant cette empreinte, l'app compare la signature installée à
+          # celle de la release et affiche la bonne consigne (désinstaller d'abord,
+          # après avoir synchronisé la file GPS) au lieu d'un lien qui échoue.
+          SIGNER_SHA256=$(
+            "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk \
+              | grep -m1 -i 'Signer #1 certificate SHA-256 digest' \
+              | sed -E 's/.*digest: *//' \
+              | tr -d '[:space:]'
+          )
+          if [ -z "$SIGNER_SHA256" ]; then
+            echo "::error::Empreinte du certificat de signature illisible — build interrompu."
+            exit 1
+          fi
+          echo "signer_sha256=$SIGNER_SHA256" >> "$GITHUB_OUTPUT"
+          echo "Signer SHA-256: $SIGNER_SHA256"
 
       # Nom d'asset FIXE demandé par le backend (GET /api/mobile-app/latest cherche
       # l'asset « deliverytrack.apk ») : AGP produit app-release.apk, on le renomme
@@ -405,6 +431,7 @@ jobs:
           VERSION_NAME: ${{ steps.version.outputs.version_name }}
           VERSION_CODE: ${{ steps.version.outputs.version_code }}
           LAST_TAG: ${{ steps.version.outputs.last_tag }}
+          SIGNER_SHA256: ${{ steps.signing.outputs.signer_sha256 }}
         run: |
           SHA256=$(sha256sum release-assets/deliverytrack.apk | awk '{print $1}')
           BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -419,6 +446,7 @@ jobs:
             "version": "$VERSION_NAME",
             "versionCode": $VERSION_CODE,
             "sha256": "$SHA256",
+            "signerSha256": "$SIGNER_SHA256",
             "buildDate": "$BUILD_DATE",
             "changelog": $(node -e "console.log(JSON.stringify(process.argv[1]))" "$CHANGELOG")
           }

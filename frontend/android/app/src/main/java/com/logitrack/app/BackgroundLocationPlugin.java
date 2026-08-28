@@ -6,6 +6,9 @@ import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageInfo;
+import android.content.pm.Signature;
+import android.content.pm.SigningInfo;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Build;
@@ -436,6 +439,70 @@ public class BackgroundLocationPlugin extends Plugin {
         JSObject ret = DeviceOemInfo.detect();
         ret.put("batteryOptimizationIgnored", isBatteryOptimizationIgnored());
         call.resolve(ret);
+    }
+
+    /**
+     * Informations d'INSTALLATION de l'app : empreinte SHA-256 du certificat qui
+     * l'a signée, et nombre de positions encore non synchronisées.
+     *
+     * POURQUOI (incident 2026-08-28) : Android refuse d'installer une mise à jour
+     * signée avec une clé DIFFÉRENTE de l'app installée, en n'affichant qu'un
+     * « Application non installée » sans aucune explication. C'est arrivé en
+     * production : les chauffeurs avaient un APK de DEBUG (CN=Android Debug) et
+     * la CI publie un APK signé avec la clé de release. La bannière de mise à
+     * jour pointait donc vers un fichier qui ne pouvait PAS s'installer.
+     *
+     * Le JS compare `signerSha256` à celui publié par la release
+     * (GET /api/mobile-app/latest) : s'ils diffèrent, la seule voie est
+     * désinstaller puis réinstaller — et il faut alors AVERTIR, car la
+     * désinstallation efface le stockage privé de l'app, donc la file SQLite des
+     * positions non encore envoyées. `pendingPositions` permet d'afficher
+     * combien seraient perdues et d'attendre la synchronisation.
+     */
+    @PluginMethod
+    public void getInstallInfo(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("signerSha256", currentSignerSha256());
+        try {
+            ret.put("pendingPositions", LocationQueueDb.getInstance(getContext()).countUnsynced());
+        } catch (Exception e) {
+            // File illisible : on ne bloque pas le diagnostic de signature.
+            ret.put("pendingPositions", -1);
+        }
+        call.resolve(ret);
+    }
+
+    /** SHA-256 (hex minuscule) du certificat de signature de CETTE installation, ou "" si illisible. */
+    private String currentSignerSha256() {
+        try {
+            PackageManager pm = getContext().getPackageManager();
+            String pkg = getContext().getPackageName();
+            Signature[] signatures;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                PackageInfo info = pm.getPackageInfo(pkg, PackageManager.GET_SIGNING_CERTIFICATES);
+                SigningInfo si = info.signingInfo;
+                if (si == null) return "";
+                signatures = si.hasMultipleSigners()
+                    ? si.getApkContentsSigners()
+                    : si.getSigningCertificateHistory();
+            } else {
+                @SuppressWarnings("deprecation")
+                PackageInfo info = pm.getPackageInfo(pkg, PackageManager.GET_SIGNATURES);
+                @SuppressWarnings("deprecation")
+                Signature[] legacy = info.signatures;
+                signatures = legacy;
+            }
+            if (signatures == null || signatures.length == 0) return "";
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(signatures[0].toByteArray());
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            // Jamais bloquant : sans empreinte, le JS retombe sur la comparaison
+            // de versionCode seule (comportement d'avant ce correctif).
+            return "";
+        }
     }
 
     /**

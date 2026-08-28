@@ -5,9 +5,11 @@ import {
   fetchLatestMobileApp,
   isVersionOutdated,
   compareBuild,
+  requiresReinstall,
   CRITICAL_BUILD_GAP,
   type MobileAppRelease,
 } from '../../services/mobileApp';
+import { getAppInstallInfo } from '../../services/tracking/backgroundLocation';
 import styles from './MobileUpdateBanner.module.css';
 
 /**
@@ -37,6 +39,10 @@ export default function MobileUpdateBanner() {
   const { t } = useTranslation();
   const [outdated, setOutdated] = useState(false);
   const [critical, setCritical] = useState(false);
+  // Mise à jour impossible sans désinstallation (signature différente) : voir
+  // requiresReinstall. `pending` = positions GPS que la désinstallation effacerait.
+  const [reinstall, setReinstall] = useState(false);
+  const [pending, setPending] = useState(-1);
   const [release, setRelease] = useState<MobileAppRelease | null>(null);
   const [checking, setChecking] = useState(true);
 
@@ -49,6 +55,20 @@ export default function MobileUpdateBanner() {
         const info = await App.getInfo();
         const latest = await fetchLatestMobileApp();
         if (cancelled || !latest) return;
+
+        // Signature installée vs signature de la release : si elles diffèrent,
+        // Android REFUSERA l'installation par-dessus. Inutile — et trompeur — de
+        // proposer un simple lien « Mettre à jour » qui échouera.
+        const installInfo = await getAppInstallInfo();
+        if (cancelled) return;
+        const mustReinstall = requiresReinstall(installInfo?.signerSha256, latest.signerSha256);
+        if (mustReinstall) {
+          setRelease(latest);
+          setOutdated(true);
+          setReinstall(true);
+          setPending(installInfo?.pendingPositions ?? -1);
+          return;
+        }
 
         // Signal PRIMAIRE : le versionCode, seul identifiant strictement croissant.
         const build = compareBuild(info.build, latest.versionCode);
@@ -82,21 +102,39 @@ export default function MobileUpdateBanner() {
   // Aucune action « masquer » n'est proposée, à dessein : un APK obsolète perd
   // silencieusement des positions GPS. Le seul moyen de faire disparaître cette
   // bannière est d'installer la mise à jour.
+  const alarming = critical || reinstall;
+
   return (
     <div
-      className={`${styles.banner} ${critical ? styles.critical : ''}`}
-      role={critical ? 'alert' : 'region'}
+      className={`${styles.banner} ${alarming ? styles.critical : ''}`}
+      role={alarming ? 'alert' : 'region'}
       aria-label={t('mobileApp.update.ariaLabel')}
     >
       <div className={styles.content}>
         <p className={styles.title}>
-          {critical
-            ? t('mobileApp.update.criticalTitle', { version: release.version })
-            : t('mobileApp.update.title', { version: release.version })}
+          {reinstall
+            ? t('mobileApp.update.reinstallTitle', { version: release.version })
+            : critical
+              ? t('mobileApp.update.criticalTitle', { version: release.version })
+              : t('mobileApp.update.title', { version: release.version })}
         </p>
         <p className={styles.subtitle}>
-          {critical ? t('mobileApp.update.criticalSubtitle') : t('mobileApp.update.subtitle')}
+          {reinstall
+            ? t('mobileApp.update.reinstallSubtitle')
+            : critical
+              ? t('mobileApp.update.criticalSubtitle')
+              : t('mobileApp.update.subtitle')}
         </p>
+        {/* Une désinstallation efface la file SQLite native : on ne propose
+            JAMAIS de désinstaller sans dire ce que ça coûterait maintenant. */}
+        {reinstall && pending > 0 && (
+          <p className={styles.subtitle}>
+            {t('mobileApp.update.reinstallPending', { count: pending })}
+          </p>
+        )}
+        {reinstall && pending === 0 && (
+          <p className={styles.subtitle}>{t('mobileApp.update.reinstallSafe')}</p>
+        )}
       </div>
       <div className={styles.actions}>
         <a
@@ -105,7 +143,9 @@ export default function MobileUpdateBanner() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          {t('mobileApp.update.download', { version: release.version })}
+          {reinstall
+            ? t('mobileApp.update.reinstallDownload', { version: release.version })
+            : t('mobileApp.update.download', { version: release.version })}
         </a>
       </div>
     </div>

@@ -38,7 +38,12 @@
       "subtitle": "Update the app to get the latest fixes.",
       "download": "Update — v{{version}}",
       "criticalTitle": "Outdated app — update required (v{{version}})",
-      "criticalSubtitle": "Your version is significantly behind. GPS positions may be lost until you install the update."
+      "criticalSubtitle": "Your version is significantly behind. GPS positions may be lost until you install the update.",
+      "reinstallTitle": "Update requires reinstalling (v{{version}})",
+      "reinstallSubtitle": "This version is signed with a different key: Android will refuse to install it over the current app (\"App not installed\"). You must uninstall the app first, then reinstall.",
+      "reinstallPending": "⚠️ {{count}} GPS position(s) not sent yet: they will be LOST when uninstalling. Keep the app open with network until this reaches zero.",
+      "reinstallSafe": "✅ All positions are synced: you can uninstall safely.",
+      "reinstallDownload": "Download v{{version}}"
     }
   },
   "nav": {

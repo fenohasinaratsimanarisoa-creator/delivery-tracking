@@ -5,6 +5,11 @@ export interface MobileAppRelease {
   versionCode: number;
   url: string;
   sha256: string;
+  /**
+   * Empreinte SHA-256 du certificat ayant signé l'APK publié. Vide si la release
+   * est antérieure à sa publication par la CI (2026-08-28).
+   */
+  signerSha256?: string;
   buildDate: string;
   changelog?: string;
 }
@@ -107,4 +112,25 @@ export function dismissMobileAppBanner(): void {
   } catch {
     /* stockage indisponible — ignore */
   }
+}
+
+/**
+ * Une mise à jour signée avec une clé DIFFÉRENTE de l'app installée ne peut PAS
+ * s'installer : Android l'interdit et n'affiche qu'un « Application non
+ * installée » sans explication (incident réel du 2026-08-28 — les chauffeurs
+ * avaient un APK de debug, la CI publie un APK de release).
+ *
+ * Retourne true UNIQUEMENT si les deux empreintes sont connues ET différentes.
+ * Toute donnée manquante (APK trop ancien pour exposer sa signature, release
+ * sans signerSha256) renvoie false : on n'affiche jamais une consigne de
+ * désinstallation sur une supposition.
+ */
+export function requiresReinstall(
+  installedSignerSha256: string | undefined,
+  releaseSignerSha256: string | undefined,
+): boolean {
+  const a = (installedSignerSha256 ?? '').trim().toLowerCase();
+  const b = (releaseSignerSha256 ?? '').trim().toLowerCase();
+  if (!a || !b) return false;
+  return a !== b;
 }

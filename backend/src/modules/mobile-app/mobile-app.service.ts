@@ -7,6 +7,17 @@ export interface MobileAppRelease {
   versionCode: number;
   url: string;
   sha256: string;
+  /**
+   * Empreinte SHA-256 du CERTIFICAT DE SIGNATURE de l'APK publié.
+   *
+   * Android refuse d'installer une mise à jour signée avec une clé différente de
+   * l'app déjà installée, en n'affichant qu'un « Application non installée »
+   * opaque (incident 2026-08-28 : les chauffeurs avaient un APK de debug, la CI
+   * publie un APK de release). L'app compare cette empreinte à celle de sa
+   * propre signature pour afficher la bonne consigne au lieu d'un lien qui
+   * échouera. Chaîne vide si la release est antérieure à cette publication.
+   */
+  signerSha256: string;
   buildDate: string;
   changelog?: string;
 }
@@ -100,6 +111,7 @@ export class MobileAppService {
         version?: string;
         versionCode?: number;
         sha256?: string;
+        signerSha256?: string;
         buildDate?: string;
         changelog?: string;
       }>(manifestUrl);
@@ -111,6 +123,7 @@ export class MobileAppService {
         versionCode: manifest.versionCode ?? 0,
         url: apkUrl,
         sha256: manifest.sha256 ?? '',
+        signerSha256: manifest.signerSha256 ?? '',
         buildDate: manifest.buildDate ?? latest.published_at,
         changelog: manifest.changelog ?? latest.body ?? undefined,
       };

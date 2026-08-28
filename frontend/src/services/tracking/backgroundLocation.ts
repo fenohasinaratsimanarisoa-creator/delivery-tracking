@@ -84,6 +84,18 @@ export interface BatteryCriticalEvent {
   accuracy?: number;
 }
 
+/**
+ * Informations d'INSTALLATION de l'app (voir BackgroundLocationPlugin.getInstallInfo).
+ * Sert à détecter le cas où une mise à jour NE POURRA PAS s'installer parce
+ * qu'elle est signée avec une autre clé que l'app en place.
+ */
+export interface AppInstallInfo {
+  /** SHA-256 (hex) du certificat ayant signé CETTE installation ; '' si illisible. */
+  signerSha256: string;
+  /** Positions encore non synchronisées dans la file SQLite native ; -1 si illisible. */
+  pendingPositions: number;
+}
+
 interface BackgroundLocationNative {
   start(): Promise<BackgroundLocationStatus>;
   stop(): Promise<BackgroundLocationStatus>;
@@ -92,6 +104,7 @@ interface BackgroundLocationNative {
   getBatteryOptimizationStatus(): Promise<BatteryOptimizationStatus>;
   requestBatteryOptimizationExemption(): Promise<BatteryOptimizationStatus>;
   getDeviceInfo(): Promise<DeviceOemInfo>;
+  getInstallInfo(): Promise<AppInstallInfo>;
   openOemBatterySettings(): Promise<{ opened: string }>;
   openOemBatterySaverSettings(): Promise<{ opened: string }>;
   // --- Canal de secours SMS zéro-connectivité (audit terrain 2026-08-27) ---
@@ -527,5 +540,22 @@ export async function setNativeTrackingContext(vehicleId: string, deliveryId: st
     await p.setNativeTrackingContext({ vehicleId, deliveryId });
   } catch {
     // Silencieux.
+  }
+}
+
+/**
+ * Signature et file d'attente de l'installation courante.
+ *
+ * Renvoie null hors app native, ou si le plugin est trop ancien pour exposer
+ * getInstallInfo (APK d'avant ce correctif) — dans ce cas l'appelant retombe sur
+ * la seule comparaison de versionCode, comportement inchangé.
+ */
+export async function getAppInstallInfo(): Promise<AppInstallInfo | null> {
+  try {
+    const p = resolvePlugin();
+    if (!p?.getInstallInfo) return null;
+    return await p.getInstallInfo();
+  } catch {
+    return null;
   }
 }

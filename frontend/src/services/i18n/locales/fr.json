@@ -38,7 +38,12 @@
       "subtitle": "Mettez à jour l'app pour bénéficier des dernières corrections.",
       "download": "Mettre à jour — v{{version}}",
       "criticalTitle": "App obsolète — mise à jour requise (v{{version}})",
-      "criticalSubtitle": "Votre version accumule un retard important. Des positions GPS peuvent être perdues tant que la mise à jour n'est pas installée."
+      "criticalSubtitle": "Votre version accumule un retard important. Des positions GPS peuvent être perdues tant que la mise à jour n'est pas installée.",
+      "reinstallTitle": "Mise à jour impossible sans réinstallation (v{{version}})",
+      "reinstallSubtitle": "Cette version est signée avec une autre clé : Android refusera l'installation par-dessus (« Application non installée »). Il faut désinstaller l'app puis réinstaller.",
+      "reinstallPending": "⚠️ {{count}} position(s) GPS pas encore envoyée(s) : elles seront PERDUES à la désinstallation. Gardez l'app ouverte avec du réseau jusqu'à ce que ce nombre tombe à zéro.",
+      "reinstallSafe": "✅ Toutes les positions sont synchronisées : vous pouvez désinstaller sans rien perdre.",
+      "reinstallDownload": "Télécharger v{{version}}"
     }
   },
   "nav": {

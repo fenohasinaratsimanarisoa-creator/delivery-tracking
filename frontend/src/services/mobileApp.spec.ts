@@ -3,6 +3,7 @@ import {
   parseVersion,
   isVersionOutdated,
   compareBuild,
+  requiresReinstall,
   CRITICAL_BUILD_GAP,
   fetchLatestMobileApp,
   hasDismissedMobileAppBanner,
@@ -139,5 +140,36 @@ describe('compareBuild — détection par versionCode', () => {
     expect(compareBuild('0', 459)).toBeNull();
     expect(compareBuild('435', undefined)).toBeNull();
     expect(compareBuild('435', 0)).toBeNull();
+  });
+});
+
+/**
+ * VERROU (incident 2026-08-28) : les chauffeurs avaient un APK de DEBUG
+ * (CN=Android Debug) tandis que la CI publie un APK signé avec la clé de
+ * release. Android refuse alors l'installation par-dessus et n'affiche qu'un
+ * « Application non installée » opaque. La bannière proposait un lien de
+ * téléchargement qui ne pouvait PAS aboutir.
+ */
+describe('requiresReinstall — signatures incompatibles', () => {
+  const DEBUG = 'e61838f036ef803b76ec45488a6d5dd2ac8213fb4b5386805cbe1f01e879b0a4';
+  const RELEASE = 'ff648d75dc1aad1650f5cdb0bddff05121b6730d941de999bd629bce8d93809f';
+
+  it('LE CAS RÉEL : APK debug installé, release publiée -> réinstallation requise', () => {
+    expect(requiresReinstall(DEBUG, RELEASE)).toBe(true);
+  });
+
+  it('même clé -> mise à jour normale possible', () => {
+    expect(requiresReinstall(RELEASE, RELEASE)).toBe(false);
+  });
+
+  it('insensible à la casse et aux espaces', () => {
+    expect(requiresReinstall(` ${RELEASE.toUpperCase()} `, RELEASE)).toBe(false);
+  });
+
+  it('ne conclut JAMAIS sur une donnée manquante (pas de consigne infondée)', () => {
+    expect(requiresReinstall(undefined, RELEASE)).toBe(false);
+    expect(requiresReinstall(DEBUG, undefined)).toBe(false);
+    expect(requiresReinstall('', RELEASE)).toBe(false);
+    expect(requiresReinstall(DEBUG, '')).toBe(false);
   });
 });
