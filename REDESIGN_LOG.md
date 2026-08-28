@@ -379,3 +379,75 @@ sont dans la fenêtre de redémarrage du backend ; trafic utilisateur réel en
 Zoom 200 % · viewport 320 px · contrastes mesurés · relecture des textes
 (« Ignorer » du mode d'import est cryptique) · `rgba()` de teinte (~400) ·
 grille 4 px · `!important` (92) · `EntityDialog` sur `Modal` · Drawer/Dropdown.
+
+---
+
+## Lot 13 — Passe finale (`6194f01`, déployé 2026-08-29)
+
+### Contrastes — mesurés, pas estimés
+Script sur les 3 palettes (`scratchpad/contrast.py`, résout les alias `palette.*`,
+gère l'alpha compositing). **57 paires testées → 4 échecs AA réels** :
+
+| Palette | Paire | Avant | Après |
+|---|---|---|---|
+| dark | `textTertiary` / surface | 4.38 | 4.82 |
+| dark | `textTertiary` / surfaceAlt | 4.11 | 4.52 |
+| light | `warning` / surface | 3.64 | 4.56 |
+| light | `orange` / surface | 3.64 | 4.56 |
+
+`#7A8089 → #818790`, `#B7791F → #A6680E` (valeurs minimales calculées, pas
+choisies à l'œil). Résultat : **57/57 AA**.
+
+### Viewport 320 px — casse réelle trouvée
+- Rangée d'actions d'en-tête : débordait, bouton « Nouvelle livraison »
+  **coupé et inatteignable**. Invisible en tant que bug parce que
+  `body { overflow-x: hidden }` **masque** le débordement au lieu de le
+  corriger — pas de scroll, juste du contenu perdu.
+- Bandeau cookies : bouton « Accepter » coupé.
+
+Corrigé : `flex-shrink: 0` retiré + `flex-wrap` sur les rangées d'actions,
+en-tête de page empilé sous 480px (14 CSS modules), bandeau cookies repliable
+avec actions pleine largeur. Vérifié par screenshot sur livraisons / flotte /
+utilisateurs / carburant.
+
+### Zoom 200 % (= 720px CSS)
+Bascule en layout mobile, aucun débordement, tout lisible.
+
+### Grille 4 px
+**324 déclarations** padding/margin/gap alignées sur les paliers (exprimées en
+token quand elles correspondent exactement). 1–2px conservés : bordures et
+ajustement optique. **Hors-grille restants : 0.**
+
+### Couleurs
+**412 `rgba()` de l'ancienne palette** → `color-mix` sur token, ou
+`--color-border` / `--color-border-subtle` pour les teintes de bordure.
+Restent 71 `rgba()` neutres (ombres et voiles noir/blanc) : légitimes.
+
+### Textes
+- « Ignorer » / « MàJ » (bascule du mode d'import, cryptiques) →
+  « Ignorer les doublons » / « Mettre à jour », tooltips explicites.
+- Typographie française : espace fine insécable avant les deux-points,
+  « Ex: » → « Ex. » — 14 chaînes.
+
+### `!important` — audit, non purgés
+110 au total. **Laissés volontairement** :
+- **41** dans des blocs `prefers-reduced-motion` → pattern obligatoire pour
+  neutraliser une animation
+- **37** surchargent Leaflet (qui pose des styles inline sur ses conteneurs)
+- le reste : overrides responsive dans `App.module.css`
+
+Les retirer en bloc casserait le respect de `prefers-reduced-motion` et le
+style de la carte. Une purge demanderait de refactoriser la spécificité
+au cas par cas — pas un gain de perception, du risque pur.
+
+### Vérifié
+tsc 0 · `eslint .` 0 · build OK · **263 tests** · contrastes 57/57 AA ·
+screenshots 320px + 200 %. Déployé, health-gate ✓, endpoints 200,
+**0 erreur backend**. Les 2×502 sont dans la fenêtre de redémarrage
+(23:12:59–23:13:01, déploiement bouclé à 23:13:16) ; trafic réel en 200/304
+juste après.
+
+### Reste (non fait, hors périmètre mesurable)
+`EntityDialog` sur `Modal` · `Drawer` / `Dropdown` · panneau latéral ancré de
+la carte · i18n des libellés de la popup Leaflet · fusion des deux barres de
+recherche de la carte.
