@@ -303,3 +303,40 @@ Ce qui reste (passe navigateur, écran par écran) : structure/hiérarchie/densi
 par écran (Lots 8–12), `rgba()` de teinte, grille 4 px, `!important` (92),
 keyframes décoratives, `EntityDialog` sur Modal, `Drawer`/`Dropdown`,
 Lot 13 (zoom 200 %, 320 px, contrastes mesurés, relecture des textes).
+
+---
+
+## Vérification visuelle (2026-08-29) — Chrome headless
+
+`google-chrome --headless --screenshot` contre le serveur de mocks
+(`vite.mock.config.ts`, port 5199) + un **baseline pré-refonte** (worktree sur
+`3fa79e0`, port 5198) pour distinguer régression et bug pré-existant.
+Harnais : `scratchpad/shoot.sh` (JWT non signé en `?token=`, 14 routes).
+
+### Résultat : aucune régression introduite par la refonte
+
+| Constat | Verdict |
+|---|---|
+| Chevauchement titre / barre de recherche sur `/dashboard` | **pré-existant** (identique au baseline) |
+| `/deliveries` : crash `toLocaleDateString` | **pré-existant** — corrigé (voir ci-dessous) |
+| Bandeau cookies `{privacyLink}` littéral | **pré-existant** — corrigé |
+| Palette, DataTable, primitives, carte | cohérents, aucun écart visuel non voulu |
+
+### 3 bugs réels corrigés (commit `d7716bb`)
+
+1. **`formatDate` & co. plantaient sur une date nulle** → l'ErrorBoundary
+   remplaçait TOUT l'écran par une page d'erreur. Une seule cellule sans date
+   faisait tomber `/deliveries` entièrement, alors que `scheduledDate` /
+   `completedAt` / `paidAt` sont nullables au schéma. Helper `toValidDate()` :
+   rend `—`, ne plante jamais. Couvre les 7 formatters.
+2. **Bandeau cookies** (page d'accueil **publique**) : `<Trans>` recevait des
+   placeholders `{x}` que i18next n'interpole pas → tags nommés + `components`.
+3. **FuelPage** : état d'erreur = `<p>` rouge nu → `<ErrorState>` (icône, titre,
+   description, bouton Réessayer câblé sur `refetch`).
+
+### Limites du harnais
+
+Les mocks ne couvrent pas tous les endpoints (carburant, rapports) : ces écrans
+s'affichent en état d'erreur — ce qui a justement permis de vérifier l'état
+d'erreur. `/map` ne se capture pas (Leaflet + socket en headless). Le rendu
+mobile (320 px), le zoom 200 % et les contrastes mesurés restent à vérifier.
