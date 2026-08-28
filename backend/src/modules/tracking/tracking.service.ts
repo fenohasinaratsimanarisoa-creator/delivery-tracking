@@ -7,7 +7,12 @@ import {
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
-import { NotificationType, NotificationPriority, Prisma, TrackingReliability } from '@prisma/client';
+import {
+  NotificationType,
+  NotificationPriority,
+  Prisma,
+  TrackingReliability,
+} from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
@@ -25,6 +30,7 @@ import {
   haversineDistance,
   GPS_NOISE_THRESHOLD_M,
   computeFilteredDistance,
+  isAccuracyTrustworthy,
 } from '../../common/geo/geo.utils';
 import { evaluateTeleportation } from '../../common/geo/teleportation.utils';
 
@@ -174,25 +180,26 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     // (au lieu d'une requête par véhicule = N+1). Les positions sont groupées par
     // vehicleId en mémoire (DISTINCT ON garde la plus récente par véhicule).
     const vehicleIds = vehicles.map((v) => v.id);
-    const lastPositionRows = vehicleIds.length > 0
-      ? await this.prisma.$queryRaw<
-          Array<{
-            vehicle_id: string;
-            latitude: number;
-            longitude: number;
-            timestamp: Date;
-            speed: number | null;
-            source: string | null;
-            attributes: unknown;
-          }>
-        >`
+    const lastPositionRows =
+      vehicleIds.length > 0
+        ? await this.prisma.$queryRaw<
+            Array<{
+              vehicle_id: string;
+              latitude: number;
+              longitude: number;
+              timestamp: Date;
+              speed: number | null;
+              source: string | null;
+              attributes: unknown;
+            }>
+          >`
           SELECT DISTINCT ON (vehicle_id)
             vehicle_id, latitude, longitude, timestamp, speed, source, attributes
           FROM gps_positions
           WHERE vehicle_id = ANY(${vehicleIds}::uuid[])
           ORDER BY vehicle_id, timestamp DESC
         `
-      : [];
+        : [];
 
     const lastPosByVehicle = new Map(
       lastPositionRows.map((r) => [
@@ -407,9 +414,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
    * Un drain légitime (rattrapage réseau) = quelques lots — très sous le défaut 30.
    */
   async isBatchRateLimited(driverId: string): Promise<boolean> {
-    const max = Number(
-      this.configService.get<string>('BATCH_RATE_LIMIT_PER_MIN', '30'),
-    );
+    const max = Number(this.configService.get<string>('BATCH_RATE_LIMIT_PER_MIN', '30'));
     if (!max || max <= 0) return false;
     const key = `rate_limit_batch:${driverId}`;
     const current = await this.cacheService.get<number>(key);
@@ -447,7 +452,15 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     // saved : any[] — même typage que saveBatch() (retourne les GpsPosition
     // Prisma réellement insérés, cf. createManyAndReturn), non re-précisé ici
     // pour ne pas dupliquer/dévier de sa signature.
-    | { status: 'ok'; saved: any[]; validatedCount: number; driverId: string }
+    // rejected : INDEX (dans rawPositions) des positions DÉFINITIVEMENT
+    // invalides, avec le motif. Voir le commentaire du bloc de validation.
+    | {
+        status: 'ok';
+        saved: any[];
+        validatedCount: number;
+        driverId: string;
+        rejected: Array<{ index: number; reason: string }>;
+      }
   > {
     if (await this.isBatchRateLimited(userId)) {
       this.logger.warn(`Batch rate limited (driver=${userId})`);
@@ -476,18 +489,40 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       }),
     );
 
+    // BUG CORRIGÉ (audit GPS 2026-08-28, A1 — CRITIQUE, perte de données) :
+    // une position invalide était jetée par un simple `continue`, le lot
+    // répondait quand même 200, et le worker natif (PositionUploadWorker) —
+    // qui ne lit pas le corps de la réponse — marquait TOUT le lot `synced`,
+    // détruisant définitivement les positions rejetées. Pire cas reproductible :
+    // une horloge d'appareil décalée de plus de 5 min invalidait TOUTES les
+    // positions (IsPlausibleTimestamp) → validatedCount=0 → 200 → la file
+    // native entière était effacée lot par lot, sans une seule erreur visible.
+    //
+    // On remonte désormais l'INDEX et le MOTIF de chaque rejet à l'appelant.
+    // Ces positions sont définitivement invalides (les retenter à l'identique
+    // échouerait indéfiniment et bloquerait la file — head-of-line blocking),
+    // mais leur destruction devient EXPLICITE et comptabilisée, jamais
+    // silencieuse.
     const validatedPositions: UpdatePositionDto[] = [];
-    for (const { instance, errors } of validationResults) {
+    const rejected: Array<{ index: number; reason: string }> = [];
+    validationResults.forEach(({ instance, errors }, index) => {
       if (errors.length > 0) {
-        this.logger.warn(
-          `Batch position invalid (driver=${userId}): ${errors
-            .map((e) => Object.keys(e.constraints || {}))
-            .flat()
-            .join(', ')}`,
-        );
-        continue;
+        const reason = errors
+          .map((e) => Object.keys(e.constraints || {}))
+          .flat()
+          .join(', ');
+        this.logger.warn(`Batch position invalid (driver=${userId}, index=${index}): ${reason}`);
+        rejected.push({ index, reason: reason || 'invalid' });
+        return;
       }
       validatedPositions.push(instance);
+    });
+
+    if (rejected.length > 0) {
+      this.logger.warn(
+        `[gps-loss] ${rejected.length}/${rawPositions.length} position(s) DÉFINITIVEMENT rejetée(s) ` +
+          `(driver=${userId}) — motifs: ${[...new Set(rejected.map((r) => r.reason))].join(' | ')}`,
+      );
     }
 
     const driver = await this.findDriverByUserId(userId);
@@ -496,11 +531,17 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (validatedPositions.length === 0) {
-      return { status: 'ok', saved: [], validatedCount: 0, driverId: driver.id };
+      return { status: 'ok', saved: [], validatedCount: 0, driverId: driver.id, rejected };
     }
 
     const saved = await this.saveBatch(userId, driver.id, validatedPositions, companyId);
-    return { status: 'ok', saved, validatedCount: validatedPositions.length, driverId: driver.id };
+    return {
+      status: 'ok',
+      saved,
+      validatedCount: validatedPositions.length,
+      driverId: driver.id,
+      rejected,
+    };
   }
 
   logMetrics() {
@@ -577,6 +618,10 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         longitude: true,
         timestamp: true,
         speed: true,
+        // accuracy : nécessaire à la dérivation prudente de la vitesse côté
+        // gateway (audit GPS 2026-08-28, C8) — on ne dérive une vitesse
+        // haversine/Δt que si les deux extrémités sont assez précises.
+        accuracy: true,
         source: true,
         attributes: true,
       },
@@ -1149,29 +1194,40 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     // une vraie retransmission du point le plus récent (le Map lastPositions, lui, est
     // mis à jour au fil du lot pour servir de référence téléportation/vitesse).
     const dbLastPositions = new Map(lastPositions);
+    // Accuracy de la dernière position retenue par véhicule — nécessaire à la
+    // dérivation prudente de la vitesse (voir C8 plus bas). Non porté par
+    // lastPositions, dont la forme est partagée avec la lecture DB ci-dessus.
+    const lastAccuracy = new Map<string, number | null | undefined>();
 
     // 1er passage : ne garder que les positions VALIDES (IDs bien formés, livraison du bon
     // chauffeur, véhicule actif). Le tri chronologique s'applique à ce sous-ensemble, pas
     // aux données qui seront de toute façon rejetées (inutile de trier du bruit).
     const validPositions: typeof positions = [];
     for (const pos of positions) {
-      try {
-        if (pos.deliveryId && !verifiedDeliveries.has(pos.deliveryId)) {
-          this.logger.warn(
-            `Batch position rejected (wrong driver): delivery=${pos.deliveryId} driver=${driverId}`,
-          );
-          continue;
-        }
-      } catch {
+      // BUG CORRIGÉ (audit GPS 2026-08-28, A8) : une livraison terminée ou
+      // réassignée pendant que le téléphone était hors ligne rendait le
+      // deliveryId de la file obsolète, et TOUTE la trace était détruite —
+      // alors que la trajectoire du VÉHICULE reste une donnée parfaitement
+      // valide, et qu'elle alimente le rapport carburant (calculé par
+      // véhicule, pas par livraison). On DÉTACHE désormais la livraison
+      // (deliveryId = null) au lieu de jeter la position.
+      let effectiveDeliveryId: string | null | undefined = pos.deliveryId;
+      if (effectiveDeliveryId && !verifiedDeliveries.has(effectiveDeliveryId)) {
         this.logger.warn(
-          `Batch position rejected (wrong driver): delivery=${pos.deliveryId} driver=${driverId}`,
+          `Batch position détachée de sa livraison (non assignée/supprimée): ` +
+            `delivery=${effectiveDeliveryId} driver=${driverId} — position CONSERVÉE sans livraison`,
         );
-        continue;
+        effectiveDeliveryId = null;
+      }
+      if (
+        effectiveDeliveryId !== undefined &&
+        effectiveDeliveryId !== null &&
+        effectiveDeliveryId.length < 16
+      ) {
+        effectiveDeliveryId = null;
       }
 
       if (!pos.vehicleId || pos.vehicleId.length < 16) continue;
-      if (pos.deliveryId !== undefined && pos.deliveryId !== null && pos.deliveryId.length < 16)
-        continue;
 
       if (!validVehicleIds.has(pos.vehicleId)) {
         this.logger.warn(
@@ -1180,7 +1236,9 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         continue;
       }
 
-      validPositions.push(pos);
+      // La position conserve toutes ses autres données ; seule l'association
+      // livraison a pu être neutralisée ci-dessus.
+      validPositions.push({ ...pos, deliveryId: effectiveDeliveryId ?? undefined });
     }
 
     // Tri chronologique (copie) APRÈS le filtrage, AVANT tout calcul de dédoublonnage et de
@@ -1241,7 +1299,18 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         (!resolvedSpeed || resolvedSpeed <= 0) &&
         last &&
         timeDiffSec > 0 &&
-        Number.isFinite(timeDiffSec)
+        Number.isFinite(timeDiffSec) &&
+        // BUG CORRIGÉ (audit GPS 2026-08-28, C8) : cette vitesse DÉRIVÉE
+        // (haversine/Δt) est stockée en base indistinctement d'une vitesse
+        // mesurée par le mobile, puis relue par la RÈGLE VITESSE de
+        // computeFilteredDistance — qui compte alors le segment EN ENTIER.
+        // Raisonnement circulaire : un saut de bruit GPS de 20 m en 3 s produit
+        // une « vitesse » de 6,7 m/s (> MOVEMENT_SPEED_THRESHOLD_MS) qui valide
+        // son propre segment de bruit. On ne dérive donc une vitesse que si les
+        // DEUX extrémités sont assez précises pour que le déplacement mesuré
+        // soit réel (même plafond que MOVEMENT_TRUST_MAX_ACCURACY_M).
+        isAccuracyTrustworthy(pos.accuracy) &&
+        isAccuracyTrustworthy(lastAccuracy.get(pos.vehicleId))
       ) {
         const distance = haversineDistance(
           last.latitude,
@@ -1275,6 +1344,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         timestamp: ts,
         speed: resolvedSpeed ?? null,
       });
+      lastAccuracy.set(pos.vehicleId, pos.accuracy);
 
       toInsert.push({
         latitude: pos.latitude,
@@ -2313,12 +2383,20 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
   ): Promise<{ status: 'ok' } | { status: 'no_driver_match' } | { status: 'rejected' }> {
     const targetTail = TrackingService.normalizePhoneTail(dto.senderPhone);
     if (targetTail.length < 9) {
-      this.logger.warn(`SMS relay rejected: senderPhone "${dto.senderPhone}" too short after normalization`);
+      this.logger.warn(
+        `SMS relay rejected: senderPhone "${dto.senderPhone}" too short after normalization`,
+      );
       return { status: 'no_driver_match' };
     }
 
     const candidates = await this.prisma.driver.findMany({
-      where: { companyId, deletedAt: null, isActive: true, phone: { not: null }, vehicleId: { not: null } },
+      where: {
+        companyId,
+        deletedAt: null,
+        isActive: true,
+        phone: { not: null },
+        vehicleId: { not: null },
+      },
       select: { id: true, phone: true, vehicleId: true },
     });
     const driver = candidates.find(
@@ -2339,7 +2417,9 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       vehicleId: driver.vehicleId,
     };
 
-    const saved = await this.savePosition(driver.id, positionDto, companyId, 'phone', { viaSms: true });
+    const saved = await this.savePosition(driver.id, positionDto, companyId, 'phone', {
+      viaSms: true,
+    });
     if (!saved) {
       // savePosition() a déjà loggué la raison précise (dédoublonnée, véhicule
       // inactif, cross-tenant…) — pas de log dupliqué ici.

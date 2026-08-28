@@ -20,6 +20,7 @@ import android.os.Build;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
@@ -212,6 +213,30 @@ public class LocationForegroundService extends Service {
     // toujours, redondant avec le pipeline SQLite+WorkManager) — voir
     // NativeHttpFallback.java.
     /** ID du véhicule courant (pour le fallback natif). */
+    /**
+     * Plafond d'accuracy exploitable (mètres). DOIT rester aligné sur la
+     * contrainte serveur `@Max(1000)` de UpdatePositionDto.accuracy : au-delà,
+     * le serveur refuse la position, et une position refusée est retirée de la
+     * file locale (voir PositionUploadWorker / audit 2026-08-28 A1-A2). On
+     * tranche donc localement plutôt que de perdre la position après un
+     * aller-retour réseau inutile.
+     */
+    private static final String TAG = "LocationFgService";
+
+    static final float MAX_USABLE_ACCURACY_M = 1000f;
+
+    /** Compteurs de diagnostic — toute position non mise en file reste VISIBLE (A2/A7). */
+    private static volatile int unattributedFixes = 0;
+    private static volatile int droppedInaccurateFixes = 0;
+
+    public static int getUnattributedFixes() {
+        return unattributedFixes;
+    }
+
+    public static int getDroppedInaccurateFixes() {
+        return droppedInaccurateFixes;
+    }
+
     private static volatile String nativeVehicleId = null;
     /** ID de la livraison courante (pour le fallback natif). */
     private static volatile String nativeDeliveryId = null;
@@ -528,11 +553,50 @@ public class LocationForegroundService extends Service {
         // n'est pas garanti immuable/thread-safe au-delà de ce callback (le
         // provider peut le recycler).
         final String vehicleIdForDb = nativeVehicleId;
-        if (vehicleIdForDb != null && !vehicleIdForDb.isEmpty()) {
+        if (vehicleIdForDb == null || vehicleIdForDb.isEmpty()) {
+            // BUG CORRIGÉ (audit GPS 2026-08-28, A7) : ces positions n'étaient
+            // même pas mises en file — elles n'existaient NULLE PART. C'est
+            // défendable (sans véhicule, impossible de les attribuer), mais
+            // c'était une perte totalement non instrumentée : aucun compteur,
+            // aucun log. Elle est désormais visible en diagnostic.
+            unattributedFixes++;
+            if (unattributedFixes == 1 || unattributedFixes % 50 == 0) {
+                Log.w(
+                    TAG,
+                    "Position NON mise en file : aucun véhicule dans le contexte natif "
+                        + "(setNativeContext pas encore appelé — WebView non prête ou véhicule "
+                        + "non affecté). Total depuis le démarrage : " + unattributedFixes
+                );
+            }
+        } else {
             final String deliveryIdForDb = nativeDeliveryId;
             final double latForDb = loc.getLatitude();
             final double lngForDb = loc.getLongitude();
-            final Float accuracyForDb = loc.hasAccuracy() ? loc.getAccuracy() : null;
+            // BUG CORRIGÉ (audit GPS 2026-08-28, A2 — CRITIQUE) : l'accuracy brute
+            // d'Android était stockée sans plafond. Or Android remonte couramment
+            // 1500-3000 m au premier fix, en intérieur, ou quand seul le provider
+            // réseau/cellulaire répond — au-delà du plafond serveur de 1000 m. Ces
+            // positions faisaient donc l'aller-retour réseau pour être REFUSÉES,
+            // puis étaient supprimées de la file (voir A1). On tranche désormais
+            // ICI, localement : un fix trop imprécis n'est pas exploitable, il ne
+            // part pas, et cette décision est journalisée.
+            final Float rawAccuracy = loc.hasAccuracy() ? loc.getAccuracy() : null;
+            if (rawAccuracy != null && rawAccuracy > MAX_USABLE_ACCURACY_M) {
+                droppedInaccurateFixes++;
+                if (droppedInaccurateFixes == 1 || droppedInaccurateFixes % 50 == 0) {
+                    Log.w(
+                        TAG,
+                        "Fix GPS ignoré : accuracy " + Math.round(rawAccuracy) + " m > "
+                            + MAX_USABLE_ACCURACY_M + " m (plafond serveur) — fix non exploitable "
+                            + "(démarrage à froid / intérieur). Total : " + droppedInaccurateFixes
+                    );
+                }
+                for (LocationSink sink : LOCATION_SINKS) {
+                    sink.onLocationUpdate(loc);
+                }
+                return;
+            }
+            final Float accuracyForDb = rawAccuracy;
             final Float speedForDb = loc.hasSpeed() ? loc.getSpeed() : null;
             final Float headingForDb = loc.hasBearing() ? loc.getBearing() : null;
             final long timestampForDb = loc.getTime();

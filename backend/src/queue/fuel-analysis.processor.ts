@@ -46,6 +46,26 @@ export class FuelAnalysisProcessor extends WorkerHost {
       return;
     }
 
+    // Cross-check GPS déporté hors du chemin HTTP (audit 2026-08-28, C2) : ce
+    // travail scanne toute la trace du véhicule entre deux pleins (jusqu'à
+    // plusieurs centaines de milliers de positions, lues par pages bornées).
+    if (job.name === 'cross-check-gps') {
+      const { fuelLogId, companyId } = (job as Job<FuelAnalysisJobData>).data;
+      try {
+        await this.fuelConsumption.runGpsCrossCheckForLog(fuelLogId, companyId);
+      } catch (err) {
+        // Une erreur ici ne doit pas faire échouer indéfiniment le job : le
+        // cross-check est un contrôle a posteriori, il sera relancé à la
+        // prochaine modification du plein.
+        this.logger.error(
+          `Cross-check GPS échoué pour le plein ${fuelLogId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+      return;
+    }
+
     this.logger.warn(`Unknown job type on fuel-analysis queue: ${job.name}`);
   }
 

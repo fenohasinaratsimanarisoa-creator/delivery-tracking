@@ -20,7 +20,10 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -88,6 +91,15 @@ public class PositionUploadWorker extends Worker {
      * WorkManager (10 min). Le reliquat éventuel part au cycle suivant.
      */
     private static final int MAX_BATCHES_PER_RUN = 25;
+    /**
+     * Budget temps d'UNE exécution (audit GPS 2026-08-28, A10). WorkManager tue
+     * un Worker au-delà de ~10 min. Or MAX_BATCHES_PER_RUN × (15 s de connect +
+     * 15 s de read) = 12,5 min dans le pire cas : le cycle pouvait être tué en
+     * plein envoi. Rien n'était perdu (seuls les lots confirmés sont marqués),
+     * mais le rattrapage était plus lent qu'annoncé et l'arrêt était brutal. On
+     * s'arrête proprement à 8 min : le reliquat part au cycle suivant.
+     */
+    private static final long MAX_RUN_DURATION_MS = 8 * 60 * 1000;
     private static final AtomicLong lastTriggerAtMs = new AtomicLong(0);
     // Verrou anti-concurrence (audit 2026-08-27, HAUTE) : le worker PÉRIODIQUE
     // (15 min, nom unique PERIODIC_WORK_NAME) et le worker ONE-SHOT (nom unique
@@ -161,13 +173,20 @@ public class PositionUploadWorker extends Worker {
         // WorkManager (10 min) : le reliquat éventuel part au cycle suivant
         // (quelques secondes plus tard), sans jamais rien perdre.
         int totalSynced = 0;
+        int totalRejected = 0;
         try {
+            final long runStartedAt = android.os.SystemClock.elapsedRealtime();
             for (int i = 0; i < MAX_BATCHES_PER_RUN; i++) {
                 // WorkManager demande l'arrêt (contrainte perdue, annulation) :
                 // on s'arrête proprement, ce qui est déjà envoyé reste marqué.
                 if (isStopped()) break;
+                if (android.os.SystemClock.elapsedRealtime() - runStartedAt > MAX_RUN_DURATION_MS) {
+                    Log.i(TAG, "Budget temps du cycle atteint — reliquat envoyé au prochain cycle");
+                    break;
+                }
 
-                int httpStatus = uploadBatch(apiUrl, token.token, batch);
+                UploadResult res = uploadBatch(apiUrl, token.token, batch);
+                int httpStatus = res.httpStatus;
 
                 if (httpStatus == 401) {
                     // Credential refusé côté serveur (session révoquée, device
@@ -185,10 +204,38 @@ public class PositionUploadWorker extends Worker {
                     return Result.retry();
                 }
 
-                List<Long> ids = new ArrayList<>(batch.size());
-                for (LocationQueueDb.QueuedPosition p : batch) ids.add(p.id);
-                db.markSynced(ids);
-                totalSynced += ids.size();
+                // A1 (audit 2026-08-28) : ne marquer `synced` QUE ce que le
+                // serveur a réellement traité. Les positions listées dans
+                // `rejected` sont définitivement invalides — les retenter à
+                // l'identique échouerait indéfiniment et bloquerait la file
+                // entière (le lot le plus ancien repart toujours en premier).
+                // On les retire donc AUSSI de la file, mais leur perte est
+                // désormais COMPTÉE et JOURNALISÉE, jamais silencieuse.
+                List<Long> acceptedIds = new ArrayList<>(batch.size());
+                List<Long> rejectedIds = new ArrayList<>();
+                for (int idx = 0; idx < batch.size(); idx++) {
+                    if (res.rejectedIndexes.contains(idx)) {
+                        rejectedIds.add(batch.get(idx).id);
+                    } else {
+                        acceptedIds.add(batch.get(idx).id);
+                    }
+                }
+
+                if (!rejectedIds.isEmpty()) {
+                    totalRejected += rejectedIds.size();
+                    Log.w(
+                        TAG,
+                        "PERTE DE DONNÉES GPS : " + rejectedIds.size() + " position(s) refusée(s) "
+                            + "définitivement par le serveur et retirée(s) de la file — motif(s): "
+                            + res.rejectedReasons + ". Causes typiques : accuracy > 1000 m "
+                            + "(fix trop imprécis), horloge de l'appareil décalée, position en "
+                            + "file depuis plus de 30 jours."
+                    );
+                    db.markSynced(rejectedIds);
+                }
+
+                db.markSynced(acceptedIds);
+                totalSynced += acceptedIds.size();
                 // Canal de secours SMS (audit terrain 2026-08-27) : chaque upload HTTP
                 // réussi repousse le seuil "hors ligne depuis" — voir SmsFallbackManager.
                 SmsFallbackManager.markSyncSuccess(context);
@@ -199,7 +246,16 @@ public class PositionUploadWorker extends Worker {
             }
 
             db.pruneOld();
-            Log.i(TAG, "Upload natif réussi : " + totalSynced + " position(s) synchronisée(s)");
+            Log.i(
+                TAG,
+                "Upload natif réussi : " + totalSynced + " position(s) synchronisée(s)"
+                    + (totalRejected > 0 ? ", " + totalRejected + " REFUSÉE(S) par le serveur" : "")
+            );
+            if (totalRejected > 0) {
+                // Compteur cumulatif exposé au diagnostic (BackgroundLocationPlugin) :
+                // une perte, même justifiée, doit rester visible dans l'app.
+                recordRejected(context, totalRejected);
+            }
             return Result.success();
         } catch (IOException e) {
             Log.w(TAG, "Upload natif : erreur réseau — retry avec backoff", e);
@@ -209,9 +265,60 @@ public class PositionUploadWorker extends Worker {
         }
     }
 
-    /** POST HTTPS via HttpURLConnection (pas de nouvelle dépendance HTTP). Renvoie le code HTTP. */
-    private int uploadBatch(String apiUrl, String token, List<LocationQueueDb.QueuedPosition> batch)
-        throws IOException {
+    /** Préférences de diagnostic : compteur cumulatif de positions refusées (A1). */
+    private static final String PREFS_DIAG = "logitrack_tracking_diag";
+    public static final String PREF_REJECTED_TOTAL = "gps_rejected_total";
+    public static final String PREF_REJECTED_LAST_AT = "gps_rejected_last_at";
+
+    /**
+     * Comptabilise une perte définitive de positions. Une perte peut être
+     * légitime (fix inexploitable), mais elle ne doit JAMAIS être invisible :
+     * ce compteur est lisible par le JS via BackgroundLocationPlugin pour
+     * alerter le chauffeur/dispatcher.
+     */
+    private static void recordRejected(Context context, int count) {
+        try {
+            android.content.SharedPreferences prefs =
+                context.getSharedPreferences(PREFS_DIAG, Context.MODE_PRIVATE);
+            prefs.edit()
+                .putInt(PREF_REJECTED_TOTAL, prefs.getInt(PREF_REJECTED_TOTAL, 0) + count)
+                .putLong(PREF_REJECTED_LAST_AT, System.currentTimeMillis())
+                .apply();
+        } catch (Exception e) {
+            Log.w(TAG, "Impossible d'enregistrer le compteur de positions refusées", e);
+        }
+    }
+
+    /** Résultat d'un envoi : code HTTP + index des positions DÉFINITIVEMENT rejetées. */
+    static final class UploadResult {
+        final int httpStatus;
+        /** Index (dans le lot envoyé) rejetés par le serveur, avec leur motif. */
+        final List<Integer> rejectedIndexes;
+        final String rejectedReasons;
+
+        UploadResult(int httpStatus, List<Integer> rejectedIndexes, String rejectedReasons) {
+            this.httpStatus = httpStatus;
+            this.rejectedIndexes = rejectedIndexes;
+            this.rejectedReasons = rejectedReasons;
+        }
+    }
+
+    /**
+     * POST HTTPS via HttpURLConnection (pas de nouvelle dépendance HTTP).
+     *
+     * BUG CORRIGÉ (audit GPS 2026-08-28, A1 — CRITIQUE, perte de données) : cette
+     * méthode ne renvoyait QUE le code HTTP, et le corps de la réponse n'était
+     * JAMAIS lu. Le serveur, lui, pouvait jeter silencieusement des positions
+     * invalides (accuracy > 1000 m, horloge décalée…) tout en répondant 200 :
+     * l'appelant marquait alors TOUT le lot `synced` et les positions rejetées
+     * étaient définitivement détruites. Pire cas reproductible : une horloge
+     * d'appareil décalée de plus de 5 min invalidait TOUTES les positions →
+     * la file entière était effacée lot par lot, sans une seule erreur visible.
+     * On lit désormais `rejected[]` pour distinguer accepté / rejeté.
+     */
+    private UploadResult uploadBatch(
+        String apiUrl, String token, List<LocationQueueDb.QueuedPosition> batch
+    ) throws IOException {
         String body;
         try {
             body = buildPayload(batch);
@@ -234,9 +341,56 @@ public class PositionUploadWorker extends Worker {
                 os.write(body.getBytes(StandardCharsets.UTF_8));
             }
 
-            return conn.getResponseCode();
+            int status = conn.getResponseCode();
+            List<Integer> rejectedIndexes = new ArrayList<>();
+            StringBuilder reasons = new StringBuilder();
+            if (status >= 200 && status < 300) {
+                parseRejected(readBody(conn), rejectedIndexes, reasons);
+            }
+            return new UploadResult(status, rejectedIndexes, reasons.toString());
         } finally {
             conn.disconnect();
+        }
+    }
+
+    private static String readBody(HttpURLConnection conn) {
+        try (InputStream in = conn.getInputStream();
+             BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            // Réponse toujours petite (compteurs + index rejetés) : borne large de sécurité.
+            while ((line = r.readLine()) != null && sb.length() < 64_000) sb.append(line);
+            return sb.toString();
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    /**
+     * Extrait `rejected: [{index, reason}]` de la réponse. Tolérant : une réponse
+     * d'un serveur plus ancien (sans ce champ) laisse simplement la liste vide —
+     * le comportement retombe alors sur l'ancien (tout le lot marqué synced),
+     * jamais une exception qui bloquerait l'envoi.
+     */
+    private static void parseRejected(String body, List<Integer> outIndexes, StringBuilder outReasons) {
+        if (body == null || body.isEmpty()) return;
+        try {
+            JSONArray rejected = new JSONObject(body).optJSONArray("rejected");
+            if (rejected == null) return;
+            for (int i = 0; i < rejected.length(); i++) {
+                JSONObject item = rejected.optJSONObject(i);
+                if (item == null) continue;
+                int index = item.optInt("index", -1);
+                if (index < 0) continue;
+                outIndexes.add(index);
+                String reason = item.optString("reason", "invalid");
+                if (outReasons.indexOf(reason) < 0) {
+                    if (outReasons.length() > 0) outReasons.append(" | ");
+                    outReasons.append(reason);
+                }
+            }
+        } catch (JSONException ignored) {
+            // Corps illisible : on ne prétend AUCUN rejet (aucune suppression indue).
         }
     }
 
@@ -323,7 +477,15 @@ public class PositionUploadWorker extends Worker {
      * pire cas passe d'un blocage de ~15 min à un simple délai de ~15 s.
      */
     public static void triggerImmediateUploadIfNetworkAvailable(Context context) {
-        long now = System.currentTimeMillis();
+        // BUG CORRIGÉ (audit GPS 2026-08-28, A9) : ce throttle utilisait
+        // System.currentTimeMillis() (horloge MURALE). Un saut d'horloge vers le
+        // futur — fréquent au premier NTP après un redémarrage, ou sur un
+        // appareil dont l'heure est réglée à la main — figeait `lastTriggerAtMs`
+        // dans le futur : `now - last` restait négatif, donc < 15 s, et PLUS
+        // AUCUN envoi immédiat n'était déclenché jusqu'à ce que l'horloge
+        // rattrape. SystemClock.elapsedRealtime() est monotone depuis le boot et
+        // insensible à tout réglage d'heure.
+        long now = android.os.SystemClock.elapsedRealtime();
         long last = lastTriggerAtMs.get();
         if (now - last < MIN_TRIGGER_INTERVAL_MS) {
             return; // Trop tôt : le prochain appel (position suivante) ou le

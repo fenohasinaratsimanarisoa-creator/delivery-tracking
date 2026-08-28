@@ -2,7 +2,10 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { computeFilteredDistance } from '../../common/geo/geo.utils';
-import { evaluateTeleportation, type TeleportReference } from '../../common/geo/teleportation.utils';
+import {
+  evaluateTeleportation,
+  type TeleportReference,
+} from '../../common/geo/teleportation.utils';
 import { FuelConsumptionService } from './fuel-consumption.service';
 
 // =============================================================================
@@ -111,7 +114,9 @@ function buildTraceWithGap(opts: {
  * sur un point accepté (jamais sur un point suspect), pour ne pas comparer un point
  * légitime à un point aberrant qui l'a précédé.
  */
-function markSuspects(positions: SyntheticPosition[]): (SyntheticPosition & { suspect: boolean })[] {
+function markSuspects(
+  positions: SyntheticPosition[],
+): (SyntheticPosition & { suspect: boolean })[] {
   const result: (SyntheticPosition & { suspect: boolean })[] = [];
   let reference: TeleportReference | null = null;
   for (const p of positions) {
@@ -120,7 +125,13 @@ function markSuspects(positions: SyntheticPosition[]): (SyntheticPosition & { su
       reference = { latitude: p.latitude, longitude: p.longitude, timestamp: p.timestamp };
       continue;
     }
-    const evalRes = evaluateTeleportation(reference, p.latitude, p.longitude, p.timestamp, p.accuracy);
+    const evalRes = evaluateTeleportation(
+      reference,
+      p.latitude,
+      p.longitude,
+      p.timestamp,
+      p.accuracy,
+    );
     result.push({ ...p, suspect: evalRes.suspect });
     if (!evalRes.suspect) {
       reference = { latitude: p.latitude, longitude: p.longitude, timestamp: p.timestamp };
@@ -133,7 +144,12 @@ const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
 
 const mockPrisma = {
   fuelLog: { findFirst: jest.fn(), update: jest.fn() },
-  gpsPosition: { findMany: jest.fn() },
+  // findFirst : borne le début de fenêtre à la 1re position connue du véhicule
+  // (audit 2026-08-28, C6). Amorcé par primeTrack() dans chaque test.
+  gpsPosition: {
+    findMany: jest.fn(),
+    findFirst: jest.fn() as jest.Mock<Promise<{ timestamp?: Date } | null>, unknown[]>,
+  },
   companyFuelSettings: { findUnique: jest.fn() },
 };
 
@@ -152,6 +168,23 @@ function makeFuelLog(overrides: Record<string, unknown> = {}) {
     gpsCoverageInsufficientReason: null,
     ...overrides,
   };
+}
+
+/**
+ * Amorce la trace GPS du véhicule pour UN cross-check.
+ *
+ * findFirst modélise la PREMIÈRE position jamais enregistrée pour ce véhicule :
+ * depuis l'audit 2026-08-28 (C6), elle borne le début de la fenêtre de
+ * vérification quand il n'existe pas de plein précédent — on ne reproche jamais
+ * à un chauffeur l'absence de données antérieures à la mise en service du suivi.
+ * Sans elle, la fenêtre remonterait à 30 jours en arrière et la couverture
+ * (C1, calculée sur la fenêtre RÉELLE) serait quasi nulle.
+ */
+function primeTrack(positions: Array<{ timestamp?: Date }>) {
+  mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positions);
+  mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce(
+    positions.length > 0 ? { timestamp: positions[0].timestamp } : null,
+  );
 }
 
 describe('GPS ↔ Carburant — traces synthétiques (verrou de non-régression)', () => {
@@ -190,9 +223,9 @@ describe('GPS ↔ Carburant — traces synthétiques (verrou de non-régression)
       expect(deviationPct).toBeLessThanOrEqual(0.05);
     });
 
-    it("crossCheckFuelLogWithGps() ne pose AUCUNE anomalie (kilométrage saisi cohérent avec le GPS)", async () => {
+    it('crossCheckFuelLogWithGps() ne pose AUCUNE anomalie (kilométrage saisi cohérent avec le GPS)', async () => {
       const fuelLog = makeFuelLog({ kilometers: REFERENCE_KM });
-      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positions);
+      primeTrack(positions);
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
@@ -224,16 +257,30 @@ describe('GPS ↔ Carburant — traces synthétiques (verrou de non-régression)
       accuracy: 15,
     });
 
-    it('computeGpsCoverageFraction() retourne < 0.9 (et, concrètement, sous le seuil réel de production)', () => {
-      const coverage = (service as any).computeGpsCoverageFraction(positions);
+    // La couverture est désormais calculée par scanVehicleTrack sur la FENÊTRE
+    // RÉELLE de vérification (audit 2026-08-28, C1) — et non plus sur l'étendue
+    // des seules positions présentes, ce qui rendait un trou invisible.
+    it('la couverture calculée sur la fenêtre réelle reste sous le seuil de production', async () => {
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positions);
+      const windowStart = positions[0].timestamp!;
+      const windowEnd = positions[positions.length - 1].timestamp!;
+
+      const scan = await (service as any).scanVehicleTrack(
+        'vehicle-1',
+        'company-1',
+        windowStart,
+        windowEnd,
+      );
+      const coverage = scan.coveredMs / (windowEnd.getTime() - windowStart.getTime());
+
       expect(coverage).toBeLessThan(0.9);
       expect(coverage).toBeLessThan(FUEL_COVERAGE_MIN_FRACTION);
     });
 
-    it("crossCheckFuelLogWithGps() flague gpsCoverageInsufficientFlag AU LIEU de comparer les distances (pas de fausse anomalie)", async () => {
+    it('crossCheckFuelLogWithGps() flague gpsCoverageInsufficientFlag AU LIEU de comparer les distances (pas de fausse anomalie)', async () => {
       const fuelLog = makeFuelLog({ kilometers: 40 }); // >= FUEL_COVERAGE_MIN_MANUAL_KM
       expect(fuelLog.kilometers).toBeGreaterThanOrEqual(FUEL_COVERAGE_MIN_MANUAL_KM);
-      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positions);
+      primeTrack(positions);
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
@@ -295,10 +342,18 @@ describe('GPS ↔ Carburant — traces synthétiques (verrou de non-régression)
       expect(gpsKmUnfiltered).toBeGreaterThan(200);
     });
 
-    it("crossCheckFuelLogWithGps() sur les positions filtrées (suspect=false, comme la requête Prisma réelle) ne pose aucune anomalie", async () => {
+    it('crossCheckFuelLogWithGps() sur les positions filtrées (suspect=false, comme la requête Prisma réelle) ne pose aucune anomalie', async () => {
       const nonSuspect = flagged.filter((p) => !p.suspect);
-      const fuelLog = makeFuelLog({ kilometers: CLEAN_REFERENCE_KM });
-      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(nonSuspect);
+      // fillDate calé sur la fin de la trace : ce test porte sur le FILTRAGE des
+      // points téléportés, pas sur la couverture temporelle. Avec la date par
+      // défaut (14h00), la fenêtre de vérification s'étendrait bien au-delà de
+      // la trace et le garde-fou de couverture (C1) se déclencherait à juste
+      // titre, masquant ce que ce test veut vérifier.
+      const fuelLog = makeFuelLog({
+        kilometers: CLEAN_REFERENCE_KM,
+        fillDate: nonSuspect[nonSuspect.length - 1].timestamp,
+      });
+      primeTrack(nonSuspect);
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
@@ -332,14 +387,14 @@ describe('GPS ↔ Carburant — traces synthétiques (verrou de non-régression)
       timestamp: new Date(Date.now() + i * 3000),
     }));
 
-    it('les positions dégradées (30-80m) sont conservées : gpsKm ≈ la distance réelle, aucune n\'est rejetée', () => {
+    it("les positions dégradées (30-80m) sont conservées : gpsKm ≈ la distance réelle, aucune n'est rejetée", () => {
       const gpsKm = computeFilteredDistance(positions) / 1000;
       expect(gpsKm).toBeCloseTo(REFERENCE_KM, 2);
     });
 
-    it("crossCheckFuelLogWithGps() traite normalement ces positions (pas de flag couverture, pas de faux rejet)", async () => {
+    it('crossCheckFuelLogWithGps() traite normalement ces positions (pas de flag couverture, pas de faux rejet)', async () => {
       const fuelLog = makeFuelLog({ kilometers: Math.round(REFERENCE_KM) });
-      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(positions);
+      primeTrack(positions);
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
@@ -360,7 +415,7 @@ describe('GPS ↔ Carburant — traces synthétiques (verrou de non-régression)
   describe('Scénario 5 — aucune position GPS sur la période', () => {
     it('message exact "Aucune position GPS enregistrée..." + gpsCoverageInsufficientFlag=true', async () => {
       const fuelLog = makeFuelLog({ kilometers: 120 });
-      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
+      primeTrack([]);
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 

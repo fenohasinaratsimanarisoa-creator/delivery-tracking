@@ -491,12 +491,43 @@ export function useDriverTracking() {
     try {
       await flushQueue(async (positions) => {
         return new Promise<void>((resolve, reject) => {
-          socket.emit('batchPosition', { positions });
+          // CORRÉLATION DE LOT (audit GPS 2026-08-28, A5 — perte de données) :
+          // l'ACK `positionsSaved` n'avait aucun identifiant. Sur réseau lent,
+          // l'ack TARDIF d'un chunk A déjà en timeout résolvait la promesse du
+          // chunk B en cours — flushQueue supprimait alors B d'IndexedDB SANS
+          // qu'il ait été acquitté ni forcément persisté. On étiquette désormais
+          // chaque lot et on IGNORE tout ack dont le batchId ne correspond pas.
+          const batchId =
+            (globalThis.crypto?.randomUUID?.() ??
+              `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+          socket.emit('batchPosition', { positions, batchId });
           // Un seul listener nommé (les deux .once précédents étaient redondants :
           // le premier ne résolvait que la promesse sans clear le timeout, et restait
           // actif 15s ; s'il ne se déclenchait jamais, il aurait pu résoudre une
           // promesse déjà rejetée). Ce handler retire le timeout puis résout.
-          const onPositionsSaved = () => { clearTimeout(timeout); resolve(); };
+          const onPositionsSaved = (data?: { batchId?: string }) => {
+            // Ack d'un AUTRE lot (retardataire) : on ne résout pas, et on se
+            // réabonne pour continuer d'attendre le nôtre.
+            if (data?.batchId && data.batchId !== batchId) {
+              socket.once('positionsSaved', onPositionsSaved);
+              return;
+            }
+            clearTimeout(timeout);
+            socket.off('positionsRejected', onPositionsRejected);
+            resolve();
+          };
+          // Rejet EXPLICITE (rate_limited, no_driver) : le serveur nous dit de
+          // conserver les positions. On rejette immédiatement au lieu d'attendre
+          // le timeout — flushQueue ne supprime alors rien (A4).
+          const onPositionsRejected = (data?: { batchId?: string; reason?: string }) => {
+            if (data?.batchId && data.batchId !== batchId) {
+              socket.once('positionsRejected', onPositionsRejected);
+              return;
+            }
+            clearTimeout(timeout);
+            socket.off('positionsSaved', onPositionsSaved);
+            reject(new Error(`batch rejected: ${data?.reason ?? 'unknown'}`));
+          };
           // Timeout d'ACK PROPORTIONNEL à la taille du chunk envoyé (jamais un
           // délai fixe) : un petit lot est traité vite côté serveur, un gros chunk
           // mérite un budget plus large. Base 5s, +15ms par position — pour un
@@ -506,9 +537,10 @@ export function useDriverTracking() {
           // flushQueue qui n'affiche rien de non-acquitté (reprise au tick suivant).
           const timeoutMs = Math.max(5000, positions.length * 15);
           const timeout = setTimeout(() => {
-            // Retire le listener restant : un 'positionsSaved' tardif (ex. d'un flush
-            // suivant) ne doit pas résoudre une promesse déjà rejetée, ni fuiter.
+            // Retire les listeners restants : un ack tardif ne doit pas résoudre
+            // une promesse déjà rejetée, ni fuiter.
             socket.off('positionsSaved', onPositionsSaved);
+            socket.off('positionsRejected', onPositionsRejected);
             reject(new Error(`flush timeout (${positions.length} positions)`));
             // Le backend émet désormais positionsSaved EXPLICITEMENT (acquittement
             // réel, sans callback ack côté client) : le timeout n'est plus qu'un filet
@@ -516,6 +548,7 @@ export function useDriverTracking() {
             // de la file IndexedDB : flushQueue ne les efface que si sendFn résout.
           }, timeoutMs);
           socket.once('positionsSaved', onPositionsSaved);
+          socket.once('positionsRejected', onPositionsRejected);
         });
       }, { chunkSize: BATCH_CHUNK_SIZE });
     } catch (err) {

@@ -61,6 +61,23 @@ public class LocationQueueDb extends SQLiteOpenHelper {
      * disque de l'appareil et faire planter l'app entière.
      */
     private static final int MAX_UNSYNCED_ROWS = 50_000;
+    /**
+     * Âge maximal d'une position NON synchronisée conservée en file.
+     *
+     * BUG CORRIGÉ (audit GPS 2026-08-28, A3) : la file gardait les lignes non
+     * synchronisées SANS AUCUNE limite de durée (seul le plafond de 50 000
+     * lignes s'appliquait), alors que le serveur REFUSE tout horodatage de plus
+     * de 30 jours (IsPlausibleTimestamp, PAST_TOLERANCE_MS). Un appareil dont le
+     * token restait invalide un mois — cas explicitement prévu par le chemin
+     * « 401 → on retente au prochain cycle » — accumulait donc des positions qui,
+     * à la reconnexion, étaient toutes refusées puis détruites.
+     *
+     * Les deux fenêtres sont désormais alignées : au-delà de 30 jours, la
+     * position est purgée LOCALEMENT et de façon VISIBLE (log explicite), au lieu
+     * d'être envoyée pour être rejetée. Marge de 1 jour sous la limite serveur
+     * pour absorber le temps de transit et une petite dérive d'horloge.
+     */
+    private static final long UNSYNCED_MAX_AGE_MS = TimeUnit.DAYS.toMillis(29);
 
     private static volatile LocationQueueDb instance;
 
@@ -103,12 +120,30 @@ public class LocationQueueDb extends SQLiteOpenHelper {
         );
     }
 
+    /**
+     * A11 (audit 2026-08-28) : cette méthode ne faisait que journaliser. Le vrai
+     * risque n'est pas la perte de données (SQLiteOpenHelper ne supprime rien
+     * ici) mais l'INVERSE : le schéma resterait dans son ancienne version tandis
+     * que le code écrirait des colonnes inexistantes — chaque insert échouerait
+     * alors silencieusement (insert() renvoie -1). On rend donc l'absence de
+     * migration IMPOSSIBLE à ignorer, et on refuse explicitement une descente de
+     * version (downgrade), qui indiquerait une installation incohérente.
+     */
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Pas de migration nécessaire pour l'instant (DB_VERSION = 1 depuis la
-        // création) — repli défensif si une future version doit un jour migrer :
-        // ne JAMAIS perdre silencieusement des positions non synchronisées.
-        Log.w(TAG, "onUpgrade appelé (" + oldVersion + " -> " + newVersion + ") — aucune migration définie");
+        throw new IllegalStateException(
+            "LocationQueueDb: migration " + oldVersion + " -> " + newVersion + " NON DÉFINIE. "
+                + "Ajoutez le code de migration (et ne perdez JAMAIS les lignes synced=0) "
+                + "avant d'incrémenter DB_VERSION."
+        );
+    }
+
+    @Override
+    public void onDowngrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        throw new IllegalStateException(
+            "LocationQueueDb: downgrade " + oldVersion + " -> " + newVersion + " refusé — "
+                + "installation incohérente, les positions en file ne doivent pas être détruites."
+        );
     }
 
     /**
@@ -263,6 +298,26 @@ public class LocationQueueDb extends SQLiteOpenHelper {
         );
         if (deletedOld > 0) {
             Log.i(TAG, "pruneOld: " + deletedOld + " ligne(s) synced supprimée(s) (> 30 jours)");
+        }
+
+        // A3 : positions NON synchronisées trop anciennes pour être encore
+        // acceptées par le serveur. Les garder ne ferait que les envoyer pour
+        // qu'elles soient refusées (et alors comptées comme perte définitive) :
+        // on les purge ici, avec un log explicite — jamais en silence.
+        long staleCutoff = System.currentTimeMillis() - UNSYNCED_MAX_AGE_MS;
+        int deletedStale = db.delete(
+            TABLE,
+            COL_SYNCED + " = 0 AND " + COL_TIMESTAMP_MS + " < ?",
+            new String[]{String.valueOf(staleCutoff)}
+        );
+        if (deletedStale > 0) {
+            Log.w(
+                TAG,
+                "pruneOld: " + deletedStale + " position(s) NON synchronisée(s) purgée(s) — "
+                    + "plus vieilles que " + TimeUnit.MILLISECONDS.toDays(UNSYNCED_MAX_AGE_MS)
+                    + " jours, le serveur les aurait de toute façon refusées. "
+                    + "Cause probable : appareil déconnecté/sans token pendant très longtemps."
+            );
         }
 
         long unsyncedCount = countUnsynced();

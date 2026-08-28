@@ -23,7 +23,11 @@ import { FuelFilterDto } from './dto/fuel-filter.dto';
 import { CreateFuelPriceDto } from './dto/create-fuel-price.dto';
 import { UpdateFuelPriceDto } from './dto/update-fuel-price.dto';
 import { UpdateDefaultFuelPricesDto } from './dto/update-default-fuel-prices.dto';
-import { computeFilteredDistance, haversineDistance } from '../../common/geo/geo.utils';
+import {
+  computeFilteredDistance,
+  haversineDistance,
+  isStationaryNoise,
+} from '../../common/geo/geo.utils';
 import { hasFuelAnomaly, withDerivedAnomaly } from '../../common/fuel/fuel-anomaly.utils';
 
 // Valeurs initiales (seed) utilisées UNIQUEMENT tant que la company n'a pas configuré
@@ -56,6 +60,15 @@ const FUEL_COVERAGE_GAP_TOLERANCE_S = 300;
 // un trajet très court (ex. ~0 km, véhicule quasi immobile) peut légitimement avoir une
 // couverture faible sans que la distance soit fausse.
 const FUEL_COVERAGE_MIN_MANUAL_KM = 5;
+
+/**
+ * Plafond de positions chargées pour UN rapport quotidien (audit 2026-08-28, C7).
+ * Une journée de tracking continu à 3 s/fix donne ~28 800 positions par véhicule ;
+ * 60 000 laisse une marge ×2 tout en bornant la mémoire du cron de 22 h, qui
+ * itère sur toute la flotte. Atteindre ce plafond n'est pas un usage normal :
+ * c'est journalisé explicitement (jamais une troncature silencieuse).
+ */
+const MAX_POSITIONS_PER_DAILY_REPORT = 60_000;
 
 @Injectable()
 export class FuelConsumptionService {
@@ -216,11 +229,35 @@ export class FuelConsumptionService {
       this.logger.warn(`Failed to dispatch fuel analysis job: ${e.message}`);
     }
 
-    // Vérification croisée : distance GPS vs kilomètres saisis
-    try {
-      await this.crossCheckFuelLogWithGps(fuelLog, companyId);
-    } catch (e: any) {
-      this.logger.warn(`Cross-check failed for fuel log ${fuelLog.id}: ${e.message}`);
+    // Vérification croisée : distance GPS vs kilomètres saisis.
+    //
+    // BUG CORRIGÉ (audit GPS/carburant 2026-08-28, C2) : ce cross-check était
+    // AWAITÉ dans le chemin de la requête HTTP alors qu'il scanne toute la trace
+    // GPS entre deux pleins (jusqu'à ~864 000 positions sur une fenêtre de
+    // 30 jours). L'utilisateur attendait plusieurs secondes pour enregistrer un
+    // plein, et le scan concurrençait le trafic temps réel sur un conteneur à
+    // 768 Mo. Il part désormais sur la file 'fuel-analysis' (worker dédié) quand
+    // elle est disponible ; l'exécution inline ne subsiste QUE comme repli sans
+    // Redis/BullMQ, où elle reste correcte grâce au scan paginé.
+    let crossCheckQueued = false;
+    if (this.fuelAnalysisQueue) {
+      try {
+        await this.fuelAnalysisQueue.add('cross-check-gps', {
+          fuelLogId: fuelLog.id,
+          vehicleId: fuelLog.vehicleId,
+          companyId,
+        });
+        crossCheckQueued = true;
+      } catch (e: any) {
+        this.logger.warn(`Failed to dispatch GPS cross-check job: ${e.message}`);
+      }
+    }
+    if (!crossCheckQueued) {
+      try {
+        await this.crossCheckFuelLogWithGps(fuelLog, companyId);
+      } catch (e: any) {
+        this.logger.warn(`Cross-check failed for fuel log ${fuelLog.id}: ${e.message}`);
+      }
     }
 
     // anomalyFlag/anomalyReason sont dérivés en lecture (consumption OR gps) :
@@ -1009,6 +1046,13 @@ export class FuelConsumptionService {
         timestamp: { gte: bounds.start, lte: bounds.end },
       },
       orderBy: { timestamp: 'asc' },
+      // GARDE-FOU VOLUME (audit GPS/carburant 2026-08-28, C7) : une journée de
+      // tracking à 3 s/fix produit ~28 800 positions PAR VÉHICULE. Sans borne,
+      // le cron de 22 h matérialisait tout l'historique du jour en mémoire pour
+      // chaque véhicule de la flotte. La borne est très au-dessus d'une journée
+      // normale : l'atteindre signale une anomalie (flood, horloge folle), pas
+      // un usage légitime — on la journalise alors explicitement.
+      take: MAX_POSITIONS_PER_DAILY_REPORT,
       select: {
         latitude: true,
         longitude: true,
@@ -1087,6 +1131,13 @@ export class FuelConsumptionService {
         timestamp: { gte: bounds.start, lte: bounds.end },
       },
       orderBy: { timestamp: 'asc' },
+      // GARDE-FOU VOLUME (audit GPS/carburant 2026-08-28, C7) : une journée de
+      // tracking à 3 s/fix produit ~28 800 positions PAR VÉHICULE. Sans borne,
+      // le cron de 22 h matérialisait tout l'historique du jour en mémoire pour
+      // chaque véhicule de la flotte. La borne est très au-dessus d'une journée
+      // normale : l'atteindre signale une anomalie (flood, horloge folle), pas
+      // un usage légitime — on la journalise alors explicitement.
+      take: MAX_POSITIONS_PER_DAILY_REPORT,
       select: {
         latitude: true,
         longitude: true,
@@ -1197,6 +1248,15 @@ export class FuelConsumptionService {
     let distanceKm = 0;
     let gpsDataQuality: GpsDataQuality = GpsDataQuality.insufficient;
 
+    if (positions.length >= MAX_POSITIONS_PER_DAILY_REPORT) {
+      // Troncature JAMAIS silencieuse (C7) : le rapport reste produit sur les
+      // positions chargées, mais l'anomalie de volume est visible.
+      this.logger.warn(
+        `[fuel-report] Plafond de positions atteint (${MAX_POSITIONS_PER_DAILY_REPORT}) : ` +
+          `vehicle=${vehicleId} driver=${driver.id} — la distance du jour peut être tronquée`,
+      );
+    }
+
     if (positions.length >= 2) {
       // Distance filtrée par bruit PONDÉRÉ par l'accuracy moyenne de chaque segment
       // ET plafonné (computeFilteredDistance, source unique dans geo.utils — même
@@ -1234,7 +1294,7 @@ export class FuelConsumptionService {
         // 3km) pour ne jamais flaguer à tort une vraie tournée de livraison à
         // arrêts multiples (ratio naturellement élevé mais accuracy correcte).
         const withTs = positions.filter((p) => p.timestamp);
-        if (computedKm >= 3 && withTs.length >= 2) {
+        if (withTs.length >= 2) {
           const first = withTs[0];
           const last = withTs[withTs.length - 1];
           const netDisplacementKm =
@@ -1245,14 +1305,13 @@ export class FuelConsumptionService {
             accuracies.length > 0
               ? accuracies.reduce((sum, a) => sum + a, 0) / accuracies.length
               : 0;
-          const wanderRatio = netDisplacementKm > 0 ? computedKm / netDisplacementKm : Infinity;
-          if (wanderRatio > 4 && avgAccuracy > 35) {
+          // Verdict PARTAGÉ avec crossCheckFuelLogWithGps (geo.utils, C4).
+          if (isStationaryNoise({ distanceKm: computedKm, netDisplacementKm, avgAccuracy })) {
             gpsDataQuality = GpsDataQuality.suspicious;
             this.logger.warn(
               `[fuel-report] Distance suspecte: vehicle=${vehicleId} driver=${driver.id} ` +
                 `distanceKm=${computedKm.toFixed(2)} netDisplacementKm=${netDisplacementKm.toFixed(2)} ` +
-                `ratio=${wanderRatio.toFixed(1)} avgAccuracy=${avgAccuracy.toFixed(0)}m — ` +
-                `probable bruit GPS stationnaire, pas un trajet réel`,
+                `avgAccuracy=${avgAccuracy.toFixed(0)}m — probable bruit GPS stationnaire, pas un trajet réel`,
             );
           }
         }
@@ -1367,24 +1426,154 @@ export class FuelConsumptionService {
    * la période est donc pénalisé. Retourne 1 quand on ne peut pas calculer (moins de 2
    * fixes ou timestamps absents) : dans ce cas le cross-check ratio se comporte comme avant.
    */
-  private computeGpsCoverageFraction(positions: Array<{ timestamp?: Date | null }>): number {
-    if (positions.length < 2) return 1;
-    const firstTs = positions[0].timestamp;
-    const lastTs = positions[positions.length - 1].timestamp;
-    if (!firstTs || !lastTs) return 1;
+  /**
+   * Parcourt la trace d'un véhicule sur [start, end] PAR PAGES BORNÉES et
+   * n'agrège que des scalaires (distance filtrée, millisecondes couvertes,
+   * nombre de fixes) — jamais tout l'historique en mémoire (audit 2026-08-28, C2).
+   *
+   * Continuité entre pages : la DERNIÈRE position d'une page est réinjectée en
+   * tête de la suivante, pour que le segment à cheval sur la frontière soit
+   * compté exactement une fois et que collapseStationaryWindows garde un
+   * contexte. L'effet de bord sur les fenêtres d'arrêt qui chevaucheraient une
+   * frontière de page est négligeable à cette taille de page (une fenêtre
+   * d'arrêt dure ≥ 5 min, une page couvre plusieurs heures d'acquisition).
+   *
+   */
+  private async scanVehicleTrack(
+    vehicleId: string,
+    companyId: string,
+    start: Date,
+    end: Date,
+  ): Promise<{
+    distanceMeters: number;
+    coveredMs: number;
+    count: number;
+    firstTimestamp: Date | null;
+    lastTimestamp: Date | null;
+    /** Déplacement NET premier→dernier point (m) et accuracy moyenne : servent
+     *  au verdict partagé de bruit stationnaire (isStationaryNoise, C4). */
+    netDisplacementMeters: number;
+    avgAccuracy: number;
+  }> {
+    const PAGE_SIZE = 20_000;
+    const toleranceMs = FUEL_COVERAGE_GAP_TOLERANCE_S * 1000;
 
-    const spanMs = lastTs.getTime() - firstTs.getTime();
-    if (spanMs <= 0) return 1;
-
+    let distanceMeters = 0;
     let coveredMs = 0;
-    for (let i = 1; i < positions.length; i++) {
-      const a = positions[i - 1].timestamp;
-      const b = positions[i].timestamp;
-      if (!a || !b) continue;
-      const gapSec = (b.getTime() - a.getTime()) / 1000;
-      coveredMs += Math.min(gapSec, FUEL_COVERAGE_GAP_TOLERANCE_S) * 1000;
+    let count = 0;
+    let firstTimestamp: Date | null = null;
+    let lastTimestamp: Date | null = null;
+    let firstPoint: { latitude: number; longitude: number } | null = null;
+    let lastPoint: { latitude: number; longitude: number } | null = null;
+    let accuracySum = 0;
+    let accuracyCount = 0;
+
+    let cursor = start;
+    let carry: {
+      latitude: number;
+      longitude: number;
+      accuracy: number | null;
+      speed: number | null;
+      timestamp: Date;
+    } | null = null;
+
+    for (;;) {
+      const page = await this.prisma.gpsPosition.findMany({
+        where: {
+          vehicleId,
+          // SCOPING TENANT EXPLICITE (C5) : GpsPosition n'est PAS dans
+          // TENANT_SCOPED_MODELS (tenant-scope.middleware.ts), aucun companyId
+          // n'est donc injecté automatiquement. Le filtre par vehicleId est
+          // déjà tenant-sûr en pratique (un véhicule n'appartient qu'à une
+          // entreprise), mais on ne s'appuie pas sur cet invariant implicite —
+          // et cela aligne cette requête sur celles de generateDailyReport*.
+          companyId,
+          timestamp: { gt: cursor, lte: end },
+          suspect: false,
+        },
+        orderBy: { timestamp: 'asc' },
+        take: PAGE_SIZE,
+        select: { latitude: true, longitude: true, accuracy: true, speed: true, timestamp: true },
+      });
+      if (page.length === 0) break;
+
+      if (!firstPoint) {
+        firstPoint = { latitude: page[0].latitude, longitude: page[0].longitude };
+      }
+      for (const p of page) {
+        if (p.accuracy != null) {
+          accuracySum += p.accuracy;
+          accuracyCount++;
+        }
+        // timestamp est NOT NULL en base, mais on reste tolérant (même repli que
+        // l'ancien calcul de couverture) : une source sans horodatage ne doit
+        // jamais faire échouer le scan, seulement ne pas compter de couverture.
+        if (p.timestamp) {
+          if (!firstTimestamp) firstTimestamp = p.timestamp;
+          lastTimestamp = p.timestamp;
+        }
+      }
+      lastPoint = {
+        latitude: page[page.length - 1].latitude,
+        longitude: page[page.length - 1].longitude,
+      };
+      count += page.length;
+
+      // Couverture temporelle : somme des écarts inter-fixes, chacun plafonné à
+      // la tolérance (un trou plus long ne « couvre » que la tolérance).
+      const withCarry = carry ? [carry, ...page] : page;
+      for (let i = 1; i < withCarry.length; i++) {
+        const a = withCarry[i - 1].timestamp;
+        const b = withCarry[i].timestamp;
+        if (!a || !b) continue;
+        coveredMs += Math.min(b.getTime() - a.getTime(), toleranceMs);
+      }
+
+      distanceMeters += computeFilteredDistance(withCarry);
+
+      carry = page[page.length - 1];
+      if (page.length < PAGE_SIZE) break;
+      // Pagination par curseur temporel : sans horodatage sur la dernière ligne,
+      // on ne peut pas avancer sans risquer une boucle infinie — on s'arrête.
+      if (!carry.timestamp) break;
+      cursor = carry.timestamp;
     }
-    return Math.min(1, coveredMs / spanMs);
+
+    if (count > PAGE_SIZE) {
+      this.logger.warn(
+        `[fuel] Trace volumineuse scannée par pages: vehicle=${vehicleId} positions=${count} ` +
+          `période=${start.toISOString().slice(0, 10)}→${end.toISOString().slice(0, 10)}`,
+      );
+    }
+
+    // Trous de tête et de queue (même règle que le garde-fou de couverture, C1).
+    if (firstTimestamp) {
+      coveredMs += Math.min(firstTimestamp.getTime() - start.getTime(), toleranceMs);
+    }
+    if (lastTimestamp) {
+      coveredMs += Math.min(end.getTime() - lastTimestamp.getTime(), toleranceMs);
+    }
+
+    const netDisplacementMeters =
+      firstPoint && lastPoint
+        ? haversineDistance(
+            firstPoint.latitude,
+            firstPoint.longitude,
+            lastPoint.latitude,
+            lastPoint.longitude,
+          )
+        : 0;
+    const avgAccuracy = accuracyCount > 0 ? accuracySum / accuracyCount : 0;
+
+    return {
+      distanceMeters,
+      coveredMs,
+      count,
+      firstTimestamp,
+      lastTimestamp,
+      netDisplacementMeters,
+      avgAccuracy,
+    };
   }
 
   // BUG CORRIGÉ (audit carburant 2026-08-27, HAUTE) : les gardes ci-dessous
@@ -1400,6 +1589,24 @@ export class FuelConsumptionService {
   // process Node (event loop mono-thread, pas de scaling horizontal du
   // conteneur `backend` sur ce déploiement).
   private readonly crossCheckInProgress = new Set<string>();
+
+  /**
+   * Relance le cross-check GPS d'un plein depuis la file 'fuel-analysis'
+   * (job 'cross-check-gps') — voir C2 : ce travail est trop lourd pour le chemin
+   * HTTP. Recharge la ligne pour travailler sur son état COURANT (le job peut
+   * s'exécuter après une correction du kilométrage).
+   */
+  async runGpsCrossCheckForLog(fuelLogId: string, companyId: string): Promise<void> {
+    const fuelLog = await this.prisma.fuelLog.findFirst({
+      where: { id: fuelLogId, companyId },
+      include: { vehicle: { include: { driver: { select: { userId: true } } } } },
+    });
+    if (!fuelLog) {
+      this.logger.warn(`Cross-check GPS: fuel log ${fuelLogId} introuvable (supprimé ?)`);
+      return;
+    }
+    await this.crossCheckFuelLogWithGps(fuelLog, companyId);
+  }
 
   private async crossCheckFuelLogWithGps(fuelLog: any, companyId: string) {
     if (!fuelLog.kilometers || fuelLog.kilometers <= 0) return;
@@ -1425,27 +1632,73 @@ export class FuelConsumptionService {
       select: { fillDate: true },
     });
 
-    const rawStart =
+    let rawStart =
       prevLog?.fillDate || new Date(fuelLog.fillDate.getTime() - 30 * 24 * 60 * 60 * 1000);
     const rawEnd = fuelLog.fillDate;
+
+    // BUG CORRIGÉ (audit GPS/carburant 2026-08-28, C6) : pour le TOUT PREMIER
+    // plein d'un véhicule (ou après un import), la fenêtre remontait
+    // arbitrairement à 30 jours — une période pendant laquelle le véhicule
+    // n'était souvent pas suivi du tout. Combiné à C1, c'était le générateur de
+    // faux positifs le plus probable en pratique. On borne le début de la
+    // fenêtre à la PREMIÈRE position GPS réellement connue pour ce véhicule :
+    // on ne reproche jamais à un chauffeur l'absence de données antérieures à la
+    // mise en service du suivi.
+    if (!prevLog) {
+      const firstEver = await this.prisma.gpsPosition.findFirst({
+        where: { vehicleId: fuelLog.vehicleId, companyId, timestamp: { lte: rawEnd } },
+        orderBy: { timestamp: 'asc' },
+        select: { timestamp: true },
+      });
+      if (firstEver && firstEver.timestamp > rawStart) {
+        rawStart = firstEver.timestamp;
+      }
+    }
 
     // B2 : distance GPS calculée depuis les POSITIONS BRUTES entre les deux pleins
     // (bornes EXACTES), pas depuis dailyFuelReport agrégé par jour entier. Avant, la
     // fenêtre normalisée à minuit incluait le jour entier du plein précédent ET du plein
     // courant → gpsKm gonflé (double comptage des km avant/après les pleins) → le ratio
     // manuel/GPS était sous-évalué et masquait la sur-déclaration (fraude silencieuse).
-    const gpsPositions = await this.prisma.gpsPosition.findMany({
-      where: {
-        vehicleId: fuelLog.vehicleId,
-        timestamp: { gte: rawStart, lte: rawEnd },
-        suspect: false,
-      },
-      orderBy: { timestamp: 'asc' },
-      select: { latitude: true, longitude: true, accuracy: true, speed: true, timestamp: true },
-    });
-
-    const gpsKm = computeFilteredDistance(gpsPositions) / 1000;
+    // BUG CORRIGÉ (audit GPS/carburant 2026-08-28, C2) : ce findMany n'avait
+    // AUCUNE borne. Sans plein précédent, la fenêtre remonte à 30 jours, soit
+    // ~864 000 positions pour un seul véhicule (28 800/jour à 3 s/fix),
+    // matérialisées d'un coup en objets JavaScript (~200-350 Mo) dans un
+    // conteneur limité à 768 Mo — et tout cela en SYNCHRONE dans la requête HTTP
+    // de création d'un plein. On scanne désormais par pages bornées, en
+    // n'agrégeant que des scalaires.
+    const scan = await this.scanVehicleTrack(fuelLog.vehicleId, companyId, rawStart, rawEnd);
+    const gpsKm = scan.distanceMeters / 1000;
     const manualKm = fuelLog.kilometers;
+
+    // BUG CORRIGÉ (audit GPS/carburant 2026-08-28, C4) : le détecteur de bruit
+    // GPS stationnaire n'était appliqué QU'au DailyFuelReport. Ici, la distance
+    // était recalculée sans lui : du bruit stationnaire gonflait `gpsKm`, le
+    // ratio manuel/GPS baissait mécaniquement, et une VRAIE sur-déclaration
+    // passait inaperçue. Quand la distance GPS n'est manifestement pas un
+    // trajet réel, elle ne peut pas servir de référence de vérification : on
+    // traite ce cas comme « non vérifiable », jamais comme « conforme ».
+    if (
+      isStationaryNoise({
+        distanceKm: gpsKm,
+        netDisplacementKm: scan.netDisplacementMeters / 1000,
+        avgAccuracy: scan.avgAccuracy,
+      })
+    ) {
+      const reason =
+        `Distance GPS non exploitable entre ${rawStart.toISOString().slice(0, 10)} et ` +
+        `${rawEnd.toISOString().slice(0, 10)} : ${gpsKm.toFixed(1)} km cumulés pour un déplacement net de ` +
+        `${(scan.netDisplacementMeters / 1000).toFixed(1)} km (accuracy moyenne ${scan.avgAccuracy.toFixed(0)} m) — ` +
+        `probable bruit GPS stationnaire. Kilométrage saisi (${manualKm} km) non vérifiable.`;
+      this.logger.warn(`[fuel] ${reason} (fuelLog=${fuelLog.id})`);
+      if (!fuelLog.gpsCoverageInsufficientFlag) {
+        await this.prisma.fuelLog.update({
+          where: { id: fuelLog.id },
+          data: { gpsCoverageInsufficientFlag: true, gpsCoverageInsufficientReason: reason },
+        });
+      }
+      return;
+    }
 
     // COUVERTURE GPS : si la période entre les deux pleins contient des trous importants
     // (app fermée / en arrière-plan / GPS coupé), la distance GPS est structurellement
@@ -1454,9 +1707,28 @@ export class FuelConsumptionService {
     // même signal que l'absence totale de GPS) au lieu de poser une fausse anomalie. Le
     // flag est reset par update() quand la saisie change, et par ce check quand la
     // couverture redevient suffisante.
-    if (gpsPositions.length >= 2) {
-      const coverage = this.computeGpsCoverageFraction(gpsPositions);
-      if (coverage < FUEL_COVERAGE_MIN_FRACTION && manualKm >= FUEL_COVERAGE_MIN_MANUAL_KM) {
+    {
+      // Évalué même avec 0 ou 1 position : une fenêtre quasi vide est justement
+      // le cas où la couverture est nulle et où le kilométrage n'est PAS
+      // vérifiable (avant, `length >= 2` faisait sauter le garde-fou et laissait
+      // le ratio conclure à une anomalie — voir C1).
+      const spanMs = rawEnd.getTime() - rawStart.getTime();
+      const coverage = spanMs > 0 ? Math.min(1, Math.max(0, scan.coveredMs) / spanMs) : 1;
+      // Deux garde-fous sur l'APPLICABILITÉ de ce contrôle :
+      //  - `scan.count > 0` : l'ABSENCE TOTALE de position est traitée plus bas
+      //    par la branche `gpsKm <= 0`, dont le message est plus précis pour
+      //    l'utilisateur (« Aucune position GPS enregistrée… ») ;
+      //  - `firstTimestamp/lastTimestamp` : sans horodatage exploitable, la
+      //    couverture temporelle n'est tout simplement PAS mesurable — on ne
+      //    doit pas conclure « couverture insuffisante » (repli identique à
+      //    l'ancien calcul, qui retournait 1 dans ce cas).
+      const coverageMeasurable = scan.firstTimestamp !== null && scan.lastTimestamp !== null;
+      if (
+        scan.count > 0 &&
+        coverageMeasurable &&
+        coverage < FUEL_COVERAGE_MIN_FRACTION &&
+        manualKm >= FUEL_COVERAGE_MIN_MANUAL_KM
+      ) {
         const reason = `Couverture GPS insuffisante (${Math.round(coverage * 100)}% du temps couvert entre ${rawStart.toISOString().slice(0, 10)} et ${rawEnd.toISOString().slice(0, 10)}) — kilométrage saisi non vérifiable (${manualKm} km déclarés).`;
         if (!fuelLog.gpsCoverageInsufficientFlag) {
           await this.prisma.fuelLog.update({
@@ -1487,9 +1759,9 @@ export class FuelConsumptionService {
       // de « positions existantes mais distance filtrée ≈ 0 » (trace courte/suspecte),
       // pour ne plus accuser à tort une absence de GPS quand les rapports n'étaient
       // simplement pas encore générés (l'ancien agrégat sur dailyFuelReport renvoyait 0).
-      const hasPositions = gpsPositions.length > 0;
+      const hasPositions = scan.count > 0;
       const reason = hasPositions
-        ? `Positions GPS insuffisantes (${gpsPositions.length} fix(s), distance filtrée 0 km) entre ${rawStart.toISOString().slice(0, 10)} et ${rawEnd.toISOString().slice(0, 10)} — kilométrage saisi non vérifiable (${manualKm} km déclarés).`
+        ? `Positions GPS insuffisantes (${scan.count} fix(s), distance filtrée 0 km) entre ${rawStart.toISOString().slice(0, 10)} et ${rawEnd.toISOString().slice(0, 10)} — kilométrage saisi non vérifiable (${manualKm} km déclarés).`
         : `Aucune position GPS enregistrée pour ce véhicule entre ${rawStart.toISOString().slice(0, 10)} et ${rawEnd.toISOString().slice(0, 10)} — kilométrage saisi non vérifiable (${manualKm} km déclarés).`;
       if (!fuelLog.gpsCoverageInsufficientFlag) {
         await this.prisma.fuelLog.update({
@@ -1599,6 +1871,24 @@ export class FuelConsumptionService {
         deliveryId: undefined,
         userId: fuelLog.vehicle?.driver?.userId ?? undefined,
       });
+      return;
+    }
+
+    // BUG CORRIGÉ (audit GPS/carburant 2026-08-28, C3) : le ratio est DANS la
+    // tolérance — mais `gpsAnomalyFlag` n'était JAMAIS remis à false nulle part
+    // dans ce fichier (seul gpsCoverageInsufficientFlag l'était). Une fois un
+    // plein marqué en anomalie, corriger le kilométrage saisi relançait bien ce
+    // cross-check, mais le drapeau et son message restaient en base POUR
+    // TOUJOURS : anomalie affichée définitivement fausse, et compteur
+    // d'anomalies du tableau de bord durablement gonflé.
+    if (fuelLog.gpsAnomalyFlag) {
+      await this.prisma.fuelLog.update({
+        where: { id: fuelLog.id },
+        data: { gpsAnomalyFlag: false, gpsAnomalyReason: null },
+      });
+      this.logger.log(
+        `[fuel] Anomalie GPS levée pour le plein ${fuelLog.id} — ratio revenu dans la tolérance (${ratio.toFixed(2)}×)`,
+      );
     }
   }
 }

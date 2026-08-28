@@ -46,7 +46,12 @@ async function mockValidateAndSaveBatch(userId: string, companyId: string, rawPo
     return { status: 'ok' as const, saved: [], validatedCount: 0, driverId: driver.id };
   }
   const saved = await trackingService.saveBatch(userId, driver.id, validatedPositions, companyId);
-  return { status: 'ok' as const, saved, validatedCount: validatedPositions.length, driverId: driver.id };
+  return {
+    status: 'ok' as const,
+    saved,
+    validatedCount: validatedPositions.length,
+    driverId: driver.id,
+  };
 }
 
 interface TrackingServiceMock {
@@ -234,7 +239,13 @@ describe('TrackingGateway — cross-tenant security', () => {
       await gateway.handleConnection(client);
 
       expect(client.join).toHaveBeenCalledWith('driver:driver-1');
-      expect(client.join).toHaveBeenCalledWith('company:company-a');
+      // CHANGEMENT VOLONTAIRE (audit GPS 2026-08-28, B3) : un chauffeur ne
+      // rejoint PLUS la room `company:` — il y recevait les positionUpdate de
+      // TOUS les véhicules de l'entreprise (données mobiles consommées sur son
+      // forfait, et positions de ses collègues exposées à son appareil). Sa room
+      // `driver:` suffit : elle porte les alertes qui lui sont destinées.
+      expect(client.join).not.toHaveBeenCalledWith('company:company-a');
+      expect(client.join).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -614,7 +625,11 @@ describe('TrackingGateway — cross-tenant security', () => {
       // Retourne une position SAVED pour chaque position validée (la même
       // transformation que le chemin réel — le nombre d'ACK = nb de valides).
       trackingService.saveBatch.mockImplementation(
-        async (_userId: string, _driverId: string, positions: Array<{ latitude: number; timestamp: string }>) =>
+        async (
+          _userId: string,
+          _driverId: string,
+          positions: Array<{ latitude: number; timestamp: string }>,
+        ) =>
           positions.map((p, i) => ({
             id: `saved-${i}`,
             latitude: p.latitude,

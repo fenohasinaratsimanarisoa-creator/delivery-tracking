@@ -84,13 +84,27 @@ export async function checkLatency(): Promise<number> {
   }
 }
 
+// Dernier verdict de latence connu, réutilisé pendant la fenêtre de throttle.
+let lastLatencyVerdict = false;
+
+/**
+ * BUG CORRIGÉ (audit GPS 2026-08-28, B5) : le throttle de 10 s était MORT — les
+ * deux branches du `if` appelaient `checkLatency()`, donc une mesure IndexedDB
+ * était faite à CHAQUE appel (soit à chaque fix GPS, ~toutes les 3 s) alors que
+ * l'intention documentée était d'en faire une au plus toutes les 10 s. On
+ * renvoie désormais le dernier verdict connu pendant la fenêtre, sans toucher au
+ * disque.
+ */
 export function shouldQueueDueToLatency(): Promise<boolean> {
   const now = Date.now();
-  if (now - lastLatencyCheck < 10000) return checkLatency().then((latency) => latency > LATENCY_THRESHOLD_MS);
+  if (now - lastLatencyCheck < 10000) {
+    return Promise.resolve(lastLatencyVerdict);
+  }
   lastLatencyCheck = now;
   return checkLatency().then((latency) => {
     lastLatencyCheck = Date.now();
-    return latency > LATENCY_THRESHOLD_MS;
+    lastLatencyVerdict = latency > LATENCY_THRESHOLD_MS;
+    return lastLatencyVerdict;
   });
 }
 

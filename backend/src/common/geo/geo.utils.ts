@@ -77,6 +77,22 @@ export const STATIONARY_MIN_DURATION_S = 300;
 export const STATIONARY_MAX_SAMPLE_GAP_S = 60;
 
 /**
+ * Une accuracy est « digne de confiance » pour AUTHENTIFIER un déplacement si
+ * elle est absente (source qui n'en fournit pas, ex. certains protocoles
+ * Traccar — on ne pénalise pas) ou inférieure au plafond de confiance.
+ *
+ * Source unique de vérité, partagée par :
+ *  - computeFilteredDistance (RÈGLE VITESSE, ci-dessous) ;
+ *  - TrackingService.saveBatch / TrackingGateway.handlePosition, qui ne
+ *    DÉRIVENT une vitesse (haversine/Δt) que si les deux extrémités sont
+ *    fiables — sinon la vitesse dérivée du bruit validerait son propre segment
+ *    de bruit (audit GPS 2026-08-28, C8).
+ */
+export function isAccuracyTrustworthy(accuracy?: number | null): boolean {
+  return accuracy == null || accuracy <= MOVEMENT_TRUST_MAX_ACCURACY_M;
+}
+
+/**
  * Réduit une suite de positions en collapsant les fenêtres d'ARRÊT CONFIRMÉ
  * (voir STATIONARY_RADIUS_M / STATIONARY_MIN_DURATION_S / STATIONARY_MAX_SAMPLE_GAP_S)
  * à un seul point représentatif chacune. No-op silencieux si un timestamp
@@ -84,7 +100,13 @@ export const STATIONARY_MAX_SAMPLE_GAP_S = 60;
  * comportement pairwise habituel, inchangé).
  */
 export function collapseStationaryWindows<
-  T extends { latitude: number; longitude: number; timestamp?: Date | null },
+  T extends {
+    latitude: number;
+    longitude: number;
+    timestamp?: Date | null;
+    speed?: number | null;
+    accuracy?: number | null;
+  },
 >(positions: T[]): T[] {
   if (positions.length < 3 || positions.some((p) => !p.timestamp)) return positions;
 
@@ -97,6 +119,18 @@ export function collapseStationaryWindows<
       const gapS =
         (positions[j].timestamp!.getTime() - positions[j - 1].timestamp!.getTime()) / 1000;
       if (gapS > STATIONARY_MAX_SAMPLE_GAP_S) break;
+      // BUG CORRIGÉ (audit GPS 2026-08-28, C9) : une fenêtre était collapsée sur
+      // le seul critère rayon+durée+densité, ce qui effaçait de VRAIS
+      // déplacements confinés (manœuvres répétées en dépôt, deux-roues circulant
+      // dans un marché, livraison en zone piétonne) — du carburant réellement
+      // consommé disparaissait du rapport. Une position qui rapporte une vitesse
+      // RÉELLE et FIABLE prouve un déplacement : elle interrompt la fenêtre
+      // d'arrêt, qui redevient ce qu'elle doit être — un arrêt.
+      const movingHere =
+        positions[j].speed != null &&
+        positions[j].speed! > MOVEMENT_SPEED_THRESHOLD_MS &&
+        isAccuracyTrustworthy(positions[j].accuracy);
+      if (movingHere) break;
       if (
         haversineDistance(
           positions[i].latitude,
@@ -179,10 +213,10 @@ export function computeFilteredDistance(
     const moving =
       (p1.speed != null &&
         p1.speed > MOVEMENT_SPEED_THRESHOLD_MS &&
-        (p1.accuracy == null || p1.accuracy <= MOVEMENT_TRUST_MAX_ACCURACY_M)) ||
+        isAccuracyTrustworthy(p1.accuracy)) ||
       (p2.speed != null &&
         p2.speed > MOVEMENT_SPEED_THRESHOLD_MS &&
-        (p2.accuracy == null || p2.accuracy <= MOVEMENT_TRUST_MAX_ACCURACY_M));
+        isAccuracyTrustworthy(p2.accuracy));
     if (moving) {
       totalDistance += segDist;
       continue;
@@ -201,6 +235,44 @@ export function computeFilteredDistance(
     }
   }
   return totalDistance;
+}
+
+// Seuils du détecteur de BRUIT GPS STATIONNAIRE (voir isStationaryNoise).
+// Volontairement conservateurs pour ne jamais flaguer à tort une vraie tournée
+// de livraison à arrêts multiples (ratio de vagabondage naturellement élevé,
+// mais accuracy correcte).
+export const WANDER_RATIO_THRESHOLD = 4;
+export const WANDER_MIN_AVG_ACCURACY_M = 35;
+export const WANDER_MIN_DISTANCE_KM = 3;
+
+/**
+ * Détecte une distance produite par du BRUIT GPS STATIONNAIRE plutôt que par un
+ * trajet réel, à partir de deux signaux convergents :
+ *  - le déplacement NET (premier → dernier point) est minuscule comparé à la
+ *    distance cumulée (aller-retours sans progression réelle — signature de la
+ *    dérive, pas d'une tournée qui progresse globalement) ;
+ *  - l'accuracy moyenne de la période est dégradée (signal faible).
+ *
+ * Cas réel à l'origine de ce détecteur : 68 km « parcourus » par un véhicule
+ * resté immobile toute la nuit (accuracy moyenne ~67 m).
+ *
+ * SOURCE UNIQUE DE VÉRITÉ (audit GPS/carburant 2026-08-28, C4) : ce verdict
+ * était auparavant codé en dur dans upsertDailyReportForVehicleGroup et ne
+ * s'appliquait donc QU'au DailyFuelReport. crossCheckFuelLogWithGps recalculait
+ * sa propre distance sans ce garde-fou : le bruit stationnaire gonflait `gpsKm`,
+ * le ratio manuel/GPS baissait, et une VRAIE sur-déclaration passait inaperçue —
+ * exactement l'inverse du faux positif que le détecteur corrige côté rapport.
+ * Les deux consommateurs de la même donnée partagent désormais le même verdict.
+ */
+export function isStationaryNoise(params: {
+  distanceKm: number;
+  netDisplacementKm: number;
+  avgAccuracy: number;
+}): boolean {
+  const { distanceKm, netDisplacementKm, avgAccuracy } = params;
+  if (distanceKm < WANDER_MIN_DISTANCE_KM) return false;
+  const wanderRatio = netDisplacementKm > 0 ? distanceKm / netDisplacementKm : Infinity;
+  return wanderRatio > WANDER_RATIO_THRESHOLD && avgAccuracy > WANDER_MIN_AVG_ACCURACY_M;
 }
 
 export function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {

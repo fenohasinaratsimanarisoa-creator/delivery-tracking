@@ -21,7 +21,7 @@ import { UpdatePositionDto, BatchPositionDto } from './dto/update-position.dto';
 import { DataUpdateBus, DataUpdateEvent } from '../../common/events/data-update.bus';
 import { WsTrackingExceptionFilter } from '../../common/filters/ws-tracking-exception.filter';
 import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
-import { haversineDistance } from '../../common/geo/geo.utils';
+import { haversineDistance, isAccuracyTrustworthy } from '../../common/geo/geo.utils';
 import { computeConfidence } from '../../common/geo/gps-quality';
 import { getCorsOrigins } from '../../config/cors';
 
@@ -101,6 +101,14 @@ export class TrackingGateway
         client.join(`driver:${user.id}`);
         this.disconnectedDrivers.delete(user.id);
         this.logger.log(`Driver connected: ${user.id} (${user.firstName} ${user.lastName})`);
+        // CORRIGÉ (audit GPS 2026-08-28, B3) : les chauffeurs rejoignaient AUSSI
+        // `company:<id>` et recevaient donc les positionUpdate/batchPositionUpdate
+        // de TOUS les véhicules de l'entreprise — consommation de données mobiles
+        // inutile sur le forfait du chauffeur, et exposition des positions de ses
+        // collègues à son appareil. Un chauffeur n'a besoin que de sa propre room
+        // `driver:<id>` (alertes de proximité qui lui sont destinées) ; il ne
+        // consomme aucun flux de supervision.
+        return;
       }
       if (user.companyId) {
         client.join(`company:${user.companyId}`);
@@ -213,9 +221,16 @@ export class TrackingGateway
       }
 
       let speed = dto.speed;
-      if (!speed || speed <= 0) {
+      // Dérivation PRUDENTE de la vitesse (audit GPS 2026-08-28, C8) : cette
+      // vitesse est persistée indistinctement d'une vitesse mesurée par le
+      // mobile, puis relue par la RÈGLE VITESSE de computeFilteredDistance —
+      // qui compte alors le segment EN ENTIER. Si les positions sont bruitées,
+      // le raisonnement devient circulaire (le bruit fabrique une vitesse qui
+      // valide son propre segment de bruit). On ne dérive donc que si les DEUX
+      // extrémités sont assez précises.
+      if ((!speed || speed <= 0) && isAccuracyTrustworthy(dto.accuracy)) {
         const last = await this.trackingService.getLastPosition(dto.vehicleId);
-        if (last) {
+        if (last && isAccuracyTrustworthy(last.accuracy)) {
           const timeDiffSec = (new Date(dto.timestamp).getTime() - last.timestamp.getTime()) / 1000;
           if (timeDiffSec > 0) {
             const distance = haversineDistance(
@@ -299,10 +314,20 @@ export class TrackingGateway
   @SubscribeMessage('batchPosition')
   async handleBatchPosition(
     @ConnectedSocket() client: Socket,
-    @MessageBody() dto: BatchPositionDto,
+    @MessageBody() dto: BatchPositionDto & { batchId?: string },
   ) {
     const user = client.data.user;
     if (!user || user.role !== 'driver') return;
+
+    // CORRÉLATION DE LOT (audit GPS 2026-08-28, A5 — perte de données) :
+    // l'acquittement `positionsSaved` n'avait AUCUN identifiant. Le client
+    // s'abonne via socket.once('positionsSaved') sans pouvoir savoir à quel lot
+    // l'ack correspond : sur réseau lent, l'ack TARDIF d'un chunk A déjà en
+    // timeout résolvait la promesse du chunk B en cours, qui était alors
+    // supprimé d'IndexedDB SANS avoir été acquitté ni persisté. On renvoie
+    // désormais le batchId fourni par le client dans TOUTES les réponses de ce
+    // handler ; le client ignore tout ack dont le batchId ne correspond pas.
+    const batchId = typeof dto?.batchId === 'string' ? dto.batchId : undefined;
 
     return CompanyScopedContext.run(user.companyId, async () => {
       // Rate limit anti-flood + validation parallèle + résolution driver + appel
@@ -321,19 +346,42 @@ export class TrackingGateway
       // résolution) et retente après son timeout (~5 s) — backoff naturel, zéro
       // perte de données.
       if (result.status === 'rate_limited') {
-        client.emit('positionsRejected', { reason: 'rate_limited', kind: 'batch' });
+        client.emit('positionsRejected', { reason: 'rate_limited', kind: 'batch', batchId });
         return;
       }
-      if (result.status === 'empty' || result.status === 'no_driver') {
-        client.emit('positionsSaved', { count: 0 });
+      // BUG CORRIGÉ (audit GPS 2026-08-28, A4 — perte de données) : ce cas
+      // émettait `positionsSaved`, que le client traite comme un ACQUITTEMENT —
+      // flushQueue purge alors la file IndexedDB (deletePositions) alors que
+      // RIEN n'a été persisté. Le chemin natif équivalent renvoie 422 depuis le
+      // 2026-08-27 précisément pour éviter cette perte : les deux chemins sont
+      // désormais cohérents. Un profil Driver non résolvable est TRANSITOIRE
+      // (compte en cours de provisionnement, désaffectation) — le client doit
+      // conserver ses positions et retenter.
+      if (result.status === 'no_driver') {
+        client.emit('positionsRejected', { reason: 'no_driver', kind: 'batch', batchId });
         return;
       }
-      if (result.validatedCount === 0) {
-        client.emit('positionsSaved', { count: 0 });
+      // Lot réellement vide : rien à conserver, acquittement légitime.
+      if (result.status === 'empty') {
+        client.emit('positionsSaved', { count: 0, batchId });
         return;
       }
 
       const { saved, driverId } = result;
+      const rejected = result.rejected ?? [];
+
+      if (rejected.length > 0) {
+        // Positions définitivement invalides : le client DOIT les retirer de sa
+        // file (les retenter à l'identique échouerait indéfiniment), mais il en
+        // est informé explicitement pour pouvoir les compter/alerter — jamais
+        // une disparition silencieuse.
+        client.emit('positionsInvalid', { batchId, rejected });
+      }
+
+      if (result.validatedCount === 0) {
+        client.emit('positionsSaved', { count: 0, batchId });
+        return;
+      }
 
       // Only broadcast positions that were actually saved
       const broadcasts = saved.map((pos: GpsPosition) => ({
@@ -368,8 +416,9 @@ export class TrackingGateway
 
       // Acquittement EXPLICITE du batch (même mécanisme que positionSaved) : le
       // client n'utilise pas de callback ack socket.io, seule une émission explicite
-      // est reçue par son socket.once('positionsSaved').
-      client.emit('positionsSaved', { count: saved.length });
+      // est reçue par son socket.once('positionsSaved'). batchId permet au client
+      // de vérifier que cet ack concerne bien le lot qu'il attend (voir A5).
+      client.emit('positionsSaved', { count: saved.length, batchId });
       return;
     });
   }

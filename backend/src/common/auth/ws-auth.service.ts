@@ -25,6 +25,33 @@ export class WsAuthError extends Error {
   }
 }
 
+/**
+ * Durée de validité du cache de vérification par socket (audit GPS 2026-08-28,
+ * B2). WsJwtGuard appelle verify() sur CHAQUE @SubscribeMessage : à raison
+ * d'une position toutes les 3 s par chauffeur, cela faisait 1 requête DB +
+ * 2 lectures Redis par position (≈ 1 000 requêtes/min pour 50 chauffeurs), rien
+ * que pour l'authentification.
+ *
+ * Ce cache ne relâche AUCUNE garantie de sécurité :
+ *  - il est porté par le socket lui-même (client.data), donc jamais partagé
+ *    entre connexions ni entre utilisateurs ;
+ *  - la signature ET l'expiration du JWT sont revérifiées à CHAQUE message
+ *    (jwtService.verify n'est pas caché) — un token expiré est refusé
+ *    immédiatement ;
+ *  - seules les lectures de RÉVOCATION (Redis) et l'état du compte (DB) sont
+ *    mises en cache, pour 10 s au maximum. Une révocation coupe donc le socket
+ *    en moins de 10 s au lieu d'instantanément : très en deçà de la durée de
+ *    vie de l'access token (15 min), et le handshake initial reste toujours
+ *    vérifié sans cache.
+ */
+const WS_AUTH_CACHE_TTL_MS = 10_000;
+
+interface WsAuthCacheEntry {
+  user: WsAuthenticatedUser;
+  token: string;
+  checkedAt: number;
+}
+
 @Injectable()
 export class WsAuthService {
   constructor(
@@ -41,10 +68,23 @@ export class WsAuthService {
     }
 
     try {
+      // Signature + expiration : TOUJOURS revérifiées, jamais mises en cache.
       const payload = this.jwtService.verify(token, {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
         algorithms: ['HS256'],
       });
+
+      // Cache court des contrôles COÛTEUX (révocation Redis + état DB) — voir
+      // WS_AUTH_CACHE_TTL_MS. Invalidé si le token présenté change.
+      const cached = (client.data as { authCache?: WsAuthCacheEntry }).authCache;
+      if (
+        cached &&
+        cached.token === token &&
+        Date.now() - cached.checkedAt < WS_AUTH_CACHE_TTL_MS
+      ) {
+        client.data.user = cached.user;
+        return cached.user;
+      }
 
       if (!payload.sub || !payload.companyId) {
         throw new WsAuthError('Invalid token: malformed payload', 'INVALID_PAYLOAD');
@@ -104,6 +144,11 @@ export class WsAuthService {
       };
 
       client.data.user = user;
+      (client.data as { authCache?: WsAuthCacheEntry }).authCache = {
+        user,
+        token,
+        checkedAt: Date.now(),
+      };
       return user;
     } catch (err) {
       if (err instanceof WsAuthError) throw err;

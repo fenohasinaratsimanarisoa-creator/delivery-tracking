@@ -273,6 +273,7 @@ describe('FuelAnalysisProcessor', () => {
             { latitude: 0, longitude: 0, accuracy: null, speed: null },
             { latitude: 30 / 111.32, longitude: 0, accuracy: null, speed: null },
           ]),
+          findFirst: jest.fn(async () => null),
         },
         companyFuelSettings: {
           findUnique: jest.fn(async () => ({ anomalyThreshold: 20 })),
@@ -404,6 +405,7 @@ describe('FuelAnalysisProcessor', () => {
         gpsPosition: {
           // B2 : gpsKm calculé depuis les positions brutes → aucune position = 0 km.
           findMany: jest.fn(async () => []),
+          findFirst: jest.fn(async () => null),
         },
         companyFuelSettings: {
           findUnique: jest.fn(async () => ({ anomalyThreshold: 20 })),
@@ -445,9 +447,11 @@ describe('FuelAnalysisProcessor', () => {
         fillDate: '2026-07-21T00:00:00.000Z',
         vehicleId: 'vehicle-1',
       } as any);
-      console.log(`[create] job 'analyze' enqueued (${jobs.length} job en attente)`);
-      expect(jobs).toHaveLength(1);
-      expect(jobs[0].name).toBe('analyze');
+      console.log(`[create] jobs enqueued (${jobs.map((j) => j.name).join(', ')})`);
+      // create() enfile DEUX jobs depuis l'audit 2026-08-28 (C2) : l'analyse de
+      // consommation, et le cross-check GPS déporté hors du chemin HTTP (il
+      // scanne toute la trace du véhicule entre deux pleins).
+      expect(jobs.map((j) => j.name).sort()).toEqual(['analyze', 'cross-check-gps']);
 
       // 1er passage du job (le worker consomme le job issu de create()).
       await runPendingAnalysisJobs('1st pass (from create)');

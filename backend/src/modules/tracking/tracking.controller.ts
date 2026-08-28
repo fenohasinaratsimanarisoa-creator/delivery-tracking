@@ -271,7 +271,13 @@ export class TrackingController {
     @CurrentUser('id') userId: string,
     @CurrentUser('companyId') companyId: string,
     @Body() dto: BatchPositionDto,
-  ): Promise<{ saved: number; duplicates: number }> {
+  ): Promise<{
+    saved: number;
+    duplicates: number;
+    // INDEX (dans le tableau `positions` envoyé) des positions DÉFINITIVEMENT
+    // rejetées, avec le motif — voir A1 ci-dessous.
+    rejected: Array<{ index: number; reason: string }>;
+  }> {
     const result = await this.trackingService.validateAndSaveBatch(
       userId,
       companyId,
@@ -289,7 +295,7 @@ export class TrackingController {
     if (result.status === 'empty') {
       // Lot vide envoyé par erreur (ne devrait pas arriver côté natif, qui ne
       // déclenche jamais avec une file vide) : rien à synchroniser, 200 légitime.
-      return { saved: 0, duplicates: 0 };
+      return { saved: 0, duplicates: 0, rejected: [] };
     }
     if (result.status === 'no_driver') {
       // BUG CORRIGÉ (audit 2026-08-27) : renvoyer 200/{saved:0} ici était une
@@ -313,7 +319,13 @@ export class TrackingController {
     // tracking en cours), la quasi-totalité provient du garde-fou d'unicité
     // (vehicleId, timestamp) — skipDuplicates dans saveBatch, INCHANGÉ ici.
     const duplicates = Math.max(0, result.validatedCount - result.saved.length);
-    return { saved: result.saved.length, duplicates };
+    // BUG CORRIGÉ (audit GPS 2026-08-28, A1 — CRITIQUE) : `rejected` est
+    // désormais renvoyé au worker natif, qui ne peut plus marquer `synced` un
+    // lot dont une partie a été jetée sans le savoir. Les positions rejetées
+    // sont définitivement invalides (les retenter bloquerait la file), mais leur
+    // destruction est maintenant EXPLICITE, comptée et journalisée côté
+    // appareil — voir PositionUploadWorker.doWorkLocked.
+    return { saved: result.saved.length, duplicates, rejected: result.rejected };
   }
 
   /**

@@ -220,15 +220,22 @@ describe('FuelConsumptionService', () => {
 
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
-      expect(mockPrisma.gpsPosition.findMany).toHaveBeenCalledWith({
-        where: {
-          vehicleId: 'vehicle-a',
-          timestamp: { gte: new Date('2026-07-20'), lte: new Date('2026-07-25') },
-          suspect: false,
-        },
-        orderBy: { timestamp: 'asc' },
-        select: expect.objectContaining({ latitude: true, longitude: true }),
-      });
+      // Scan PAGINÉ depuis l'audit 2026-08-28 (C2) : curseur temporel exclusif
+      // (`gt`) initialisé au début de fenêtre, `take` borné, et companyId
+      // explicite (C5 — GpsPosition n'est pas scopé par le middleware tenant).
+      expect(mockPrisma.gpsPosition.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            vehicleId: 'vehicle-a',
+            companyId: 'company-1',
+            timestamp: { gt: new Date('2026-07-20'), lte: new Date('2026-07-25') },
+            suspect: false,
+          }),
+          orderBy: { timestamp: 'asc' },
+          take: expect.any(Number),
+          select: expect.objectContaining({ latitude: true, longitude: true }),
+        }),
+      );
       // ratio 150/140 = 1.07 < 1.3 → aucun flag.
       expect(mockPrisma.fuelLog.update).not.toHaveBeenCalled();
     });
@@ -278,18 +285,23 @@ describe('FuelConsumptionService', () => {
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
 
       // Bornes EXACTES : plus de troncature au jour UTC (B2).
-      expect(mockPrisma.gpsPosition.findMany).toHaveBeenCalledWith({
-        where: {
-          vehicleId: 'vehicle-a',
-          timestamp: {
-            gte: new Date('2026-07-15T14:30:00.000Z'),
-            lte: new Date('2026-07-18T09:00:00.000Z'),
-          },
-          suspect: false,
-        },
-        orderBy: { timestamp: 'asc' },
-        select: expect.objectContaining({ latitude: true, longitude: true }),
-      });
+      expect(mockPrisma.gpsPosition.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            vehicleId: 'vehicle-a',
+            companyId: 'company-1',
+            // Curseur temporel exclusif depuis le scan paginé (C2).
+            timestamp: {
+              gt: new Date('2026-07-15T14:30:00.000Z'),
+              lte: new Date('2026-07-18T09:00:00.000Z'),
+            },
+            suspect: false,
+          }),
+          orderBy: { timestamp: 'asc' },
+          take: expect.any(Number),
+          select: expect.objectContaining({ latitude: true, longitude: true }),
+        }),
+      );
       // ratio = 400/300 = 1.33 < 3 (seuil configuré ici) → aucun flag d'anomalie
       expect(mockPrisma.fuelLog.update).not.toHaveBeenCalled();
       expect(mockNotifications.create).not.toHaveBeenCalled();
@@ -385,7 +397,7 @@ describe('FuelConsumptionService', () => {
     // ----------------------------------------------------------------
     // RÉGRESSIONS — audit carburant 2026-08-27
     // ----------------------------------------------------------------
-    it('HAUTE #6 : deux appels CONCURRENTS sur le même fuel log ne notifient/écrivent qu\'UNE SEULE fois (verrou en mémoire)', async () => {
+    it("HAUTE #6 : deux appels CONCURRENTS sur le même fuel log ne notifient/écrivent qu'UNE SEULE fois (verrou en mémoire)", async () => {
       const fuelLog = {
         id: 'fuel-log-concurrent',
         vehicleId: 'vehicle-a',
@@ -751,7 +763,12 @@ describe('FuelConsumptionService', () => {
         id: 'fuel-log-covered',
         vehicleId: 'vehicle-a',
         kilometers: 150,
-        fillDate: new Date('2026-07-25T12:00:00.000Z'),
+        // fillDate calé sur la FIN de la trace : depuis le correctif C1, la
+        // couverture se mesure sur la fenêtre RÉELLE [plein précédent → plein].
+        // Avec 12h de fenêtre pour 20 min de fixes, la couverture serait de 2 %
+        // et le garde-fou se déclencherait à juste titre — masquant le ratio que
+        // ce test veut précisément exercer.
+        fillDate: new Date('2026-07-25T00:20:00.000Z'),
         vehicle: { licensePlate: 'TRK-A' },
         gpsCoverageInsufficientFlag: false,
       };
@@ -1406,7 +1423,7 @@ describe('FuelConsumptionService', () => {
       expect(captured.create.gpsDataQuality).toBe(GpsDataQuality.suspicious);
     });
 
-    it('reste sufficient : une VRAIE tournée à arrêts multiples (accuracy correcte) n\'est jamais flaguée à tort', async () => {
+    it("reste sufficient : une VRAIE tournée à arrêts multiples (accuracy correcte) n'est jamais flaguée à tort", async () => {
       // 5 points en ligne, ~1km chacun, accuracy correcte (10m) : ratio
       // distance/déplacement net naturellement élevé pour une tournée avec
       // détour, mais l'accuracy correcte doit empêcher tout flag suspicious.
