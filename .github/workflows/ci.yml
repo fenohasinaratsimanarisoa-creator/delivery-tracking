@@ -320,16 +320,42 @@ jobs:
           # versionCode = nombre total de commits (strictement croissant, jamais
           # de collision, aucune discipline humaine).
           VERSION_CODE=$(git rev-list --count HEAD)
-          # versionName = dernier tag vX.Y.Z avec patch+1 ; 1.0.0 si aucun tag.
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          # versionName = PLUS HAUT tag vX.Y.Z existant, avec patch+1 ; 1.0.0 si aucun tag.
+          #
+          # BUG CORRIGÉ (2026-08-28) : on utilisait `git describe --tags --abbrev=0`,
+          # qui renvoie UN tag atteignable depuis HEAD — pas le plus HAUT en version.
+          # Quand deux tags pointent sur le MÊME commit (cas réel : v0.0.58 et
+          # v0.0.59 tous deux sur ba9eb7bb, deux builds successifs sans commit
+          # entre-temps), describe renvoyait v0.0.58. Le build calculait alors
+          # 0.0.58+1 = 0.0.59 → un tag DÉJÀ EXISTANT → action-gh-release écrasait
+          # les assets de la release v0.0.59 au lieu d'en créer une nouvelle.
+          # Défaut AUTO-PERPÉTUANT : chaque build suivant refaisait le même calcul
+          # et réécrasait indéfiniment la même release, figeant le versionName —
+          # deux APK différents portaient alors la même version, rendant impossible
+          # de savoir laquelle un chauffeur a installée.
+          # `git tag --sort=-v:refname` trie sémantiquement : le plus haut gagne,
+          # quel que soit le commit sur lequel il pointe.
+          LAST_TAG=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -n 1)
+          LAST_TAG=${LAST_TAG:-v0.0.0}
           BASE=${LAST_TAG#v}
           IFS='.' read -r MAJ MIN PATCH <<< "$BASE"
           MAJ=${MAJ:-0}; MIN=${MIN:-0}; PATCH=${PATCH:-0}
           VERSION_NAME="$MAJ.$MIN.$((PATCH + 1))"
+          # GARDE-FOU : ne JAMAIS écraser silencieusement une release existante.
+          # C'est ce silence qui a rendu le bug ci-dessus invisible pendant
+          # plusieurs builds — l'APK était bien reconstruit, mais publié sous une
+          # version déjà utilisée.
+          if git rev-parse -q --verify "refs/tags/v$VERSION_NAME" >/dev/null; then
+            echo "::error::Le tag v$VERSION_NAME existe déjà (dernier tag vu : $LAST_TAG)."
+            echo "::error::Publier ici ÉCRASERAIT la release existante et deux APK"
+            echo "::error::différents porteraient la même version. Build interrompu."
+            exit 1
+          fi
+
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "last_tag=$LAST_TAG" >> "$GITHUB_OUTPUT"
-          echo "Next version: $VERSION_NAME (code $VERSION_CODE)"
+          echo "Next version: $VERSION_NAME (code $VERSION_CODE), dernier tag: $LAST_TAG"
 
       - name: Restore signing keystore from secret
         working-directory: ./frontend/android
