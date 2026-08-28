@@ -15,8 +15,8 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 55% 45% at 60% 20%, rgba(242, 169, 60, 0.1) 0%, transparent 55%),
-    radial-gradient(ellipse 45% 40% at 20% 75%, rgba(63, 167, 150, 0.07) 0%, transparent 55%);
+    radial-gradient(ellipse 55% 45% at 60% 20%, color-mix(in srgb, var(--color-accent) 10%, transparent) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 40% at 20% 75%, color-mix(in srgb, var(--color-teal) 7%, transparent) 0%, transparent 55%);
 }
 
 .orbGlow {
@@ -25,7 +25,7 @@
   right: -10%;
   width: 55%;
   height: 55%;
-  background: radial-gradient(circle, rgba(242, 169, 60, 0.09) 0%, transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-accent) 9%, transparent) 0%, transparent 70%);
   pointer-events: none;
   animation: dt-orb-pulse 6s var(--ease-smooth, ease-in-out) infinite;
 }
@@ -36,8 +36,8 @@
   pointer-events: none;
   opacity: 0.55;
   background-image:
-    linear-gradient(rgba(232, 236, 243, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(232, 236, 243, 0.04) 1px, transparent 1px);
+    linear-gradient(var(--color-border-subtle) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px);
   background-size: 44px 44px;
   mask-image: radial-gradient(ellipse 80% 70% at 60% 40%, black 30%, transparent 75%);
   -webkit-mask-image: radial-gradient(ellipse 80% 70% at 60% 40%, black 30%, transparent 75%);
@@ -53,8 +53,8 @@
 .badges {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 18px;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
 }
 
 .tagline {
@@ -73,17 +73,17 @@
   height: 8px;
   border-radius: 50%;
   background: var(--color-accent);
-  box-shadow: 0 0 0 0 rgba(242, 169, 60, 0.55);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 55%, transparent);
   animation: dt-live-ping 1.8s var(--ease-smooth, ease-out) infinite;
 }
 
 .safeBadge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-xs);
   font-size: 11px;
   color: var(--color-text-tertiary);
-  padding: 4px 10px;
+  padding: 4px var(--space-sm);
   border-radius: var(--radius-full);
   border: 1px solid var(--color-border-subtle);
   background: rgba(255, 255, 255, 0.04);
@@ -110,7 +110,7 @@
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 18px;
-  padding: 18px 20px 16px;
+  padding: var(--space-lg) 20px 16px;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
@@ -128,7 +128,7 @@
 .mockTitle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-secondary);
@@ -137,7 +137,7 @@
 .mockLive {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -150,8 +150,8 @@
   height: 110px;
   border-radius: 12px;
   background:
-    radial-gradient(circle at 20% 80%, rgba(63, 167, 150, 0.1), transparent 40%),
-    radial-gradient(circle at 85% 15%, rgba(242, 169, 60, 0.1), transparent 45%),
+    radial-gradient(circle at 20% 80%, color-mix(in srgb, var(--color-teal) 10%, transparent), transparent 40%),
+    radial-gradient(circle at 85% 15%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 45%),
     rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.06);
   overflow: hidden;
@@ -169,11 +169,11 @@
 }
 
 .pinOrigin {
-  filter: drop-shadow(0 0 6px rgba(63, 167, 150, 0.8));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-teal) 80%, transparent));
 }
 
 .pinDest {
-  filter: drop-shadow(0 0 6px rgba(242, 169, 60, 0.8));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-accent) 80%, transparent));
   animation: dt-pin-bounce 2.2s var(--ease-smooth, ease-in-out) infinite;
 }
 
@@ -195,13 +195,13 @@
   font-weight: 700;
   font-size: 14px;
   background: linear-gradient(135deg, var(--color-accent), var(--color-warning));
-  box-shadow: 0 6px 18px rgba(242, 169, 60, 0.4);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-accent) 40%, transparent);
 }
 
 .mockStats {
   display: flex;
-  gap: 10px;
-  margin-top: 14px;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
 }
 
 .mockStat {
@@ -209,7 +209,7 @@
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 10px;
-  padding: 9px 12px;
+  padding: var(--space-sm) 12px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -253,7 +253,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 26px;
+  margin-top: var(--space-xl);
   flex-wrap: wrap;
 }
 
@@ -322,9 +322,9 @@
 }
 
 @keyframes dt-live-ping {
-  0% { box-shadow: 0 0 0 0 rgba(242, 169, 60, 0.5); }
-  70% { box-shadow: 0 0 0 9px rgba(242, 169, 60, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(242, 169, 60, 0); }
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 50%, transparent); }
+  70% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--color-accent) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 0%, transparent); }
 }
 
 @keyframes dt-route-flow {

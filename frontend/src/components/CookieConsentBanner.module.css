@@ -3,11 +3,11 @@
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 9999;
+  z-index: var(--z-toast);
   background: var(--color-surface);
-  border-top: 1px solid var(--color-border, rgba(232,236,243,0.08));
+  border-top: 1px solid var(--color-border, var(--color-border-subtle));
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
-  padding: var(--space-lg) var(--space-xl);
+  padding: var(--space-lg) var(--space-lg);
   font-family: var(--font-body);
   font-size: var(--text-sm);
 }
@@ -23,7 +23,7 @@
 
 .text {
   flex: 1;
-  min-width: 280px;
+  min-width: min(280px, 100%);
   color: var(--color-text-secondary);
   line-height: 1.5;
   margin: 0;
@@ -38,6 +38,16 @@
 .actions {
   display: flex;
   gap: var(--space-sm);
-  flex-shrink: 0;
+  flex-wrap: wrap;
   align-items: center;
+}
+
+/* 320px : la rangée d'actions passe sous le texte et occupe la largeur. */
+@media (max-width: 420px) {
+  .actions {
+    width: 100%;
+  }
+  .actions > * {
+    flex: 1;
+  }
 }

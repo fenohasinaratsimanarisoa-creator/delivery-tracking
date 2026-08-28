@@ -9,15 +9,15 @@
   flex-direction: column;
   gap: 8px;
   background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle, rgba(232, 236, 243, 0.08));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-lg, 10px);
-  padding: 14px 16px;
+  padding: var(--space-lg) 16px;
 }
 
 .header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-sm);
 }
 
 .iconChip {
@@ -55,9 +55,9 @@
 .input {
   flex: 1 1 200px;
   min-width: 0;
-  padding: 10px 12px;
+  padding: var(--space-sm) 12px;
   border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--color-border-subtle, rgba(232, 236, 243, 0.15));
+  border: 1px solid var(--color-border-subtle, var(--color-border));
   background: var(--color-surface-alt);
   color: var(--color-text);
   font-size: 0.85rem;
@@ -67,8 +67,8 @@
 .saveBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 16px;
   border: none;
   border-radius: var(--radius-md, 8px);
   background: var(--color-teal);
@@ -88,9 +88,9 @@
 .doneChip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
   align-self: flex-start;
-  padding: 4px 10px;
+  padding: 4px var(--space-sm);
   border-radius: var(--radius-full, 9999px);
   font-size: var(--text-xs, 0.625rem);
   font-weight: 600;

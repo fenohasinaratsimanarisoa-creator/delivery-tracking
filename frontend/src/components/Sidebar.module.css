@@ -3,7 +3,7 @@
   flex-direction: column;
   height: 100%;
   background: var(--color-bg);
-  border-right: 1px solid var(--color-border, rgba(232,236,243,0.08));
+  border-right: 1px solid var(--color-border, var(--color-border-subtle));
   transition: width 0.2s ease;
   overflow: hidden;
 }

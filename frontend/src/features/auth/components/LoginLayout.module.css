@@ -13,9 +13,9 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 60% 50% at 12% 30%, rgba(242, 169, 60, 0.08) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 40% at 85% 15%, rgba(59, 130, 246, 0.06) 0%, transparent 55%),
-    radial-gradient(ellipse 45% 35% at 75% 85%, rgba(63, 167, 150, 0.05) 0%, transparent 55%);
+    radial-gradient(ellipse 60% 50% at 12% 30%, color-mix(in srgb, var(--color-accent) 8%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 85% 15%, color-mix(in srgb, var(--color-blue) 6%, transparent) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 35% at 75% 85%, color-mix(in srgb, var(--color-teal) 5%, transparent) 0%, transparent 55%);
   animation: dt-aurora 14s var(--ease-smooth, ease-in-out) infinite alternate;
 }
 
@@ -82,7 +82,7 @@
 }
 
 .footerMark {
-  margin-top: 18px;
+  margin-top: var(--space-lg);
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--color-text-tertiary);

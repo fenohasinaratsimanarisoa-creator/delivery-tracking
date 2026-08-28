@@ -12,7 +12,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 2px solid var(--color-border, rgba(242,169,60,0.2));
+  border: 2px solid var(--color-border, color-mix(in srgb, var(--color-accent) 20%, transparent));
   border-top-color: var(--color-accent);
   animation: dt-spin 0.6s linear infinite;
   margin-right: 8px;
@@ -115,7 +115,7 @@ html, body, #root {
   }
   .reports-table-wrap th,
   .reports-table-wrap td {
-    padding: 6px 8px !important;
+    padding: var(--space-sm) 8px !important;
   }
 }
 
@@ -141,7 +141,7 @@ html, body, #root {
   .sidebar-hamburger {
     top: 6px !important;
     left: 6px !important;
-    padding: 6px !important;
+    padding: var(--space-sm) !important;
   }
 }
 

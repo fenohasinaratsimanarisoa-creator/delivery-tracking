@@ -246,11 +246,11 @@
       "gps": "Coordonnées GPS"
     },
     "formPlaceholders": {
-      "title": "Ex: Livraison Analamanga 45",
+      "title": "Ex. Livraison Analamanga 45",
       "driver": "Sélectionner un chauffeur…",
       "noActiveDriver": "Aucun chauffeur actif disponible",
-      "pickup": "Ex: Analakely Antananarivo…",
-      "delivery": "Ex: Ivato Antananarivo…",
+      "pickup": "Ex. Analakely Antananarivo…",
+      "delivery": "Ex. Ivato Antananarivo…",
       "description": "Description détaillée de la livraison…",
       "notes": "Instructions particulières, informations complémentaires…"
     },
@@ -374,12 +374,12 @@
         "none": "Aucune donnée importée"
       },
       "tooltip": {
-        "skipDuplicates": "Mode: ignorer les doublons",
-        "updateExisting": "Mode: mettre à jour les existants"
+        "skipDuplicates": "Mode d'import : les livraisons déjà présentes sont ignorées",
+        "updateExisting": "Mode d'import : les livraisons déjà présentes sont mises à jour"
       },
       "mode": {
-        "skip": "Ignorer",
-        "update": "MàJ"
+        "skip": "Ignorer les doublons",
+        "update": "Mettre à jour"
       }
     }
   },
@@ -517,15 +517,15 @@
     "modalDevice": {
       "title": "Nouveau dispositif Traccar",
       "nameLabel": "Nom du traceur",
-      "namePlaceholder": "Ex: Traceur Renault Kangoo",
+      "namePlaceholder": "Ex. Traceur Renault Kangoo",
       "imeiLabel": "Identifiant unique (IMEI)",
-      "imeiPlaceholder": "Ex: 863295042345678",
+      "imeiPlaceholder": "Ex. 863295042345678",
       "cancel": "Annuler",
       "add": "Ajouter",
       "adding": "Ajout..."
     },
     "validation": {
-      "invalidYear": "Année invalide (ex: 2024)"
+      "invalidYear": "Année invalide (ex. 2024)"
     }
   },
   "drivers": {
@@ -1032,8 +1032,8 @@
     "geoNotSupported": "Géolocalisation non supportée par votre navigateur",
     "selectDelivery": "Veuillez sélectionner une livraison",
     "searchingPosition": "Recherche de la position...",
-    "positionAcquired": "Position acquise (précision: {accuracy}m)",
-    "gpsError": "Erreur GPS: {message}",
+    "positionAcquired": "Position acquise (précision : {accuracy}m)",
+    "gpsError": "Erreur GPS : {message}",
     "gpsPermissionDenied": "Accès à la position refusé. Autorisez la géolocalisation dans les paramètres du navigateur.",
     "gpsUnavailable": "Position indisponible. Vérifiez que le GPS est activé.",
     "gpsTimeout": "Délai d'attente GPS dépassé. Vérifiez votre connexion ou passez à l'extérieur.",
@@ -1047,8 +1047,8 @@
     "startingSharing": "Démarrage...",
     "gpsLowAccuracy": "GPS haute précision indisponible — recherche basse précision...",
     "stopSharing": "Arrêter le partage",
-    "accuracy": "Précision: {accuracy}m",
-    "accuracyNA": "Précision: N/A",
+    "accuracy": "Précision : {accuracy}m",
+    "accuracyNA": "Précision : N/A",
     "vehicleInfo": "🚛 {brand} {model} — {licensePlate}",
     "poorAccuracy": "Précision insuffisante ({accuracy}m) - en attente d'un meilleur signal",
     "poorAccuracyWarning": "Précision GPS insuffisante (>50m) - point non envoyé en attendant un meilleur signal",
@@ -1076,8 +1076,8 @@
     "distanceAsCrowFlies": "{label} — {distance} km (vol d'oiseau)",
     "pickupPopup": "📦 Point d'enlèvement : {address}",
     "speedValue": "{speed} km/h",
-    "confidenceValue": "conf: {confidence}%",
-    "etaLabel": "ETA: {eta}"
+    "confidenceValue": "conf : {confidence}%",
+    "etaLabel": "ETA : {eta}"
   },
   "myVehicle": {
     "title": "Mon véhicule",
@@ -1533,7 +1533,7 @@
     "title": "La plateforme qui connecte vos livraisons",
     "subtitle": "Pilotez votre flotte, suivez chaque colis et simplifiez la coordination entre livreurs et clients.",
     "deliveriesToday": "Livraisons aujourd'hui",
-    "target": "Objectif: 100",
+    "target": "Objectif : 100",
     "percentReached": "78% atteint",
     "socialProof": "Utilisé par des entreprises de logistique à Madagascar",
     "kpiLabel": "Livraisons aujourd'hui",
@@ -1747,7 +1747,7 @@
     "sessionUnknownDevice": "Appareil inconnu",
     "sessionCurrent": "— Cette session",
     "sessionLastActivity": "Dernière activité : {date}",
-    "sessionIpLabel": "IP: {ip}",
+    "sessionIpLabel": "IP : {ip}",
     "sessionRevoke": "Révoquer",
     "sessionRevokeAll": "Déconnecter les autres appareils",
     "toastSessionRevoked": "Session révoquée",

@@ -23,7 +23,7 @@
   padding: var(--space-sm, 8px) var(--space-md, 12px);
   flex: 1;
   max-width: 400px;
-  border: 1px solid var(--color-input-border, rgba(232,236,243,0.15));
+  border: 1px solid var(--color-input-border, var(--color-border));
   border-radius: var(--radius-md, 6px);
   background: var(--color-input-bg);
   color: var(--color-text);
@@ -37,7 +37,7 @@
   border-radius: var(--radius-lg, 8px);
   overflow: hidden;
   margin-bottom: var(--space-lg, 16px);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
 }
 
 .playbackControls {
@@ -48,7 +48,7 @@
   padding: var(--space-lg, 16px);
   background: var(--color-surface);
   border-radius: var(--radius-lg, 8px);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
 }
 
 .playBtn {
@@ -61,7 +61,7 @@
   font-size: var(--text-sm, 0.875rem);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
 }
 
 .playBtnPlaying {
@@ -73,7 +73,7 @@
 }
 
 .speedBtn {
-  padding: var(--space-sm, 6px) var(--space-md, 12px);
+  padding: var(--space-sm, var(--space-sm)) var(--space-md, 12px);
   border-radius: var(--radius-md, 6px);
   cursor: pointer;
   font-size: var(--text-sm, 0.875rem);
@@ -81,13 +81,13 @@
 
 .speedBtnActive {
   border: 2px solid var(--color-accent);
-  background: var(--color-accent-bg, rgba(242,169,60,0.08));
+  background: var(--color-accent-bg, color-mix(in srgb, var(--color-accent) 8%, transparent));
   color: var(--color-accent);
   font-weight: 600;
 }
 
 .speedBtnInactive {
-  border: 1px solid var(--color-input-border, rgba(232,236,243,0.15));
+  border: 1px solid var(--color-input-border, var(--color-border));
   background: var(--color-surface);
   color: var(--color-text-secondary);
   font-weight: 400;
@@ -119,5 +119,5 @@
   padding: var(--space-md, 12px);
   background: var(--color-surface);
   border-radius: var(--radius-md, 6px);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
 }

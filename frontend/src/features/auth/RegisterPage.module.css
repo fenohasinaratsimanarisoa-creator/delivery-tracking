@@ -53,7 +53,7 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-sm);
   margin-bottom: 24px;
 }
 
@@ -81,7 +81,7 @@
   font-size: 22px;
   font-weight: 700;
   color: var(--color-text);
-  margin-bottom: 6px;
+  margin-bottom: var(--space-sm);
 }
 
 .subtitle {
@@ -107,7 +107,7 @@
 
 .input {
   width: 100%;
-  padding: 20px 40px 8px 14px;
+  padding: 20px 40px 8px var(--space-lg);
   border: none;
   outline: none;
   background: transparent;
@@ -148,15 +148,15 @@
 .ruleList {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-top: 6px;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
   margin-bottom: 16px;
 }
 
 .ruleItem {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
   font-size: 12px;
   transition: color 0.15s;
 }
@@ -170,7 +170,7 @@
 }
 
 .fieldGroup {
-  margin-bottom: 14px;
+  margin-bottom: var(--space-lg);
   position: relative;
 }
 
@@ -207,7 +207,7 @@
 
 .submitBtn {
   width: 100%;
-  padding: 11px 24px;
+  padding: var(--space-md) 24px;
   border: none;
   border-radius: var(--radius-md);
   font-size: 15px;
@@ -232,7 +232,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
+  padding: var(--space-sm) var(--space-lg);
   border-radius: var(--radius-md);
   background: var(--color-red-muted);
   border: 1px solid var(--color-red);
@@ -292,7 +292,7 @@
 
 .ssoButton {
   width: 100%;
-  padding: 10px 24px;
+  padding: var(--space-sm) 24px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-input-border);
   background: var(--color-input-bg);

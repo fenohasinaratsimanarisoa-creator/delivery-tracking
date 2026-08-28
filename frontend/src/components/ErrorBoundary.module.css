@@ -29,7 +29,7 @@
 
 .retryBtn {
   margin-top: 24px;
-  padding: 10px 24px;
+  padding: var(--space-sm) 24px;
   background: var(--color-accent);
   color: var(--color-bg);
   border: none;

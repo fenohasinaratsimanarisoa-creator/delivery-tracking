@@ -28,11 +28,11 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-sm);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg, 14px);
-  padding: 18px 18px 14px;
+  padding: var(--space-lg) var(--space-lg) var(--space-lg);
   box-shadow: var(--shadow-lg, 0 12px 40px rgba(0, 0, 0, 0.5));
 }
 
@@ -65,7 +65,7 @@
 .header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-sm);
   padding-right: 32px;
 }
 
@@ -106,7 +106,7 @@
 
 .step {
   display: flex;
-  gap: 10px;
+  gap: var(--space-sm);
 }
 
 .stepNum {
@@ -118,7 +118,7 @@
   height: 24px;
   margin-top: 2px;
   border-radius: 50%;
-  background: var(--color-accent-muted, rgba(242, 169, 60, 0.14));
+  background: var(--color-accent-muted, color-mix(in srgb, var(--color-accent) 14%, transparent));
   color: var(--color-accent);
   font-size: 0.72rem;
   font-weight: 700;
@@ -127,7 +127,7 @@
 .stepBody {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-sm);
   min-width: 0;
 }
 
@@ -155,8 +155,8 @@
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
   border: none;
   border-radius: var(--radius-md, 8px);
   background: var(--color-orange);
@@ -177,7 +177,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  padding: 4px var(--space-sm);
   border-radius: 12px;
   font-size: 0.72rem;
   font-weight: 600;

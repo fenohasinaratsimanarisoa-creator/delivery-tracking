@@ -12,7 +12,7 @@
 .backLink {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
   font-size: 13px;
   color: var(--color-text-tertiary);
   text-decoration: none;

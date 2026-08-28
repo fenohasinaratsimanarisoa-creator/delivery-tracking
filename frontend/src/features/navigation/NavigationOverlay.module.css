@@ -31,7 +31,7 @@
   font-size: var(--text-md, 1rem);
 }
 .finishBtn {
-  padding: 14px 40px;
+  padding: var(--space-lg) 40px;
   background: var(--color-teal);
   color: #fff;
   border: none;
@@ -50,7 +50,7 @@
   background: var(--color-red);
   color: #fff;
   text-align: center;
-  padding: 6px;
+  padding: var(--space-sm);
   font-size: var(--text-xs, 0.625rem);
   font-weight: 700;
 }
@@ -62,7 +62,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-sm);
   background: var(--color-teal);
   color: #fff;
   text-align: center;
@@ -78,12 +78,12 @@
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-sm);
   pointer-events: none;
 }
 .instructionCard {
   background: var(--color-glass, rgba(18,27,46,0.92));
-  border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
+  border: 1px solid var(--color-glass-border, color-mix(in srgb, var(--color-accent) 15%, transparent));
   border-radius: var(--radius-lg, 12px);
   padding: var(--space-lg, 16px);
   box-shadow: var(--shadow-md, 0 4px 20px rgba(0,0,0,0.4));
@@ -93,7 +93,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-sm);
 }
 .instructionTextWrap {
   flex: 1;
@@ -122,9 +122,9 @@
 }
 .muteBtn {
   background: var(--color-surface-alt);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-md, 6px);
-  padding: 8px 10px;
+  padding: 8px var(--space-sm);
   cursor: pointer;
   font-size: var(--text-md, 1rem);
   pointer-events: auto;
@@ -163,13 +163,13 @@
 }
 .bottomRow {
   display: flex;
-  gap: 6px;
+  gap: var(--space-sm);
   pointer-events: auto;
 }
 .infoBar {
   flex: 1;
   background: var(--color-glass, rgba(18,27,46,0.92));
-  border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
+  border: 1px solid var(--color-glass-border, color-mix(in srgb, var(--color-accent) 15%, transparent));
   border-radius: var(--radius-lg, 8px);
   padding: 8px 12px;
   display: flex;
@@ -180,7 +180,7 @@
 .infoItem {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-xs);
   color: var(--color-teal);
   font-weight: 700;
   font-family: var(--font-mono);
@@ -188,13 +188,13 @@
 .infoItemSecondary {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-xs);
   color: var(--color-text-secondary);
 }
 .dataSaverBtn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-xs);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -211,10 +211,10 @@
   font-weight: 400;
 }
 .exitBtn {
-  background: var(--color-red-muted, rgba(232,84,76,0.15));
-  border: 1px solid var(--color-red-muted, rgba(232,84,76,0.15));
+  background: var(--color-red-muted, color-mix(in srgb, var(--color-red) 15%, transparent));
+  border: 1px solid var(--color-red-muted, color-mix(in srgb, var(--color-red) 15%, transparent));
   border-radius: var(--radius-lg, 8px);
-  padding: 8px 14px;
+  padding: 8px var(--space-lg);
   cursor: pointer;
   color: var(--color-red);
   font-size: var(--text-xs, 0.625rem);
@@ -231,11 +231,11 @@
   pointer-events: none;
 }
 .deviationBadgeInner {
-  background: var(--color-red-muted, rgba(232,84,76,0.15));
+  background: var(--color-red-muted, color-mix(in srgb, var(--color-red) 15%, transparent));
   color: #fff;
-  padding: 10px 24px;
+  padding: var(--space-sm) 24px;
   border-radius: var(--radius-full, 9999px);
   font-size: var(--text-sm, 0.75rem);
   font-weight: 700;
-  box-shadow: var(--shadow-md, 0 4px 20px rgba(232,84,76,0.4));
+  box-shadow: var(--shadow-md, 0 4px 20px color-mix(in srgb, var(--color-red) 40%, transparent));
 }

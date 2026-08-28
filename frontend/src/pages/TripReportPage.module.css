@@ -23,7 +23,7 @@
   padding: var(--space-sm, 8px) var(--space-md, 12px);
   flex: 1;
   max-width: 400px;
-  border: 1px solid var(--color-input-border, rgba(232,236,243,0.15));
+  border: 1px solid var(--color-input-border, var(--color-border));
   border-radius: var(--radius-md, 6px);
   background: var(--color-input-bg);
   color: var(--color-text);
@@ -35,7 +35,7 @@
 .exportBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
   padding: var(--space-sm, 8px) var(--space-lg, 16px);
   background: var(--color-accent);
   color: var(--color-bg);
@@ -55,7 +55,7 @@
   background: var(--color-surface);
   padding: var(--space-xl, 20px);
   border-radius: var(--radius-xl, 12px);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   max-width: 600px;
 }
 
@@ -88,10 +88,10 @@
    sans avoir à comparer les deux chiffres manuellement. */
 .distanceBadge {
   display: inline-block;
-  margin-left: 6px;
+  margin-left: var(--space-sm);
   padding: 1px 8px;
   border-radius: var(--radius-full, 999px);
-  background: var(--color-accent-muted, rgba(242, 169, 60, 0.15));
+  background: var(--color-accent-muted, color-mix(in srgb, var(--color-accent) 15%, transparent));
   border: 1px solid var(--color-accent);
   color: var(--color-accent);
   font-size: 0.65rem;

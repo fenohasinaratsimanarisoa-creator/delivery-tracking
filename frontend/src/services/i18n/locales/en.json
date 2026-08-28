@@ -374,12 +374,12 @@
         "none": "No data imported"
       },
       "tooltip": {
-        "skipDuplicates": "Mode: skip duplicates",
-        "updateExisting": "Mode: update existing"
+        "skipDuplicates": "Import mode: deliveries already present are skipped",
+        "updateExisting": "Import mode: deliveries already present are updated"
       },
       "mode": {
-        "skip": "Skip",
-        "update": "Update"
+        "skip": "Skip duplicates",
+        "update": "Update existing"
       }
     }
   },

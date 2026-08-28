@@ -4,7 +4,7 @@
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(1200px 500px at 50% -10%, var(--color-accent-muted, rgba(242,169,60,0.12)), transparent 60%),
+    radial-gradient(1200px 500px at 50% -10%, var(--color-accent-muted, color-mix(in srgb, var(--color-accent) 12%, transparent)), transparent 60%),
     var(--color-bg);
   font-family: var(--font-body, Inter, sans-serif);
   padding: var(--space-lg);
@@ -15,7 +15,7 @@
   padding: var(--space-2xl);
   background: var(--color-surface);
   border-radius: var(--radius-2xl);
-  border: 1px solid var(--color-border, rgba(242,169,60,0.2));
+  border: 1px solid var(--color-border, color-mix(in srgb, var(--color-accent) 20%, transparent));
   box-shadow: var(--shadow-dialog, 0 2px 8px rgba(0,0,0,0.3), 0 20px 60px rgba(0,0,0,0.4));
 }
 .cardHeader {
@@ -26,13 +26,13 @@
   width: 60px;
   height: 60px;
   border-radius: var(--radius-full);
-  background: var(--color-accent-muted, rgba(242,169,60,0.15));
+  background: var(--color-accent-muted, color-mix(in srgb, var(--color-accent) 15%, transparent));
   color: var(--color-accent);
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto var(--space-md);
-  box-shadow: var(--shadow-glow, 0 0 12px rgba(242,169,60,0.35));
+  box-shadow: var(--shadow-glow, 0 0 12px color-mix(in srgb, var(--color-accent) 35%, transparent));
 }
 .cardTitle {
   font-family: var(--font-display, 'Space Grotesk', sans-serif);
@@ -50,7 +50,7 @@
 .errorBanner {
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-full);
-  background: var(--color-red-muted, rgba(232,84,76,0.15));
+  background: var(--color-red-muted, color-mix(in srgb, var(--color-red) 15%, transparent));
   color: var(--color-red);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -60,7 +60,7 @@
 .infoBanner {
   padding: var(--space-md);
   border-radius: var(--radius-md);
-  background: var(--color-accent-muted, rgba(242,169,60,0.15));
+  background: var(--color-accent-muted, color-mix(in srgb, var(--color-accent) 15%, transparent));
   color: var(--color-accent);
   font-size: var(--text-sm);
   line-height: 1.5;
@@ -69,7 +69,7 @@
 }
 .infoBannerIcon {
   vertical-align: middle;
-  margin-right: 6px;
+  margin-right: var(--space-sm);
 }
 .qrContainer {
   text-align: center;
@@ -79,7 +79,7 @@
   width: 180px;
   height: 180px;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border, rgba(242,169,60,0.2));
+  border: 1px solid var(--color-border, color-mix(in srgb, var(--color-accent) 20%, transparent));
   box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.35));
 }
 .otpUrlBox {
@@ -100,7 +100,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-secondary);
-  margin-bottom: 6px;
+  margin-bottom: var(--space-sm);
 }
 .inputWrapper {
   position: relative;
@@ -114,7 +114,7 @@
 }
 .inputField {
   width: 100%;
-  padding: 10px 12px;
+  padding: var(--space-sm) 12px;
   border: 1px solid var(--color-input-border);
   border-radius: var(--radius-md);
   background: var(--color-input-bg);
@@ -128,10 +128,10 @@
 }
 .inputField:focus {
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px var(--color-accent-muted, rgba(242,169,60,0.15));
+  box-shadow: 0 0 0 3px var(--color-accent-muted, color-mix(in srgb, var(--color-accent) 15%, transparent));
 }
 .inputFieldWithIcon {
-  padding: 10px 12px 10px 36px;
+  padding: var(--space-sm) 12px var(--space-sm) 36px;
 }
 .inputFieldCenter {
   text-align: center;
@@ -143,7 +143,7 @@
 }
 .submitBtn {
   width: 100%;
-  padding: 10px;
+  padding: var(--space-sm);
   background: var(--color-accent);
   color: var(--color-bg);
   border: none;
@@ -156,7 +156,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: var(--shadow-glow, 0 0 12px rgba(242,169,60,0.35));
+  box-shadow: var(--shadow-glow, 0 0 12px color-mix(in srgb, var(--color-accent) 35%, transparent));
   transition: transform var(--duration-fast) var(--ease-snappy, ease),
     box-shadow var(--duration-fast) var(--ease-smooth, ease);
 }

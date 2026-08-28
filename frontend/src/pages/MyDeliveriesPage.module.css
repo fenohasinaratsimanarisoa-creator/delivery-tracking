@@ -63,9 +63,9 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-xl);
-  background: var(--color-accent-muted, rgba(242,169,60,0.15));
+  background: var(--color-accent-muted, color-mix(in srgb, var(--color-accent) 15%, transparent));
   color: var(--color-accent);
-  border: 1px solid var(--color-glass-border, rgba(242,169,60,0.15));
+  border: 1px solid var(--color-glass-border, color-mix(in srgb, var(--color-accent) 15%, transparent));
   flex-shrink: 0;
 }
 
@@ -112,17 +112,17 @@
 /* Pills teintées : le fond + la couleur de texte portent le signal — la bordure colorée
    en plus (3e signal) est retirée. */
 .pillTeal {
-  background: var(--color-teal-muted, rgba(63,167,150,0.15));
+  background: var(--color-teal-muted, color-mix(in srgb, var(--color-teal) 15%, transparent));
   color: var(--color-teal);
 }
 
 .pillAmber {
-  background: var(--color-accent-muted, rgba(242,169,60,0.15));
+  background: var(--color-accent-muted, color-mix(in srgb, var(--color-accent) 15%, transparent));
   color: var(--color-accent);
 }
 
 .pillRed {
-  background: var(--color-red-muted, rgba(232,84,76,0.15));
+  background: var(--color-red-muted, color-mix(in srgb, var(--color-red) 15%, transparent));
   color: var(--color-red);
 }
 
@@ -140,7 +140,7 @@
 .pillMuted {
   background: var(--color-surface-alt);
   color: var(--color-text-tertiary);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
 }
 
 /* Point « live » statique : le pill (couleur + libellé) est le SEUL signal
@@ -166,7 +166,7 @@
   gap: var(--space-sm);
   padding: var(--space-md) var(--space-lg);
   background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-xl);
   overflow: hidden;
   transition: border-color var(--duration-base, 200ms) var(--ease-smooth, ease);
@@ -177,7 +177,7 @@
 
 
 .summaryCard:hover {
-  border-color: var(--color-border, rgba(242,169,60,0.2));
+  border-color: var(--color-border, color-mix(in srgb, var(--color-accent) 20%, transparent));
 }
 
 .summaryTop {
@@ -191,7 +191,7 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-lg);
-  background: var(--kpi-muted, rgba(242,169,60,0.15));
+  background: var(--kpi-muted, color-mix(in srgb, var(--color-accent) 15%, transparent));
   color: var(--kpi, var(--color-accent));
 }
 
@@ -226,14 +226,14 @@
   gap: var(--space-md);
   padding: var(--space-lg);
   background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-xl);
   overflow: hidden;
   transition: border-color var(--duration-base, 200ms) var(--ease-smooth, ease);
 }
 
 .deliveryCard:hover {
-  border-color: var(--color-border, rgba(242,169,60,0.2));
+  border-color: var(--color-border, color-mix(in srgb, var(--color-accent) 20%, transparent));
 }
 
 /* Statut « actif »/« en attente » signalé par le SEUL accentBar (bordure gauche fine) :
@@ -291,12 +291,12 @@
 .cardTime {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-xs);
   font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   white-space: nowrap;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  padding-top: 3px;
+  padding-top: var(--space-xs);
 }
 
 /* ─── Itinéraire ──────────────────────────────────────────── */
@@ -322,19 +322,19 @@
   background: var(--color-surface-alt);
   color: var(--color-text-tertiary);
   flex-shrink: 0;
-  box-shadow: inset 0 0 0 1px var(--color-border-subtle, rgba(232,236,243,0.08));
+  box-shadow: inset 0 0 0 1px var(--color-border-subtle, var(--color-border-subtle));
 }
 
 .addressIconPickup {
   color: var(--color-accent);
-  background: var(--color-accent-muted, rgba(242,169,60,0.15));
-  box-shadow: inset 0 0 0 1px rgba(242, 169, 60, 0.2);
+  background: var(--color-accent-muted, color-mix(in srgb, var(--color-accent) 15%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 20%, transparent);
 }
 
 .addressIconDrop {
   color: var(--color-teal);
-  background: var(--color-teal-muted, rgba(63,167,150,0.15));
-  box-shadow: inset 0 0 0 1px rgba(63, 167, 150, 0.2);
+  background: var(--color-teal-muted, color-mix(in srgb, var(--color-teal) 15%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-teal) 20%, transparent);
 }
 
 .addressTextWrap {
@@ -362,7 +362,7 @@
 /* Connecteur pointillé STATIQUE (pas de défilement animé) */
 .routeConnector {
   position: relative;
-  margin-left: 15px;
+  margin-left: var(--space-lg);
   min-height: 24px;
   width: 2px;
 }
@@ -375,7 +375,7 @@
   width: 2px;
   background: repeating-linear-gradient(
     to bottom,
-    var(--color-border, rgba(242,169,60,0.2)) 0 6px,
+    var(--color-border, color-mix(in srgb, var(--color-accent) 20%, transparent)) 0 6px,
     transparent 6px 12px
   );
 }
@@ -383,7 +383,7 @@
 /* ─── Détails repliables ──────────────────────────────────── */
 .cardDetails {
   margin: 0;
-  border-top: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border-top: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   padding-top: var(--space-md);
 }
 
@@ -437,7 +437,7 @@
   font-size: var(--text-xs);
   color: var(--color-text-secondary);
   background: var(--color-surface-alt);
-  border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-full);
 }
@@ -458,8 +458,8 @@
   font-weight: 600;
   letter-spacing: 0.03em;
   color: var(--color-accent);
-  background: var(--color-accent-muted, rgba(242,169,60,0.15));
-  padding: 1px 7px;
+  background: var(--color-accent-muted, color-mix(in srgb, var(--color-accent) 15%, transparent));
+  padding: 1px var(--space-sm);
   border-radius: var(--radius-sm);
 }
 
@@ -491,7 +491,7 @@
   gap: var(--space-sm);
   flex-wrap: wrap;
   justify-content: flex-end;
-  border-top: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
+  border-top: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   padding-top: var(--space-md);
 }
 
@@ -500,7 +500,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
-  padding: 9px 18px;
+  padding: var(--space-sm) var(--space-lg);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-weight: 700;
@@ -543,11 +543,11 @@
 .actionDanger {
   background: transparent;
   color: var(--color-red);
-  border-color: rgba(232, 84, 76, 0.35);
+  border-color: color-mix(in srgb, var(--color-red) 35%, transparent);
 }
 
 .actionDanger:hover {
-  background: var(--color-red-muted, rgba(232,84,76,0.15));
+  background: var(--color-red-muted, color-mix(in srgb, var(--color-red) 15%, transparent));
   border-color: var(--color-red);
 }
 
@@ -561,7 +561,7 @@
   gap: var(--space-sm);
   padding: var(--space-3xl) var(--space-2xl);
   text-align: center;
-  border: 1px dashed var(--color-border, rgba(242,169,60,0.2));
+  border: 1px dashed var(--color-border, color-mix(in srgb, var(--color-accent) 20%, transparent));
   border-radius: var(--radius-xl);
   background: var(--color-surface);
 }
@@ -723,5 +723,17 @@
   }
   :global([data-context="field"]) .list {
     gap: var(--space-lg);
+  }
+}
+
+/* 320-480px : l'en-tête de page s'empile — le bloc titre garde toute la
+   largeur au lieu d'être comprimé par la rangée d'actions à côté. */
+@media (max-width: 480px) {
+  .pageHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pageHeader > * {
+    min-width: 0;
   }
 }

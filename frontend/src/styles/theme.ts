@@ -17,7 +17,8 @@ export const colors = {
     borderSubtle: 'rgba(237, 238, 240, 0.05)',
     text: palette.textPrimary,
     textSecondary: '#A0A6B0',
-    textTertiary: '#7A8089',
+    // AA mesuré : #7A8089 tombait à 4.38 sur surface et 4.11 sur surfaceAlt.
+    textTertiary: '#818790',
     accent: palette.accent,
     accentHover: '#7ECBA9',
     accentMuted: 'rgba(111, 191, 158, 0.14)',
@@ -122,9 +123,10 @@ export const colors = {
     blueMuted: 'rgba(74, 107, 138, 0.10)',
     purple: '#6B5A8C',
     purpleMuted: 'rgba(107, 90, 140, 0.10)',
-    orange: '#B7791F',
-    orangeMuted: 'rgba(183, 121, 31, 0.10)',
-    warning: '#B7791F',
+    // AA mesuré : #B7791F tombait à 3.64 sur surface blanche.
+    orange: '#A6680E',
+    orangeMuted: 'rgba(166, 104, 14, 0.10)',
+    warning: '#A6680E',
     warningMuted: 'rgba(183, 121, 31, 0.08)',
     warningSubtle: 'rgba(183, 121, 31, 0.05)',
     shadow: '0 1px 3px rgba(16,18,22,0.06)',

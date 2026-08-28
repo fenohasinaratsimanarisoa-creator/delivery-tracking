@@ -7,9 +7,9 @@
   display: flex;
   align-items: stretch;
   gap: 2px;
-  padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+  padding: var(--space-sm) var(--space-sm) calc(var(--space-sm) + env(safe-area-inset-bottom));
   background: var(--color-bg);
-  border-top: 1px solid var(--color-border, rgba(242, 169, 60, 0.2));
+  border-top: 1px solid var(--color-border, color-mix(in srgb, var(--color-accent) 20%, transparent));
   backdrop-filter: blur(18px) saturate(1.2);
   -webkit-backdrop-filter: blur(18px) saturate(1.2);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
@@ -50,8 +50,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 8px 2px 6px;
+  gap: var(--space-xs);
+  padding: 8px 2px var(--space-sm);
   background: none;
   border: none;
   cursor: pointer;
@@ -150,7 +150,7 @@
 .sheet {
   background: var(--color-surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  border: 1px solid var(--color-border-subtle, rgba(232, 236, 243, 0.08));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   box-shadow: var(--shadow-2xl, 0 -12px 40px rgba(0, 0, 0, 0.5));
   padding: 8px 8px calc(12px + env(safe-area-inset-bottom));
   max-height: 70vh;
@@ -162,21 +162,21 @@
   width: 40px;
   height: 4px;
   border-radius: 999px;
-  background: var(--color-border-subtle, rgba(232, 236, 243, 0.08));
-  margin: 4px auto 10px;
+  background: var(--color-border-subtle, var(--color-border-subtle));
+  margin: 4px auto var(--space-sm);
 }
 
 .sheetTitle {
   font-family: var(--font-display);
   font-size: var(--text-sm);
   color: var(--color-text-tertiary);
-  padding: 3px 16px 10px;
+  padding: var(--space-xs) 16px var(--space-sm);
   letter-spacing: 0.01em;
 }
 
 .sheetDivider {
   height: 1px;
-  background: var(--color-border-subtle, rgba(232, 236, 243, 0.08));
+  background: var(--color-border-subtle, var(--color-border-subtle));
   margin: 8px 16px;
 }
 
@@ -184,7 +184,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 6px 16px 8px;
+  padding: var(--space-sm) 16px 8px;
 }
 
 .sheetUserIcon {
@@ -239,15 +239,15 @@
 
 .sheetLogout:hover,
 .sheetLogout:focus-visible {
-  background: var(--color-red-muted, rgba(232, 84, 76, 0.15));
+  background: var(--color-red-muted, color-mix(in srgb, var(--color-red) 15%, transparent));
 }
 
 .sheetItem {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-lg);
   width: 100%;
-  padding: 13px 16px;
+  padding: var(--space-md) 16px;
   background: none;
   border: none;
   border-radius: var(--radius-md);

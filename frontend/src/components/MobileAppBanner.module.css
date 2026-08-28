@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 16px;
+  padding: var(--space-sm) 16px;
   margin: 0 16px 12px;
   border-radius: 10px;
   background: var(--color-accent);
@@ -44,7 +44,7 @@
 
 .downloadLink {
   display: inline-block;
-  padding: 6px 12px;
+  padding: var(--space-sm) 12px;
   border-radius: 6px;
   background: #fff;
   color: var(--color-accent);
@@ -54,7 +54,7 @@
 }
 
 .dismiss {
-  padding: 6px 10px;
+  padding: var(--space-sm) var(--space-sm);
   border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 6px;
   background: transparent;
