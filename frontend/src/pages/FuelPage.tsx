@@ -599,6 +599,10 @@ export default function FuelPage() {
     gpsDataQuality?: "sufficient" | "insufficient" | "suspicious";
     consumptionLPer100Km?: number;
     estimatedCost?: number;
+    // null = coût NON chiffré : prix carburant non configuré (véhicule
+    // électrique) OU distance GPS jugée non fiable (gpsDataQuality suspicious).
+    // Dans ce cas, ne PAS afficher "0 Ar" — un tiret + le motif.
+    pricePerLiterUsed?: number | null;
     reportDate?: string;
   }
   const reportList: FuelReport[] = reports ?? [];
@@ -1164,9 +1168,22 @@ export default function FuelPage() {
                         <td
                           className={`${styles.tableCell} ${styles.tableCellRight}`}
                         >
-                          <span className={styles.costCellAr}>
-                            {formatAriary(r.estimatedCost)}
-                          </span>
+                          {r.pricePerLiterUsed == null ? (
+                            <span
+                              className={styles.costCellAr}
+                              title={
+                                r.gpsDataQuality === "suspicious"
+                                  ? t("fuel.costUnreliableGps")
+                                  : t("fuel.costNoPrice")
+                              }
+                            >
+                              —
+                            </span>
+                          ) : (
+                            <span className={styles.costCellAr}>
+                              {formatAriary(r.estimatedCost)}
+                            </span>
+                          )}
                         </td>
                         <td className={styles.tableCell}>
                           <span className={styles.dateCell}>

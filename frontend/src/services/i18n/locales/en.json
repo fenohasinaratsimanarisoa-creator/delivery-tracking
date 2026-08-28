@@ -685,6 +685,8 @@
     "gpsQualityBadge": "Low GPS",
     "gpsQualityInsufficient": "GPS distance too low to be reliable this day (positions exist but movement < 0.1 km).",
     "gpsQualitySuspiciousBadge": "Verify",
+      "costUnreliableGps": "Cost not computed: this day's GPS distance is not reliable (signal drift).",
+      "costNoPrice": "Cost not computed: fuel price not configured for this vehicle.",
     "gpsQualitySuspicious": "This distance looks like GPS noise (vehicle likely stayed put) rather than a real trip — verify before relying on it.",
     "estimatedCost": "Estimated Cost",
     "date": "Date",
