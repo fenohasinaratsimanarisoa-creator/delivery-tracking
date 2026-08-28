@@ -190,3 +190,70 @@ Vérifié : tsc, eslint.
 4. **Lot 13** — passe finale (zoom 200 %, viewport 320 px, contrastes mesurés,
    relecture des textes d'UI, purge des derniers hex/`!important`/keyframes
    mortes).
+
+---
+
+## Lot 4 — Primitives overlay (partiel)
+
+Branche : `redesign/lot4-primitives-overlay`
+
+| Composant | État |
+|---|---|
+| `Modal` | **nouveau** — portal, verrou de scroll body, piège à focus (Tab/Shift+Tab), Échap, clic sur le fond, restauration du focus, `role=dialog` + `aria-modal`/`labelledby`, `--z-modal`, feuille du bas < 480px |
+| `Pagination` | **nouveau** — « X–Y sur Z » + n° de page, chevrons lucide, `tabular-nums`, cibles 44px |
+| `Tabs` | **nouveau** — `role=tablist`, clavier ←/→/Home/End, roving tabindex |
+| `ConfirmDialog` | **refondu sur `Modal`** (mêmes props). Gagne portal + focus-trap + scroll-lock. Focus initial → « Annuler » (défensif). `ConfirmDialog.module.css` supprimé. |
+| `EntityDialog` | **non fait** — injecte son propre CSS d'input, dépend de `useEntityForm`, testé par `FuelPage.test` → à refondre avec revue navigateur |
+| `Drawer`, `Dropdown` | **non faits** |
+
++5 tests. tsc + eslint OK. Consommateurs de `ConfirmDialog` (FuelPage,
+DeliveriesPage, FleetPage, UsersPage) : tests verts.
+
+---
+
+## Lot 5b — DataTable
+
+Branche : `redesign/lot5b-datatable` (**tip de la chaîne — contient tous les lots**)
+
+Refonte style + structure, **comportement de tri INCHANGÉ** :
+- `<thead>` réellement collant + colonnes sélection/actions gelées via classes
+  (fin des z-index inline arbitraires 1/2/3)
+- `Column.align?` (`left`/`right`/`center`) — `right` ajoute `tabular-nums`.
+  Additif (colonnes sans `align` = inchangées).
+- hover de ligne : CSS `:hover` au lieu de handlers JS `onMouseEnter/Leave`
+- chargement : `<Skeleton>` à la forme du tableau
+- vide : `<EmptyState>` + icône `Inbox` (l'icône `Pencil` était un contre-sens)
+- pagination : `<Pagination>` (au lieu des glyphes `←/→` + `pageBtnStyle` inline)
+- tri : chevrons lucide + `aria-sort` (au lieu des `▲▼` unicode)
+
+API `Column<T>` / `Props<T>` inchangée sauf `align?`. 77 tests
+pages/composants verts. `eslint .` + `vite build` OK.
+
+---
+
+## Où en est-on
+
+**Branche à réviser : `redesign/lot5b-datatable`** (13 commits, linéaire depuis
+`main`). Elle contient les lots 1, 2, 3, 4 (partiel), 5, 5b, 6 (partiel).
+
+```
+git checkout redesign/lot5b-datatable && cd frontend && npm run dev
+```
+
+Rien n'est mergé sur `main`, rien n'est déployé.
+
+Fait (fondations + primitives, vérifiables au build/tests mais **PAS visuellement**
+dans cet environnement) :
+- Tokens : `--status-*`, `--z-*`, `--transition-*` (+ fix), purge des exports
+  legacy.
+- Primitives : `Button` `Input` `Badge` (sémantique) `Textarea` `Checkbox`
+  `Radio` `Switch` `Tooltip` `Modal` `Pagination` `Tabs` `Skeleton` `EmptyState`
+  `ErrorState` `VehicleStatusPill` ; `ConfirmDialog` sur `Modal` ; `DataTable`
+  refondu ; `formatRelativeTime`.
+- Écran carte (Lot 1) entièrement fait.
+
+À faire — **nécessite la boucle de revue navigateur** (un écran à la fois) :
+- `EntityDialog` sur `Modal` ; `Drawer` / `Dropdown`.
+- Lots 8–12 : Flotte, Carburant, Ops, Admin, Auth — migration hex→token +
+  adoption des primitives + 3 états par écran.
+- Lot 13 : passe finale (zoom 200 %, 320 px, contrastes, textes, purge finale).
