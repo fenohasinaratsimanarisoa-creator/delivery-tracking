@@ -621,8 +621,37 @@
     "legend": {
       "moving": "En mouvement",
       "stopped": "À l'arrêt",
+      "offline": "Hors ligne",
       "doubleClick": "Double-cliquez pour zoomer"
+    },
+    "panel": {
+      "plate": "Plaque",
+      "noPlate": "Véhicule sans plaque",
+      "driver": "Chauffeur",
+      "status": "Statut",
+      "speed": "Vitesse",
+      "heading": "Cap",
+      "coordinates": "Position GPS",
+      "gpsAccuracy": "Précision GPS",
+      "confidence": "Fiabilité du fix",
+      "lastPosition": "Dernière position",
+      "eta": "Arrivée estimée",
+      "distanceRemaining": "Distance restante",
+      "delivery": "Livraison",
+      "noDelivery": "Aucune livraison en cours",
+      "staleWarning": "Position non actualisée depuis plus de 2 minutes",
+      "offlineWarning": "Ce véhicule n'a plus transmis de position depuis plus de 15 minutes",
+      "follow": "Suivre",
+      "following": "Suivi actif",
+      "close": "Fermer la fiche véhicule"
     }
+  },
+  "vehicleStatus": {
+    "enroute": "En route",
+    "idle": "À l'arrêt",
+    "offline": "Hors ligne",
+    "alert": "Alerte",
+    "maintenance": "Maintenance"
   },
   "fuel": {
     "title": "Carburant",
