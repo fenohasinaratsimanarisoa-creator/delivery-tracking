@@ -1,7 +1,19 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Trash2, CheckSquare, Square } from 'lucide-react';
+import {
+  Pencil,
+  Trash2,
+  CheckSquare,
+  Square,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+  Inbox,
+} from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
+import Skeleton from './Skeleton';
+import EmptyState from './EmptyState';
+import Pagination from './Pagination';
 import styles from './DataTable.module.css';
 
 interface Column<T> {
@@ -9,6 +21,8 @@ interface Column<T> {
   label: string;
   render?: (row: T) => ReactNode;
   sortable?: boolean;
+  /** Alignement selon le TYPE de donnée. `right` active aussi `tabular-nums`. */
+  align?: 'left' | 'right' | 'center';
 }
 
 interface Props<T> {
@@ -26,6 +40,12 @@ interface Props<T> {
   selectable?: boolean;
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
+}
+
+function alignClass(align?: Column<unknown>['align']): string {
+  if (align === 'right') return `${styles.alignRight} ${styles.numeric}`;
+  if (align === 'center') return styles.alignCenter;
+  return '';
 }
 
 export default function DataTable<T>({
@@ -50,6 +70,8 @@ export default function DataTable<T>({
     }
   };
 
+  // Tri client sur la page courante (inchangé — le tri serveur sera une décision
+  // séparée). Ne PAS supprimer / muter `data`.
   const sorted = [...data].sort((a, b) => {
     if (!sortKey) return 0;
     const aVal = (a as any)[sortKey];
@@ -65,15 +87,10 @@ export default function DataTable<T>({
 
   const handleSelectAll = () => {
     if (!onSelectionChange) return;
-    if (allSelectedOnPage) {
-      const next = new Set(selectedIds);
-      data.forEach((row) => next.delete(keyExtractor(row)));
-      onSelectionChange(next);
-    } else {
-      const next = new Set(selectedIds);
-      data.forEach((row) => next.add(keyExtractor(row)));
-      onSelectionChange(next);
-    }
+    const next = new Set(selectedIds);
+    if (allSelectedOnPage) data.forEach((row) => next.delete(keyExtractor(row)));
+    else data.forEach((row) => next.add(keyExtractor(row)));
+    onSelectionChange(next);
   };
 
   const handleRowSelect = (id: string) => {
@@ -85,23 +102,31 @@ export default function DataTable<T>({
   };
 
   if (loading) {
+    const colCount = columns.length + (selectable ? 1 : 0) + (onEdit || onDelete ? 1 : 0);
     return (
-      <div className={styles.loadingContainer}>
-        <div className={styles.spinner} />
-        {t('components.dataTable.loading')}
+      <div className={styles.tableContainer} aria-busy="true">
+        <span className={styles.srOnly}>{t('components.dataTable.loading')}</span>
+        <div className={styles.skeletonWrap}>
+          {Array.from({ length: 6 }).map((_, r) => (
+            <div key={r} className={styles.skeletonRow}>
+              {Array.from({ length: Math.max(colCount, 3) }).map((_, c) => (
+                <Skeleton key={c} variant="text" width={c === 0 ? '55%' : '80%'} />
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
   if (data.length === 0) {
     return (
-      <div className={styles.emptyContainer}>
-        <div className={styles.emptyIcon}>
-          <Pencil size={20} />
-        </div>
-        <p className={styles.emptyMessage}>
-          {emptyMessage ?? t('components.dataTable.emptyData')}
-        </p>
+      <div className={styles.tableContainer}>
+        <EmptyState
+          size="inline"
+          icon={<Inbox size={20} />}
+          title={emptyMessage ?? t('components.dataTable.emptyData')}
+        />
       </div>
     );
   }
@@ -112,77 +137,46 @@ export default function DataTable<T>({
         {sorted.map((row) => {
           const rowId = keyExtractor(row);
           return (
-          <div key={rowId} className={styles.mobileCard}>
-            {selectable && (
-              <div className={styles.mobileSelectRow}>
-                <button
-                  onClick={() => handleRowSelect(rowId)}
-                  className={styles.iconButton}
-                  aria-label="Sélectionner"
-                >
-                  {selectedIds?.has(rowId) ? <CheckSquare size={18} /> : <Square size={18} />}
-                </button>
-              </div>
-            )}
-            {columns.map((col) => (
-              <div key={col.key} className={styles.mobileColumnRow}>
-                <span className={styles.mobileLabel}>
-                  {col.label}
-                </span>
-                <span className={styles.mobileValue}>
-                  {col.render ? col.render(row) : (row as any)[col.key] ?? '-'}
-                </span>
-              </div>
-            ))}
-            {(onEdit || onDelete) && (
-              <div className={styles.mobileActions}>
-                {onEdit && (
-                  <button
-                    onClick={() => onEdit(row)}
-                    className={styles.actionBtn}
-                    style={{ minWidth: 44, minHeight: 44 }}
-                    aria-label={t('components.dataTable.editAria')}
-                  >
-                    <Pencil size={16} />
+            <div key={rowId} className={styles.mobileCard}>
+              {selectable && (
+                <div className={styles.mobileSelectRow}>
+                  <button onClick={() => handleRowSelect(rowId)} className={styles.iconButton} aria-label={t('components.dataTable.select', 'Sélectionner')}>
+                    {selectedIds?.has(rowId) ? <CheckSquare size={18} /> : <Square size={18} />}
                   </button>
-                )}
-                {onDelete && (
-                  <button
-                    onClick={() => onDelete(row)}
-                    className={styles.actionBtn}
-                    style={{ minWidth: 44, minHeight: 44 }}
-                    aria-label={t('components.dataTable.deleteAria')}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+              {columns.map((col) => (
+                <div key={col.key} className={styles.mobileColumnRow}>
+                  <span className={styles.mobileLabel}>{col.label}</span>
+                  <span className={`${styles.mobileValue} ${alignClass(col.align)}`}>
+                    {col.render ? col.render(row) : (row as any)[col.key] ?? '-'}
+                  </span>
+                </div>
+              ))}
+              {(onEdit || onDelete) && (
+                <div className={styles.mobileActions}>
+                  {onEdit && (
+                    <button onClick={() => onEdit(row)} className={styles.actionBtnLg} aria-label={t('components.dataTable.editAria')}>
+                      <Pencil size={16} />
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button onClick={() => onDelete(row)} className={styles.actionBtnLg} aria-label={t('components.dataTable.deleteAria')}>
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           );
         })}
         {totalPages > 1 && (
-          <div className={styles.mobilePagination}>
-            <button
-              disabled={page <= 1}
-              onClick={() => onPageChange(page - 1)}
-              style={pageBtnStyle(page <= 1)}
-              aria-label={t('common.previousPage')}
-            >
-              ←
-            </button>
-            <span className={styles.pageNumber}>
-              {page} / {totalPages}
-            </span>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => onPageChange(page + 1)}
-              style={pageBtnStyle(page >= totalPages)}
-              aria-label={t('common.nextPage')}
-            >
-              →
-            </button>
-          </div>
+          <Pagination
+            className={styles.mobilePagination}
+            page={page}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+          />
         )}
       </div>
     );
@@ -195,113 +189,88 @@ export default function DataTable<T>({
           <thead>
             <tr className={styles.headerRow}>
               {selectable && (
-                <th className={styles.headerCellSelect}
-                  style={{ position: 'sticky', left: 0, zIndex: 3, background: 'var(--color-surface-alt)' }}
-                >
+                <th className={`${styles.headerCell} ${styles.headerCellSelect} ${styles.stickyLeft}`}>
                   <button
                     onClick={handleSelectAll}
                     className={styles.iconButton}
-                    aria-label={allSelectedOnPage ? 'Tout désélectionner' : 'Tout sélectionner'}
+                    aria-label={allSelectedOnPage ? t('components.dataTable.deselectAll', 'Tout désélectionner') : t('components.dataTable.selectAll', 'Tout sélectionner')}
                   >
                     {allSelectedOnPage ? <CheckSquare size={16} /> : someSelectedOnPage ? <Square size={16} opacity={0.5} /> : <Square size={16} />}
                   </button>
                 </th>
               )}
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  onClick={() => handleSort(col)}
-                  className={`${styles.headerCell}${col.sortable ? ` ${styles.sortableCell}` : ''}`}
-                  style={{ cursor: col.sortable ? 'pointer' : 'default' }}
-                >
-                  {col.label}
-                  {col.sortable && (
-                    <span style={{
-                      marginLeft: 'var(--space-xs)',
-                      opacity: sortKey === col.key ? 1 : 0.25,
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 'var(--text-xs)',
-                    }}>
-                      {sortKey === col.key ? (sortDir === 'asc' ? '▲' : '▼') : '▲'}
+              {columns.map((col) => {
+                const active = sortKey === col.key;
+                return (
+                  <th
+                    key={col.key}
+                    onClick={() => handleSort(col)}
+                    aria-sort={col.sortable ? (active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none') : undefined}
+                    className={[
+                      styles.headerCell,
+                      col.sortable ? styles.sortableCell : '',
+                      alignClass(col.align),
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    <span className={styles.headerLabel}>
+                      {col.label}
+                      {col.sortable && (
+                        <span className={`${styles.sortIcon}${active ? ` ${styles.sortIconActive}` : ''}`} aria-hidden="true">
+                          {active ? (
+                            sortDir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />
+                          ) : (
+                            <ChevronsUpDown size={13} />
+                          )}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </th>
-              ))}
+                  </th>
+                );
+              })}
               {(onEdit || onDelete) && (
-                <th className={styles.headerActionsCell}
-                  style={{ position: 'sticky', right: 0, zIndex: 2, background: 'var(--color-surface-alt)' }}
-                >
+                <th className={`${styles.headerCell} ${styles.headerActionsCell} ${styles.stickyRight}`}>
                   {t('common.actions')}
                 </th>
               )}
             </tr>
           </thead>
           <tbody>
-              {sorted.map((row, ri) => {
-                const rowId = keyExtractor(row);
-                const isSelected = selectedIds?.has(rowId);
-                return (
-                <tr
-                  key={rowId}
-                  className={styles.dataRow}
-                  style={{
-                    borderBottom: ri < sorted.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
-                    ...(isSelected ? { background: 'var(--color-accent-muted)' } : {}),
-                  }}
-                  onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
-                  onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
-                >
+            {sorted.map((row) => {
+              const rowId = keyExtractor(row);
+              const isSelected = selectedIds?.has(rowId);
+              return (
+                <tr key={rowId} className={`${styles.dataRow}${isSelected ? ` ${styles.dataRowSelected}` : ''}`}>
                   {selectable && (
-                    <td className={styles.dataCellSelect}
-                      style={{
-                        position: 'sticky', left: 0, zIndex: 1,
-                        background: isSelected ? 'var(--color-accent-muted)' : 'var(--color-surface)',
-                      }}
-                    >
-                      <button
-                        onClick={() => handleRowSelect(rowId)}
-                        className={styles.iconButton}
-                        aria-label="Sélectionner"
-                      >
+                    <td className={`${styles.dataCell} ${styles.dataCellSelect} ${styles.stickyLeft}`}>
+                      <button onClick={() => handleRowSelect(rowId)} className={styles.iconButton} aria-label={t('components.dataTable.select', 'Sélectionner')}>
                         {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
                       </button>
                     </td>
                   )}
                   {columns.map((col) => (
-                    <td key={col.key} className={styles.dataCell}>
-                    {col.render ? col.render(row) : (row as any)[col.key] ?? '-'}
-                  </td>
-                ))}
-                {(onEdit || onDelete) && (
-                  <td className={styles.actionsCell}
-                    style={{
-                      position: 'sticky', right: 0, zIndex: 1,
-                      background: isSelected ? 'var(--color-accent-muted)' : 'var(--color-surface)',
-                    }}
-                  >
-                    <div className={styles.actionsRow}>
-                      {onEdit && (
-                        <button
-                          onClick={() => onEdit(row)}
-                          className={styles.actionBtn}
-                          aria-label={t('components.dataTable.editAria')}
-                        >
-                          <Pencil size={14} />
-                        </button>
-                      )}
-                      {onDelete && (
-                        <button
-                          onClick={() => onDelete(row)}
-                          className={styles.actionBtn}
-                          aria-label={t('components.dataTable.deleteAria')}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                )}
-              </tr>
+                    <td key={col.key} className={`${styles.dataCell} ${alignClass(col.align)}`}>
+                      {col.render ? col.render(row) : (row as any)[col.key] ?? '-'}
+                    </td>
+                  ))}
+                  {(onEdit || onDelete) && (
+                    <td className={`${styles.dataCell} ${styles.actionsCell} ${styles.stickyRight}`}>
+                      <div className={styles.actionsRow}>
+                        {onEdit && (
+                          <button onClick={() => onEdit(row)} className={styles.actionBtn} aria-label={t('components.dataTable.editAria')}>
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button onClick={() => onDelete(row)} className={styles.actionBtn} aria-label={t('components.dataTable.deleteAria')}>
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  )}
+                </tr>
               );
             })}
           </tbody>
@@ -310,41 +279,15 @@ export default function DataTable<T>({
 
       {totalPages > 1 && (
         <div className={styles.pagination}>
-          <button
-            disabled={page <= 1}
-            onClick={() => onPageChange(page - 1)}
-            style={pageBtnStyle(page <= 1)}
-            aria-label={t('common.previousPage')}
-          >
-            ←
-          </button>
-          <span className={styles.pageNumber}>
-            {page} / {totalPages}
-          </span>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => onPageChange(page + 1)}
-            style={pageBtnStyle(page >= totalPages)}
-            aria-label={t('common.nextPage')}
-          >
-            →
-          </button>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            pageSize={limit}
+            onPageChange={onPageChange}
+          />
         </div>
       )}
     </div>
   );
 }
-
-const pageBtnStyle = (disabled: boolean): React.CSSProperties => ({
-  padding: 'var(--space-sm) var(--space-md)',
-  border: '1px solid var(--color-border-subtle)',
-  borderRadius: 'var(--radius-md)',
-  cursor: disabled ? 'default' : 'pointer',
-  opacity: disabled ? 0.35 : 1,
-  background: disabled ? 'transparent' : 'var(--color-surface)',
-  color: disabled ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)',
-  fontSize: 'var(--text-sm)',
-  fontFamily: 'var(--font-body)',
-  fontWeight: 500,
-  transition: 'background 0.15s ease, opacity 0.15s ease, color 0.15s ease',
-});

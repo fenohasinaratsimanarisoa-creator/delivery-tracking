@@ -1357,7 +1357,10 @@
       "loading": "Loading...",
       "emptyData": "No data.",
       "editAria": "Edit",
-      "deleteAria": "Delete"
+      "deleteAria": "Delete",
+      "select": "Select",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all"
     },
     "entityDialog": {
       "closeAria": "Close"

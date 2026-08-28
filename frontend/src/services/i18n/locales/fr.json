@@ -1357,7 +1357,10 @@
       "loading": "Chargement...",
       "emptyData": "Aucune donnée.",
       "editAria": "Modifier",
-      "deleteAria": "Supprimer"
+      "deleteAria": "Supprimer",
+      "select": "Sélectionner",
+      "selectAll": "Tout sélectionner",
+      "deselectAll": "Tout désélectionner"
     },
     "entityDialog": {
       "closeAria": "Fermer"
