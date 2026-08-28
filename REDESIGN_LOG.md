@@ -2,6 +2,25 @@
 
 Refonte visuelle premium — journal des lots. Voir `DESIGN_AUDIT.md` pour le plan.
 
+## État
+
+| Lot | Objet | Statut | Branche |
+|---|---|---|---|
+| 1 | Carte temps réel + panneau véhicule | ✅ fait | `redesign/screen-map` |
+| 2 | Nettoyage tokens legacy | ✅ fait | `redesign/lot2-tokens-legacy` |
+| 3 | Primitives formulaire | ✅ fait | `redesign/lot3-primitives-form` |
+| 5 | Primitives données (Skeleton/EmptyState/ErrorState) | ✅ partiel (DataTable non refondu) | `redesign/lot5-primitives-data` |
+| 6 | Chrome (z-index + Sidebar) | ✅ partiel (restyle Sidebar/BottomNav non fait) | `redesign/lot6-chrome` |
+| 4 | Primitives overlay (Modal/Drawer/Dropdown/Tabs/Pagination) | ⏳ à faire | — |
+| 8–12 | Écrans (Flotte, Carburant, Ops, Admin, Auth) | ⏳ à faire — **nécessite revue navigateur** | — |
+| 13 | Passe finale (zoom 200%, 320px, contrastes, textes) | ⏳ à faire — **nécessite navigateur** | — |
+
+Les branches se **chaînent** : `redesign/lot6-chrome` (tip) contient les lots 1→6.
+Revue : `git checkout redesign/lot6-chrome && cd frontend && npm run dev`.
+
+Rien n'est mergé sur `main`, rien n'est déployé — conforme à la décision
+« déploiement après revue navigateur ».
+
 ---
 
 ## Lot 1 — Carte temps réel + panneau véhicule
@@ -82,3 +101,92 @@ nouveau layout de panneau ancré.
 
 - Rien de bloquant. Prochain lot proposé : Lot 2 (nettoyage legacy tokens) ou
   directement Lot 8 (Flotte + fiche véhicule) — à ton choix.
+
+---
+
+## Lot 2 — Nettoyage tokens legacy
+
+Branche : `redesign/lot2-tokens-legacy`
+
+- `theme.ts` : suppression des exports `tokens` et `keyframes` (−77 lignes de
+  code mort, aucun import dans `src/` — vérifié). Ils portaient des valeurs
+  DIVERGENTES du système moderne (radius, timings, palette, `dt-fade-in-up`),
+  source de confusion.
+- `dt-shimmer` local à 10 CSS modules : reporté au Lot 5 (le composant
+  `Skeleton` les rendra obsolètes).
+
+Vérifié : tsc, eslint, tests (auth + composants).
+
+---
+
+## Lot 3 — Primitives formulaire
+
+Branche : `redesign/lot3-primitives-form`
+
+| Composant | Changement |
+|---|---|
+| `Button` | `type="button"` par défaut (submit accidentel dans un `<form>` = bug latent ; submits explicites vérifiés) · libellé `sizeSm` 10px → `--text-sm` · `danger` passe en **plein** (poids cohérent) · fallbacks ancienne palette purgés · `aria-busy` · `className` fusionné (n'écrase plus les styles) |
+| `Input` | `id` via `useId()` (collisions / accents corrigés) · `aria-invalid` + `aria-describedby` · erreur `role="alert"` · padding icônes en CSS · états `read-only`/`disabled` |
+| `Badge` | variantes **sémantiques** `success/warning/danger/info` (couleurs brutes → alias dépréciés) |
+| `Textarea`, `Checkbox` (+ indeterminate), `Radio`, `Switch` (role=switch), `Tooltip` (CSS-only, survol + focus + Échap) | **nouveaux**, additifs, non encore adoptés |
+
+Décision : `danger` en bouton plein rouge. Visible partout où des actions
+destructives existent — **à confirmer en revue navigateur**.
+
+Vérifié : tsc, eslint, +34 tests. `<Button>` : couvert par les tests des forms
+auth (submit toujours OK).
+
+---
+
+## Lot 5 — Primitives données (partiel)
+
+Branche : `redesign/lot5-primitives-data`
+
+- `Skeleton` (text multi-lignes / block / circle), `EmptyState`, `ErrorState`
+  (role=alert + Réessayer) — additifs, remplaceront les implémentations ad hoc.
+- `formatRelativeTime()` dans `services/i18n/formatDate.ts` : « il y a X min »
+  (Intl.RelativeTimeFormat), bascule date absolue > 24 h.
+- `common.errorTitle` / `common.retry` (fr + en).
+
+**Non fait** : refonte de `DataTable` (en-tête collant, alignement par type,
+`tabular-nums`, `:hover` CSS au lieu de JS, skeleton à la forme du tableau).
+`DataTable` est utilisé par ~8 écrans → à faire avec revue navigateur, pas en
+aveugle. Les primitives dont il a besoin (`Skeleton`, `EmptyState`) sont prêtes.
+
+Vérifié : tsc, eslint, +22 tests.
+
+---
+
+## Lot 6 — Chrome (partiel)
+
+Branche : `redesign/lot6-chrome`
+
+- `theme.ts` : échelle `--z-*` (base → tooltip). Barème unique pour remplacer
+  les ~22 valeurs z-index arbitraires et les 92 `!important`. `Tooltip` câblé.
+- `Sidebar` : préférence « replier » **persistée** (localStorage) — avant, un
+  `useEffect` la remettait à false à chaque navigation.
+
+**Non fait** : restyle visuel Sidebar (contraste, largeur) + BottomNav +
+migration `--z-*` / suppression des `!important` page par page → revue navigateur.
+
+Vérifié : tsc, eslint.
+
+---
+
+## Reste à faire (nécessite la boucle de revue navigateur)
+
+1. **Lot 4** — Modal générique (portal + focus-trap + scroll-lock), Drawer,
+   Dropdown, Pagination autonome, Tabs ; refonte de `ConfirmDialog` /
+   `EntityDialog` par-dessus (sans changer leurs props).
+2. **`DataTable`** (Lot 5 restant).
+3. **Lots 8–12 — écrans** : migration hex→token + structure + 3 états par
+   écran, un écran à la fois, chacun vérifié dans le navigateur.
+   Fichiers lourds à traiter par petits commits (CSS d'abord) :
+   `FuelPage.tsx` (1831 l.), `RealTimeMap.tsx` déjà fait, `DeliveriesPage.tsx`
+   (955 l.).
+   > Rappel mission : « aucun find-replace global sur des classes ou des
+   > couleurs » — le même hex sert à des sémantiques différentes selon les
+   > fichiers, la migration ne peut pas être automatisée en bloc.
+4. **Lot 13** — passe finale (zoom 200 %, viewport 320 px, contrastes mesurés,
+   relecture des textes d'UI, purge des derniers hex/`!important`/keyframes
+   mortes).
