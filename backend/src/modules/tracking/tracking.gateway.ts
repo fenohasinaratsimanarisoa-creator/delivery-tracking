@@ -557,15 +557,21 @@ export class TrackingGateway
     return { event: 'unsubscribed', data: { companyId: user.companyId } };
   }
 
+  // `this.server` peut être ABSENT hors du process qui bootstrap le WebSocket
+  // adapter : le WORKER (QueueWorkerModule → createApplicationContext, aucun
+  // adaptateur WS) importe TrackingGateway via QueueModule et appelle ces
+  // méthodes depuis FuelAnalysisProcessor (recompute-driver-report) et depuis
+  // tout script de maintenance. `?.` évite un crash — la diffusion temps réel
+  // est alors simplement absente (le client rafraîchira au prochain fetch).
   broadcastDataUpdate(companyId: string, type: string, payload?: Record<string, unknown>) {
-    this.server.to(`company:${companyId}`).emit('dataUpdate', { type, ...payload });
+    this.server?.to(`company:${companyId}`).emit('dataUpdate', { type, ...payload });
   }
 
   broadcastToCompany(companyId: string, event: string, data: Record<string, unknown>) {
-    this.server.to(`company:${companyId}`).emit(event, data);
+    this.server?.to(`company:${companyId}`).emit(event, data);
   }
 
   sendToDriver(userId: string, event: string, data: Record<string, unknown>) {
-    this.server.to(`driver:${userId}`).emit(event, data);
+    this.server?.to(`driver:${userId}`).emit(event, data);
   }
 }
