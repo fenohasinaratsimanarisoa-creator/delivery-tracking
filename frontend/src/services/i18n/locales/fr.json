@@ -596,6 +596,7 @@
   },
   "map": {
     "searchPlaceholder": "Rechercher un véhicule, un chauffeur, une livraison…",
+    "searchDriverPlaceholder": "Rechercher un chauffeur…",
     "searchAria": "Rechercher sur la carte",
     "filterAria": "Filtrer",
     "layersAria": "Couches cartographiques",

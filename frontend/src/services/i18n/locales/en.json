@@ -596,6 +596,7 @@
   },
   "map": {
     "searchPlaceholder": "Search vehicles, drivers, deliveries…",
+    "searchDriverPlaceholder": "Search drivers…",
     "searchAria": "Search on map",
     "filterAria": "Filter",
     "layersAria": "Map layers",

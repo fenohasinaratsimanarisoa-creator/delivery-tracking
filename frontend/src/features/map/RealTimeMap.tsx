@@ -3,7 +3,8 @@ import { MapContainer, Polyline, useMap } from 'react-leaflet';
 import type { Layer } from 'leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Search, X } from 'lucide-react';
+import { Search, X, Crosshair, NavigationOff, AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api/client';
 import { getSocket, PositionUpdate } from '../../services/socket/socket';
@@ -14,6 +15,7 @@ import { predictPosition, maxDeadReckonTime } from '../../services/tracking/dead
 import { computeAnimationDuration, FALLBACK_ANIMATION_MS } from './animationTiming';
 
 import MapLayerSwitcher from '../../components/MapLayerSwitcher';
+import VehicleStatusPill, { mapVehicleStatus } from '../../components/VehicleStatusPill';
 import { enableRetinaDefaultMarker } from './markerIcons';
 import styles from './RealTimeMap.module.css';
 
@@ -61,16 +63,25 @@ function syncVehicleMarker(marker: L.Marker, vehicle: VehicleData, focused: bool
   const el = marker.getElement();
   if (!el) return;
 
-  const isMoving = vehicle.status === 'moving';
+  const status = vehicle.status;
+  const isMoving = status === 'moving';
+  const isOffline = status === 'offline';
   const confidence = vehicle.confidence ?? 1;
-  // Couleurs pilotées par les tokens (var(--color-status-moving/static)) via
-  // color-mix : le halo suit le thème clair/sombre/field sans hex en dur.
-  const statusVar = isMoving ? 'var(--color-status-moving)' : 'var(--color-status-static)';
+  // Couleurs pilotées par les tokens sémantiques de statut (--status-enroute /
+  // -idle / -offline) via color-mix : suit le thème clair/sombre/field sans hex
+  // en dur. Hors ligne ≠ à l'arrêt : teinte grise + halo figé + flèche
+  // désaturée (voir .dt-marker-offline dans le CSS).
+  const statusVar = isMoving
+    ? 'var(--status-enroute)'
+    : isOffline
+      ? 'var(--status-offline)'
+      : 'var(--status-idle)';
   const opacity = Math.max(0.15, Math.min(0.5, confidence * 0.5));
   const scale = 1 + (1 - confidence) * 0.5;
 
   el.classList.toggle('dt-marker-moving', isMoving);
-  el.classList.toggle('dt-marker-static', !isMoving);
+  el.classList.toggle('dt-marker-static', status === 'static');
+  el.classList.toggle('dt-marker-offline', isOffline);
   el.classList.toggle('dt-marker-focus', focused);
 
   const halo = el.querySelector<HTMLElement>('.dt-marker-halo');
@@ -269,123 +280,64 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
   }, [vehicle.speed]);
 
   const popupContent = useMemo(() => {
+    // DOM natif (popup Leaflet, hors arbre React) : le style vit dans
+    // RealTimeMap.module.css (:global(.dt-popup*)), tokenisé thème-aware.
+    // TODO lot ultérieur : i18n des libellés de cette popup.
     const container = document.createElement('div');
-    container.style.minWidth = '220px';
+    container.className = 'dt-popup';
 
     const nameRow = document.createElement('div');
-    nameRow.style.fontSize = '0.85rem';
-    nameRow.style.fontWeight = '600';
-    nameRow.style.marginBottom = '4px';
+    nameRow.className = 'dt-popup__name';
     nameRow.textContent = vehicle.name;
     container.appendChild(nameRow);
 
     const coords = document.createElement('div');
-    coords.style.fontSize = '0.65rem';
-    coords.style.fontFamily = 'var(--font-mono, monospace)';
-    coords.style.color = 'var(--color-text-tertiary, #7A8BA3)';
-    coords.style.marginBottom = '6px';
+    coords.className = 'dt-popup__time';
+    coords.style.fontFamily = 'var(--font-mono)';
     coords.textContent = `${(vehicle.lat ?? 0).toFixed(6)}, ${(vehicle.lng ?? 0).toFixed(6)}`;
     container.appendChild(coords);
 
     const detail = document.createElement('div');
+    detail.className = 'dt-popup__meta';
     detail.style.display = 'flex';
     detail.style.flexDirection = 'column';
     detail.style.gap = '2px';
-    detail.style.marginBottom = '6px';
-
-    if (vehicle.speed != null) {
-      const speedKmh = (vehicle.speed * 3.6).toFixed(1);
+    const line = (text: string) => {
       const row = document.createElement('div');
-      row.style.fontSize = '0.75rem';
-      row.style.color = 'var(--color-text-secondary, #9BA6B9)';
-      row.textContent = `Vitesse · ${speedKmh} km/h`;
+      row.textContent = text;
       detail.appendChild(row);
-    }
-
-    if (vehicle.accuracy !== undefined) {
-      const row = document.createElement('div');
-      row.style.fontSize = '0.7rem';
-      row.style.color = 'var(--color-text-tertiary, #7A8BA3)';
-      row.textContent = `Précision · ±${Math.round(vehicle.accuracy)}m`;
-      detail.appendChild(row);
-    }
-
-    if (vehicle.heading != null) {
-      const row = document.createElement('div');
-      row.style.fontSize = '0.75rem';
-      row.style.color = 'var(--color-text-secondary, #9BA6B9)';
-      row.textContent = `Cap · ${vehicle.heading.toFixed(0)}°`;
-      detail.appendChild(row);
-    }
-
-    if (vehicle.routeDistance && vehicle.routeDistance > 0) {
-      const row = document.createElement('div');
-      row.style.fontSize = '0.75rem';
-      row.style.color = 'var(--color-text-secondary, #9BA6B9)';
-      row.textContent = `Distance · ${formatDistance(vehicle.routeDistance)}`;
-      detail.appendChild(row);
-    }
-
-    if (vehicle.eta) {
-      const row = document.createElement('div');
-      row.style.fontSize = '0.7rem';
-      row.style.color = 'var(--color-status-moving, #F2A93C)';
-      row.style.fontFamily = 'var(--font-mono, monospace)';
-      row.textContent = `ETA · ${vehicle.eta}`;
-      detail.appendChild(row);
-    }
-
+    };
+    if (vehicle.speed != null) line(`Vitesse · ${(vehicle.speed * 3.6).toFixed(1)} km/h`);
+    if (vehicle.accuracy !== undefined) line(`Précision · ±${Math.round(vehicle.accuracy)} m`);
+    if (vehicle.heading != null) line(`Cap · ${vehicle.heading.toFixed(0)}°`);
+    if (vehicle.routeDistance && vehicle.routeDistance > 0)
+      line(`Distance · ${formatDistance(vehicle.routeDistance)}`);
+    if (vehicle.eta) line(`ETA · ${vehicle.eta}`);
     container.appendChild(detail);
 
     const timeRow = document.createElement('div');
-    timeRow.style.fontSize = '0.7rem';
-    timeRow.style.color = 'var(--color-text-tertiary, #7A8BA3)';
-    timeRow.style.marginBottom = '6px';
+    timeRow.className = 'dt-popup__time';
     const ts = new Date(vehicle.timestamp);
     timeRow.textContent = `Dernière position · ${formatDate(ts)} ${formatTime(ts)}`;
     container.appendChild(timeRow);
 
     if (vehicle.suspect) {
       const suspectBadge = document.createElement('div');
-      suspectBadge.style.display = 'inline-block';
-      suspectBadge.style.padding = '2px 10px';
-      suspectBadge.style.borderRadius = '12px';
-      suspectBadge.style.fontSize = '0.65rem';
-      suspectBadge.style.fontWeight = '700';
-      suspectBadge.style.textTransform = 'uppercase';
-      suspectBadge.style.letterSpacing = '0.04em';
-      suspectBadge.style.background = 'var(--color-red-muted, rgba(232,84,76,0.15))';
-      suspectBadge.style.color = 'var(--color-red, #E8544C)';
-      suspectBadge.style.border = '1px solid var(--color-red-muted, rgba(232,84,76,0.15))';
-      suspectBadge.style.marginBottom = '4px';
+      suspectBadge.className = 'dt-popup__badge dt-popup__badge--suspect';
       suspectBadge.textContent = 'SIGNAL GPS INSTABLE';
       container.appendChild(suspectBadge);
     }
 
+    const variant =
+      vehicle.status === 'moving' ? 'enroute' : vehicle.status === 'offline' ? 'offline' : 'idle';
     const badge = document.createElement('div');
-    badge.style.display = 'inline-block';
-    badge.style.padding = '2px 10px';
-    badge.style.borderRadius = '12px';
-    badge.style.fontSize = '0.65rem';
-    badge.style.fontWeight = '700';
-    badge.style.textTransform = 'uppercase';
-    badge.style.letterSpacing = '0.04em';
-    if (vehicle.suspect) {
-      badge.style.background = 'var(--color-purple-muted, rgba(139,92,246,0.15))';
-      badge.style.color = 'var(--color-purple, #8b5cf6)';
-      badge.style.border = '1px solid var(--color-purple-muted, rgba(139,92,246,0.15))';
-      badge.textContent = vehicle.status === 'moving' ? 'DÉPLACEMENT (NON CONFIRMÉ)' : 'ARRÊT (NON CONFIRMÉ)';
-    } else if (vehicle.status === 'moving') {
-      badge.style.background = 'var(--color-accent-muted, rgba(242,169,60,0.15))';
-      badge.style.color = 'var(--color-status-moving, #F2A93C)';
-      badge.style.border = '1px solid var(--color-accent-muted, rgba(242,169,60,0.15))';
-      badge.textContent = 'EN MOUVEMENT';
-    } else {
-      badge.style.background = 'var(--color-teal-muted, rgba(63,167,150,0.15))';
-      badge.style.color = 'var(--color-status-static, #3FA796)';
-      badge.style.border = '1px solid var(--color-teal-muted, rgba(63,167,150,0.15))';
-      badge.textContent = 'À L\'ARRÊT';
-    }
+    badge.className = `dt-popup__badge dt-popup__badge--${variant}`;
+    badge.textContent =
+      vehicle.status === 'moving'
+        ? 'EN MOUVEMENT'
+        : vehicle.status === 'offline'
+          ? 'HORS LIGNE'
+          : "À L'ARRÊT";
     container.appendChild(badge);
 
     return container;
@@ -475,11 +427,21 @@ function FollowVehicleController({ vehicle, following, onUserInteraction }: {
   return null;
 }
 
-function DetailRow({ label, value, color, mono }: { label: string; value: string; color?: string; mono?: boolean }) {
+function DetailRow({ label, value, accent, mono }: { label: string; value: string; accent?: boolean; mono?: boolean }) {
   return (
     <div className={styles.detailRow}>
       <span className={styles.detailLabel}>{label}</span>
-      <span className={`${styles.detailValue}${mono ? ` ${styles.detailValueMono}` : ''}`} style={{ color: color || 'var(--color-text)' }}>{value}</span>
+      <span
+        className={[
+          styles.detailValue,
+          mono ? styles.detailValueMono : '',
+          accent ? styles.detailValueAccent : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -562,6 +524,7 @@ interface RealTimeMapProps {
 }
 
 export default function RealTimeMap({ deliveryId, readOnly, initialPositions, deliveryLat, deliveryLng, focusId, focusCenter, onVehiclesUpdate, onFocusChange }: RealTimeMapProps) {
+  const { t } = useTranslation();
   const [vehicles, setVehicles] = useState<Map<string, VehicleData>>(new Map());
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const [routingPolyline, setRoutingPolyline] = useState<[number, number][]>([]);
@@ -633,6 +596,16 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
     () => (selectedDriverId ? allPositions.find((v) => v.id === selectedDriverId) ?? null : null),
     [allPositions, selectedDriverId],
   );
+
+  // Plaque du véhicule sélectionné : le flux positions (VehicleData) ne la
+  // porte pas — on la résout, en lecture seule, depuis la liste des chauffeurs.
+  const selectedPlate = useMemo(() => {
+    if (!selectedDriver?.vehicleId) return null;
+    return (
+      allDrivers.find((d) => d.vehicle?.id === selectedDriver.vehicleId)?.vehicle?.licensePlate ??
+      null
+    );
+  }, [selectedDriver, allDrivers]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 10_000);
@@ -883,7 +856,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
         <div className={styles.searchBar}>
           <Search size={14} className={styles.searchIcon} />
           <input
-            placeholder="Rechercher un chauffeur…"
+            placeholder={t('map.searchDriverPlaceholder')}
             value={driverFilter}
             onChange={(e) => setDriverFilter(e.target.value)}
             className={styles.searchInput}
@@ -908,10 +881,12 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
           }} className={styles.searchResults}>
             {searchResults.length === 0 ? (
               <div className={styles.searchResultEmpty}>
-                Aucun résultat
+                {t('map.noResults')}
               </div>
             ) : (
-              searchResults.map((v: SearchResult) => (
+              searchResults.map((v: SearchResult) => {
+                const isOffline = v.isOffline || v.status === 'offline';
+                return (
                 <div
                   key={v.id}
                   onMouseDown={(e) => {
@@ -928,23 +903,22 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                   }}
                   className={`${styles.searchResultItem}${v.isOffline ? ` ${styles.searchResultItemOffline}` : ''}`}
                 >
-                  <span
-                    className={styles.searchResultIcon}
-                    style={{ color: v.isOffline ? 'var(--color-text-tertiary)' : 'var(--color-accent)' }}
-                  >
-                    {v.isOffline ? '—' : '•'}
-                  </span>
-                  <div>
+                  <VehicleStatusPill
+                    status={isOffline ? 'offline' : mapVehicleStatus(v.status ?? 'static')}
+                    size="sm"
+                    iconOnly
+                  />
+                  <div className={styles.searchResultMain}>
                     <div className={styles.searchResultName}>{v.name}</div>
                     <div className={styles.searchResultSub}>
-                      {v.isOffline || v.status === 'offline'
-                        ? 'Hors ligne — aucune position récente'
-                        : `${v.status === 'moving' ? 'En route' : 'À l\'arrêt'} · ${v.accuracy !== undefined ? `±${Math.round(v.accuracy)}m · ` : ''}${formatTime(v.timestamp ?? '')}`
-                      }
+                      {isOffline
+                        ? t('vehicleStatus.offline')
+                        : `${t(`vehicleStatus.${mapVehicleStatus(v.status ?? 'static')}`)} · ${v.accuracy !== undefined ? `±${Math.round(v.accuracy)} m · ` : ''}${formatTime(v.timestamp ?? '')}`}
                     </div>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
@@ -964,20 +938,31 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
             style={{ position: 'absolute', bottom: 20, left: 10, zIndex: 1000 }}
             aria-pressed={following}
           >
-            {following ? '🎯 Suivi actif' : '🎯 Suivre'}
+            <Crosshair size={13} className={styles.followIcon} aria-hidden="true" />
+            {following ? t('map.panel.following') : t('map.panel.follow')}
           </button>
           <div style={{
             position: 'absolute', bottom: 20, right: 10, zIndex: 1000,
           }} className={styles.driverCard}>
             <div className={styles.driverCardHeader}>
-              <div className={styles.driverCardTitle}>{selectedDriver.name}</div>
+              <div className={styles.driverCardIdentity}>
+                {selectedPlate ? (
+                  <>
+                    <div className={styles.driverCardPlate}>{selectedPlate}</div>
+                    <div className={styles.driverCardDriver}>{selectedDriver.name}</div>
+                  </>
+                ) : (
+                  <div className={styles.driverCardTitle}>{selectedDriver.name}</div>
+                )}
+              </div>
               <div className={styles.driverCardActions}>
                 <button
                   onClick={() => setFollowing((f) => !f)}
                   className={`${styles.followToggle}${following ? ` ${styles.followToggleActive}` : ''}`}
                   aria-pressed={following}
                 >
-                  {following ? '🎯 Suivi actif' : '🎯 Suivre'}
+                  <Crosshair size={12} className={styles.followIcon} aria-hidden="true" />
+                  {following ? t('map.panel.following') : t('map.panel.follow')}
                 </button>
                 <button
                   onClick={() => {
@@ -986,44 +971,46 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                     onFocusChange?.(null);
                   }}
                   className={styles.driverCardClose}
+                  aria-label={t('map.panel.close')}
                 >
                   <X size={16} />
                 </button>
               </div>
             </div>
 
+            <div className={styles.driverCardStatusRow}>
+              <VehicleStatusPill status={mapVehicleStatus(selectedDriver.status)} size="sm" />
+            </div>
+
             <div className={styles.driverCardBody}>
-              <DetailRow label="Statut" value={selectedDriver.status === 'moving' ? 'En mouvement' : 'À l\'arrêt'} color={selectedDriver.status === 'moving' ? 'var(--color-accent)' : 'var(--color-teal)'} />
               {selectedDriver.speed != null && (
-                <DetailRow label="Vitesse" value={`${(selectedDriver.speed * 3.6).toFixed(1)} km/h`} />
+                <DetailRow label={t('map.panel.speed')} value={`${(selectedDriver.speed * 3.6).toFixed(1)} km/h`} />
               )}
               {selectedDriver.heading != null && (
-                <DetailRow label="Direction" value={`${selectedDriver.heading.toFixed(0)}°`} />
+                <DetailRow label={t('map.panel.heading')} value={`${selectedDriver.heading.toFixed(0)}°`} />
               )}
-              <DetailRow label="Position" value={`${(selectedDriver.lat ?? 0).toFixed(5)}, ${(selectedDriver.lng ?? 0).toFixed(5)}`} mono />
+              <DetailRow label={t('map.panel.coordinates')} value={`${(selectedDriver.lat ?? 0).toFixed(5)}, ${(selectedDriver.lng ?? 0).toFixed(5)}`} mono />
               {selectedDriver.accuracy != null && (
-                <DetailRow label="Précision GPS" value={`±${Math.round(selectedDriver.accuracy)}m`} />
+                <DetailRow label={t('map.panel.gpsAccuracy')} value={`±${Math.round(selectedDriver.accuracy)} m`} />
               )}
               {selectedDriver.confidence != null && (
-                <DetailRow label="Confiance Kalman" value={`${(selectedDriver.confidence * 100).toFixed(0)}%`} />
+                <DetailRow label={t('map.panel.confidence')} value={`${(selectedDriver.confidence * 100).toFixed(0)} %`} />
               )}
-              <DetailRow label="Dernière position" value={formatTime(selectedDriver.timestamp)} />
-              <DetailRow label="Date" value={formatDate(selectedDriver.timestamp)} />
+              <DetailRow
+                label={t('map.panel.lastPosition')}
+                value={`${formatDate(selectedDriver.timestamp)} ${formatTime(selectedDriver.timestamp)}`}
+              />
               {selectedDriver.eta && (
-                <DetailRow label="ETA destination" value={selectedDriver.eta} color="var(--color-teal)" />
-              )}
-              {selectedDriver.vehicleId && (
-                <DetailRow label="Véhicule ID" value={selectedDriver.vehicleId.slice(0, 8)} mono />
-              )}
-              {selectedDriver.deliveryId && (
-                <DetailRow label="Livraison ID" value={selectedDriver.deliveryId.slice(0, 8)} mono />
-              )}
-              {!selectedDriver.deliveryId && (
-                <DetailRow label="Statut" value="Disponible" color="var(--color-teal)" />
+                <DetailRow label={t('map.panel.eta')} value={selectedDriver.eta} accent />
               )}
               {selectedDriver.routeDistance !== undefined && (
-                <DetailRow label="Distance restante" value={formatDistance(selectedDriver.routeDistance)} />
+                <DetailRow label={t('map.panel.distanceRemaining')} value={formatDistance(selectedDriver.routeDistance)} />
               )}
+              <DetailRow
+                label={t('map.panel.delivery')}
+                value={selectedDriver.deliveryId ? selectedDriver.deliveryId.slice(0, 8) : t('map.panel.noDelivery')}
+                mono={!!selectedDriver.deliveryId}
+              />
             </div>
 
             {/* Bandeau réactif EN TEMPS RÉEL : selectedDriver est dérivé en
@@ -1031,9 +1018,15 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                 fréquence (`now`) déclenche le render même quand le véhicule
                 s'arrête — le bandeau apparaît/disparaît tout seul, sans
                 re-sélectionner le véhicule. */}
-            {(!selectedDriver.timestamp || now - new Date(selectedDriver.timestamp).getTime() > 120_000) && (
+            {selectedDriver.status === 'offline' ? (
+              <div className={`${styles.warningBanner} ${styles.warningBannerOffline}`}>
+                <NavigationOff size={13} className={styles.warningIcon} aria-hidden="true" />
+                {t('map.panel.offlineWarning')}
+              </div>
+            ) : (!selectedDriver.timestamp || now - new Date(selectedDriver.timestamp).getTime() > 120_000) && (
               <div className={styles.warningBanner}>
-                Position non actualisée depuis plus de 2 minutes
+                <AlertTriangle size={13} className={styles.warningIcon} aria-hidden="true" />
+                {t('map.panel.staleWarning')}
               </div>
             )}
           </div>
