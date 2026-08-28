@@ -283,11 +283,17 @@ tsc + eslint . + vite build + **263 tests** OK.
 
 ---
 
-## Déploiement
+## Déploiement — FAIT (2026-08-29)
 
-`redesign/full` mergée sur `main` et déployée sur Contabo via
-`deploy-contabo.sh` (build --no-cache backend/worker/frontend, health-gate,
-`prisma migrate deploy` — aucune migration, rollback auto sur échec).
+`redesign/full` (17 commits) mergée en fast-forward sur `main` (`8bce968`),
+poussée, déployée sur Contabo via `deploy-contabo.sh` :
+- build `--no-cache` backend/worker/frontend OK
+- health-gate : backend/frontend `healthy`, `/health` = ok (db/redis/queue)
+- `prisma migrate deploy` : « No pending migrations » (refonte front only)
+- `déploiement OK — commit 8bce968 en production`, pas de rollback
+- vérif : `https://169-58-237-88.sslip.io` 200 · `/api/health` 200 · Traccar 200 ·
+  bundle CSS = `--color-accent` (ancienne palette `#f2a93c` : 1 résiduel) ·
+  logs backend/frontend sans erreur depuis le déploiement
 
 ⚠️ **Rendu visuel non vérifié** (pas de navigateur dans l'environnement de
 travail) : à contrôler en prod immédiatement, écran par écran. Rollback :
