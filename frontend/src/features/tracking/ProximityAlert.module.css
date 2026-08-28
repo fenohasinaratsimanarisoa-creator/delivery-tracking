@@ -43,7 +43,6 @@
   /* Fond opaque : le backdrop-filter (flou/transparence) réduit le contraste, ce qui
      contredit l'intention du thème field (lisible en plein soleil). Le fond est posé
      par le JS (URGENCY_CONFIG → var(--color-surface)), on désactive ici tout flou. */
-  animation: dt-alert-in 0.3s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
   overflow: hidden;
 }
 

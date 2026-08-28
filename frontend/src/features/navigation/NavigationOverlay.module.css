@@ -12,7 +12,6 @@
   text-align: center;
   color: var(--color-text);
   padding: 40px;
-  animation: dt-fade-in-up 0.4s ease-out;
 }
 .arrivedEmoji {
   display: flex;
@@ -70,7 +69,6 @@
   padding: 8px 12px;
   font-size: var(--text-sm, 0.75rem);
   font-weight: 700;
-  animation: dt-fade-in-up 0.3s ease-out;
 }
 .instructionPanel {
   position: absolute;
@@ -107,7 +105,6 @@
   color: #FFFFFF;
   line-height: 1.3;
   margin-bottom: 4px;
-  animation: dt-fade-in-up 0.3s ease-out;
 }
 .recalculatingText {
   color: var(--color-teal);
@@ -232,7 +229,6 @@
   transform: translate(-50%, -50%);
   z-index: 1001;
   pointer-events: none;
-  animation: dt-fade-in-up 0.4s ease-out;
 }
 .deviationBadgeInner {
   background: var(--color-red-muted, rgba(232,84,76,0.15));

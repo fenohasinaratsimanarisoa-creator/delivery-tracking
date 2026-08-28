@@ -42,7 +42,6 @@
   padding: 44px 40px 32px;
   position: relative;
   z-index: 1;
-  animation: dt-card-in 0.6s var(--ease-premium, cubic-bezier(0.16, 1, 0.3, 1)) both;
 }
 
 .cardGlowLine {

@@ -90,7 +90,6 @@
   font-size: var(--text-md);
   font-weight: 500;
   color: var(--color-text-secondary);
-  animation: dt-card-in 0.28s var(--ease-smooth, ease) both;
 }
 
 /* ─── Pill LIVE ───────────────────────────────────────────── */
@@ -171,7 +170,6 @@
   border-radius: var(--radius-xl);
   overflow: hidden;
   transition: border-color var(--duration-base, 200ms) var(--ease-smooth, ease);
-  animation: dt-card-in 0.28s var(--ease-smooth, ease) both;
 }
 
 /* Le signal KPI est porté par la valeur (colored) + l'icône teintée : la ligne
@@ -231,7 +229,6 @@
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-xl);
   overflow: hidden;
-  animation: dt-card-in 0.28s var(--ease-smooth, ease) both;
   transition: border-color var(--duration-base, 200ms) var(--ease-smooth, ease);
 }
 

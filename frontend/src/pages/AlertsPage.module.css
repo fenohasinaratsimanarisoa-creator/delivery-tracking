@@ -143,7 +143,6 @@
   border-radius: var(--radius-full, 9999px);
   background: var(--color-accent);
   color: var(--color-bg);
-  animation: dt-fade-in-up 0.3s var(--ease-smooth, ease) both;
 }
 
 /* ─── KPIs ────────────────────────────────────────────────── */
@@ -420,7 +419,6 @@
   border-radius: var(--radius-xl, 12px);
   cursor: pointer;
   overflow: hidden;
-  animation: dt-fade-in-up 0.3s var(--ease-smooth, ease) both;
   transition: transform var(--duration-base, 200ms) var(--ease-premium, cubic-bezier(0.16,1,0.3,1)),
     border-color var(--duration-base, 200ms) var(--ease-smooth, ease),
     box-shadow var(--duration-base, 200ms) var(--ease-smooth, ease);

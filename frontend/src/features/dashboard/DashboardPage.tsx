@@ -271,13 +271,16 @@ export default function DashboardPage() {
   // `subscribeToCompany`, double polling /tracking/live et double rendu des markers.
   const isMobile = useMediaQuery('(max-width: 768px)');
 
+  // Ordre : ce qui APPELLE UNE ACTION d'abord (anomalies), puis l'activité du
+  // jour, puis les totaux de contexte. Un dispatcher scanne cette rangée en
+  // une seconde : le chiffre qui doit le faire réagir est en tête.
   const kpiItems = useMemo(() => [
+    { icon: AlertTriangle, label: t('dashboard.kpis.anomalies'), value: kpis?.anomalies ?? '\u2014', color: 'var(--status-alert)' },
     { icon: Truck, label: t('dashboard.kpis.deliveriesToday'), value: kpis?.deliveriesToday ?? '\u2014', color: 'var(--color-accent)' },
-    { icon: CheckCircle, label: t('dashboard.kpis.totalDeliveries'), value: kpis?.totalDeliveries ?? '\u2014', color: 'var(--color-teal)' },
-    { icon: MapPin, label: t('dashboard.kpis.activeVehicles'), value: kpis?.activeVehicles ?? '\u2014', color: 'var(--color-accent)' },
-    { icon: Clock, label: t('dashboard.kpis.activeDrivers'), value: kpis?.activeDrivers ?? '\u2014', color: 'var(--color-accent)' },
-    { icon: AlertTriangle, label: t('dashboard.kpis.anomalies'), value: kpis?.anomalies ?? '\u2014', color: 'var(--color-red)' },
+    { icon: MapPin, label: t('dashboard.kpis.activeVehicles'), value: kpis?.activeVehicles ?? '\u2014', color: 'var(--status-enroute)' },
+    { icon: Clock, label: t('dashboard.kpis.activeDrivers'), value: kpis?.activeDrivers ?? '\u2014', color: 'var(--status-enroute)' },
     { icon: Fuel, label: t('dashboard.kpis.avgConsumption'), value: kpis?.fuelStats?.averageConsumption, color: 'var(--color-teal)', decimals: 1 },
+    { icon: CheckCircle, label: t('dashboard.kpis.totalDeliveries'), value: kpis?.totalDeliveries ?? '\u2014', color: 'var(--color-text-tertiary)' },
   ], [kpis, t]);
 
   const anyChart = !error && (deliveryStats.length > 0 || fuelData.length > 0);

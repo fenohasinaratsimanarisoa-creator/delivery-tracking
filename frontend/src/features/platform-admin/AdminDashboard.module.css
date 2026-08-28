@@ -168,7 +168,6 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: var(--space-md);
-  animation: dt-fade-up 0.3s var(--ease-smooth, ease) both;
 }
 
 .statCard {
@@ -281,7 +280,6 @@
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.35));
   overflow: hidden;
-  animation: dt-fade-up 0.3s var(--ease-smooth, ease) both;
 }
 
 .sectionCardHeader,
@@ -604,7 +602,6 @@
   justify-content: center;
   background: var(--color-overlay, rgba(11,18,32,0.7));
   backdrop-filter: blur(4px);
-  animation: dt-fade-up 0.2s var(--ease-smooth, ease);
 }
 
 .modalContent {

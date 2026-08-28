@@ -117,13 +117,12 @@ function useCountUp(target: number, duration = 650) {
   return value;
 }
 
-function KpiCard({ icon, label, value, color, suffix, delay }: {
+function KpiCard({ icon, label, value, color, suffix }: {
   icon: React.ReactNode; label: string; value: number; color: string;
-  suffix?: string; delay: number;
-}) {
+  suffix?: string; }) {
   const animated = useCountUp(value);
   return (
-    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color, animationDelay: `${delay}ms` }}>
+    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color }}>
       <div className={styles.kpiTop}>
         <span className={styles.kpiIcon}>{icon}</span>
       </div>
@@ -197,15 +196,15 @@ function initials(name: string) {
   return `${(parts[0]?.[0] || '').toUpperCase()}${(parts[1]?.[0] || '').toUpperCase()}`;
 }
 
-function SkeletonShimmer({ width, height, delay }: { width: number; height: number; delay: number }) {
-  return <div className={styles.shimmer} style={{ width: `${width}%`, height, animationDelay: `${delay}ms` }} />;
+function SkeletonShimmer({ width, height }: { width: number; height: number }) {
+  return <div className={styles.shimmer} style={{ width: `${width}%`, height }} />;
 }
 
-function KpiSkeleton({ delay }: { delay: number }) {
+function KpiSkeleton() {
   return (
     <div className={styles.kpiSkeleton}>
-      <SkeletonShimmer width={26} height={18} delay={delay} />
-      <SkeletonShimmer width={48} height={26} delay={delay + 40} />
+      <SkeletonShimmer width={26} height={18} />
+      <SkeletonShimmer width={48} height={26} />
     </div>
   );
 }
@@ -213,10 +212,10 @@ function KpiSkeleton({ delay }: { delay: number }) {
 function ChartSkeleton({ height = 260 }: { height?: number }) {
   return (
     <div className={styles.skeletonCanvas} style={{ height }}>
-      <SkeletonShimmer width={92} height={16} delay={60} />
+      <SkeletonShimmer width={92} height={16} />
       <div className={styles.skeletonBarBlock}>
         {[80, 55, 70, 40, 62, 48, 74].map((h, i) => (
-          <SkeletonShimmer key={i} width={8} height={h} delay={120 + i * 50} />
+          <SkeletonShimmer key={i} width={8} height={h} />
         ))}
       </div>
     </div>
@@ -229,13 +228,13 @@ function TableSkeleton() {
     <div className={styles.skeletonTableWrapper}>
       <div className={styles.skeletonThead}>
         {columns.map((col, i) => (
-          <SkeletonShimmer key={`h${i}`} width={col} height={12} delay={i * 40} />
+          <SkeletonShimmer key={`h${i}`} width={col} height={12} />
         ))}
       </div>
       {[1, 2, 3, 4].map((r) => (
         <div key={r} className={styles.skeletonRow}>
           {columns.map((col, c) => (
-            <SkeletonShimmer key={`${r}-${c}`} width={col} height={13} delay={(r + c) * 60} />
+            <SkeletonShimmer key={`${r}-${c}`} width={col} height={13} />
           ))}
         </div>
       ))}
@@ -384,7 +383,7 @@ function DeliveryReport({ data, loading }: { data: DeliveryReport | undefined; l
     return (
       <div className={styles.section}>
         <div className={styles.kpiGrid}>
-          {[0, 60, 120, 180].map((d) => <KpiSkeleton key={d} delay={d} />)}
+          {[0, 60, 120, 180].map((d) => <KpiSkeleton key={d} />)}
         </div>
         <div className={styles.chartsGrid}>
           <div className={styles.card}><ChartSkeleton height={320} /></div>
@@ -405,10 +404,10 @@ function DeliveryReport({ data, loading }: { data: DeliveryReport | undefined; l
   return (
     <div className={styles.section}>
       <div className={styles.kpiGrid}>
-        <KpiCard icon={<Package size={16} />} label={t('reports.kpis.deliveryTotal')} value={data.total} color={COLORS.accent} delay={0} />
-        <KpiCard icon={<CheckCircle2 size={16} />} label={t('reports.kpis.deliveryCompleted')} value={data.completedCount} color={COLORS.teal} delay={60} />
-        <KpiCard icon={<Clock4 size={16} />} label={t('reports.kpis.deliveryOnTime')} value={data.onTimeCount} color={COLORS.blue} delay={120} />
-        <KpiCard icon={<Gauge size={16} />} label={t('reports.kpis.deliveryOnTimeRate')} value={data.onTimeRate} suffix="%" color={data.onTimeRate >= 80 ? COLORS.teal : COLORS.red} delay={180} />
+        <KpiCard icon={<Package size={16} />} label={t('reports.kpis.deliveryTotal')} value={data.total} color={COLORS.accent} />
+        <KpiCard icon={<CheckCircle2 size={16} />} label={t('reports.kpis.deliveryCompleted')} value={data.completedCount} color={COLORS.teal} />
+        <KpiCard icon={<Clock4 size={16} />} label={t('reports.kpis.deliveryOnTime')} value={data.onTimeCount} color={COLORS.blue} />
+        <KpiCard icon={<Gauge size={16} />} label={t('reports.kpis.deliveryOnTimeRate')} value={data.onTimeRate} suffix="%" color={data.onTimeRate >= 80 ? COLORS.teal : COLORS.red} />
       </div>
 
       <div className={styles.chartsGrid}>
@@ -477,7 +476,7 @@ function FleetReport({ data, loading }: { data: FleetReport | undefined; loading
     return (
       <div className={styles.section}>
         <div className={styles.kpiGrid}>
-          {[0, 60, 120, 180].map((d) => <KpiSkeleton key={d} delay={d} />)}
+          {[0, 60, 120, 180].map((d) => <KpiSkeleton key={d} />)}
         </div>
         <div className={styles.card}><ChartSkeleton height={300} /></div>
         <div className={styles.card}><TableSkeleton /></div>
@@ -492,10 +491,10 @@ function FleetReport({ data, loading }: { data: FleetReport | undefined; loading
   return (
     <div className={styles.section}>
       <div className={styles.kpiGrid}>
-        <KpiCard icon={<Truck size={16} />} label={t('reports.kpis.fleetActive')} value={data.activeCount} color={COLORS.accent} delay={0} />
-        <KpiCard icon={<Wifi size={16} />} label={t('reports.kpis.fleetOnline')} value={data.onlineCount} color={COLORS.teal} delay={60} />
-        <KpiCard icon={<Route size={16} />} label={t('reports.kpis.fleetDistance')} value={Math.round(data.totalDistance)} suffix="km" color={COLORS.blue} delay={120} />
-        <KpiCard icon={<Fuel size={16} />} label={t('reports.kpis.fleetFuel')} value={Math.round(data.totalFuel)} suffix="L" color={COLORS.purple} delay={180} />
+        <KpiCard icon={<Truck size={16} />} label={t('reports.kpis.fleetActive')} value={data.activeCount} color={COLORS.accent} />
+        <KpiCard icon={<Wifi size={16} />} label={t('reports.kpis.fleetOnline')} value={data.onlineCount} color={COLORS.teal} />
+        <KpiCard icon={<Route size={16} />} label={t('reports.kpis.fleetDistance')} value={Math.round(data.totalDistance)} suffix="km" color={COLORS.blue} />
+        <KpiCard icon={<Fuel size={16} />} label={t('reports.kpis.fleetFuel')} value={Math.round(data.totalFuel)} suffix="L" color={COLORS.purple} />
       </div>
 
       <GlowCard icon={<Route size={14} />} title={t('reports.charts.distanceByVehicle')}>
@@ -578,8 +577,8 @@ function FleetReport({ data, loading }: { data: FleetReport | undefined; loading
                 </tr>
               </thead>
               <tbody>
-                {vehicles.map((v, i) => (
-                  <tr key={v.vehicleId} className={styles.tableRow} style={{ animationDelay: `${i * 40}ms` }}>
+                {vehicles.map((v) => (
+                  <tr key={v.vehicleId} className={styles.tableRow} style={{ }}>
                     <td className={styles.tableCell}><span className={styles.cellPrimary}>{v.vehicleName}</span></td>
                     <td className={styles.tableCell}><span className={`${styles.cellMono} ${styles.cellSub}`}>{v.licensePlate}</span></td>
                     <td className={styles.tableCell}><span className={styles.cellNumber}>{formatNumber(v.deliveriesCount)}</span></td>
@@ -612,7 +611,7 @@ function DriverReport({ data, loading }: { data: DriverReport | undefined; loadi
     return (
       <div className={styles.section}>
         <div className={styles.kpiGrid}>
-          {[0, 60, 120, 180].map((d) => <KpiSkeleton key={d} delay={d} />)}
+          {[0, 60, 120, 180].map((d) => <KpiSkeleton key={d} />)}
         </div>
         <div className={styles.card}><ChartSkeleton height={280} /></div>
         <div className={styles.card}><TableSkeleton /></div>
@@ -627,10 +626,10 @@ function DriverReport({ data, loading }: { data: DriverReport | undefined; loadi
   return (
     <div className={styles.section}>
       <div className={styles.kpiGrid}>
-        <KpiCard icon={<Package size={16} />} label={t('reports.kpis.driverTotal')} value={data.totalDeliveries} color={COLORS.accent} delay={0} />
-        <KpiCard icon={<CheckCircle2 size={16} />} label={t('reports.kpis.driverCompleted')} value={data.totalCompleted} color={COLORS.teal} delay={60} />
-        <KpiCard icon={<Gauge size={16} />} label={t('reports.kpis.driverOnTimeRate')} value={data.overallOnTimeRate} suffix="%" color={data.overallOnTimeRate >= 80 ? COLORS.teal : COLORS.red} delay={120} />
-        <KpiCard icon={<Users size={16} />} label={t('reports.kpis.driverActive')} value={sorted.filter((d) => d.isActive).length} color={COLORS.blue} delay={180} />
+        <KpiCard icon={<Package size={16} />} label={t('reports.kpis.driverTotal')} value={data.totalDeliveries} color={COLORS.accent} />
+        <KpiCard icon={<CheckCircle2 size={16} />} label={t('reports.kpis.driverCompleted')} value={data.totalCompleted} color={COLORS.teal} />
+        <KpiCard icon={<Gauge size={16} />} label={t('reports.kpis.driverOnTimeRate')} value={data.overallOnTimeRate} suffix="%" color={data.overallOnTimeRate >= 80 ? COLORS.teal : COLORS.red} />
+        <KpiCard icon={<Users size={16} />} label={t('reports.kpis.driverActive')} value={sorted.filter((d) => d.isActive).length} color={COLORS.blue} />
       </div>
 
       <GlowCard icon={<BarChart3 size={14} />} title={t('reports.charts.deliveriesByDriver')}>
@@ -679,8 +678,8 @@ function DriverReport({ data, loading }: { data: DriverReport | undefined; loadi
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((d, i) => (
-                  <tr key={d.driverId} className={styles.tableRow} style={{ animationDelay: `${i * 40}ms` }}>
+                {sorted.map((d) => (
+                  <tr key={d.driverId} className={styles.tableRow} style={{ }}>
                     <td className={styles.tableCell}>
                       <span className={styles.driverCell}>
                         <span className={styles.driverAvatar}>{initials(d.driverName)}</span>

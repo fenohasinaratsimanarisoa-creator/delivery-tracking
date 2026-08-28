@@ -81,12 +81,11 @@ function useCountUp(target: number, duration = 650) {
   return value;
 }
 
-function KpiCard({ icon, label, value, color, delay }: {
-  icon: React.ReactNode; label: string; value: number; color: string; delay: number;
-}) {
+function KpiCard({ icon, label, value, color }: {
+  icon: React.ReactNode; label: string; value: number; color: string; }) {
   const animated = useCountUp(value);
   return (
-    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color, animationDelay: `${delay}ms` }}>
+    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color }}>
       <div className={styles.kpiTop}>
         <span className={styles.kpiIcon}>{icon}</span>
       </div>
@@ -507,10 +506,10 @@ export default function DeliveriesPage() {
       </header>
 
       <div className={styles.kpiGrid}>
-        <KpiCard icon={<Package size={18} />} label={t('deliveries.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" delay={0} />
-        <KpiCard icon={<Clock size={18} />} label={t('deliveries.kpis.pending')} value={stats.pending} color="var(--color-warning, #f59e0b)" delay={70} />
-        <KpiCard icon={<Truck size={18} />} label={t('deliveries.kpis.inProgress')} value={stats.inProgress} color="var(--color-blue, #3b82f6)" delay={140} />
-        <KpiCard icon={<CheckCircle2 size={18} />} label={t('deliveries.kpis.delivered')} value={stats.delivered} color="var(--color-teal, #3FA796)" delay={210} />
+        <KpiCard icon={<Package size={18} />} label={t('deliveries.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" />
+        <KpiCard icon={<Clock size={18} />} label={t('deliveries.kpis.pending')} value={stats.pending} color="var(--color-warning, #f59e0b)" />
+        <KpiCard icon={<Truck size={18} />} label={t('deliveries.kpis.inProgress')} value={stats.inProgress} color="var(--color-blue, #3b82f6)" />
+        <KpiCard icon={<CheckCircle2 size={18} />} label={t('deliveries.kpis.delivered')} value={stats.delivered} color="var(--color-teal, #3FA796)" />
       </div>
 
       <div className={styles.filtersRow}>
@@ -633,7 +632,7 @@ export default function DeliveriesPage() {
             )}
           </div>
         ) : (
-          <Card flush animated style={{ animationDelay: '150ms' }}>
+          <Card flush animated >
             <DataTable
               selectable
               selectedIds={selectedIds}

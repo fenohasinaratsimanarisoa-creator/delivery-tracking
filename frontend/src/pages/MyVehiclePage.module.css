@@ -138,7 +138,6 @@
   border-radius: var(--radius-2xl, 16px);
   overflow: hidden;
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
-  animation: dt-card-in 0.28s var(--ease-smooth, ease) both;
   transition: border-color var(--duration-base, 200ms) var(--ease-smooth, ease);
 }
 

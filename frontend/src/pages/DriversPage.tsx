@@ -47,12 +47,11 @@ function useCountUp(target: number, duration = 650) {
   return value;
 }
 
-function KpiCard({ icon, label, value, color, delay }: {
-  icon: React.ReactNode; label: string; value: number; color: string; delay: number;
-}) {
+function KpiCard({ icon, label, value, color }: {
+  icon: React.ReactNode; label: string; value: number; color: string; }) {
   const animated = useCountUp(value);
   return (
-    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color, animationDelay: `${delay}ms` }}>
+    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color }}>
       <div className={styles.kpiTop}>
         <span className={styles.kpiIcon}>{icon}</span>
       </div>
@@ -271,10 +270,10 @@ export default function DriversPage() {
       </header>
 
       <div className={styles.kpiGrid}>
-        <KpiCard icon={<Truck size={18} />} label={t('drivers.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" delay={0} />
-        <KpiCard icon={<UserCheck size={18} />} label={t('drivers.kpis.active')} value={stats.active} color="var(--color-teal)" delay={70} />
-        <KpiCard icon={<UserX size={18} />} label={t('drivers.kpis.inactive')} value={stats.inactive} color="var(--color-text-tertiary, #7A8BA3)" delay={140} />
-        <KpiCard icon={<Car size={18} />} label={t('drivers.kpis.unassigned')} value={stats.unassigned} color="var(--color-blue, #3b82f6)" delay={210} />
+        <KpiCard icon={<Truck size={18} />} label={t('drivers.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" />
+        <KpiCard icon={<UserCheck size={18} />} label={t('drivers.kpis.active')} value={stats.active} color="var(--color-teal)" />
+        <KpiCard icon={<UserX size={18} />} label={t('drivers.kpis.inactive')} value={stats.inactive} color="var(--color-text-tertiary, #7A8BA3)" />
+        <KpiCard icon={<Car size={18} />} label={t('drivers.kpis.unassigned')} value={stats.unassigned} color="var(--color-blue, #3b82f6)" />
       </div>
 
       <div className={styles.filtersRow}>
@@ -316,7 +315,7 @@ export default function DriversPage() {
             <p className={styles.emptyDesc}>{search ? t('drivers.empty.tryDifferent') : t('drivers.fromUsersHint')}</p>
           </div>
         ) : (
-          <Card flush animated style={{ animationDelay: '150ms' }}>
+          <Card flush animated >
             <DataTable
               columns={[
                 {

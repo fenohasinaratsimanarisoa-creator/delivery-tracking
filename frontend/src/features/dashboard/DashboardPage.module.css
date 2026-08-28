@@ -204,7 +204,6 @@
   border-radius: var(--radius-lg, 8px);
   box-shadow: var(--shadow-md);
   pointer-events: auto;
-  animation: dt-fade-in-up 0.5s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) 0.06s both;
 }
 
 .kpiPanelHeader {
@@ -461,7 +460,6 @@
   color: var(--color-teal);
   font-weight: 500;
   font-family: var(--font-body);
-  animation: dt-fade-in-up 0.4s ease-out;
   white-space: nowrap;
 }
 

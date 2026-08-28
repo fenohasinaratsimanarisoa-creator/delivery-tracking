@@ -77,7 +77,7 @@ export default function LandingPage() {
             {features.map((f, i) => {
               const Icon = FEATURE_ICONS[i] ?? ShieldCheck;
               return (
-                <Card key={f.title} animated hoverable style={{ animationDelay: `${i * 60}ms` }}>
+                <Card key={f.title} animated hoverable style={{ }}>
                   <span className={styles.featureIcon}><Icon size={20} /></span>
                   <h3 className={styles.featureTitle}>{f.title}</h3>
                   <p className={styles.featureDesc}>{f.desc}</p>

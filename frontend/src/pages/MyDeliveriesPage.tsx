@@ -181,14 +181,14 @@ export default function MyDeliveriesPage() {
       )}
 
       <div className={styles.list}>
-        {sorted.map((d, i) => {
+        {sorted.map((d) => {
           const isActive = d.status === 'in_progress';
           const isPending = d.status === 'assigned';
           return (
             <div
               key={d.id}
               className={`${styles.deliveryCard}${isActive ? ` ${styles.deliveryCardActive}` : ''}${isPending ? ` ${styles.deliveryCardPending}` : ''}`}
-              style={{ animationDelay: `${Math.min(i, 6) * 60}ms` } as CSSProperties}
+              style={{ } as CSSProperties}
             >
               {(isActive || isPending) && (
                 <span className={`${styles.accentBar} ${isPending ? styles.accentBarAmber : ''}`} />

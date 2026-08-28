@@ -89,7 +89,6 @@
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-xl, 12px);
   overflow: hidden;
-  animation: dt-fade-in-up 0.5s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
   transition: transform var(--duration-base, 200ms) var(--ease-premium, cubic-bezier(0.16,1,0.3,1)), border-color var(--duration-base, 200ms) var(--ease-smooth, ease), box-shadow var(--duration-base, 200ms) var(--ease-smooth, ease);
 }
 
@@ -468,7 +467,6 @@
   border-radius: var(--radius-2xl, 16px);
   box-shadow: var(--shadow-dialog, 0 24px 48px rgba(0,0,0,0.6));
   padding: var(--space-xl, 24px);
-  animation: dt-fade-in-up 0.4s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
 }
 
 .modalTitle {

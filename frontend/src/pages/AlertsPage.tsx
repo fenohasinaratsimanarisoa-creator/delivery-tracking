@@ -339,10 +339,10 @@ export default function AlertsPage() {
         </div>
       ) : (
         <div className={styles.alertList}>
-          {alerts.map((r, i) => {
+          {alerts.map((r) => {
             const cfg = typeConfig[r.type as keyof typeof typeConfig] || { icon: <Bell size={17} />, color: 'var(--color-text-tertiary)' };
             const prio = PRIORITY_COLORS[r.priority] || 'var(--color-text-tertiary)';
-            const cardStyle = { '--prio': r.resolved ? 'var(--color-teal)' : prio, animationDelay: `${Math.min(i, 10) * 45}ms` } as CSSProperties;
+            const cardStyle = { '--prio': r.resolved ? 'var(--color-teal)' : prio } as CSSProperties;
             return (
               <div
                 key={r.id}

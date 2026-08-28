@@ -287,14 +287,13 @@ export default function NotificationsPage() {
                 <span className={styles.groupLabel}>{label}</span>
                 <span className={styles.groupCount}>{items.length}</span>
               </div>
-              {items.map((n, i) => {
+              {items.map((n) => {
                 const isUnread = !n.readAt;
                 const cfg = typeIcon(n.type);
                 const prio = PRIORITY_COLORS[n.priority] || '#6b7280';
                 const cardStyle = {
                   '--prio': prio,
                   borderLeftColor: isUnread ? prio : 'transparent',
-                  animationDelay: `${Math.min(i, 10) * 45}ms`,
                 } as CSSProperties;
                 return (
                   <div

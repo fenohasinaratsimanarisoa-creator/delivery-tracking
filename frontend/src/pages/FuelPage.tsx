@@ -147,7 +147,6 @@ function KpiCard({
   value,
   unit,
   color,
-  delay,
   decimals = 0,
   format,
   pulse,
@@ -157,7 +156,6 @@ function KpiCard({
   value: number;
   unit?: string;
   color: string;
-  delay: number;
   decimals?: number;
   format?: (n: number) => string;
   pulse?: boolean;
@@ -172,7 +170,7 @@ function KpiCard({
   return (
     <div
       className={`${styles.kpiCard} ${pulse ? styles.kpiCardPulse : ""}`}
-      style={{ ["--kpi" as string]: color, animationDelay: `${delay}ms` }}
+      style={{ ["--kpi" as string]: color }}
     >
       <div className={styles.kpiTop}>
         <span className={styles.kpiIcon}>{icon}</span>
@@ -651,11 +649,11 @@ export default function FuelPage() {
             <div key={i} className={styles.kpiSkeleton}>
               <div
                 className={`${styles.shimmer} ${styles.shimmerIcon}`}
-                style={{ animationDelay: `${i * 60}ms` }}
+                style={{ }}
               />
               <div
                 className={`${styles.shimmer} ${styles.shimmerValue}`}
-                style={{ animationDelay: `${i * 60 + 40}ms` }}
+                style={{ }}
               />
             </div>
           ))}
@@ -670,7 +668,6 @@ export default function FuelPage() {
                   className={`${styles.shimmer} ${styles.shimmerCell}`}
                   style={{
                     width: `${w}%`,
-                    animationDelay: `${(r + c) * 50}ms`,
                   }}
                 />
               ))}
@@ -749,7 +746,6 @@ export default function FuelPage() {
                 value={Math.round(s.totalLiters ?? 0)}
                 unit={t("fuel.unitLiters")}
                 color="var(--color-teal)"
-                delay={0}
               />
               <KpiCard
                 icon={<Gauge size={16} />}
@@ -757,7 +753,6 @@ export default function FuelPage() {
                 value={Math.round(s.totalKilometers ?? 0)}
                 unit={t("fuel.unitKm")}
                 color="var(--color-accent)"
-                delay={60}
               />
               <KpiCard
                 icon={<Wallet size={16} />}
@@ -765,7 +760,6 @@ export default function FuelPage() {
                 value={s.totalCost ?? 0}
                 format={formatAriary}
                 color="var(--color-blue)"
-                delay={120}
               />
               <KpiCard
                 icon={<Fuel size={16} />}
@@ -774,14 +768,12 @@ export default function FuelPage() {
                 unit={t("fuel.unitPer100")}
                 color="var(--color-purple)"
                 decimals={1}
-                delay={180}
               />
               <KpiCard
                 icon={<AlertTriangle size={16} />}
                 label={t("fuel.stats.anomalies")}
                 value={s.anomalyCount ?? 0}
                 color="var(--color-red)"
-                delay={240}
                 pulse={(s.anomalyCount ?? 0) > 0}
               />
             </div>
@@ -1056,7 +1048,7 @@ export default function FuelPage() {
                     <div
                       key={c}
                       className={`${styles.shimmer} ${styles.shimmerCell}`}
-                      style={{ width: `${w}%`, animationDelay: `${(r + c) * 50}ms` }}
+                      style={{ width: `${w}%` }}
                     />
                   ))}
                 </div>
@@ -1498,7 +1490,7 @@ export default function FuelPage() {
                       <div
                         key={c}
                         className={`${styles.shimmer} ${styles.shimmerCell}`}
-                        style={{ width: `${w}%`, animationDelay: `${(r + c) * 50}ms` }}
+                        style={{ width: `${w}%` }}
                       />
                     ))}
                   </div>

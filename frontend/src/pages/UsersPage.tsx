@@ -70,12 +70,11 @@ function useCountUp(target: number, duration = 650) {
   return value;
 }
 
-function KpiCard({ icon, label, value, color, delay }: {
-  icon: React.ReactNode; label: string; value: number; color: string; delay: number;
-}) {
+function KpiCard({ icon, label, value, color }: {
+  icon: React.ReactNode; label: string; value: number; color: string; }) {
   const animated = useCountUp(value);
   return (
-    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color, animationDelay: `${delay}ms` }}>
+    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color }}>
       <div className={styles.kpiTop}>
         <span className={styles.kpiIcon}>{icon}</span>
       </div>
@@ -338,10 +337,10 @@ export default function UsersPage() {
       </header>
 
       <div className={styles.kpiGrid}>
-        <KpiCard icon={<Users size={18} />} label={t('users.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" delay={0} />
-        <KpiCard icon={<UserCheck size={18} />} label={t('users.kpis.active')} value={stats.active} color="var(--color-teal)" delay={70} />
-        <KpiCard icon={<UserX size={18} />} label={t('users.kpis.inactive')} value={stats.inactive} color="var(--color-red)" delay={140} />
-        <KpiCard icon={<Truck size={18} />} label={t('users.kpis.drivers')} value={stats.drivers} color="var(--color-teal, #3FA796)" delay={210} />
+        <KpiCard icon={<Users size={18} />} label={t('users.kpis.total')} value={stats.total} color="var(--color-accent, #F2A93C)" />
+        <KpiCard icon={<UserCheck size={18} />} label={t('users.kpis.active')} value={stats.active} color="var(--color-teal)" />
+        <KpiCard icon={<UserX size={18} />} label={t('users.kpis.inactive')} value={stats.inactive} color="var(--color-red)" />
+        <KpiCard icon={<Truck size={18} />} label={t('users.kpis.drivers')} value={stats.drivers} color="var(--color-teal, #3FA796)" />
       </div>
 
       <div className={styles.filtersRow}>
@@ -395,7 +394,7 @@ export default function UsersPage() {
             )}
           </div>
         ) : (
-          <Card flush animated style={{ animationDelay: '150ms' }}>
+          <Card flush animated >
             <DataTable
               columns={[
                 {

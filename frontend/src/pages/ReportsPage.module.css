@@ -216,7 +216,6 @@
   border: 1px solid var(--color-border-subtle, rgba(232,236,243,0.08));
   border-radius: var(--radius-xl, 12px);
   overflow: hidden;
-  animation: dt-fade-in-up 0.5s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
   transition: transform var(--duration-base, 200ms) var(--ease-premium, cubic-bezier(0.16,1,0.3,1)), border-color var(--duration-base, 200ms) var(--ease-smooth, ease), box-shadow var(--duration-base, 200ms) var(--ease-smooth, ease);
 }
 
@@ -309,7 +308,6 @@
   border-radius: var(--radius-2xl, 16px);
   overflow: hidden;
   box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.35));
-  animation: dt-fade-in-up 0.5s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
 }
 
 .cardHeader {
@@ -470,7 +468,6 @@
 
 .tableRow {
   border-bottom: 1px solid var(--color-border-subtle, rgba(232,236,243,0.06));
-  animation: dt-fade-in-up 0.4s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) both;
   transition: background var(--duration-fast, 120ms) var(--ease-smooth, ease);
 }
 
