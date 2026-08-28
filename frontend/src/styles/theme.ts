@@ -60,6 +60,29 @@ export const colors = {
     shadowDialog: '0 2px 8px rgba(0,0,0,0.3), 0 20px 60px rgba(0,0,0,0.4)',
     chartGrid: 'rgba(237, 238, 240, 0.07)',
     chartTooltip: '#1C2026',
+    // ─── Statut véhicule (tokens sémantiques, ajout lot carte) ───
+    // 5 états, 5 teintes distinctes (vert / bleu-ardoise / gris / rouge / ambre)
+    // pour ne jamais dépendre de la seule couleur — la forme + l'icône + le
+    // libellé de VehicleStatusPill portent aussi l'info. `enroute` = accent.
+    statusEnroute: '#6FBF9E',
+    statusEnrouteSurface: 'rgba(111, 191, 158, 0.14)',
+    statusEnrouteBorder: 'rgba(111, 191, 158, 0.32)',
+    statusEnrouteText: '#8FCFB4',
+    statusIdle: '#7FA8C4',
+    statusIdleSurface: 'rgba(127, 168, 196, 0.14)',
+    statusIdleBorder: 'rgba(127, 168, 196, 0.32)',
+    statusIdleText: '#A2C2D8',
+    statusOffline: '#6B7480',
+    statusOfflineSurface: 'rgba(122, 130, 143, 0.16)',
+    statusOfflineBorder: 'rgba(122, 130, 143, 0.28)',
+    statusOfflineText: '#98A0AC',
+    statusAlertSurface: 'rgba(224, 117, 108, 0.14)',
+    statusAlertBorder: 'rgba(224, 117, 108, 0.32)',
+    statusAlertText: '#E88A82',
+    statusMaintenance: '#D9A441',
+    statusMaintenanceSurface: 'rgba(217, 164, 65, 0.14)',
+    statusMaintenanceBorder: 'rgba(217, 164, 65, 0.32)',
+    statusMaintenanceText: '#E0B45F',
   },
   light: {
     bg: '#F6F7F9',
@@ -109,6 +132,26 @@ export const colors = {
     shadowDialog: '0 2px 8px rgba(16,18,22,0.05), 0 16px 40px rgba(16,18,22,0.08)',
     chartGrid: 'rgba(22, 24, 29, 0.07)',
     chartTooltip: '#FFFFFF',
+    // ─── Statut véhicule (light) — text ≥ AA sur fond blanc ───
+    statusEnroute: '#2F6B4F',
+    statusEnrouteSurface: 'rgba(47, 107, 79, 0.10)',
+    statusEnrouteBorder: 'rgba(47, 107, 79, 0.28)',
+    statusEnrouteText: '#2F6B4F',
+    statusIdle: '#3D6E8C',
+    statusIdleSurface: 'rgba(61, 110, 140, 0.10)',
+    statusIdleBorder: 'rgba(61, 110, 140, 0.26)',
+    statusIdleText: '#33607D',
+    statusOffline: '#6B7280',
+    statusOfflineSurface: 'rgba(107, 114, 128, 0.12)',
+    statusOfflineBorder: 'rgba(107, 114, 128, 0.24)',
+    statusOfflineText: '#5B6169',
+    statusAlertSurface: 'rgba(180, 68, 59, 0.10)',
+    statusAlertBorder: 'rgba(180, 68, 59, 0.26)',
+    statusAlertText: '#B4443B',
+    statusMaintenance: '#B7791F',
+    statusMaintenanceSurface: 'rgba(183, 121, 31, 0.10)',
+    statusMaintenanceBorder: 'rgba(183, 121, 31, 0.26)',
+    statusMaintenanceText: '#8A5A14',
   },
   // Variante « field » : usage terrain mobile en extérieur (drivers / clients).
   // Palette sobre, accent désaturé, fort contraste lisible en plein soleil,
@@ -162,6 +205,26 @@ export const colors = {
     shadowDialog: '0 2px 8px rgba(15,23,42,0.06), 0 16px 40px rgba(15,23,42,0.14)',
     chartGrid: 'rgba(15, 23, 42, 0.08)',
     chartTooltip: '#FFFFFF',
+    // ─── Statut véhicule (field / terrain plein soleil) — fort contraste ───
+    statusEnroute: '#275A43',
+    statusEnrouteSurface: 'rgba(39, 90, 67, 0.12)',
+    statusEnrouteBorder: 'rgba(39, 90, 67, 0.30)',
+    statusEnrouteText: '#275A43',
+    statusIdle: '#33607D',
+    statusIdleSurface: 'rgba(51, 96, 125, 0.12)',
+    statusIdleBorder: 'rgba(51, 96, 125, 0.28)',
+    statusIdleText: '#2C5570',
+    statusOffline: '#5B6470',
+    statusOfflineSurface: 'rgba(91, 100, 112, 0.14)',
+    statusOfflineBorder: 'rgba(91, 100, 112, 0.28)',
+    statusOfflineText: '#4A525E',
+    statusAlertSurface: 'rgba(176, 58, 50, 0.12)',
+    statusAlertBorder: 'rgba(176, 58, 50, 0.30)',
+    statusAlertText: '#B03A32',
+    statusMaintenance: '#9A6314',
+    statusMaintenanceSurface: 'rgba(154, 99, 20, 0.12)',
+    statusMaintenanceBorder: 'rgba(154, 99, 20, 0.30)',
+    statusMaintenanceText: '#7D5011',
   },
 };
 
@@ -288,6 +351,26 @@ function cssVarBody(
   --color-status-moving: ${c.statusMoving};
   --color-status-static: ${c.statusStatic};
   --color-status-alert: ${c.statusAlert};
+  --status-enroute: ${c.statusEnroute};
+  --status-enroute-surface: ${c.statusEnrouteSurface};
+  --status-enroute-border: ${c.statusEnrouteBorder};
+  --status-enroute-text: ${c.statusEnrouteText};
+  --status-idle: ${c.statusIdle};
+  --status-idle-surface: ${c.statusIdleSurface};
+  --status-idle-border: ${c.statusIdleBorder};
+  --status-idle-text: ${c.statusIdleText};
+  --status-offline: ${c.statusOffline};
+  --status-offline-surface: ${c.statusOfflineSurface};
+  --status-offline-border: ${c.statusOfflineBorder};
+  --status-offline-text: ${c.statusOfflineText};
+  --status-alert: ${c.statusAlert};
+  --status-alert-surface: ${c.statusAlertSurface};
+  --status-alert-border: ${c.statusAlertBorder};
+  --status-alert-text: ${c.statusAlertText};
+  --status-maintenance: ${c.statusMaintenance};
+  --status-maintenance-surface: ${c.statusMaintenanceSurface};
+  --status-maintenance-border: ${c.statusMaintenanceBorder};
+  --status-maintenance-text: ${c.statusMaintenanceText};
   --color-blue: ${c.blue};
   --color-blue-muted: ${c.blueMuted};
   --color-purple: ${c.purple};
@@ -349,6 +432,9 @@ function cssVarBody(
   --duration-fast: ${duration.fast};
   --duration-base: ${duration.base};
   --duration-slow: ${duration.slow};
+  --transition-fast: ${duration.fast};
+  --transition-base: ${duration.base};
+  --transition-slow: ${duration.slow};
 `;
 }
 
@@ -438,7 +524,12 @@ input, textarea, select, button {
 }
 
 button, a, .clickable {
-  transition: background var(--transition-fast) ease, color var(--transition-fast) ease, opacity var(--transition-fast) ease, border-color var(--transition-fast) ease, box-shadow var(--transition-fast) ease;
+  transition:
+    background var(--transition-fast) var(--ease-smooth),
+    color var(--transition-fast) var(--ease-smooth),
+    opacity var(--transition-fast) var(--ease-smooth),
+    border-color var(--transition-fast) var(--ease-smooth),
+    box-shadow var(--transition-fast) var(--ease-smooth);
 }
 
 :focus-visible {
