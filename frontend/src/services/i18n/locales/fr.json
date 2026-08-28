@@ -8,6 +8,8 @@
     "search": "Rechercher",
     "noData": "Aucune donnée.",
     "error": "Erreur",
+    "errorTitle": "Une erreur est survenue",
+    "retry": "Réessayer",
     "close": "Fermer",
     "back": "Retour",
     "actions": "Actions",

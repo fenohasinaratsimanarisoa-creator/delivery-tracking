@@ -8,6 +8,8 @@
     "search": "Search",
     "noData": "No data.",
     "error": "Error",
+    "errorTitle": "Something went wrong",
+    "retry": "Retry",
     "close": "Close",
     "back": "Back",
     "actions": "Actions",
