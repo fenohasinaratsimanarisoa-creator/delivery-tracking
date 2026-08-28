@@ -31,24 +31,34 @@ export default function Button({
   icon,
   fullWidth,
   children,
-  style,
+  className,
+  // Défaut explicite `button` : un <Button> sans type dans un <form> soumettait
+  // le formulaire au clic/Entrée (bug latent). Les vrais boutons d'envoi
+  // portent déjà `type="submit"` explicitement (vérifié sur tous les forms).
+  type = 'button',
   disabled,
   ...rest
 }: Props) {
   return (
     <button
+      type={type}
       disabled={disabled || loading}
-      className={`${styles.root} ${sizeClassMap[size] ?? ''} ${variantClassMap[variant] ?? ''}`}
-      style={{
-        width: fullWidth ? '100%' : undefined,
-        ...style,
-      }}
+      aria-busy={loading || undefined}
+      className={[
+        styles.root,
+        sizeClassMap[size] ?? '',
+        variantClassMap[variant] ?? '',
+        fullWidth ? styles.fullWidth : '',
+        className ?? '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       {...rest}
     >
       {loading ? (
-        <span className={`${styles.loading}${size === 'sm' ? ` ${styles.loadingSm}` : ''}`} />
+        <span className={`${styles.loading}${size === 'sm' ? ` ${styles.loadingSm}` : ''}`} aria-hidden="true" />
       ) : icon ? (
-        <span className={styles.iconWrap}>{icon}</span>
+        <span className={styles.iconWrap} aria-hidden="true">{icon}</span>
       ) : null}
       {children}
     </button>

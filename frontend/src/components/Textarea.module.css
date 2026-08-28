@@ -18,32 +18,9 @@
   color: var(--color-red);
 }
 
-.inputWrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.prefixIcon,
-.suffixIcon {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--color-text-tertiary);
-  display: flex;
-  pointer-events: none;
-}
-
-.prefixIcon {
-  left: var(--space-md);
-}
-
-.suffixIcon {
-  right: var(--space-md);
-}
-
-.input {
+.textarea {
   width: 100%;
+  min-height: 72px;
   padding: var(--space-sm) var(--space-md);
   background: var(--color-input-bg);
   border: 1px solid var(--color-input-border);
@@ -51,49 +28,42 @@
   color: var(--color-text);
   font-size: var(--text-sm);
   font-family: var(--font-body);
+  line-height: var(--lh-normal);
+  resize: vertical;
   outline: none;
   transition:
     border-color var(--transition-fast) var(--ease-smooth),
     box-shadow var(--transition-fast) var(--ease-smooth);
 }
 
-.hasPrefix {
-  padding-left: var(--space-2xl);
-}
-
-.hasSuffix {
-  padding-right: var(--space-2xl);
-}
-
-.input::placeholder {
+.textarea::placeholder {
   color: var(--color-text-tertiary);
 }
 
-.input:hover:not(:disabled):not(:read-only) {
+.textarea:hover:not(:disabled):not(:read-only) {
   border-color: color-mix(in srgb, var(--color-input-border) 55%, var(--color-input-focus) 45%);
 }
 
-.input:focus {
+.textarea:focus {
   border-color: var(--color-input-focus);
   box-shadow: 0 0 0 3px var(--color-accent-muted);
 }
 
-.input:disabled {
+.textarea:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
-.input:read-only {
+.textarea:read-only {
   background: var(--color-surface-alt);
   color: var(--color-text-secondary);
-  cursor: default;
 }
 
-.inputError {
+.textareaError {
   border-color: var(--color-red);
 }
 
-.inputError:focus {
+.textareaError:focus {
   border-color: var(--color-red);
   box-shadow: 0 0 0 3px var(--color-red-muted);
 }

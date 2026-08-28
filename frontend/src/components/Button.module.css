@@ -2,15 +2,24 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  font-weight: 600;
-  border-radius: var(--radius-md, 6px);
-  font-family: var(--font-body, Inter, sans-serif);
-  transition: background var(--duration-base, 200ms) var(--ease-smooth, ease), color var(--duration-base, 200ms) var(--ease-smooth, ease), border-color var(--duration-base, 200ms) var(--ease-smooth, ease), box-shadow var(--duration-base, 200ms) var(--ease-smooth, ease), transform var(--duration-fast, 120ms) var(--ease-snappy, ease);
+  gap: var(--space-xs);
+  font-weight: var(--weight-semibold);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  border: 1px solid transparent;
+  transition:
+    background var(--transition-fast) var(--ease-smooth),
+    color var(--transition-fast) var(--ease-smooth),
+    border-color var(--transition-fast) var(--ease-smooth),
+    box-shadow var(--transition-fast) var(--ease-smooth),
+    transform var(--transition-fast) var(--ease-snappy);
   white-space: nowrap;
   position: relative;
-  overflow: hidden;
   cursor: pointer;
+}
+
+.fullWidth {
+  width: 100%;
 }
 
 .root:disabled {
@@ -50,27 +59,27 @@
 
 .sizeSm {
   min-height: 28px;
-  padding: var(--space-xs, 4px) var(--space-sm, 8px);
-  font-size: var(--text-xs, 0.625rem);
-  gap: 4px;
+  padding: var(--space-xs) var(--space-sm);
+  /* Libellé lisible : --text-xs (10px) était trop petit pour un bouton. */
+  font-size: var(--text-sm);
+  gap: var(--space-xs);
 }
 
 .sizeMd {
   min-height: 36px;
-  padding: var(--space-sm, 8px) var(--space-lg, 16px);
-  font-size: var(--text-sm, 0.875rem);
-  gap: 6px;
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--text-sm);
+  gap: var(--space-xs);
 }
 
 .sizeLg {
   min-height: 44px;
-  padding: 12px 24px;
-  font-size: var(--text-md, 1rem);
-  gap: 8px;
+  padding: var(--space-md) var(--space-xl);
+  font-size: var(--text-md);
+  gap: var(--space-sm);
 }
 
-/* Confort tactile : sur écrans tactiles, toutes les tailles passent à ≥44px
-   (recommandation WCAG 2.5.5 / material touch target) sans toucher au desktop. */
+/* Confort tactile : sur écrans tactiles toutes les tailles ≥ 44px (WCAG 2.5.5). */
 @media (pointer: coarse) {
   .sizeSm,
   .sizeMd,
@@ -80,64 +89,62 @@
 }
 
 .variantPrimary {
-  background: var(--color-accent, #F2A93C);
-  color: var(--color-bg, #0B1220);
-  border: none;
-  box-shadow: var(--shadow-xs, 0 1px 3px rgba(0,0,0,0.3));
+  background: var(--color-accent);
+  color: var(--color-bg);
+  box-shadow: var(--shadow-xs);
 }
 
 .variantPrimary:hover:not(:disabled) {
-  background: var(--color-accent-hover, #7ECBA9);
+  background: var(--color-accent-hover);
 }
 
 .variantSecondary {
-  background: var(--color-surface-alt, #182339);
-  color: var(--color-text, #E8ECF3);
-  border: 1px solid var(--color-input-border, rgba(232,236,243,0.15));
-  box-shadow: var(--shadow-xs, 0 1px 3px rgba(0,0,0,0.3));
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-xs);
 }
 
 .variantSecondary:hover:not(:disabled) {
-  background: var(--color-surface-hover, #1E2A45);
+  background: var(--color-surface-hover);
 }
 
 .variantSuccess {
-  background: var(--color-teal, #3FA796);
-  color: var(--color-bg, #0B1220);
-  border: none;
-  box-shadow: var(--shadow-xs, 0 1px 3px rgba(0,0,0,0.3));
+  background: var(--color-teal);
+  color: var(--color-bg);
+  box-shadow: var(--shadow-xs);
 }
 
 .variantSuccess:hover:not(:disabled) {
-  background: var(--color-teal-hover, #256B52);
+  background: var(--color-teal-hover);
 }
 
 .variantDanger {
-  background: var(--color-red-muted, rgba(232,84,76,0.15));
-  color: var(--color-red, #E8544C);
-  border: 1px solid var(--color-red-muted, rgba(232,84,76,0.15));
+  background: var(--color-red);
+  color: var(--color-bg);
+  box-shadow: var(--shadow-xs);
 }
 
 .variantDanger:hover:not(:disabled) {
-  background: var(--color-red-muted, rgba(232,84,76,0.24));
+  background: color-mix(in srgb, var(--color-red) 88%, black);
 }
 
 .variantGhost {
   background: transparent;
-  color: var(--color-text-secondary, #9BA6B9);
-  border: none;
+  color: var(--color-text-secondary);
 }
 
 .variantGhost:hover:not(:disabled) {
-  background: var(--color-accent-muted, rgba(242,169,60,0.08));
+  background: var(--color-surface-hover);
+  color: var(--color-text);
 }
 
 .variantOutline {
   background: transparent;
-  color: var(--color-accent, #F2A93C);
-  border: 1px solid var(--color-accent, #F2A93C);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .variantOutline:hover:not(:disabled) {
-  background: var(--color-accent-muted, rgba(242,169,60,0.15));
+  background: var(--color-accent-muted);
 }

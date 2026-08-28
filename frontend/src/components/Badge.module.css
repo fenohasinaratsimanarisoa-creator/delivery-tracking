@@ -1,22 +1,53 @@
 .root {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-weight: 600;
-  border-radius: var(--radius-full, 9999px);
+  gap: var(--space-xs);
+  font-weight: var(--weight-semibold);
+  border-radius: var(--radius-full);
   white-space: nowrap;
-  line-height: var(--lh-tight, 1.2);
+  line-height: var(--lh-tight);
   border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
 }
 
 .sizeSm {
-  padding: 2px 8px;
-  font-size: var(--text-xs, 0.625rem);
+  padding: 2px var(--space-sm);
+  font-size: var(--text-xs);
 }
 
 .sizeMd {
-  padding: 3px 10px;
-  font-size: var(--text-sm, 0.75rem);
+  padding: 3px var(--space-sm);
+  font-size: var(--text-sm);
+}
+
+.variantSuccess {
+  background: var(--status-enroute-surface);
+  border-color: var(--status-enroute-border);
+  color: var(--status-enroute-text);
+}
+
+.variantWarning {
+  background: var(--color-warning-muted);
+  border-color: color-mix(in srgb, var(--color-warning) 32%, transparent);
+  color: var(--color-warning);
+}
+
+.variantDanger {
+  background: var(--status-alert-surface);
+  border-color: var(--status-alert-border);
+  color: var(--status-alert-text);
+}
+
+.variantInfo {
+  background: var(--color-blue-muted);
+  border-color: color-mix(in srgb, var(--color-blue) 32%, transparent);
+  color: var(--color-blue);
+}
+
+.variantNeutral {
+  background: var(--color-surface-alt);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-subtle);
 }
 
 .variantAccent {
@@ -24,35 +55,9 @@
   color: var(--color-accent);
 }
 
-.variantTeal {
-  background: var(--color-teal-muted);
-  color: var(--color-teal);
-}
-
-.variantRed {
-  background: var(--color-red-muted);
-  color: var(--color-red);
-}
-
-.variantBlue {
-  background: var(--color-blue-muted);
-  color: var(--color-blue);
-}
-
 .variantPurple {
   background: var(--color-purple-muted);
   color: var(--color-purple);
-}
-
-.variantOrange {
-  background: var(--color-orange-muted);
-  color: var(--color-orange);
-}
-
-.variantNeutral {
-  background: var(--color-surface-alt);
-  color: var(--color-text-secondary);
-  border-color: var(--color-border-subtle);
 }
 
 .dot {

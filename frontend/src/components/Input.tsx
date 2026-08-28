@@ -1,4 +1,4 @@
-import { type InputHTMLAttributes, type ReactNode, forwardRef } from 'react';
+import { type InputHTMLAttributes, type ReactNode, forwardRef, useId } from 'react';
 import styles from './Input.module.css';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -11,44 +11,54 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, hint, prefixIcon, suffixIcon, fullWidth, style, id, ...rest }, ref) => {
-    const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+  ({ label, error, hint, prefixIcon, suffixIcon, fullWidth, className, id, required, ...rest }, ref) => {
+    // id STABLE et unique (React.useId) : l'ancien id dérivé du texte du label
+    // provoquait des collisions (2 champs même label) et cassait avec les
+    // accents / l'i18n.
+    const generatedId = useId();
+    const inputId = id ?? generatedId;
+    const errorId = `${inputId}-error`;
+    const hintId = `${inputId}-hint`;
+    const describedBy = error ? errorId : hint ? hintId : undefined;
+
     return (
-      <div className={styles.field} style={{ width: fullWidth ? '100%' : undefined }}>
+      <div className={`${styles.field}${fullWidth ? ` ${styles.fullWidth}` : ''}`}>
         {label && (
           <label htmlFor={inputId} className={styles.label}>
             {label}
+            {required && <span className={styles.required} aria-hidden="true"> *</span>}
           </label>
         )}
         <div className={styles.inputWrap}>
-          {prefixIcon && (
-            <span className={styles.prefixIcon}>
-              {prefixIcon}
-            </span>
-          )}
+          {prefixIcon && <span className={styles.prefixIcon} aria-hidden="true">{prefixIcon}</span>}
           <input
             ref={ref}
             id={inputId}
-            className={`${styles.input}${error ? ` ${styles.inputError}` : ''}`}
-            style={{
-              width: fullWidth ? '100%' : undefined,
-              paddingLeft: prefixIcon ? 32 : 12,
-              paddingRight: suffixIcon ? 32 : 12,
-              ...style,
-            }}
+            required={required}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
+            className={[
+              styles.input,
+              prefixIcon ? styles.hasPrefix : '',
+              suffixIcon ? styles.hasSuffix : '',
+              error ? styles.inputError : '',
+              className ?? '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
             {...rest}
           />
-          {suffixIcon && (
-            <span className={styles.suffixIcon}>
-              {suffixIcon}
-            </span>
-          )}
+          {suffixIcon && <span className={styles.suffixIcon} aria-hidden="true">{suffixIcon}</span>}
         </div>
         {error && (
-          <span className={styles.error}>{error}</span>
+          <span id={errorId} className={styles.error} role="alert">
+            {error}
+          </span>
         )}
         {hint && !error && (
-          <span className={styles.hint}>{hint}</span>
+          <span id={hintId} className={styles.hint}>
+            {hint}
+          </span>
         )}
       </div>
     );
