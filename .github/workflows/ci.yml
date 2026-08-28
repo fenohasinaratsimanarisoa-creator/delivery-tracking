@@ -135,10 +135,16 @@ jobs:
         # autre suite encore en cours référence → violations de clé étrangère
         # intermittentes (deliveries_company_id_fkey). En série, chaque suite a la
         # base pour elle le temps de son exécution.
-        run: npm run test:e2e -- --passWithNoTests --runInBand
+        #
+        # --forceExit : l'AppModule monte BullMQ + Redis + la gateway WebSocket
+        # (setInterval de nettoyage). Après un test qui persiste réellement des
+        # positions, des jobs de file restent en vol et app.close() ne rend pas
+        # la main → le job CI tournait 20 min sans jamais se terminer. Les tests
+        # eux-mêmes passent ; on force la sortie une fois les assertions faites.
+        run: npm run test:e2e -- --passWithNoTests --runInBand --forceExit
 
       - name: Run Traccar integration tests (against PostGIS test DB)
-        run: npx jest traccar-alert-chain traccar-postgis -- --passWithNoTests
+        run: npx jest traccar-alert-chain traccar-postgis --passWithNoTests --forceExit
 
   # Frontend Jobs
   frontend-lint:
