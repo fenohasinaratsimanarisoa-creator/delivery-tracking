@@ -16,6 +16,10 @@
     "edit": "Edit",
     "previousPage": "Previous page",
     "nextPage": "Next page",
+    "pagination": {
+      "range": "{{from}}–{{to}} of {{total}}",
+      "page": "{{page}} / {{totalPages}}"
+    },
     "show": "Show",
     "hide": "Hide",
     "yes": "Yes",
