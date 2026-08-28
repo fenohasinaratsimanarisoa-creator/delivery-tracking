@@ -1,0 +1,65 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  border-radius: var(--radius-full);
+  font-weight: var(--weight-semibold);
+  line-height: var(--lh-tight);
+  white-space: nowrap;
+  border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
+}
+
+.sizeSm {
+  padding: 2px var(--space-sm);
+  font-size: var(--text-xs);
+}
+
+.sizeMd {
+  padding: 3px var(--space-sm);
+  font-size: var(--text-sm);
+}
+
+.iconOnly {
+  padding: var(--space-xs);
+  gap: 0;
+}
+
+.icon {
+  flex-shrink: 0;
+}
+
+.label {
+  /* alignement optique : l'icône lucide a un léger débord bas */
+  transform: translateY(0.5px);
+}
+
+.enroute {
+  background: var(--status-enroute-surface);
+  border-color: var(--status-enroute-border);
+  color: var(--status-enroute-text);
+}
+
+.idle {
+  background: var(--status-idle-surface);
+  border-color: var(--status-idle-border);
+  color: var(--status-idle-text);
+}
+
+.offline {
+  background: var(--status-offline-surface);
+  border-color: var(--status-offline-border);
+  color: var(--status-offline-text);
+}
+
+.alert {
+  background: var(--status-alert-surface);
+  border-color: var(--status-alert-border);
+  color: var(--status-alert-text);
+}
+
+.maintenance {
+  background: var(--status-maintenance-surface);
+  border-color: var(--status-maintenance-border);
+  color: var(--status-maintenance-text);
+}
