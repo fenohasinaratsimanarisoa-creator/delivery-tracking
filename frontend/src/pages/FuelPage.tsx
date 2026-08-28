@@ -37,6 +37,7 @@ import EntityDialog, {
   DialogSubmitBar,
 } from "../components/EntityDialog";
 import ConfirmDialog from "../components/ConfirmDialog";
+import ErrorState from "../components/ErrorState";
 import { useToast } from "../components/Toast";
 import { formatAriary } from "../services/formatAriary";
 import type { FuelLog, Vehicle } from "../types";
@@ -236,7 +237,7 @@ export default function FuelPage() {
   );
   const limit = 20;
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["fuel-consumption", page],
     queryFn: () =>
       api
@@ -691,7 +692,7 @@ export default function FuelPage() {
             <h1 className={styles.pageTitle}>{t("fuel.title")}</h1>
           </div>
         </div>
-        <p className={styles.errorText}>{t("fuel.error")}</p>
+        <ErrorState description={t("fuel.error")} onRetry={() => void refetch()} />
       </div>
     );
   }

@@ -721,7 +721,7 @@
     "gpsQualityBadge": "Low GPS",
     "gpsQualityInsufficient": "GPS distance too low to be reliable this day (positions exist but movement < 0.1 km).",
     "gpsQualitySuspiciousBadge": "Verify",
-      "costNoPrice": "Cost not computed: fuel price not configured for this vehicle.",
+    "costNoPrice": "Cost not computed: fuel price not configured for this vehicle.",
     "gpsQualitySuspicious": "This distance looks like GPS noise (vehicle likely stayed put) rather than a real trip — verify before relying on it.",
     "estimatedCost": "Estimated Cost",
     "date": "Date",
@@ -1395,7 +1395,7 @@
       "upgrade": "Upgrade plan"
     },
     "cookieConsent": {
-      "message": "We use essential cookies for the service to function and, subject to your consent, analytics cookies to improve our platform. See our {privacyLink} and {cookiesLink}.",
+      "message": "We use essential cookies for the service to function and, subject to your consent, analytics cookies to improve our platform. See our <privacyLink>privacy policy</privacyLink> and <cookiesLink>cookie policy</cookiesLink>.",
       "privacyLink": "privacy policy",
       "cookiesLink": "cookie policy",
       "refuse": "Refuse non-essential",
@@ -1962,7 +1962,12 @@
           "price": "Contact us",
           "period": "",
           "desc": "For small teams starting to track their fleet.",
-          "features": ["Up to 5 vehicles", "Real-time dispatching", "Basic GPS tracking", "Email support"],
+          "features": [
+            "Up to 5 vehicles",
+            "Real-time dispatching",
+            "Basic GPS tracking",
+            "Email support"
+          ],
           "cta": "Contact us",
           "highlighted": false
         },
@@ -1971,7 +1976,12 @@
           "price": "Contact us",
           "period": "",
           "desc": "For growing fleets that need reliability and anti-fraud.",
-          "features": ["Unlimited vehicles", "GPS anti-fraud", "Fuel reports", "Priority support"],
+          "features": [
+            "Unlimited vehicles",
+            "GPS anti-fraud",
+            "Fuel reports",
+            "Priority support"
+          ],
           "cta": "Contact us",
           "highlighted": true
         },
@@ -1980,7 +1990,12 @@
           "price": "Contact us",
           "period": "",
           "desc": "For multi-site groups with specific integration needs.",
-          "features": ["Multi-entity", "Dedicated SLA", "Custom integrations", "Dedicated onboarding"],
+          "features": [
+            "Multi-entity",
+            "Dedicated SLA",
+            "Custom integrations",
+            "Dedicated onboarding"
+          ],
           "cta": "Contact us",
           "highlighted": false
         }

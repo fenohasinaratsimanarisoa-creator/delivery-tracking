@@ -721,7 +721,7 @@
     "gpsQualityBadge": "GPS faible",
     "gpsQualityInsufficient": "Distance GPS trop faible pour être fiable ce jour-là (positions présentes mais déplacement < 0,1 km).",
     "gpsQualitySuspiciousBadge": "À vérifier",
-      "costNoPrice": "Coût non chiffré : prix du carburant non configuré pour ce véhicule.",
+    "costNoPrice": "Coût non chiffré : prix du carburant non configuré pour ce véhicule.",
     "gpsQualitySuspicious": "Cette distance ressemble à du bruit GPS (véhicule probablement resté immobile) plutôt qu'à un vrai trajet — vérifiez avant de vous y fier.",
     "estimatedCost": "Coût estimé",
     "date": "Date",
@@ -1395,7 +1395,7 @@
       "upgrade": "Passer à un forfait supérieur"
     },
     "cookieConsent": {
-      "message": "Nous utilisons des cookies essentiels au fonctionnement du service et, sous réserve de votre consentement, des cookies d'analyse pour améliorer notre plateforme. Consultez notre {privacyLink} et notre {cookiesLink}.",
+      "message": "Nous utilisons des cookies essentiels au fonctionnement du service et, sous réserve de votre consentement, des cookies d'analyse pour améliorer notre plateforme. Consultez notre <privacyLink>politique de confidentialité</privacyLink> et notre <cookiesLink>politique de cookies</cookiesLink>.",
       "privacyLink": "politique de confidentialité",
       "cookiesLink": "politique de cookies",
       "refuse": "Refuser les non-essentiels",
@@ -1962,7 +1962,12 @@
           "price": "Sur devis",
           "period": "",
           "desc": "Pour les petites équipes qui démarrent le suivi de leur flotte.",
-          "features": ["Jusqu'à 5 véhicules", "Dispatching temps réel", "Suivi GPS de base", "Support par email"],
+          "features": [
+            "Jusqu'à 5 véhicules",
+            "Dispatching temps réel",
+            "Suivi GPS de base",
+            "Support par email"
+          ],
           "cta": "Nous contacter",
           "highlighted": false
         },
@@ -1971,7 +1976,12 @@
           "price": "Sur devis",
           "period": "",
           "desc": "Pour les flottes en croissance qui ont besoin de fiabilité et d'anti-fraude.",
-          "features": ["Véhicules illimités", "Anti-fraude GPS", "Rapports carburant", "Support prioritaire"],
+          "features": [
+            "Véhicules illimités",
+            "Anti-fraude GPS",
+            "Rapports carburant",
+            "Support prioritaire"
+          ],
           "cta": "Nous contacter",
           "highlighted": true
         },
@@ -1980,7 +1990,12 @@
           "price": "Sur devis",
           "period": "",
           "desc": "Pour les groupes multi-sites avec des besoins d'intégration spécifiques.",
-          "features": ["Multi-entités", "SLA dédié", "Intégrations sur mesure", "Accompagnement dédié"],
+          "features": [
+            "Multi-entités",
+            "SLA dédié",
+            "Intégrations sur mesure",
+            "Accompagnement dédié"
+          ],
           "cta": "Nous contacter",
           "highlighted": false
         }

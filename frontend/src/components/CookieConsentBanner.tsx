@@ -47,14 +47,18 @@ export default function CookieConsentBanner() {
     <div className={styles.overlay} role="dialog" aria-label={t('components.cookieConsent.ariaLabel')}>
       <div className={styles.inner}>
         <p className={styles.text}>
-          <Trans i18nKey="components.cookieConsent.message">
-            Nous utilisons des cookies essentiels au fonctionnement du service et, sous réserve
-            de votre consentement, des cookies d&rsquo;analyse pour améliorer notre plateforme.
-            Consultez notre{' '}
-            <a href="/privacy" className={styles.link}>politique de confidentialité</a>{' '}
-            et notre{' '}
-            <a href="/cookies" className={styles.link}>politique de cookies</a>.
-          </Trans>
+          {/* `components` (tags nommés) et NON des enfants JSX : la traduction
+              utilisait des placeholders `{privacyLink}` que i18next n'interpole
+              pas (il attend `{{var}}`) — le bandeau affichait littéralement
+              « Consultez notre {privacyLink} et notre {cookiesLink}. » sur la
+              page d'accueil publique. */}
+          <Trans
+            i18nKey="components.cookieConsent.message"
+            components={{
+              privacyLink: <a href="/privacy" className={styles.link} />,
+              cookiesLink: <a href="/cookies" className={styles.link} />,
+            }}
+          />
         </p>
         <div className={styles.actions}>
           <Button variant="ghost" size="sm" onClick={refuse}>
