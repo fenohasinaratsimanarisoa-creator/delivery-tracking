@@ -1421,6 +1421,13 @@ describe('FuelConsumptionService', () => {
 
       expect(captured.create.distanceKm).toBeGreaterThanOrEqual(3);
       expect(captured.create.gpsDataQuality).toBe(GpsDataQuality.suspicious);
+
+      // AUDIT 2026-08-28 : une distance suspecte ne doit PAS produire un montant
+      // présenté comme fiable. estimatedCost = 0 et pricePerLiterUsed = null
+      // (même signal que « prix non configuré ») → le frontend affiche « non
+      // fiable » au lieu d'un coût trompeur calculé sur du bruit GPS.
+      expect(captured.create.estimatedCost).toBe(0);
+      expect(captured.create.pricePerLiterUsed).toBeNull();
     });
 
     it("reste sufficient : une VRAIE tournée à arrêts multiples (accuracy correcte) n'est jamais flaguée à tort", async () => {

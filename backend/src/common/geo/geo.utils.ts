@@ -10,11 +10,65 @@
 export const GPS_NOISE_THRESHOLD_M = 5;
 
 // Plafond de l'échelle d'accuracy appliquée au seuil de bruit (accuracy/10, plancher 1).
-// Sans plafond, une précision dégradée (20-80m, fréquente en ville/centre-ville) élevait
-// le seuil à 10-40 m et supprimait des segments RÉELS de circulation lente (10-30m entre
-// deux fixes à INTERVAL_FAST=3s) — sous-corrigeant la distance d'un facteur 2 à 5 (ex.
-// 50 km réels → ~10 km au rapport). Cap à 1.5 → le seuil ne dépasse jamais 7,5 m.
+// CONSERVÉ pour compatibilité (calculateDistancePostGIS, tests hérités) mais n'est
+// PLUS utilisé par computeFilteredDistance depuis l'audit du 2026-08-28 — voir plus bas.
 export const GPS_NOISE_MAX_ACCURACY_SCALE = 1.5;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT TERRAIN 2026-08-28 — sur-comptage confirmé sur trace réelle de production.
+//
+// Cas : trajet aller-retour (déplacement net = 0, le chauffeur rentre chez lui),
+// zone parcourue ~16 km de diagonale. Distance RÉELLE estimée ~40 km. Rapport
+// carburant : 87 km. Reconstruction segment par segment de la trace (6169 fixes,
+// 15 h) :
+//   - 2512 segments à accuracy < 20 m totalisent ~43 km  → majoritairement RÉEL ;
+//   - 399  segments à accuracy > 80 m totalisent ~33 km  → BRUIT DE RÉCEPTION PUR,
+//     comptés intégralement par l'ancien algo.
+//
+// CAUSE : l'ancien seuil de bruit était plafonné à 7,5 m (GPS_NOISE_MAX_ACCURACY_SCALE).
+// À accuracy 50-600 m, la position réelle est incertaine de dizaines à centaines
+// de mètres — chaque « saut » de bruit dépasse donc 7,5 m et était compté comme
+// un déplacement. Et la RÈGLE VITESSE comptait le segment ENTIER même quand le
+// saut de position (jitter) était bien plus grand que ce que la vitesse permet.
+//
+// NOUVELLE LOGIQUE (bornée par des données réelles — ramène 87→49 km et 125→43 km
+// sur deux journées, sans toucher un trajet propre synthétique de 20 km) :
+//   1. Si les DEUX fixes d'un segment ont accuracy > GPS_UNUSABLE_ACCURACY_M, ni
+//      la position ni la vitesse Doppler ne peuvent authentifier un déplacement :
+//      segment ignoré.
+//   2. Vitesse Doppler exploitable (accuracy ≤ SPEED_TRUST_MAX_ACCURACY_M) et
+//      > seuil → déplacement réel, mais BORNÉ par vitesse × Δt × marge : un saut
+//      de position plus grand que ça est du jitter, pas de la distance.
+//   3. Sinon, le segment ne compte que s'il dépasse NETTEMENT le bruit combiné
+//      des deux fixes : GPS_NOISE_SIGMA_K × rms(accuracy1, accuracy2).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Accuracy supposée quand un fix n'en fournit pas (certains protocoles Traccar). */
+export const GPS_ACCURACY_FALLBACK_M = 25;
+
+/** Au-delà (sur les DEUX extrémités d'un segment), le fix n'authentifie plus rien. */
+export const GPS_UNUSABLE_ACCURACY_M = 80;
+
+/** Un segment ne compte que si sa longueur dépasse K × l'incertitude combinée. */
+export const GPS_NOISE_SIGMA_K = 2;
+
+/** Plancher du seuil de bruit — sous ça, c'est toujours de la dérive. */
+export const GPS_NOISE_FLOOR_M = 4;
+
+/**
+ * Accuracy max pour faire CONFIANCE à la vitesse Doppler rapportée par le device
+ * dans le calcul de distance. Plus permissif que MOVEMENT_TRUST_MAX_ACCURACY_M
+ * (30 m, qui garde la DÉRIVATION haversine/Δt) : ici la distance est de toute
+ * façon BORNÉE par vitesse × Δt × marge, donc la valeur exacte de ce seuil est
+ * peu sensible (testé sur trace réelle : 48,9 km identique pour un seuil de 50
+ * à 80). 70 m couvre l'embouteillage en centre-ville dense (accuracy 50-70 m,
+ * vitesse Doppler encore fiable) sans jamais laisser passer du bruit (le cap
+ * vitesse × Δt s'en charge).
+ */
+export const SPEED_TRUST_MAX_ACCURACY_M = 70;
+
+/** Un segment « en mouvement » ne peut pas dépasser vitesse × Δt × cette marge. */
+export const SPEED_DISTANCE_CAP_MULT = 1.5;
 
 // Vitesse (m/s) au-dessus de laquelle un segment est considéré comme un déplacement réel
 // (toujours compté, quelle que soit sa longueur). 1.0 m/s ≈ 3.6 km/h : nettement au-dessus
@@ -204,33 +258,43 @@ export function computeFilteredDistance(
     const p2 = positions[i];
     const segDist = haversineDistance(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
 
-    // RÈGLE VITESSE : un déplacement avéré est compté intégralement — mais
-    // UNIQUEMENT si la position qui rapporte cette vitesse est elle-même
-    // suffisamment précise (accuracy ≤ MOVEMENT_TRUST_MAX_ACCURACY_M) pour
-    // que sa vitesse soit exploitable. Voir le commentaire de la constante :
-    // sans ce garde-fou, du bruit GPS indoor/stationnaire pouvait gonfler la
-    // distance de dizaines de km sans aucun déplacement réel.
-    const moving =
-      (p1.speed != null &&
-        p1.speed > MOVEMENT_SPEED_THRESHOLD_MS &&
-        isAccuracyTrustworthy(p1.accuracy)) ||
-      (p2.speed != null &&
-        p2.speed > MOVEMENT_SPEED_THRESHOLD_MS &&
-        isAccuracyTrustworthy(p2.accuracy));
-    if (moving) {
-      totalDistance += segDist;
+    const a1 = p1.accuracy != null && p1.accuracy > 0 ? p1.accuracy : GPS_ACCURACY_FALLBACK_M;
+    const a2 = p2.accuracy != null && p2.accuracy > 0 ? p2.accuracy : GPS_ACCURACY_FALLBACK_M;
+
+    // (1) Les DEUX fixes trop imprécis : segment = bruit, jamais compté.
+    if (a1 > GPS_UNUSABLE_ACCURACY_M && a2 > GPS_UNUSABLE_ACCURACY_M) {
       continue;
     }
 
-    // Pas de déplacement (arrêt ou vitesse inconnue) : filtre la dérive avec le seuil.
-    const avgAccuracy =
-      p1.accuracy != null && p2.accuracy != null
-        ? (p1.accuracy + p2.accuracy) / 2
-        : (p1.accuracy ?? p2.accuracy ?? 0);
-    const scale =
-      avgAccuracy > 0 ? Math.max(1, Math.min(avgAccuracy / 10, GPS_NOISE_MAX_ACCURACY_SCALE)) : 1;
-    const threshold = GPS_NOISE_THRESHOLD_M * scale;
-    if (segDist >= threshold) {
+    // Δt du segment (secondes). Absent (appelant sans timestamps, ex. tests
+    // hérités) → on ne peut pas borner par la vitesse, repli documenté ci-dessous.
+    const dtSec =
+      p1.timestamp instanceof Date && p2.timestamp instanceof Date
+        ? Math.max(1, (p2.timestamp.getTime() - p1.timestamp.getTime()) / 1000)
+        : null;
+
+    // (2) RÈGLE VITESSE : la vitesse Doppler du device (≤ SPEED_TRUST_MAX_ACCURACY_M)
+    // atteste un déplacement réel — mais la distance retenue est BORNÉE par ce que
+    // la vitesse permet physiquement (vitesse × Δt × marge). Un saut de position
+    // plus grand est du jitter GPS pendant le trajet, pas de la distance parcourue.
+    const speedTrusted = (acc: number, spd: number | null | undefined) =>
+      acc <= SPEED_TRUST_MAX_ACCURACY_M && spd != null && spd > MOVEMENT_SPEED_THRESHOLD_MS;
+    const moving = speedTrusted(a1, p1.speed) || speedTrusted(a2, p2.speed);
+    if (moving) {
+      const maxSpeed = Math.max(p1.speed ?? 0, p2.speed ?? 0);
+      totalDistance +=
+        dtSec != null ? Math.min(segDist, maxSpeed * dtSec * SPEED_DISTANCE_CAP_MULT) : segDist;
+      continue;
+    }
+
+    // (3) Ni vitesse fiable ni arrêt : le segment ne compte que s'il dépasse
+    // NETTEMENT le bruit de position combiné des deux fixes.
+    // rms = hypot(a1, a2) / √2 ≈ « incertitude typique » du segment.
+    const noiseGate = Math.max(
+      GPS_NOISE_FLOOR_M,
+      (GPS_NOISE_SIGMA_K * Math.hypot(a1, a2)) / Math.SQRT2,
+    );
+    if (segDist >= noiseGate) {
       totalDistance += segDist;
     }
   }

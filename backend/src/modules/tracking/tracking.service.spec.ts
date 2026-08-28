@@ -1588,14 +1588,17 @@ describe('TrackingService', () => {
 
   describe('getTripReport', () => {
     it('reports more positions and distance when dedup does not drop 3s-interval points', async () => {
-      // Simulate 20 positions along a line at 3s intervals (60s of movement)
+      // 30 positions à 3 s, pas COHÉRENT avec la vitesse (audit 2026-08-28 :
+      // computeFilteredDistance borne chaque segment par vitesse × Δt, donc un
+      // pas de position incohérent avec la vitesse déclarée n'est plus compté
+      // intégralement). 15 m/s × 3 s = 45 m ; 0.0004° de latitude ≈ 44,5 m.
       const positions: any[] = [];
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 30; i++) {
         positions.push({
-          latitude: 48.8566 + i * 0.0005,
-          longitude: 2.3522 + i * 0.0005,
-          speed: 10,
-          heading: 45,
+          latitude: 48.8566 + i * 0.0004,
+          longitude: 2.3522,
+          speed: 15,
+          heading: 0,
           altitude: null,
           accuracy: 10,
           suspect: false,
@@ -1621,11 +1624,11 @@ describe('TrackingService', () => {
 
       const report = await service.getTripReport('delivery-1', 'company-1');
 
-      expect(report.positionCount).toBe(20);
-      // 20 points at 3s → 57s duration
-      expect(report.totalDurationSec).toBe(57);
-      // Haversine distance across 20 points should be > 0
-      expect(report.totalDistance.meters).toBeGreaterThan(1000);
+      expect(report.positionCount).toBe(30);
+      // 30 points at 3s → 87s duration
+      expect(report.totalDurationSec).toBe(87);
+      // ~29 segments × ~44,5 m ≈ 1290 m (vitesse cohérente → segment compté).
+      expect(report.totalDistance.meters).toBeGreaterThan(1100);
 
       // Now simulate the OLD behavior: only ~1/2 of positions were saved (1 per 6s)
       const sparsePositions = positions.filter((_: any, i: number) => i % 2 === 0);
@@ -1832,7 +1835,11 @@ describe('TrackingService', () => {
         })),
         // Mauvais véhicule : 2 points + un trou de 10 min → couverture faible.
         { vehicleId: 'vehicle-bad', deliveryId: 'delivery-2', timestamp: new Date(base) },
-        { vehicleId: 'vehicle-bad', deliveryId: 'delivery-2', timestamp: new Date(base + 600 * 1000) },
+        {
+          vehicleId: 'vehicle-bad',
+          deliveryId: 'delivery-2',
+          timestamp: new Date(base + 600 * 1000),
+        },
       ]);
       mockPrisma.vehicle.findMany.mockResolvedValue([
         {
@@ -1970,7 +1977,10 @@ describe('TrackingService', () => {
   describe('updateTrackingReliability', () => {
     it("persiste le nouveau statut sur LE chauffeur résolu depuis userId (jamais un driverId fourni par l'appelant)", async () => {
       mockPrisma.driver.findUnique.mockResolvedValue({ id: 'driver-1', companyId: 'company-1' });
-      mockPrisma.driver.update.mockResolvedValue({ id: 'driver-1', trackingReliability: 'battery_opt_not_ignored' });
+      mockPrisma.driver.update.mockResolvedValue({
+        id: 'driver-1',
+        trackingReliability: 'battery_opt_not_ignored',
+      });
 
       const result = await service.updateTrackingReliability('user-1', 'battery_opt_not_ignored');
 
@@ -1985,7 +1995,7 @@ describe('TrackingService', () => {
       expect(result).toEqual({ updated: true, trackingReliability: 'battery_opt_not_ignored' });
     });
 
-    it("ne persiste rien (updated: false) si userId ne correspond à aucun chauffeur", async () => {
+    it('ne persiste rien (updated: false) si userId ne correspond à aucun chauffeur', async () => {
       mockPrisma.driver.findUnique.mockResolvedValue(null);
 
       const result = await service.updateTrackingReliability('user-inconnu', 'oem_restricted');
@@ -2281,7 +2291,7 @@ describe('TrackingService', () => {
   });
 
   describe('archiveAllCompaniesPositionsBefore — garde 48h (audit G.2)', () => {
-    it("refuse une date de moins de 48h : 0 archivé, AUCUNE requête SQL (sinon les rapports carburant perdent leurs données)", async () => {
+    it('refuse une date de moins de 48h : 0 archivé, AUCUNE requête SQL (sinon les rapports carburant perdent leurs données)', async () => {
       mockPrisma.$executeRawUnsafe = jest.fn().mockResolvedValue(0);
       const oneHourAgo = new Date(Date.now() - 3600_000);
 
@@ -2439,48 +2449,55 @@ describe('TrackingService', () => {
       // GPS_NOISE_MAX_ACCURACY_SCALE garantit qu'un vrai déplacement urbain lent (segments
       // 8-25m, voir règle vitesse) reste compté alors que le bruit à l'arrêt est filtré.
       // P2→P3→P4 = trajet réel ~9985 m, segments bien au-dessus du seuil → conservés.
-      const positions = [
-        { latitude: 0, longitude: 0, accuracy: 40, timestamp: new Date('2026-07-20T06:00:00Z') },
+      // 3 fixes de jitter à l'arrêt (vitesse 0, ~3 m de dérive, accuracy 40 →
+      // sous le seuil de bruit combiné → filtrés), puis un vrai trajet de ~10 km
+      // à 13 m/s échantillonné toutes les 3 s (COHÉRENT : 13 × 3 ≈ 39 m/segment,
+      // 0.00035° de longitude à l'équateur ≈ 39 m). computeFilteredDistance v3
+      // borne chaque segment par vitesse × Δt : le pas doit donc coller à la
+      // vitesse déclarée, sinon il n'est plus compté intégralement.
+      const positions: any[] = [
+        {
+          latitude: 0,
+          longitude: 0,
+          accuracy: 40,
+          speed: 0,
+          timestamp: new Date('2026-07-20T06:00:00Z'),
+        },
         {
           latitude: 0,
           longitude: 0.00003,
           accuracy: 40,
           speed: 0,
-          timestamp: new Date('2026-07-20T06:01:00Z'),
+          timestamp: new Date('2026-07-20T06:00:03Z'),
         },
         {
           latitude: 0,
           longitude: 0.00006,
           accuracy: 40,
           speed: 0,
-          timestamp: new Date('2026-07-20T06:02:00Z'),
-        },
-        {
-          latitude: 0,
-          longitude: 0.045,
-          accuracy: 40,
-          speed: 13,
-          timestamp: new Date('2026-07-20T06:03:00Z'),
-        },
-        {
-          latitude: 0,
-          longitude: 0.09,
-          accuracy: 40,
-          speed: 13,
-          timestamp: new Date('2026-07-20T06:04:00Z'),
+          timestamp: new Date('2026-07-20T06:00:06Z'),
         },
       ];
-      mockPrisma.gpsPosition.count.mockResolvedValue(5);
+      const tripStart = Date.parse('2026-07-20T06:00:09Z');
+      for (let i = 0; i < 256; i++) {
+        positions.push({
+          latitude: 0,
+          longitude: 0.00006 + i * 0.00035,
+          accuracy: 40,
+          speed: 13,
+          timestamp: new Date(tripStart + i * 3000),
+        });
+      }
+      mockPrisma.gpsPosition.count.mockResolvedValue(positions.length);
       mockPrisma.gpsPosition.findMany.mockResolvedValue(positions as any);
 
       const result = await service.calculateDistance(DELIVERY, COMPANY);
 
       console.log(`[Test D] distance = ${result.meters} m`);
-      // Le bruit à l'arrêt (vitesse 0, segments ~3m < seuil 7,5m) est filtré ; le vrai trajet
-      // (~9985m, vitesse 13 m/s) est compté intégralement → jamais sous 9900m ni au-delà du
-      // vrai trajet majoré du bruit filtré.
-      expect(result.meters).toBeGreaterThan(9900);
-      expect(result.meters).toBeLessThan(10100);
+      // Bruit à l'arrêt filtré ; trajet réel (~9950 m) compté. Tolérance large :
+      // accuracy 40 m + borne vitesse × Δt.
+      expect(result.meters).toBeGreaterThan(9000);
+      expect(result.meters).toBeLessThan(11000);
     });
 
     it('Test E : cohérence calculateDistance() vs DailyFuelReport.distanceKm sur un même (véhicule, jour)', async () => {
@@ -2799,7 +2816,11 @@ describe('TrackingService', () => {
       // format international (+261341234567) — les 9 derniers chiffres
       // doivent matcher malgré la différence de préfixe.
       mockPrisma.driver.findMany.mockResolvedValueOnce([
-        { id: 'driver-1', phone: '034 12 345 67', vehicleId: '11111111-1111-4111-8111-111111111111' },
+        {
+          id: 'driver-1',
+          phone: '034 12 345 67',
+          vehicleId: '11111111-1111-4111-8111-111111111111',
+        },
       ]);
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
         companyId: 'company-1',
@@ -2814,9 +2835,13 @@ describe('TrackingService', () => {
       expect(mockPrisma.gpsPosition.create).toHaveBeenCalled();
     });
 
-    it("aucun chauffeur actif ne correspond au numéro → no_driver_match, AUCUNE écriture", async () => {
+    it('aucun chauffeur actif ne correspond au numéro → no_driver_match, AUCUNE écriture', async () => {
       mockPrisma.driver.findMany.mockResolvedValueOnce([
-        { id: 'driver-1', phone: '034 99 999 99', vehicleId: '11111111-1111-4111-8111-111111111111' },
+        {
+          id: 'driver-1',
+          phone: '034 99 999 99',
+          vehicleId: '11111111-1111-4111-8111-111111111111',
+        },
       ]);
 
       const result = await service.ingestSmsRelayPosition('company-1', validDto as any);
@@ -2833,9 +2858,13 @@ describe('TrackingService', () => {
       expect(result).toEqual({ status: 'no_driver_match' });
     });
 
-    it("le numéro émetteur est scopé à la company demandée (isolation multi-tenant)", async () => {
+    it('le numéro émetteur est scopé à la company demandée (isolation multi-tenant)', async () => {
       mockPrisma.driver.findMany.mockResolvedValueOnce([
-        { id: 'driver-1', phone: '034 12 345 67', vehicleId: '11111111-1111-4111-8111-111111111111' },
+        {
+          id: 'driver-1',
+          phone: '034 12 345 67',
+          vehicleId: '11111111-1111-4111-8111-111111111111',
+        },
       ]);
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
         companyId: 'company-1',
@@ -2855,7 +2884,11 @@ describe('TrackingService', () => {
 
     it('savePosition() rejette (ex. véhicule inactif) → rejected, jamais ok', async () => {
       mockPrisma.driver.findMany.mockResolvedValueOnce([
-        { id: 'driver-1', phone: '034 12 345 67', vehicleId: '11111111-1111-4111-8111-111111111111' },
+        {
+          id: 'driver-1',
+          phone: '034 12 345 67',
+          vehicleId: '11111111-1111-4111-8111-111111111111',
+        },
       ]);
       // Aucun véhicule actif trouvé → savePosition() renvoie null.
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
@@ -2868,7 +2901,11 @@ describe('TrackingService', () => {
 
     it('marque la position avec attributes.viaSms=true pour la traçabilité', async () => {
       mockPrisma.driver.findMany.mockResolvedValueOnce([
-        { id: 'driver-1', phone: '034 12 345 67', vehicleId: '11111111-1111-4111-8111-111111111111' },
+        {
+          id: 'driver-1',
+          phone: '034 12 345 67',
+          vehicleId: '11111111-1111-4111-8111-111111111111',
+        },
       ]);
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
         companyId: 'company-1',

@@ -1692,12 +1692,16 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
 
     const totalDistance = await this.calculateDistance(deliveryId, companyId);
 
-    let postgisDistance: { meters: number; kilometers: number } | null = null;
-    try {
-      postgisDistance = await this.calculateDistancePostGIS(deliveryId, companyId);
-    } catch {
-      postgisDistance = totalDistance;
-    }
+    // AUDIT 2026-08-28 : `calculateDistancePostGIS` applique un seuil de bruit
+    // FIXE à 5 m (aucune pondération par l'accuracy, aucun cap vitesse × Δt) —
+    // il sur-compte massivement le bruit GPS, exactement le bug que
+    // computeFilteredDistance vient de corriger. Le montrer comme une
+    // « estimation alternative » à côté du vrai chiffre créait un écart alarmant
+    // (ex. 49 km vs 80 km) sur une donnée que l'utilisateur ne peut pas
+    // arbitrer. On expose désormais UNE seule distance, celle qui fait foi pour
+    // le carburant. `postgisDistance` reste renseigné (= la même valeur) pour ne
+    // pas casser le contrat de l'API ni le frontend existant.
+    const postgisDistance = totalDistance;
 
     const first = positions[0];
     const last = positions[positions.length - 1];

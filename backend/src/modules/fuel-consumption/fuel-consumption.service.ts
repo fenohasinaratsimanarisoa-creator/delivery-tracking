@@ -1365,8 +1365,17 @@ export class FuelConsumptionService {
     // (colonne NOT NULL) mais pricePerLiterUsed = null signale de façon fiable
     // l'absence de prix (le front peut alors afficher "non configuré"). Pour les
     // autres carburants, pricePerLiter est toujours un nombre → coût calculé normal.
-    const costUnavailable = pricePerLiter === null;
-    const estimatedCost = costUnavailable
+    // BUG CORRIGÉ (audit terrain 2026-08-28) : quand gpsDataQuality === 'suspicious'
+    // (distance dominée par du bruit GPS stationnaire — cas réel : 87 km affichés
+    // pour ~40 km réels), on affichait quand même un estimatedCost calculé sur
+    // cette distance fausse, présenté comme un vrai montant (8524 Ar). On NE
+    // chiffre PAS un coût sur une distance dont on sait qu'elle n'est pas fiable :
+    // pricePerLiterUsed = null (même signal que « prix non configuré ») pour que
+    // le frontend affiche « non fiable » au lieu d'un montant trompeur. La
+    // distance reste stockée (meilleure estimation disponible) mais explicitement
+    // marquée suspecte.
+    const costUnreliable = pricePerLiter === null || gpsDataQuality === GpsDataQuality.suspicious;
+    const estimatedCost = costUnreliable
       ? 0
       : Math.round(((distanceKm * consumption) / 100) * pricePerLiter * 100) / 100;
 
@@ -1392,7 +1401,7 @@ export class FuelConsumptionService {
         gpsDataQuality,
         consumptionLPer100Km: consumption,
         estimatedCost,
-        pricePerLiterUsed: costUnavailable ? null : pricePerLiter,
+        pricePerLiterUsed: costUnreliable ? null : pricePerLiter,
         companyId,
       },
       update: {
@@ -1402,7 +1411,7 @@ export class FuelConsumptionService {
         fuelType,
         consumptionLPer100Km: consumption,
         vehiclePlate: vehicle.licensePlate || 'N/A',
-        pricePerLiterUsed: costUnavailable ? null : pricePerLiter,
+        pricePerLiterUsed: costUnreliable ? null : pricePerLiter,
       },
     });
 

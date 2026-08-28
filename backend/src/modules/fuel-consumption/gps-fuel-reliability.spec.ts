@@ -330,16 +330,19 @@ describe('GPS ↔ Carburant — traces synthétiques (verrou de non-régression)
       expect(glitchEntry.suspect).toBe(true);
     });
 
-    it("l'exclusion du point suspect empêche gpsKm de gonfler (reste ≈ la distance réelle, pas ≈ +400km)", () => {
+    it('le point téléporté ne gonfle pas gpsKm — DOUBLE protection (audit 2026-08-28)', () => {
       const nonSuspect = flagged.filter((p) => !p.suspect);
       const gpsKmFiltered = computeFilteredDistance(nonSuspect) / 1000;
       const gpsKmUnfiltered = computeFilteredDistance(flagged) / 1000;
 
+      // 1) L'exclusion des points suspects (requête Prisma réelle) protège gpsKm.
       expect(Math.abs(gpsKmFiltered - CLEAN_REFERENCE_KM)).toBeLessThan(0.5);
-      // Sans l'exclusion, l'aller-retour de 200km vers le point suspect gonflerait
-      // gpsKm de plusieurs centaines de km — la démonstration du contraste prouve
-      // que le filtrage est bien ce qui protège gpsKm, pas un hasard de construction.
-      expect(gpsKmUnfiltered).toBeGreaterThan(200);
+
+      // 2) Même SANS cette exclusion, computeFilteredDistance v3 borne chaque
+      //    segment par vitesse × Δt : un saut de 200 km en 3 s ne peut PAS être
+      //    compté (aucune vitesse plausible ne l'autorise). Avant v3, ce cas
+      //    ajoutait ~400 km ; désormais l'impact est négligeable.
+      expect(gpsKmUnfiltered).toBeLessThan(CLEAN_REFERENCE_KM + 2);
     });
 
     it('crossCheckFuelLogWithGps() sur les positions filtrées (suspect=false, comme la requête Prisma réelle) ne pose aucune anomalie', async () => {
@@ -371,38 +374,53 @@ describe('GPS ↔ Carburant — traces synthétiques (verrou de non-régression)
   // ---------------------------------------------------------------------------
   // Scénario 4 — accuracy dégradée mais plausible (zone urbaine dense)
   // ---------------------------------------------------------------------------
-  describe('Scénario 4 — accuracy dégradée mais plausible (30-80m, sans vitesse fournie)', () => {
-    const ACCURACIES = [30, 45, 60, 80, 50, 35, 70]; // toutes dans [30, 80]
-    const PER_SEGMENT_M = 20; // > seuil de bruit plafonné (7.5m, GPS_NOISE_MAX_ACCURACY_SCALE=1.5)
-    const FIX_COUNT = 200;
-    const REFERENCE_KM = (PER_SEGMENT_M * (FIX_COUNT - 1)) / 1000;
+  describe('Scénario 4 — conduite en accuracy dégradée (30-70m)', () => {
+    // CHANGEMENT DE POLITIQUE (audit 2026-08-28) : l'ancienne version de ce
+    // scénario supposait qu'une "progression" de 20 m / 3 s à accuracy 30-80 m
+    // SANS vitesse Doppler devait être comptée comme distance réelle. C'est
+    // EXACTEMENT le motif qui a produit le rapport de 87 km sur une trace réelle
+    // où le véhicule n'avait parcouru que ~40 km : à 30-80 m d'incertitude et
+    // sans vitesse, une suite de petits sauts est indistinguable du bruit.
+    //
+    // La règle correcte : un véhicule qui roule RAPPORTE sa vitesse Doppler.
+    //  - avec vitesse -> compté (borné par vitesse × Δt) ;
+    //  - sans vitesse à accuracy dégradée -> non mesurable, non compté.
 
-    const positions: SyntheticPosition[] = Array.from({ length: FIX_COUNT }, (_, i) => ({
+    const FIX_COUNT = 200;
+    const SPEED_MS = 6.7; // ~24 km/h
+    const PER_SEGMENT_M = SPEED_MS * 3; // avance cohérente avec la vitesse
+    const REFERENCE_KM = (PER_SEGMENT_M * (FIX_COUNT - 1)) / 1000;
+    const ACCURACIES = [30, 45, 60, 50, 35, 70];
+
+    const withSpeed: SyntheticPosition[] = Array.from({ length: FIX_COUNT }, (_, i) => ({
       latitude: latAfterNorthMove(BASE_LAT, PER_SEGMENT_M * i),
       longitude: BASE_LNG,
       accuracy: ACCURACIES[i % ACCURACIES.length],
-      // PAS de speed fourni : force le passage par le seuil de bruit pondéré par
-      // l'accuracy dans computeFilteredDistance (pas la RÈGLE VITESSE) — c'est
-      // précisément le chemin de code que ce scénario protège.
+      speed: SPEED_MS,
       timestamp: new Date(Date.now() + i * 3000),
     }));
 
-    it("les positions dégradées (30-80m) sont conservées : gpsKm ≈ la distance réelle, aucune n'est rejetée", () => {
-      const gpsKm = computeFilteredDistance(positions) / 1000;
-      expect(gpsKm).toBeCloseTo(REFERENCE_KM, 2);
+    it('AVEC vitesse Doppler : la distance est comptée (~réelle, légèrement bornée)', () => {
+      const km = computeFilteredDistance(withSpeed) / 1000;
+      // Borne = vitesse × Δt × 1,5 ; les segments sont construits ≈ vitesse × Δt,
+      // donc comptés quasi intégralement. Tolérance large : accuracy dégradée.
+      expect(km).toBeGreaterThan(REFERENCE_KM * 0.85);
+      expect(km).toBeLessThan(REFERENCE_KM * 1.15);
     });
 
-    it('crossCheckFuelLogWithGps() traite normalement ces positions (pas de flag couverture, pas de faux rejet)', async () => {
-      const fuelLog = makeFuelLog({ kilometers: Math.round(REFERENCE_KM) });
-      primeTrack(positions);
+    it('SANS vitesse à accuracy dégradée : non mesurable -> distance ≈ 0 (jamais du bruit compté)', () => {
+      const noSpeed = withSpeed.map((p) => ({ ...p, speed: undefined }));
+      const km = computeFilteredDistance(noSpeed) / 1000;
+      expect(km).toBeLessThan(0.3);
+    });
 
+    it('crossCheckFuelLogWithGps() ne pose pas de fausse anomalie quand la vitesse est présente', async () => {
+      const fuelLog = makeFuelLog({
+        kilometers: Math.round(REFERENCE_KM),
+        fillDate: withSpeed[withSpeed.length - 1].timestamp,
+      });
+      primeTrack(withSpeed);
       await (service as any).crossCheckFuelLogWithGps(fuelLog, 'company-1');
-
-      expect(mockPrisma.fuelLog.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ gpsCoverageInsufficientFlag: true }),
-        }),
-      );
       expect(mockPrisma.fuelLog.update).not.toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ gpsAnomalyFlag: true }) }),
       );
