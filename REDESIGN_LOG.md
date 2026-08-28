@@ -340,3 +340,42 @@ Les mocks ne couvrent pas tous les endpoints (carburant, rapports) : ces écrans
 s'affichent en état d'erreur — ce qui a justement permis de vérifier l'état
 d'erreur. `/map` ne se capture pas (Leaflet + socket en headless). Le rendu
 mobile (320 px), le zoom 200 % et les contrastes mesurés restent à vérifier.
+
+---
+
+## Écrans (lots 8–12) + déploiement — 2026-08-29
+
+Réglages appliqués (recommandations validées) : **carte dominante conservée**
+(2/3 sur le Dashboard), densité compacte, KPI orientés action.
+
+### Dashboard — restructuré (`338758a`)
+Carte plein écran + panneaux flottants absolus → **flux normal** : en-tête,
+rangée de 6 KPI, grille carte (2/3, hauteur bornée 420–640px) + colonne
+d'analyse (1/3). Supprime le chevauchement titre / recherche de la carte /
+badge fiabilité (bug confirmé pré-existant sur le baseline). Layout mobile
+inchangé, aucune logique touchée.
+
+### Tous les écrans (`dd778fa`)
+- **KPI orientés action** : « Anomalies » en tête, « Total livraisons » en
+  queue ; couleurs sur les tokens de statut.
+- **Densité compacte** : ~48px → ~36px par ligne de tableau.
+- **42 animations d'entrée en cascade retirées** (18 CSS modules de page) + 22
+  délais posés en JS. Elles rejouaient à chaque navigation sur des écrans
+  laissés ouverts toute la journée. Shimmers de skeleton conservés (le décalage
+  sert à lire le chargement) ; `components/` non touché (Toast, cloche : une
+  apparition y a du sens).
+- **`Card.animated`** : 450ms → 200ms (budget motion).
+- **Contrôles natifs Leaflet** (couches, zoom) sur tokens — ils arrivaient en
+  blanc opaque avec la police par défaut sur *toute* carte.
+
+### Vérifié
+tsc 0 · `eslint .` 0 · build OK · **263 tests**. Screenshots : dashboard,
+livraisons, flotte, réglages, carburant. Déployé `dd778fa`, health-gate ✓,
+endpoints 200, `/api/health` ok, **0 erreur backend**. Les seuls 5xx (2×502)
+sont dans la fenêtre de redémarrage du backend ; trafic utilisateur réel en
+304/200 juste après.
+
+### Reste (Lot 13)
+Zoom 200 % · viewport 320 px · contrastes mesurés · relecture des textes
+(« Ignorer » du mode d'import est cryptique) · `rgba()` de teinte (~400) ·
+grille 4 px · `!important` (92) · `EntityDialog` sur `Modal` · Drawer/Dropdown.
