@@ -257,3 +257,43 @@ dans cet environnement) :
 - Lots 8–12 : Flotte, Carburant, Ops, Admin, Auth — migration hex→token +
   adoption des primitives + 3 états par écran.
 - Lot 13 : passe finale (zoom 200 %, 320 px, contrastes, textes, purge finale).
+
+---
+
+## Migration palette (transversale, hors lots)
+
+Branche : `redesign/full` (intègre tous les lots)
+
+- **1107 → 43 occurrences hex** sur 54 CSS modules. Migration **fichier par
+  fichier** (pas de find-replace global) : chaque hex de l'ancienne palette a
+  un rôle sémantique unique, vérifié par analyse du contexte (property) :
+  surface / surface-alt / surface-hover / bg / text / text-secondary /
+  text-tertiary / accent / teal / red / blue / warning + familles.
+- Fallbacks morts `var(--token, #hex)` retirés ; alias legacy sans définition
+  (`--color-primary/-error/-card/-accent-strong`…) remappés sur les vrais
+  tokens ; `var(--x, var(--x))` redondants (903, effet de bord du 1er passage)
+  collapsés.
+- **Restant (43)** : `#fff` sur badges colorés (légitime), `#4285f4` (bleu de
+  marque Google, volontaire), quelques dégradés d'avatar → Lot 13.
+- **Non fait** : les `rgba()` de teinte de l'ancienne palette (~400,
+  `rgba(242,169,60,X)` etc.) — subtiles, proches des nouvelles teintes, à
+  migrer vers `color-mix` / `*-muted` lors de la passe navigateur.
+
+tsc + eslint . + vite build + **263 tests** OK.
+
+---
+
+## Déploiement
+
+`redesign/full` mergée sur `main` et déployée sur Contabo via
+`deploy-contabo.sh` (build --no-cache backend/worker/frontend, health-gate,
+`prisma migrate deploy` — aucune migration, rollback auto sur échec).
+
+⚠️ **Rendu visuel non vérifié** (pas de navigateur dans l'environnement de
+travail) : à contrôler en prod immédiatement, écran par écran. Rollback :
+`git revert` du merge + redéploiement, ou retour au commit précédent.
+
+Ce qui reste (passe navigateur, écran par écran) : structure/hiérarchie/densité
+par écran (Lots 8–12), `rgba()` de teinte, grille 4 px, `!important` (92),
+keyframes décoratives, `EntityDialog` sur Modal, `Drawer`/`Dropdown`,
+Lot 13 (zoom 200 %, 320 px, contrastes mesurés, relecture des textes).
