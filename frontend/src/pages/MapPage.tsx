@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Filter, Layers, User, Truck, Package, MapPin, SearchX, Radio } from 'lucide-react';
+import { Search, X, User, Truck, Package, MapPin, SearchX, Radio } from 'lucide-react';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import RealTimeMap from '../features/map/RealTimeMap';
 import Button from '../components/Button';
+import VehicleStatusPill from '../components/VehicleStatusPill';
 import styles from './MapPage.module.css';
 
 interface SearchResult {
@@ -20,7 +21,6 @@ export default function MapPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
@@ -157,22 +157,12 @@ export default function MapPage() {
               // s'arrête (synchronisé via onFocusChange / focusId).
               setFocusId(null);
               setFocusCenter(null);
-            }} aria-label={t('map.clearAria')}>✕</Button>
+            }} aria-label={t('map.clearAria')} icon={<X size={14} />} />
           )}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`${styles.iconButton} ${showFilters ? styles.iconButtonActive : styles.iconButtonInactive}`}
-            aria-label={t('map.filterAria')}
-            aria-pressed={showFilters}
-          >
-            <Filter size={14} />
-          </button>
-          <button
-            className={`${styles.iconButton} ${styles.iconButtonInactive}`}
-            aria-label={t('map.layersAria')}
-          >
-            <Layers size={14} />
-          </button>
+          {/* Boutons Filtres / Couches : retirés tant qu'ils ne sont pas
+              fonctionnels (un contrôle inerte casse la crédibilité). Le
+              sélecteur de fond de carte natif Leaflet reste disponible
+              (MapLayerSwitcher, bas-gauche). */}
         </div>
 
         {open && results.length > 0 && (
@@ -221,17 +211,12 @@ export default function MapPage() {
       </div>
 
       <div className={styles.legend}>
-        <span className={styles.legendItem}>
-          <span className={`${styles.legendDot} ${styles.legendDotMoving}`} />
-          {t('map.legend.moving')}
-        </span>
-        <span className={styles.legendItem}>
-          <span className={`${styles.legendDot} ${styles.legendDotStopped}`} />
-          {t('map.legend.stopped')}
-        </span>
+        <VehicleStatusPill status="enroute" size="sm" />
+        <VehicleStatusPill status="idle" size="sm" />
+        <VehicleStatusPill status="offline" size="sm" />
         <span className={styles.legendDivider} />
         <span className={styles.legendHint}>
-          <MapPin size={12} />
+          <MapPin size={12} aria-hidden="true" />
           {t('map.legend.doubleClick')}
         </span>
       </div>

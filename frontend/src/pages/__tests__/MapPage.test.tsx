@@ -46,23 +46,18 @@ describe('MapPage', () => {
     expect(screen.getByLabelText('Rechercher sur la carte')).toBeInTheDocument();
   });
 
-  it('has filter button', () => {
+  it('does not show inert filter / layers buttons', () => {
     renderMapPage();
-    expect(screen.getByLabelText('Filtrer')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Filtrer')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Couches cartographiques')).not.toBeInTheDocument();
   });
 
-  it('shows layers button', () => {
+  it('shows the status legend (enroute / idle / offline) plus the zoom hint', () => {
     renderMapPage();
 
-    const layersButton = screen.getByLabelText('Couches cartographiques');
-    expect(layersButton).toBeInTheDocument();
-  });
-
-  it('shows bottom info bar with status indicators', () => {
-    renderMapPage();
-
-    expect(screen.getByText('En mouvement')).toBeInTheDocument();
+    expect(screen.getByText('En route')).toBeInTheDocument();
     expect(screen.getByText("À l'arrêt")).toBeInTheDocument();
+    expect(screen.getByText('Hors ligne')).toBeInTheDocument();
     expect(screen.getByText('Double-cliquez pour zoomer')).toBeInTheDocument();
   });
 
