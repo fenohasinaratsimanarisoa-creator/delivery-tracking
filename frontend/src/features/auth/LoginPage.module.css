@@ -4,9 +4,9 @@
   align-items: center;
   height: 100vh;
   height: 100dvh;
-  background: var(--color-bg, #0B1220);
+  background: var(--color-bg, var(--color-bg));
 }
 .loadingText {
-  color: var(--color-text-tertiary, #7A8BA3);
+  color: var(--color-text-tertiary, var(--color-text-tertiary));
   font-size: var(--text-base, 0.875rem);
 }

@@ -29,8 +29,8 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: var(--color-surface, #121B2E);
-  border: 1px solid var(--color-border, #24304A);
+  background: var(--color-surface, var(--color-surface));
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg, 14px);
   padding: 18px 18px 14px;
   box-shadow: var(--shadow-lg, 0 12px 40px rgba(0, 0, 0, 0.5));
@@ -54,12 +54,12 @@
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--color-text-tertiary, #7A8BA3);
+  color: var(--color-text-tertiary, var(--color-text-tertiary));
   cursor: pointer;
 }
 
 .closeBtn:hover {
-  color: var(--color-text, #E8ECF3);
+  color: var(--color-text, var(--color-text));
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -78,22 +78,22 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--color-orange, #E8753C) 16%, transparent);
-  color: var(--color-orange, #E8753C);
+  background: color-mix(in srgb, var(--color-orange, var(--color-orange)) 16%, transparent);
+  color: var(--color-orange, var(--color-orange));
 }
 
 .title {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 700;
-  color: var(--color-text, #E8ECF3);
+  color: var(--color-text, var(--color-text));
 }
 
 .message {
   margin: 0;
   font-size: 0.82rem;
   line-height: 1.5;
-  color: var(--color-text-secondary, #9BA6B9);
+  color: var(--color-text-secondary, var(--color-text-secondary));
 }
 
 .steps {
@@ -120,7 +120,7 @@
   margin-top: 2px;
   border-radius: 50%;
   background: var(--color-accent-muted, rgba(242, 169, 60, 0.14));
-  color: var(--color-accent, #F2A93C);
+  color: var(--color-accent, var(--color-accent));
   font-size: 0.72rem;
   font-weight: 700;
 }
@@ -135,13 +135,13 @@
 .stepTitle {
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--color-text, #E8ECF3);
+  color: var(--color-text, var(--color-text));
 }
 
 .stepText {
   font-size: 0.78rem;
   line-height: 1.45;
-  color: var(--color-text-secondary, #9BA6B9);
+  color: var(--color-text-secondary, var(--color-text-secondary));
 }
 
 .oemSteps {
@@ -149,7 +149,7 @@
   padding-left: 16px;
   font-size: 0.76rem;
   line-height: 1.5;
-  color: var(--color-text-secondary, #9BA6B9);
+  color: var(--color-text-secondary, var(--color-text-secondary));
 }
 
 .actionBtn {
@@ -160,7 +160,7 @@
   padding: 10px 14px;
   border: none;
   border-radius: var(--radius-md, 8px);
-  background: var(--color-orange, #E8753C);
+  background: var(--color-orange, var(--color-orange));
   color: #fff;
   font-weight: 600;
   font-size: 0.78rem;
@@ -182,8 +182,8 @@
   border-radius: 12px;
   font-size: 0.72rem;
   font-weight: 600;
-  background: color-mix(in srgb, var(--color-teal, #3FA796) 14%, transparent);
-  color: var(--color-teal, #3FA796);
+  background: color-mix(in srgb, var(--color-teal, var(--color-teal)) 14%, transparent);
+  color: var(--color-teal, var(--color-teal));
 }
 
 .footer {
@@ -197,7 +197,7 @@
   border: none;
   border-radius: var(--radius-md, 8px);
   background: transparent;
-  color: var(--color-text-tertiary, #7A8BA3);
+  color: var(--color-text-tertiary, var(--color-text-tertiary));
   font-size: 0.78rem;
   cursor: pointer;
   min-height: 44px;

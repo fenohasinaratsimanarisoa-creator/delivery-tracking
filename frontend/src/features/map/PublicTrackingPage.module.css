@@ -19,7 +19,7 @@
 .header {
   padding: 20px;
   background: #fff;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--color-border);
 }
 .headerRow {
   display: flex;
@@ -35,17 +35,17 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #28a745;
+  background: var(--color-teal);
   animation: dt-pulse-moving 2s ease-out infinite;
 }
 .liveLabel {
   font-size: 0.8rem;
-  color: #28a745;
+  color: var(--color-teal);
   font-weight: 600;
 }
 .lastUpdate {
   font-size: 0.75rem;
-  color: #999;
+  color: var(--color-text-tertiary);
 }
 .mapContainer {
   flex: 1;

@@ -5,13 +5,13 @@
 .pageCentered {
   padding: var(--space-md);
   text-align: center;
-  color: var(--color-red, #B91C1C);
+  color: var(--color-red);
 }
 
 .emptyState {
   text-align: center;
   padding: var(--space-3xl) var(--space-lg);
-  color: var(--color-text-tertiary, #64748B);
+  color: var(--color-text-tertiary, var(--color-text-tertiary));
 }
 
 .orderList {
@@ -21,7 +21,7 @@
 }
 
 .orderCard {
-  background: var(--color-surface, #FFFFFF);
+  background: var(--color-surface);
   border-radius: var(--radius-lg, 8px);
   padding: var(--space-lg);
   cursor: pointer;
@@ -31,12 +31,12 @@
 
 .orderTitle {
   font-weight: bold;
-  color: var(--color-text, #0F172A);
+  color: var(--color-text, var(--color-bg));
 }
 
 .orderAddress {
   font-size: var(--text-sm, 0.875rem);
-  color: var(--color-text-secondary, #334155);
+  color: var(--color-text-secondary);
   margin-top: var(--space-xs);
 }
 
@@ -48,18 +48,18 @@
 
 .deliveryInfo {
   padding: var(--space-lg) var(--space-md);
-  background: var(--color-surface, #FFFFFF);
+  background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-subtle, rgba(15, 23, 42, 0.07));
 }
 
 .deliveryTitle {
   margin: 0 0 8px;
-  color: var(--color-text, #0F172A);
+  color: var(--color-text, var(--color-bg));
 }
 
 .deliveryDetails {
   font-size: var(--text-sm, 0.875rem);
-  color: var(--color-text-secondary, #334155);
+  color: var(--color-text-secondary);
 }
 
 .mapArea {

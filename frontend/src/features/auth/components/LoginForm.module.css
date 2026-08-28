@@ -355,7 +355,7 @@
   color: var(--color-text-secondary);
 }
 .backLink:hover {
-  color: var(--color-primary);
+  color: var(--color-accent);
 }
 .backLink:disabled {
   opacity: 0.5;

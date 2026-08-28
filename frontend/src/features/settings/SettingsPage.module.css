@@ -42,6 +42,6 @@
 }
 .langBtnActive {
   border-color: var(--color-accent);
-  background: var(--color-accent-bg);
+  background: var(--color-accent-muted);
   font-weight: 600;
 }

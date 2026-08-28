@@ -153,7 +153,7 @@
 }
 
 .ruleItemValid {
-  color: #059669;
+  color: var(--color-teal);
 }
 
 .ruleItemInvalid {
@@ -239,7 +239,7 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #f0fdf4;
+  background: var(--color-teal-muted);
   display: flex;
   align-items: center;
   justify-content: center;

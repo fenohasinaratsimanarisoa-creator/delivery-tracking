@@ -6,7 +6,7 @@
   height: 100%;
   padding: 40px;
   text-align: center;
-  background: var(--color-bg, #0B1220);
+  background: var(--color-bg, var(--color-bg));
 }
 
 .emoji {
@@ -16,14 +16,14 @@
 
 .heading {
   margin: 0 0 8px;
-  color: var(--color-text, #E8ECF3);
+  color: var(--color-text, var(--color-text));
   font-family: var(--font-display, Space Grotesk, sans-serif);
 }
 
 .message {
   margin: 0 0 24px;
   font-size: var(--text-sm, 0.875rem);
-  color: var(--color-text-secondary, #9BA6B9);
+  color: var(--color-text-secondary, var(--color-text-secondary));
 }
 
 .button {
@@ -31,8 +31,8 @@
   align-items: center;
   gap: 8px;
   padding: 11px 24px;
-  background: var(--color-accent, #F2A93C);
-  color: var(--color-bg, #0B1220);
+  background: var(--color-accent, var(--color-accent));
+  color: var(--color-bg, var(--color-bg));
   border: none;
   border-radius: var(--radius-md, 6px);
   cursor: pointer;

@@ -5,7 +5,7 @@
   width: 100%;
   position: relative;
   overflow: hidden;
-  background: var(--color-bg, #0B1220);
+  background: var(--color-bg, var(--color-bg));
 }
 
 .auroraLayer {
@@ -51,7 +51,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--color-accent, #F2A93C), transparent);
+  background: linear-gradient(90deg, transparent, var(--color-accent, var(--color-accent)), transparent);
   opacity: 0.7;
   border-radius: var(--radius-2xl, 16px) var(--radius-2xl, 16px) 0 0;
 }
@@ -61,7 +61,7 @@
   position: absolute;
   width: 14px;
   height: 14px;
-  border-color: var(--color-accent, #F2A93C);
+  border-color: var(--color-accent, var(--color-accent));
   opacity: 0.5;
   pointer-events: none;
 }

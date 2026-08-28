@@ -1,13 +1,13 @@
 .container {
   padding: 40px;
   font-family: monospace;
-  background: #0B1220;
-  color: #E8ECF3;
+  background: var(--color-bg);
+  color: var(--color-text);
   min-height: 100vh;
 }
 
 .heading {
-  color: var(--color-red, #E8544C);
+  color: var(--color-red, var(--color-red));
   margin-bottom: 16px;
 }
 
@@ -15,7 +15,7 @@
   white-space: pre-wrap;
   font-size: 13px;
   line-height: 1.5;
-  color: var(--color-red, #E8544C);
+  color: var(--color-red, var(--color-red));
   margin-bottom: 20px;
 }
 
@@ -23,15 +23,15 @@
   white-space: pre-wrap;
   font-size: 11px;
   line-height: 1.4;
-  color: var(--color-text-secondary, #9BA6B9);
+  color: var(--color-text-secondary, var(--color-text-secondary));
   opacity: 0.8;
 }
 
 .retryBtn {
   margin-top: 24px;
   padding: 10px 24px;
-  background: var(--color-accent, #F2A93C);
-  color: #0B1220;
+  background: var(--color-accent, var(--color-accent));
+  color: var(--color-bg);
   border: none;
   border-radius: 6px;
   font-weight: 600;

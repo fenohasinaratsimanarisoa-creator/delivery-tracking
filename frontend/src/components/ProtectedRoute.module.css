@@ -6,6 +6,6 @@
 }
 
 .loadingText {
-  color: var(--color-text-tertiary, #7a8ba3);
+  color: var(--color-text-tertiary, var(--color-text-tertiary));
   font-size: var(--text-sm, 0.875rem);
 }

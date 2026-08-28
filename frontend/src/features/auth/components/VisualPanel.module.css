@@ -65,7 +65,7 @@
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-accent, #F2A93C);
+  color: var(--color-accent, var(--color-accent));
 }
 
 .liveDot {
@@ -93,7 +93,7 @@
   font-size: clamp(28px, 3.2vw, 40px);
   font-weight: 700;
   line-height: 1.22;
-  color: var(--color-text, #fff);
+  color: var(--color-text);
   margin: 0 0 12px;
   letter-spacing: -0.02em;
 }
@@ -194,7 +194,7 @@
   color: #fff;
   font-weight: 700;
   font-size: 14px;
-  background: linear-gradient(135deg, var(--color-accent), #d4902e);
+  background: linear-gradient(135deg, var(--color-accent), var(--color-warning));
   box-shadow: 0 6px 18px rgba(242, 169, 60, 0.4);
 }
 
@@ -279,11 +279,11 @@
   margin-left: 0;
 }
 
-.avatarA { background: linear-gradient(135deg, #fbbf24, #f97316); }
-.avatarB { background: linear-gradient(135deg, #34d399, #10b981); }
-.avatarC { background: linear-gradient(135deg, #38bdf8, #2563eb); }
+.avatarA { background: linear-gradient(135deg, var(--color-warning), var(--color-orange)); }
+.avatarB { background: linear-gradient(135deg, var(--color-teal), var(--color-teal)); }
+.avatarC { background: linear-gradient(135deg, #38bdf8, var(--color-blue)); }
 .avatarD { background: linear-gradient(135deg, #e879f9, #a855f7); }
-.avatarE { background: linear-gradient(135deg, #fb7185, #ef4444); }
+.avatarE { background: linear-gradient(135deg, #fb7185, var(--color-red)); }
 
 .ratingBlock {
   display: flex;
@@ -294,7 +294,7 @@
 .stars {
   display: inline-flex;
   gap: 1px;
-  color: #fbbf24;
+  color: var(--color-warning);
 }
 
 .ratingText {

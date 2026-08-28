@@ -14,7 +14,7 @@
 }
 
 .notFoundLink {
-  color: var(--color-accent, #F2A93C);
+  color: var(--color-accent, var(--color-accent));
 }
 
 .page {
@@ -63,7 +63,7 @@
 .notes {
   padding: 12px;
   background: var(--color-accent-muted, rgba(242,169,60,0.15));
-  border-left: 3px solid var(--color-accent, #F2A93C);
+  border-left: 3px solid var(--color-accent, var(--color-accent));
   border-radius: 0 8px 8px 0;
   margin-bottom: 20px;
   font-size: 0.85rem;

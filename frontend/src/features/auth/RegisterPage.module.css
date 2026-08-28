@@ -162,7 +162,7 @@
 }
 
 .ruleItemValid {
-  color: #059669;
+  color: var(--color-teal);
 }
 
 .ruleItemInvalid {
