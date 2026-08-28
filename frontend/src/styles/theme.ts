@@ -435,6 +435,15 @@ function cssVarBody(
   --transition-fast: ${duration.fast};
   --transition-base: ${duration.base};
   --transition-slow: ${duration.slow};
+  --z-base: 1;
+  --z-raised: 10;
+  --z-sticky: 100;
+  --z-dropdown: 300;
+  --z-overlay: 1000;
+  --z-drawer: 1100;
+  --z-modal: 1200;
+  --z-toast: 1400;
+  --z-tooltip: 1500;
 `;
 }
 

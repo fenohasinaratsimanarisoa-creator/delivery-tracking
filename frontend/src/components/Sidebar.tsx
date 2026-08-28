@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
@@ -17,12 +17,25 @@ export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const [collapsed, setCollapsed] = useState(false);
+  // Préférence PERSISTÉE : avant, un useEffect remettait `collapsed` à false à
+  // CHAQUE navigation — la barre se ré-ouvrait sans arrêt malgré le choix de
+  // l'utilisateur.
+  const [collapsed, setCollapsedState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('dt-sidebar-collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const setCollapsed = (next: boolean) => {
+    setCollapsedState(next);
+    try {
+      localStorage.setItem('dt-sidebar-collapsed', next ? '1' : '0');
+    } catch {
+      /* stockage indisponible : préférence non persistée, sans incidence */
+    }
+  };
   const tooltipTimer = useRef<ReturnType<typeof setTimeout>>();
-
-  useEffect(() => {
-    setCollapsed(false);
-  }, [location.pathname]);
 
   const role = user?.role ?? 'admin';
   const trackingStatus = useTrackingStatus();
