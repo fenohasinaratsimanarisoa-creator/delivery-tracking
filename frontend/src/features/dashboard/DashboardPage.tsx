@@ -44,13 +44,13 @@ function useCountUp(target: number, duration = 700, decimals = 0) {
   return value;
 }
 
-function KpiCard({ icon: Icon, label, value, color, delay, decimals = 0 }: {
-  icon: React.ElementType; label: string; value: number | string | undefined; color: string; delay: number; decimals?: number;
+function KpiCard({ icon: Icon, label, value, color, decimals = 0 }: {
+  icon: React.ElementType; label: string; value: number | string | undefined; color: string; decimals?: number;
 }) {
   const numeric = typeof value === 'number' && isFinite(value);
   const animated = numeric ? useCountUp(value, 700, decimals) : null;
   return (
-    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color, animationDelay: `${delay}ms` }}>
+    <div className={styles.kpiCard} style={{ ['--kpi' as string]: color }}>
       <span className={styles.kpiIcon} style={{ background: `${color}18`, color }}>
         {Icon && <Icon size={15} />}
       </span>
@@ -66,7 +66,7 @@ function KpiCard({ icon: Icon, label, value, color, delay, decimals = 0 }: {
   );
 }
 
-function ReliabilityScore({ score, trend, delay = 0 }: { score: number; trend: 'up' | 'down' | 'stable'; delay?: number }) {
+function ReliabilityScore({ score, trend }: { score: number; trend: 'up' | 'down' | 'stable' }) {
   const { t } = useTranslation();
   const color = score >= 95 ? 'var(--color-teal)' : score >= 80 ? 'var(--color-accent)' : 'var(--color-red)';
   const r = 17;
@@ -75,7 +75,7 @@ function ReliabilityScore({ score, trend, delay = 0 }: { score: number; trend: '
   const trendIcon = trend === 'up' ? '\u25B2' : trend === 'down' ? '\u25BC' : '\u2015';
   const trendColor = trend === 'up' ? 'var(--color-teal)' : trend === 'down' ? 'var(--color-red)' : 'var(--color-text-tertiary)';
   return (
-    <div className={styles.reliabilityPanel} style={delay ? { animation: `dt-fade-in-up 0.45s var(--ease-premium, cubic-bezier(0.16,1,0.3,1)) ${delay}s both` } : undefined}>
+    <div className={styles.reliabilityPanel}>
       <span className={styles.reliabilityRing}>
         <svg width="44" height="44" viewBox="0 0 44 44">
           <circle cx="22" cy="22" r={r} fill="none" stroke="var(--color-border)" strokeWidth="3" />
@@ -119,10 +119,10 @@ function ChartTooltip() {
 
 const chartTooltip = ChartTooltip();
 
-function MiniChart({ data, delay = 0 }: { data: DeliveryStat[]; delay?: number }) {
+function MiniChart({ data }: { data: DeliveryStat[] }) {
   const { t } = useTranslation();
   return (
-    <div className={styles.chartPanel} style={delay ? { animation: `dt-fade-in-up 0.45s ease-out ${delay}s both` } : undefined}>
+    <div className={styles.chartPanel}>
       <div className={styles.chartPanelHeader}>
         <span className={styles.chartPanelDot} style={{ background: 'var(--color-accent)' }} />
         <span className={styles.chartPanelTitle}>{t('dashboard.charts.deliveryStatus')}</span>
@@ -143,10 +143,10 @@ function MiniChart({ data, delay = 0 }: { data: DeliveryStat[]; delay?: number }
   );
 }
 
-function FuelMiniChart({ data, delay = 0 }: { data: FuelChartPoint[]; delay?: number }) {
+function FuelMiniChart({ data }: { data: FuelChartPoint[] }) {
   const { t } = useTranslation();
   return (
-    <div className={styles.chartPanel} style={delay ? { animation: `dt-fade-in-up 0.45s ease-out ${delay}s both` } : undefined}>
+    <div className={styles.chartPanel}>
       <div className={styles.chartPanelHeader}>
         <span className={styles.chartPanelDot} style={{ background: 'var(--color-teal)' }} />
         <span className={styles.chartPanelTitle}>{t('dashboard.charts.consumption')}</span>
@@ -164,7 +164,7 @@ function FuelMiniChart({ data, delay = 0 }: { data: FuelChartPoint[]; delay?: nu
   );
 }
 
-function RecentDeliveriesMini({ delay = 0 }: { delay?: number }) {
+function RecentDeliveriesMini() {
   const { t } = useTranslation();
   const [deliveries, setDeliveries] = useState<RecentDelivery[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,7 +192,7 @@ function RecentDeliveriesMini({ delay = 0 }: { delay?: number }) {
   if (loading) return null;
 
   return (
-    <div className={styles.recentPanel} style={delay ? { animation: `dt-fade-in-up 0.45s ease-out ${delay}s both` } : undefined}>
+    <div className={styles.recentPanel}>
       <div className={styles.recentHeader}>
         <span className={styles.recentTitle}>{t('dashboard.recentDeliveries')}</span>
         {deliveries.length > 0 && (
@@ -293,63 +293,59 @@ export default function DashboardPage() {
   return (
     <>
       {!isMobile && (
-        /* Desktop layout: full-screen map with floating overlays */
-        <div className={`${styles.desktopLayout} ${styles.dashboardDesktopOnly}`}>
-          <div className={styles.mapContainer}>
-            <RealTimeMap />
-          </div>
-
-          <div className={styles.overlayContainer}>
-            {/* Top bar */}
-            <header className={styles.topBar}>
-              <div className={styles.topBarLeft}>
-                <span className={styles.titleIconChip}><Gauge size={20} /></span>
-                <div className={styles.headerText}>
-                  <span className={styles.kicker}>{t('dashboard.kicker')}</span>
-                  <h1 className={styles.pageTitle}>{t('dashboard.title')}</h1>
-                  <span className={styles.dashboardDate}>{formatDateLong(new Date())}</span>
-                </div>
-              </div>
-              <div className={styles.topBarRight}>
-                {perfectMonth && <PerfectMonthBadge month={currentMonth} />}
-                {kpis && reliability && (
-                  <ReliabilityScore score={reliability.score} trend={reliability.trend} delay={0.04} />
-                )}
-              </div>
-            </header>
-
-            {/* Left: overview KPI panel */}
-            <div className={styles.kpiPanel}>
-              <div className={styles.kpiPanelHeader}>
-                <span className={styles.kpiPanelDot} />
-                <span className={styles.kpiPanelTitle}>{t('dashboard.overviewTitle')}</span>
-              </div>
-              <div className={styles.kpiGrid}>
-                {kpiItems.map((item, i) => (
-                  <KpiCard key={item.label} {...item} delay={0.1 + i * 0.06} />
-                ))}
+        /* Tableau de bord en FLUX NORMAL (proposition refonte) : la carte est un
+           panneau parmi d'autres, plus un fond plein écran survolé de panneaux
+           flottants. Supprime le chevauchement titre / barre de recherche de la
+           carte, et rend la page lisible de haut en bas. */
+        <div className={`${styles.dashboardPage} ${styles.dashboardDesktopOnly}`}>
+          <header className={styles.pageHeader}>
+            <div className={styles.headerLeft}>
+              <span className={styles.titleIconChip}><Gauge size={20} /></span>
+              <div className={styles.headerText}>
+                <span className={styles.kicker}>{t('dashboard.kicker')}</span>
+                <h1 className={styles.pageTitle}>{t('dashboard.title')}</h1>
+                <span className={styles.dashboardDate}>{formatDateLong(new Date())}</span>
               </div>
             </div>
+            <div className={styles.headerRight}>
+              {perfectMonth && <PerfectMonthBadge month={currentMonth} />}
+              {kpis && reliability && (
+                <ReliabilityScore score={reliability.score} trend={reliability.trend} />
+              )}
+            </div>
+          </header>
 
-            {/* Right column: charts + recent deliveries */}
+          {error && <div className={styles.errorBanner}>{error}</div>}
+
+          <OnboardingChecklist />
+
+          {/* Rangée de KPI : scannable en une seconde, avant tout le reste. */}
+          <div className={styles.kpiRow}>
+            {kpiItems.map((item) => (
+              <KpiCard key={item.label} {...item} />
+            ))}
+          </div>
+
+          {/* Grille de contenu : carte (dominante) + colonne d'analyse. */}
+          <div className={styles.contentGrid}>
+            <section className={styles.mapCard} aria-label={t('nav.map')}>
+              <div className={styles.cardHeader}>
+                <span className={styles.cardTitle}>{t('nav.map')}</span>
+              </div>
+              <div className={styles.mapViewport}>
+                <RealTimeMap />
+              </div>
+            </section>
+
             {anyChart && (
-              <div className={styles.chartsColumn}>
-                {deliveryStats.length > 0 && <MiniChart data={deliveryStats} delay={0.14} />}
-                {fuelData.length > 0 && <FuelMiniChart data={fuelData} delay={0.18} />}
-                <RecentDeliveriesMini delay={0.22} />
+              <div className={styles.sideColumn}>
+                {deliveryStats.length > 0 && <MiniChart data={deliveryStats} />}
+                {fuelData.length > 0 && <FuelMiniChart data={fuelData} />}
+                <RecentDeliveriesMini />
               </div>
             )}
-
-            {/* Error toast */}
-            {error && (
-              <div className={styles.errorToast}>
-                {error}
-              </div>
-            )}
-
-            <OnboardingChecklist />
           </div>
-          </div>
+        </div>
         )}
 
       {isMobile && (
@@ -370,7 +366,7 @@ export default function DashboardPage() {
             </div>
 
             {kpis && reliability && (
-              <ReliabilityScore score={reliability.score} trend={reliability.trend} delay={0.04} />
+              <ReliabilityScore score={reliability.score} trend={reliability.trend} />
             )}
 
             <div className={styles.kpiPanel}>
@@ -379,17 +375,17 @@ export default function DashboardPage() {
                 <span className={styles.kpiPanelTitle}>{t('dashboard.overviewTitle')}</span>
               </div>
               <div className={styles.kpiGrid}>
-                {kpiItems.map((item, i) => (
-                  <KpiCard key={item.label} {...item} delay={0.08 + i * 0.06} />
+                {kpiItems.map((item) => (
+                  <KpiCard key={item.label} {...item} />
                 ))}
               </div>
             </div>
 
             {anyChart && (
               <>
-                {deliveryStats.length > 0 && <MiniChart data={deliveryStats} delay={0.1} />}
-                {fuelData.length > 0 && <FuelMiniChart data={fuelData} delay={0.18} />}
-                <RecentDeliveriesMini delay={0.26} />
+                {deliveryStats.length > 0 && <MiniChart data={deliveryStats} />}
+                {fuelData.length > 0 && <FuelMiniChart data={fuelData} />}
+                <RecentDeliveriesMini />
               </>
             )}
 
