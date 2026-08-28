@@ -36,7 +36,9 @@
       "ariaLabel": "Mobile app update",
       "title": "A new version (v{{version}}) is available",
       "subtitle": "Update the app to get the latest fixes.",
-      "download": "Update — v{{version}}"
+      "download": "Update — v{{version}}",
+      "criticalTitle": "Outdated app — update required (v{{version}})",
+      "criticalSubtitle": "Your version is significantly behind. GPS positions may be lost until you install the update."
     }
   },
   "nav": {

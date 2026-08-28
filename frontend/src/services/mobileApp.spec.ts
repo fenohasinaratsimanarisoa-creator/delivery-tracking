@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   parseVersion,
   isVersionOutdated,
+  compareBuild,
+  CRITICAL_BUILD_GAP,
   fetchLatestMobileApp,
   hasDismissedMobileAppBanner,
   dismissMobileAppBanner,
@@ -91,5 +93,51 @@ describe('dismissal (localStorage)', () => {
     expect(hasDismissedMobileAppBanner()).toBe(false);
     dismissMobileAppBanner();
     expect(hasDismissedMobileAppBanner()).toBe(true);
+  });
+});
+
+/**
+ * VERROU (audit 2026-08-28) : le versionName peut se FIGER — c'est arrivé
+ * réellement, deux APK différents ont porté « 0.0.59 » à cause d'un défaut de
+ * calcul de version dans la CI. Une détection d'obsolescence basée sur le nom
+ * concluait alors « à jour » alors que l'appareil tournait un binaire sans les
+ * correctifs natifs de perte de données GPS. Le versionCode
+ * (`git rev-list --count`) est strictement croissant : c'est le seul
+ * identifiant sur lequel on peut conclure.
+ */
+describe('compareBuild — détection par versionCode', () => {
+  it('détecte un APK en retard', () => {
+    expect(compareBuild('435', 459)).toEqual({ outdated: true, gap: 24 });
+  });
+
+  it('ne signale rien quand la version installée est à jour', () => {
+    expect(compareBuild('459', 459)).toEqual({ outdated: false, gap: 0 });
+  });
+
+  it("ne signale rien si l'appareil est en AVANCE (build local de dev)", () => {
+    expect(compareBuild('460', 459)).toEqual({ outdated: false, gap: -1 });
+  });
+
+  it('LE CAS RÉEL : versionName identique mais versionCode en retard', () => {
+    // Deux APK nommés « 0.0.59 » : isVersionOutdated ne voit rien...
+    expect(isVersionOutdated('0.0.59', '0.0.59')).toBe(false);
+    // ...alors que le versionCode prouve un retard de 24 commits.
+    expect(compareBuild('435', 459)?.outdated).toBe(true);
+  });
+
+  it('classe le retard comme critique au-delà du seuil', () => {
+    const justUnder = compareBuild(String(459 - (CRITICAL_BUILD_GAP - 1)), 459)!;
+    const atThreshold = compareBuild(String(459 - CRITICAL_BUILD_GAP), 459)!;
+    expect(justUnder.gap >= CRITICAL_BUILD_GAP).toBe(false);
+    expect(atThreshold.gap >= CRITICAL_BUILD_GAP).toBe(true);
+  });
+
+  it('retourne null sur une donnée illisible (jamais de fausse alerte bloquante)', () => {
+    expect(compareBuild(undefined, 459)).toBeNull();
+    expect(compareBuild('', 459)).toBeNull();
+    expect(compareBuild('abc', 459)).toBeNull();
+    expect(compareBuild('0', 459)).toBeNull();
+    expect(compareBuild('435', undefined)).toBeNull();
+    expect(compareBuild('435', 0)).toBeNull();
   });
 });

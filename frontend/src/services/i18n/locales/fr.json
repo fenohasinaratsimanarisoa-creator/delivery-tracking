@@ -36,7 +36,9 @@
       "ariaLabel": "Mise à jour de l'app mobile",
       "title": "Une nouvelle version (v{{version}}) est disponible",
       "subtitle": "Mettez à jour l'app pour bénéficier des dernières corrections.",
-      "download": "Mettre à jour — v{{version}}"
+      "download": "Mettre à jour — v{{version}}",
+      "criticalTitle": "App obsolète — mise à jour requise (v{{version}})",
+      "criticalSubtitle": "Votre version accumule un retard important. Des positions GPS peuvent être perdues tant que la mise à jour n'est pas installée."
     }
   },
   "nav": {

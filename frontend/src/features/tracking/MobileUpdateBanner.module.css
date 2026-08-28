@@ -12,6 +12,21 @@
   font-size: 13px;
 }
 
+/*
+ * Mise à jour CRITIQUE (retard >= CRITICAL_BUILD_GAP commits) : rouge au lieu
+ * d'orange. Un APK très en retard perd silencieusement des positions GPS — le
+ * message ne doit pas se confondre avec une simple nouveauté disponible.
+ * La bannière n'a de toute façon aucun bouton « masquer » : seule
+ * l'installation la fait disparaître.
+ */
+.critical {
+  background: #b91c1c;
+}
+
+.critical .downloadLink {
+  color: #b91c1c;
+}
+
 .content {
   min-width: 0;
   flex: 1;
