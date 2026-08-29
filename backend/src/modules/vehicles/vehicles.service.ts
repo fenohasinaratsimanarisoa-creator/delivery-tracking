@@ -159,9 +159,20 @@ export class VehiclesService {
       await this.checkTraccarDeviceIdUniqueness(dto.traccarDeviceId, id);
     }
 
+    const data: Record<string, unknown> = { ...dto };
+    // Bascule physical_tracker → phone : on LIBÈRE le traceur Traccar. Sans ça, le
+    // véhicule garde un `traccarDeviceId` mort (positionSource=phone → ni le pont
+    // ni le backfill ne le lisent) qui reste vu comme « déjà lié » par
+    // checkTraccarDeviceIdUniqueness et par `available-traccar-devices` → le
+    // traceur ne peut plus être réaffecté à un autre véhicule. Symétrique de
+    // validateTrackerConfig (physical EXIGE un device ⇒ phone n'en garde aucun).
+    if (dto.positionSource === 'phone') {
+      data.traccarDeviceId = null;
+    }
+
     return this.prisma.vehicle.update({
       where: { id },
-      data: dto,
+      data,
     });
   }
 

@@ -158,7 +158,9 @@ describe('VehiclesService', () => {
       take: 5,
       orderBy: { createdAt: 'desc' },
       include: {
-        driver: { select: { id: true, firstName: true, lastName: true, trackingReliability: true } },
+        driver: {
+          select: { id: true, firstName: true, lastName: true, trackingReliability: true },
+        },
       },
     });
   });
@@ -204,6 +206,30 @@ describe('VehiclesService', () => {
         service.update('company-1', 'vehicle-1', { licensePlate: 'TRK-TAKEN' }),
       ).rejects.toThrow(ConflictException);
       expect(mockPrisma.vehicle.update).not.toHaveBeenCalled();
+    });
+
+    it('libère le traccarDeviceId quand on repasse un véhicule de physical_tracker à phone', async () => {
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1' }); // findOne
+      mockPrisma.vehicle.update.mockResolvedValueOnce({ id: 'vehicle-1', positionSource: 'phone' });
+
+      await service.update('company-1', 'vehicle-1', { positionSource: 'phone' });
+
+      expect(mockPrisma.vehicle.update).toHaveBeenCalledWith({
+        where: { id: 'vehicle-1' },
+        data: { positionSource: 'phone', traccarDeviceId: null },
+      });
+    });
+
+    it('ne touche pas au traccarDeviceId sur une mise à jour qui ne change pas la source', async () => {
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: 'vehicle-1' }); // findOne
+      mockPrisma.vehicle.update.mockResolvedValueOnce({ id: 'vehicle-1' });
+
+      await service.update('company-1', 'vehicle-1', { model: 'X' });
+
+      expect(mockPrisma.vehicle.update).toHaveBeenCalledWith({
+        where: { id: 'vehicle-1' },
+        data: { model: 'X' },
+      });
     });
   });
 
