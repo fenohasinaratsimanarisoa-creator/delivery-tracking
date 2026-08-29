@@ -86,7 +86,12 @@ services:
       - traccar_data:/opt/traccar/data
       - ./traccar/traccar.xml:/opt/traccar/conf/traccar.xml:ro
     ports:
-      - "8082:8082"    # Interface web admin — restreins-la à ton IP via le firewall si possible
+      # Interface web admin : liée à 127.0.0.1 UNIQUEMENT (pas exposée à Internet).
+      # Docker publie les ports en contournant UFW → le seul moyen fiable de la
+      # restreindre est le bind loopback. Le pont Traccar y accède par le réseau
+      # Docker interne (http://delivery-tracking-traccar:8082), pas par ce port.
+      # Accès humain : tunnel SSH — `ssh -L 8082:localhost:8082 root@<VPS>` puis http://localhost:8082
+      - "127.0.0.1:8082:8082"
       - "5055:5055"    # GT06 / Concox / JM-VL03
       - "5056:5056"    # Teltonika FMB / FM / TAVL / GH
       - "5057:5057"    # H02
@@ -152,10 +157,12 @@ services:
       # Pas de domaine/TLS : un redirect HTTP→HTTPS forcé bouclerait sur lui-même.
       ENFORCE_HTTPS: 'false'
     ports:
-      # Accès direct à l'API (debug/tests), EN PLUS du /api proxifié par le
-      # frontend en interne. 8080 choisi pour ne pas entrer en conflit avec
-      # le port interne 3000 déjà utilisé par le healthcheck/le réseau docker.
-      - "8080:3000"
+      # Accès direct à l'API (debug/tests + health-check de deploy-contabo.sh via
+      # localhost), EN PLUS du /api proxifié par le frontend en interne. Lié à
+      # 127.0.0.1 UNIQUEMENT : l'app web ET mobile passent par 443 → Caddy → nginx
+      # → backend (réseau Docker), jamais par ce port. Aucune raison de l'exposer
+      # à Internet.
+      - "127.0.0.1:8080:3000"
     depends_on:
       postgres:
         condition: service_healthy
