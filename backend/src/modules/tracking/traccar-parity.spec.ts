@@ -458,4 +458,68 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       expect(result).toBeDefined();
     });
   });
+
+  // ─── 4.7 Rattrapage Traccar : proximité + géofences rejouées (parité saveBatch) ──
+  describe('4.7 replayBackfillSideEffects', () => {
+    it('rejoue la vérification géofence ET la proximité livraison sur le dernier point backfillé', async () => {
+      mockGeofence.checkGeofences.mockResolvedValue([
+        { event: 'entry', geofenceId: 'gf-1', geofenceName: 'Zone Livraison' },
+      ]);
+      mockPrisma.driver.findFirst.mockResolvedValue({ id: DRIVER_ID, userId: USER_ID });
+      const proximitySpy = jest
+        .spyOn(proximityService, 'checkProximity')
+        .mockResolvedValue(undefined);
+
+      await trackingService.replayBackfillSideEffects({
+        driverId: DRIVER_ID,
+        vehicleId: VEHICLE_ID_TRACKER,
+        companyId: COMPANY_ID,
+        deliveryId: DELIVERY_ID,
+        latitude: DELIVERY_LAT + 0.0005,
+        longitude: DELIVERY_LNG + 0.0005,
+        timestamp: new Date(),
+      });
+      await new Promise((r) => setTimeout(r, 20));
+
+      expect(mockGeofence.checkGeofences).toHaveBeenCalledWith(
+        DELIVERY_ID,
+        VEHICLE_ID_TRACKER,
+        DELIVERY_LAT + 0.0005,
+        DELIVERY_LNG + 0.0005,
+      );
+      expect(mockNotifications.create).toHaveBeenCalledWith(
+        COMPANY_ID,
+        expect.objectContaining({ type: NotificationType.geofence_event }),
+      );
+      expect(proximitySpy).toHaveBeenCalledWith(
+        DRIVER_ID,
+        VEHICLE_ID_TRACKER,
+        COMPANY_ID,
+        DELIVERY_LAT + 0.0005,
+        DELIVERY_LNG + 0.0005,
+        expect.any(Date),
+      );
+      proximitySpy.mockRestore();
+    });
+
+    it('sans deliveryId : pas de géofence, mais la proximité (auto-résolue) est tentée', async () => {
+      const proximitySpy = jest
+        .spyOn(proximityService, 'checkProximity')
+        .mockResolvedValue(undefined);
+
+      await trackingService.replayBackfillSideEffects({
+        driverId: DRIVER_ID,
+        vehicleId: VEHICLE_ID_TRACKER,
+        companyId: COMPANY_ID,
+        deliveryId: null,
+        latitude: DELIVERY_LAT,
+        longitude: DELIVERY_LNG,
+        timestamp: new Date(),
+      });
+
+      expect(mockGeofence.checkGeofences).not.toHaveBeenCalled();
+      expect(proximitySpy).toHaveBeenCalled();
+      proximitySpy.mockRestore();
+    });
+  });
 });

@@ -884,26 +884,55 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const geofenceEvents = dto.deliveryId
-      ? await this.geofenceService.checkGeofences(
+    if (dto.deliveryId) {
+      tasks.push(
+        this.emitGeofenceEvents(
           dto.deliveryId,
           dto.vehicleId,
           dto.latitude,
           dto.longitude,
-        )
-      : [];
-    for (const geofenceEvent of geofenceEvents) {
-      tasks.push(
-        this.notifications.create(companyId, {
-          type: NotificationType.geofence_event,
-          priority: NotificationPriority.high,
-          title: `Geofence ${geofenceEvent.event === 'entry' ? 'Entry' : 'Exit'}`,
-          message: `Vehicle ${geofenceEvent.event === 'entry' ? 'entered' : 'exited'} "${geofenceEvent.geofenceName}"`,
-          link: `/tracking/${dto.deliveryId}`,
-          deliveryId: dto.deliveryId,
-          userId: alertUserId ?? undefined,
-        }),
+          companyId,
+          driverId,
+          alertUserId,
+        ),
       );
+    }
+
+    await Promise.allSettled(tasks);
+  }
+
+  /**
+   * Évalue les géofences d'une livraison pour une position et, à chaque entrée /
+   * sortie, crée la notification + émet l'évènement temps réel. Chemin PARTAGÉ
+   * entre generateAlerts (temps réel / batch téléphone) et replayBackfillSideEffects
+   * (rattrapage Traccar) — une seule implémentation, même comportement quelle que
+   * soit la source.
+   */
+  private async emitGeofenceEvents(
+    deliveryId: string,
+    vehicleId: string,
+    latitude: number,
+    longitude: number,
+    companyId: string,
+    driverId: string | null,
+    alertUserId: string | null,
+  ): Promise<void> {
+    const geofenceEvents = await this.geofenceService.checkGeofences(
+      deliveryId,
+      vehicleId,
+      latitude,
+      longitude,
+    );
+    for (const geofenceEvent of geofenceEvents) {
+      await this.notifications.create(companyId, {
+        type: NotificationType.geofence_event,
+        priority: NotificationPriority.high,
+        title: `Geofence ${geofenceEvent.event === 'entry' ? 'Entry' : 'Exit'}`,
+        message: `Vehicle ${geofenceEvent.event === 'entry' ? 'entered' : 'exited'} "${geofenceEvent.geofenceName}"`,
+        link: `/tracking/${deliveryId}`,
+        deliveryId,
+        userId: alertUserId ?? undefined,
+      });
       this.dataUpdateBus.emit('dataUpdate', {
         companyId,
         entity: 'geofence_event',
@@ -912,11 +941,72 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
           event: geofenceEvent.event,
           geofenceId: geofenceEvent.geofenceId,
           geofenceName: geofenceEvent.geofenceName,
-          deliveryId: dto.deliveryId,
-          vehicleId: dto.vehicleId,
+          deliveryId,
+          vehicleId,
           driverId,
         },
       });
+    }
+  }
+
+  /**
+   * Effets de bord STATEFULS (proximité livraison + géofences) à rejouer sur le
+   * DERNIER point fiable d'un lot de rattrapage Traccar (performBackfill).
+   *
+   * PARITÉ : le flush de file offline du téléphone (saveBatch) réévalue déjà
+   * proximité + géofences après une coupure réseau ; le backfill Traccar ne le
+   * faisait pas, donc un traceur physique qui franchissait une géofence ou
+   * arrivait à destination pendant une coupure Traccar ne produisait ni évènement
+   * géofence ni invite « validez la livraison ». Ces deux effets sont idempotents
+   * (clés Redis côté proximité, table geofence_events côté géofence). Les alertes
+   * temps réel (vitesse / arrêt / retard / offline) restent volontairement
+   * exclues : périmées sur de la donnée d'archive.
+   */
+  async replayBackfillSideEffects(params: {
+    driverId: string | null;
+    vehicleId: string;
+    companyId: string;
+    deliveryId: string | null;
+    latitude: number;
+    longitude: number;
+    timestamp: Date;
+  }): Promise<void> {
+    const { driverId, vehicleId, companyId, deliveryId, latitude, longitude, timestamp } = params;
+    const tasks: Promise<unknown>[] = [];
+
+    if (deliveryId) {
+      let alertUserId: string | null = null;
+      if (driverId) {
+        const driverRow = await this.prisma.driver.findFirst({
+          where: { id: driverId },
+          select: { userId: true },
+        });
+        alertUserId = driverRow?.userId ?? null;
+      }
+      tasks.push(
+        this.emitGeofenceEvents(
+          deliveryId,
+          vehicleId,
+          latitude,
+          longitude,
+          companyId,
+          driverId,
+          alertUserId,
+        ),
+      );
+    }
+
+    if (driverId) {
+      tasks.push(
+        this.deliveryProximityService.checkProximity(
+          driverId,
+          vehicleId,
+          companyId,
+          latitude,
+          longitude,
+          timestamp,
+        ),
+      );
     }
 
     await Promise.allSettled(tasks);

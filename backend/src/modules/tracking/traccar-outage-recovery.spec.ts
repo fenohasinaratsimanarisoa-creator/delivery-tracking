@@ -41,6 +41,7 @@ describe('TraccarBridgeService — reprise après coupure serveur : backfill SAN
     savePosition: jest.fn().mockResolvedValue({ id: 'gps-1', suspect: false }),
     getLastPosition: jest.fn(),
     getCompanySettings: jest.fn(),
+    replayBackfillSideEffects: jest.fn().mockResolvedValue(undefined),
   };
 
   const mockGateway = { broadcastDataUpdate: jest.fn(), broadcastToCompany: jest.fn() };
@@ -236,5 +237,93 @@ describe('TraccarBridgeService — reprise après coupure serveur : backfill SAN
       // mal attribuée à cause de la réaffectation pendant la coupure.
       expect(p.driverId).toBe(t < SWITCH_TIME ? OLD_DRIVER : NEW_DRIVER);
     }
+  });
+});
+
+// =============================================================================
+// File de secours Redis (traccar:pending-positions) : reprise après incident
+// base — les positions rejouées doivent l'être dans l'ordre CHRONOLOGIQUE, comme
+// le flush de file offline du téléphone (saveBatch trie). Sans tri, le rejeu LIFO
+// (lpush empile en tête) fait rejeter les plus anciennes par la déduplication de
+// savePosition (fenêtre ±1s derrière la dernière déjà réinsérée) → perte.
+// =============================================================================
+describe('TraccarBridgeService — file pending-positions : rejeu chronologique', () => {
+  const DEVICE_ID_Q = 77;
+
+  it('rejoue les positions en attente du plus ANCIEN au plus récent', async () => {
+    const list: string[] = [];
+    const redis = {
+      lpush: jest.fn(async (_k: string, v: string) => {
+        list.unshift(v);
+        return list.length;
+      }),
+      ltrim: jest.fn(async () => 'OK'),
+      llen: jest.fn(async () => list.length),
+      lrange: jest.fn(async () => [...list]),
+      lrem: jest.fn(async (_k: string, _c: number, v: string) => {
+        const i = list.indexOf(v);
+        if (i >= 0) list.splice(i, 1);
+        return 1;
+      }),
+    };
+
+    const config = {
+      get: jest.fn((key: string, d?: string) => {
+        const m: Record<string, string> = {
+          TRACCAR_URL: 'http://traccar-test:8082',
+          TRACCAR_USER: 't',
+          TRACCAR_PASSWORD: 't',
+        };
+        return m[key] ?? (d as any);
+      }),
+    };
+
+    const bridge = new TraccarBridgeService(
+      config as unknown as ConfigService,
+      {} as unknown as PrismaService,
+      {} as unknown as TrackingService,
+      {
+        broadcastDataUpdate: jest.fn(),
+        broadcastToCompany: jest.fn(),
+      } as unknown as TrackingGateway,
+      { create: jest.fn() } as unknown as NotificationsService,
+      null,
+      redis as any,
+    );
+
+    // handlePosition espionné : enregistre l'ordre de rejeu, ne fait rien d'autre.
+    const seen: string[] = [];
+    (bridge as any).handlePosition = jest.fn(async (pos: any) => {
+      seen.push(pos.fixTime);
+    });
+
+    const mk = (fixTime: string) => ({
+      id: 1,
+      deviceId: DEVICE_ID_Q,
+      latitude: -18.87,
+      longitude: 47.52,
+      speed: 5,
+      course: 0,
+      altitude: 0,
+      accuracy: 10,
+      valid: true,
+      fixTime,
+      deviceTime: fixTime,
+    });
+
+    const tOld = new Date(Date.now() - 30000).toISOString();
+    const tMid = new Date(Date.now() - 20000).toISOString();
+    const tNew = new Date(Date.now() - 10000).toISOString();
+
+    // File Redis seedée dans un ordre quelconque (comme des échecs live successifs :
+    // lpush empile en tête, donc l'état ci-dessous = [tOld, tNew, tMid] côté lrange).
+    list.push(JSON.stringify({ ...mk(tMid), _queuedAt: Date.now() }));
+    list.unshift(JSON.stringify({ ...mk(tNew), _queuedAt: Date.now() }));
+    list.unshift(JSON.stringify({ ...mk(tOld), _queuedAt: Date.now() }));
+
+    await (bridge as any).processPendingPositions();
+
+    expect(seen).toEqual([tOld, tMid, tNew]);
+    expect(list).toHaveLength(0);
   });
 });

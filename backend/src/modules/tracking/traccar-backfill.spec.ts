@@ -68,6 +68,7 @@ describe('TraccarBridgeService — performBackfill déduplication', () => {
     savePosition: jest.fn().mockResolvedValue({ id: 'gps-1', suspect: false }),
     getLastPosition: jest.fn(),
     getCompanySettings: jest.fn(),
+    replayBackfillSideEffects: jest.fn().mockResolvedValue(undefined),
   };
 
   const mockGateway = { broadcastDataUpdate: jest.fn(), broadcastToCompany: jest.fn() };
@@ -258,6 +259,90 @@ describe('TraccarBridgeService — performBackfill déduplication', () => {
     expect(byTime.get(P_OLD_TIME.getTime())).toBe(OLD_DRIVER);
     expect(byTime.get(P_NEW_TIME.getTime())).toBe(NEW_DRIVER);
   });
+
+  it('rejoue proximité + géofences sur le DERNIER point fiable inséré (parité saveBatch)', async () => {
+    mockPrisma.gpsPosition.findMany.mockResolvedValue([]);
+    await (service as any).performBackfill();
+
+    expect(mockTrackingService.replayBackfillSideEffects).toHaveBeenCalledTimes(1);
+    const arg = mockTrackingService.replayBackfillSideEffects.mock.calls[0][0];
+    expect(arg.vehicleId).toBe(VEHICLE_ID);
+    // P2 est la position la plus récente du lot.
+    expect(new Date(arg.timestamp).toISOString()).toBe(P2_TIME);
+  });
+
+  it('un point suspect (téléportation) ne devient PAS la référence du point suivant', async () => {
+    // Base fiable en (-18.87, 47.52) il y a 3 min.
+    const T0 = new Date(Date.now() - 180000);
+    const T1 = new Date(Date.now() - 120000);
+    const T2 = new Date(Date.now() - 60000);
+    const T3 = new Date(Date.now() - 30000);
+    mockTrackingService.getLastPosition.mockResolvedValue({
+      timestamp: T0,
+      latitude: -18.87,
+      longitude: 47.52,
+      accuracy: 10,
+    });
+    mockPrisma.gpsPosition.findMany.mockResolvedValue([]);
+    mockPrisma.vehicle.findMany.mockResolvedValue([
+      { id: VEHICLE_ID, traccarDeviceId: String(DEVICE_ID), companyId: 'c1' },
+    ]);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        // T1 : proche de la base → fiable
+        {
+          id: 1,
+          deviceId: DEVICE_ID,
+          latitude: -18.871,
+          longitude: 47.521,
+          speed: 8,
+          course: 90,
+          altitude: 0,
+          accuracy: 10,
+          valid: true,
+          fixTime: T1.toISOString(),
+          deviceTime: T1.toISOString(),
+        },
+        // T2 : saut de ~600 km en 1 min → SUSPECT
+        {
+          id: 2,
+          deviceId: DEVICE_ID,
+          latitude: -12.0,
+          longitude: 45.0,
+          speed: 0,
+          course: 0,
+          altitude: 0,
+          accuracy: 10,
+          valid: true,
+          fixTime: T2.toISOString(),
+          deviceTime: T2.toISOString(),
+        },
+        // T3 : de retour près de la base → doit être FIABLE (comparé à T1, pas à T2)
+        {
+          id: 3,
+          deviceId: DEVICE_ID,
+          latitude: -18.872,
+          longitude: 47.522,
+          speed: 8,
+          course: 90,
+          altitude: 0,
+          accuracy: 10,
+          valid: true,
+          fixTime: T3.toISOString(),
+          deviceTime: T3.toISOString(),
+        },
+      ],
+    });
+
+    await (service as any).performBackfill();
+
+    const inserted = (mockPrisma.gpsPosition.createMany.mock.calls[0][0] as any).data;
+    const byTime = new Map(inserted.map((p: any) => [new Date(p.timestamp).getTime(), p.suspect]));
+    expect(byTime.get(T1.getTime())).toBe(false);
+    expect(byTime.get(T2.getTime())).toBe(true); // le saut
+    expect(byTime.get(T3.getTime())).toBe(false); // retour : PAS un 2e faux positif
+  });
 });
 
 describe('TraccarBridgeService — sérialisation PAR DEVICE (backfill vs flux live)', () => {
@@ -282,6 +367,7 @@ describe('TraccarBridgeService — sérialisation PAR DEVICE (backfill vs flux l
     savePosition: jest.fn().mockResolvedValue({ id: 'gps-1', suspect: false }),
     getLastPosition: jest.fn().mockResolvedValue(null),
     getCompanySettings: jest.fn(),
+    replayBackfillSideEffects: jest.fn().mockResolvedValue(undefined),
   };
 
   const mockGateway = { broadcastDataUpdate: jest.fn(), broadcastToCompany: jest.fn() };
@@ -353,13 +439,16 @@ describe('TraccarBridgeService — sérialisation PAR DEVICE (backfill vs flux l
     global.fetch = originalFetch;
   });
 
-  it('backfill et position live pour le MÊME device ne s\'exécutent jamais en même temps (le live attend le backfill)', async () => {
+  it("backfill et position live pour le MÊME device ne s'exécutent jamais en même temps (le live attend le backfill)", async () => {
     const events: string[] = [];
     let resolveFetch!: (v: any) => void;
     // Le fetch REST du backfill reste en attente : le backfill tient le verrou
     // du device pendant cette section critique (lecture → écriture).
     global.fetch = jest.fn(
-      () => new Promise((resolve) => { resolveFetch = resolve; }),
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
     ) as any;
 
     mockPrisma.gpsPosition.createMany.mockImplementation(async ({ data }: any) => {
@@ -383,9 +472,7 @@ describe('TraccarBridgeService — sérialisation PAR DEVICE (backfill vs flux l
     // Libère le fetch : le backfill finit (insertion) PUIS le live est traité.
     resolveFetch({
       ok: true,
-      json: async () => [
-        livePosition({ id: 1, deviceId: DEVICE_ID }),
-      ],
+      json: async () => [livePosition({ id: 1, deviceId: DEVICE_ID })],
     });
     await backfillPromise;
     await livePromise;
@@ -416,7 +503,9 @@ describe('TraccarBridgeService — sérialisation PAR DEVICE (backfill vs flux l
     mockTrackingService.savePosition.mockImplementation(async (_d: any, dto: any) => {
       if (dto.vehicleId === VEHICLE_ID) {
         events.push('d42:enter');
-        await new Promise<void>((resolve) => { releaseDevice42 = resolve; });
+        await new Promise<void>((resolve) => {
+          releaseDevice42 = resolve;
+        });
         events.push('d42:exit');
         return { id: 'gps-42', suspect: false };
       }

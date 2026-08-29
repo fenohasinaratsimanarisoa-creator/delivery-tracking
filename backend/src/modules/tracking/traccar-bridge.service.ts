@@ -1152,29 +1152,30 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               return null;
             };
 
+            // Référence de téléportation / dérivation de vitesse du backfill : dernier
+            // point FIABLE en base (getLastPosition exclut les suspects par défaut —
+            // cohérent avec detectTeleportation du temps réel ; comparer contre un point
+            // déjà aberrant propagerait la fausse téléportation). Chargé
+            // INCONDITIONNELLEMENT (avant : seulement si une clé Redis
+            // `traccar:last_position` existait déjà) — sinon le PREMIER point rattrapé
+            // après une coupure, ou tout le lot quand Redis est indisponible, échappait
+            // à la détection de téléportation ET à la reconstruction de vitesse, alors
+            // que le flux temps réel et le batch téléphone ont toujours une référence.
             let lastBackfillPos: {
               latitude: number;
               longitude: number;
               timestamp: Date;
               accuracy: number | null;
             } | null = null;
-            if (this.redis) {
-              const stored = await this.redis.get(
-                `traccar:last_position:${vehicle.traccarDeviceId}`,
-              );
-              if (stored) {
-                // Référence de téléportation du backfill : dernier point FIABLE (exclut
-                // les positions suspectes), cohérent avec detectTeleportation — comparer
-                // contre un point déjà aberrant propagerait la fausse téléportation.
-                const lastDbPos = await this.trackingService.getLastPosition(vehicle.id);
-                if (lastDbPos) {
-                  lastBackfillPos = {
-                    latitude: lastDbPos.latitude,
-                    longitude: lastDbPos.longitude,
-                    timestamp: lastDbPos.timestamp,
-                    accuracy: lastDbPos.accuracy ?? null,
-                  };
-                }
+            {
+              const lastDbPos = await this.trackingService.getLastPosition(vehicle.id);
+              if (lastDbPos) {
+                lastBackfillPos = {
+                  latitude: lastDbPos.latitude,
+                  longitude: lastDbPos.longitude,
+                  timestamp: lastDbPos.timestamp,
+                  accuracy: lastDbPos.accuracy ?? null,
+                };
               }
             }
 
@@ -1245,12 +1246,19 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                   );
                 }
               }
-              lastBackfillPos = {
-                latitude: pos.latitude,
-                longitude: pos.longitude,
-                timestamp,
-                accuracy,
-              };
+              // N'avance la référence que sur un point FIABLE : un point suspect
+              // (aberration GPS) ne doit pas servir de base au suivant — sinon une
+              // glitch isolée en produit deux (le retour vers la vraie position est vu
+              // comme un 2e saut). Aligné sur detectTeleportation du temps réel, qui lit
+              // getLastPosition(excludeSuspect=true).
+              if (!suspect) {
+                lastBackfillPos = {
+                  latitude: pos.latitude,
+                  longitude: pos.longitude,
+                  timestamp,
+                  accuracy,
+                };
+              }
 
               toInsert.push({
                 latitude: pos.latitude,
@@ -1318,7 +1326,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                   throw insertErr;
                 }
                 this.logger.log(
-                  `Backfill: inserted ${uniqueToInsert.length} positions for device ${vehicle.traccarDeviceId} (no alerts generated — historical data)`,
+                  `Backfill: inserted ${uniqueToInsert.length} positions for device ${vehicle.traccarDeviceId} (alerts temps réel non générées — historique ; proximité + géofences rejouées sur le dernier point)`,
                 );
 
                 if (this.redis) {
@@ -1333,6 +1341,35 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                     `traccar:last_position:${vehicle.traccarDeviceId}`,
                     maxTs.toISOString(),
                   );
+                }
+
+                // PARITÉ AVEC LE FLUSH OFFLINE DU TÉLÉPHONE (saveBatch réévalue proximité
+                // + géofences sur le dernier point) : on rejoue ces deux effets stateful
+                // et idempotents sur le DERNIER point FIABLE inséré, pour qu'un traceur
+                // physique qui franchit une géofence / arrive à destination pendant une
+                // coupure Traccar déclenche l'évènement géofence et l'invite « validez la
+                // livraison » comme le ferait l'app chauffeur. Alertes temps réel exclues
+                // (périmées sur de l'archive).
+                const lastReal = uniqueToInsert
+                  .filter((p) => !p.suspect)
+                  .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+                  .at(-1);
+                if (lastReal) {
+                  await this.trackingService
+                    .replayBackfillSideEffects({
+                      driverId: lastReal.driverId,
+                      vehicleId: vehicle.id,
+                      companyId: vehicle.companyId,
+                      deliveryId: lastReal.deliveryId ?? null,
+                      latitude: lastReal.latitude,
+                      longitude: lastReal.longitude,
+                      timestamp: lastReal.timestamp,
+                    })
+                    .catch((e: any) =>
+                      this.logger.warn(
+                        `Backfill side-effects replay failed for device ${vehicle.traccarDeviceId}: ${e.message}`,
+                      ),
+                    );
                 }
               } else {
                 this.logger.log(
@@ -1416,6 +1453,11 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           }
         }
 
+        // `orderBy createdAt desc` : tie-break DÉTERMINISTE si un chauffeur a
+        // exceptionnellement plusieurs livraisons in_progress en parallèle (sans tri,
+        // findFirst renvoie une ligne arbitraire → la position pouvait basculer d'une
+        // livraison à l'autre entre deux fix). On rattache alors à la plus récemment
+        // créée, comportement stable et intuitif.
         const currentDelivery = driverId
           ? await this.prisma.delivery.findFirst({
               where: {
@@ -1423,6 +1465,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                 status: 'in_progress',
                 deletedAt: null,
               },
+              orderBy: { createdAt: 'desc' },
               select: { id: true },
             })
           : null;
@@ -1681,6 +1724,23 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           await this.redis.lrem('traccar:pending-positions', 1, entry);
         }
       }
+
+      // ORDRE CHRONOLOGIQUE avant rejeu (parité avec saveBatch du chemin téléphone,
+      // qui trie sa file offline avant traitement). `lpush` empile en TÊTE →
+      // `lrange 0 -1` renvoie du plus RÉCENT au plus ancien. Rejouer dans cet ordre
+      // LIFO fait rejeter les positions les plus anciennes par isDuplicateByTimestamp
+      // de savePosition (elles tombent dans la fenêtre ±1s DERRIÈRE la dernière
+      // position déjà réinsérée) → perte silencieuse de positions physiques lors
+      // d'une reprise après incident base, absente du chemin téléphone.
+      const parseQueuedTs = (e: string): number => {
+        try {
+          const p = JSON.parse(e);
+          return Date.parse(p.fixTime || p.deviceTime || '') || 0;
+        } catch {
+          return 0;
+        }
+      };
+      toRetry.sort((a, b) => parseQueuedTs(a) - parseQueuedTs(b));
 
       let retried = 0;
       for (const entry of toRetry) {
