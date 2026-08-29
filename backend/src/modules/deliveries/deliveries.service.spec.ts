@@ -1277,6 +1277,35 @@ describe('DeliveriesService - State Machine', () => {
         'comp-1',
         expect.objectContaining({ type: NotificationType.location_mismatch }),
       );
+      // UNE SEULE notification (statut + écart combinés) — pas une 2e "delivery_status".
+      expect(mockNotifications.create).toHaveBeenCalledTimes(1);
+      const notif = mockNotifications.create.mock.calls[0][1] as any;
+      expect(notif.message).toMatch(/livrée|delivered/i);
+      expect(notif.message).toMatch(/vérifier|review/i);
+      expect(notif.priority).toBe('high');
+    });
+
+    it('un statut SANS coordonnées de preuve → 1 seule notification combinée (reason no_coords)', async () => {
+      mockPrisma.delivery.findFirst.mockResolvedValue(deliveryAtDest);
+      mockPrisma.delivery.update.mockResolvedValue({
+        ...deliveryAtDest,
+        status: 'failed',
+        locationMismatch: true,
+      });
+
+      await service.updateDriverStatus('comp-1', 'del-1', 'user-1', {
+        status: DeliveryStatus.failed,
+      } as any);
+
+      const updateArg = mockPrisma.delivery.update.mock.calls[0][0] as any;
+      expect(updateArg.data.locationMismatch).toBe(true);
+      expect(mockNotifications.create).toHaveBeenCalledTimes(1);
+      expect(mockNotifications.create).toHaveBeenCalledWith(
+        'comp-1',
+        expect.objectContaining({ type: NotificationType.location_mismatch }),
+      );
+      const notif = mockNotifications.create.mock.calls[0][1] as any;
+      expect(notif.message).toMatch(/sans preuve|without a position proof/i);
     });
 
     it('ne signale PAS de mismatch quand la preuve est cohérente avec la trace GPS', async () => {

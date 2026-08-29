@@ -35,6 +35,13 @@ const TRANSITION_MATRIX: Record<DeliveryStatus, DeliveryStatus[]> = {
   [DeliveryStatus.cancelled]: [],
 };
 
+/** Résultat du contrôle de position à la complétion, intégré à L'UNIQUE notification. */
+type DeliveryMismatchInfo = {
+  mismatched: boolean;
+  reason: 'distance' | 'no_coords' | null;
+  distanceMeters: number;
+};
+
 @Injectable()
 export class DeliveriesService {
   private readonly logger = new Logger(DeliveriesService.name);
@@ -270,7 +277,7 @@ export class DeliveriesService {
       );
     }
 
-    const proofData = await this.verifyDeliveryLocation(companyId, delivery, dto, lang);
+    const { proofData, mismatch } = await this.verifyDeliveryLocation(delivery, dto);
     const updateData: any = { ...proofData, status: dto.status };
     if (dto.status === DeliveryStatus.delivered) {
       updateData.completedAt = new Date();
@@ -287,21 +294,18 @@ export class DeliveriesService {
       this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId, dto.status);
     }
 
-    const statusLabel = dto.status.replace('_', ' ');
-    await this.notifications.create(companyId, {
-      type: NotificationType.delivery_status,
-      priority:
-        dto.status === DeliveryStatus.delivered
-          ? NotificationPriority.low
-          : NotificationPriority.high,
-      title: t('delivery.notification.title', lang, { status: statusLabel }),
-      message: t('delivery.notification.message', lang, {
-        title: updated.title,
-        status: statusLabel,
+    // UNE SEULE notification par livraison (statut + écart de position combinés).
+    // Chemin chauffeur : notification à l'échelle entreprise (le dispatcher la voit).
+    await this.notifications.create(
+      companyId,
+      this.buildDeliveryStatusNotification({
+        deliveryId: id,
+        deliveryTitle: updated.title,
+        status: dto.status,
+        mismatch,
+        lang,
       }),
-      link: `/deliveries/${id}`,
-      deliveryId: id,
-    });
+    );
 
     await this.dispatchWebhook(companyId, updated, dto.status);
 
@@ -493,7 +497,7 @@ export class DeliveriesService {
       );
     }
 
-    const proofData = await this.verifyDeliveryLocation(companyId, delivery, dto, lang);
+    const { proofData, mismatch } = await this.verifyDeliveryLocation(delivery, dto);
     const updateData: any = { ...proofData, status: dto.status };
     if (dto.status === DeliveryStatus.delivered) {
       updateData.completedAt = new Date();
@@ -510,24 +514,19 @@ export class DeliveriesService {
       this.dispatchDailyFuelReportRecompute(companyId, delivery.driverId, dto.status);
     }
 
-    const statusLabel = dto.status.replace('_', ' ');
-    await this.notifications.create(companyId, {
-      type: NotificationType.delivery_status,
-      priority:
-        dto.status === DeliveryStatus.delivered
-          ? NotificationPriority.low
-          : dto.status === DeliveryStatus.failed
-            ? NotificationPriority.high
-            : NotificationPriority.medium,
-      title: t('delivery.notification.title', lang, { status: statusLabel }),
-      message: t('delivery.notification.message', lang, {
-        title: updated.title,
-        status: statusLabel,
+    // UNE SEULE notification par livraison (statut + écart de position combinés).
+    // Chemin dispatcher : notification adressée au chauffeur affecté.
+    await this.notifications.create(
+      companyId,
+      this.buildDeliveryStatusNotification({
+        deliveryId: id,
+        deliveryTitle: updated.title,
+        status: dto.status,
+        mismatch,
+        lang,
+        userId: updated.assignedDriverId ?? undefined,
       }),
-      link: `/deliveries/${id}`,
-      userId: updated.assignedDriverId ?? undefined,
-      deliveryId: id,
-    });
+    );
 
     await this.dispatchWebhook(companyId, updated, dto.status);
 
@@ -568,30 +567,89 @@ export class DeliveriesService {
     return TRANSITION_MATRIX[from]?.includes(to) ?? false;
   }
 
+  /**
+   * Construit LE payload d'UNE SEULE notification pour un changement de statut de
+   * livraison. Quand ce changement a aussi déclenché un écart de position
+   * (verifyDeliveryLocation), le message combine les deux faits — au lieu d'émettre
+   * une 2e notification `location_mismatch` séparée. Une notification = une livraison.
+   */
+  private buildDeliveryStatusNotification(params: {
+    deliveryId: string;
+    deliveryTitle: string;
+    status: DeliveryStatus;
+    mismatch: DeliveryMismatchInfo;
+    lang: Language;
+    userId?: string;
+  }) {
+    const { deliveryId, deliveryTitle, status, mismatch, lang, userId } = params;
+    const statusLabel = status.replace('_', ' ');
+    const base = { link: `/deliveries/${deliveryId}`, deliveryId, userId };
+
+    if (mismatch.mismatched) {
+      return {
+        ...base,
+        type: NotificationType.location_mismatch,
+        priority: NotificationPriority.high,
+        title: t('delivery.notification.mismatchTitle', lang),
+        message:
+          mismatch.reason === 'no_coords'
+            ? t('delivery.notification.combinedNoCoords', lang, {
+                title: deliveryTitle,
+                status: statusLabel,
+              })
+            : t('delivery.notification.combinedMismatch', lang, {
+                title: deliveryTitle,
+                status: statusLabel,
+                distance: (mismatch.distanceMeters / 1000).toFixed(1),
+                meters: mismatch.distanceMeters,
+              }),
+      };
+    }
+
+    return {
+      ...base,
+      type: NotificationType.delivery_status,
+      priority:
+        status === DeliveryStatus.delivered
+          ? NotificationPriority.low
+          : status === DeliveryStatus.failed
+            ? NotificationPriority.high
+            : NotificationPriority.medium,
+      title: t('delivery.notification.title', lang, { status: statusLabel }),
+      message: t('delivery.notification.message', lang, {
+        title: deliveryTitle,
+        status: statusLabel,
+      }),
+    };
+  }
+
   private async verifyDeliveryLocation(
-    companyId: string,
     delivery: any,
     dto: UpdateDeliveryStatusDto,
-    lang: Language = 'fr',
-  ): Promise<Record<string, any>> {
+  ): Promise<{ proofData: Record<string, any>; mismatch: DeliveryMismatchInfo }> {
     const proofData: Record<string, any> = {};
 
     const isTerminalProofStatus =
       dto.status === DeliveryStatus.delivered || dto.status === DeliveryStatus.failed;
 
+    const noMismatch: DeliveryMismatchInfo = {
+      mismatched: false,
+      reason: null,
+      distanceMeters: 0,
+    };
+
     // Statut non terminal : aucune preuve attendue.
     if (!isTerminalProofStatus) {
-      return proofData;
+      return { proofData, mismatch: noMismatch };
     }
 
     // Statut terminal SANS coordonnées : on ne laisse plus passer une complétion
     // « livré/échec » sans AUCUNE preuve de localisation (le dispositif anti-fraude
     // — deliveryProofDistance, cross-check trace GPS — était entièrement contourné
     // en omettant deux champs facultatifs). On marque la livraison comme
-    // incohérence à revoir par l'admin (elle remonte dans /deliveries/proofs et se
-    // résout via resolve-mismatch). Pas de notification ici : le flag suffit à la
-    // surfacer, et verifyDeliveryLocation s'exécute AVANT le verrou optimiste —
-    // notifier ferait partir l'alerte même pour la requête concurrente perdante.
+    // incohérence à revoir par l'admin (elle remonte dans /deliveries/proofs). Le
+    // `mismatch` renvoyé est intégré à L'UNIQUE notification de changement de statut
+    // par l'appelant (APRÈS le verrou optimiste) — jamais une 2e notification.
     if (dto.latitude === undefined || dto.longitude === undefined) {
       this.logger.warn(
         `Delivery ${delivery.id}: transition "${dto.status}" SANS coordonnées de preuve — ` +
@@ -599,7 +657,10 @@ export class DeliveriesService {
       );
       proofData.locationMismatch = true;
       proofData.mismatchResolved = false;
-      return proofData;
+      return {
+        proofData,
+        mismatch: { mismatched: true, reason: 'no_coords', distanceMeters: 0 },
+      };
     }
 
     proofData.deliveryProofLat = dto.latitude;
@@ -683,25 +744,17 @@ export class DeliveriesService {
     if (mismatch) {
       proofData.locationMismatch = true;
       proofData.mismatchResolved = false;
-
-      await this.notifications.create(companyId, {
-        type: NotificationType.location_mismatch,
-        priority: NotificationPriority.high,
-        title: t('delivery.notification.mismatchTitle', lang),
-        message: t('delivery.notification.mismatchMessage', lang, {
-          title: delivery.title,
-          distance: (mismatchDistance / 1000).toFixed(1),
-          meters: mismatchDistance,
-        }),
-        link: `/deliveries/${delivery.id}`,
-        deliveryId: delivery.id,
-      });
-    } else {
-      proofData.locationMismatch = false;
-      proofData.mismatchResolved = false;
+      // PAS de notification ici : l'appelant en émet UNE SEULE (statut + écart
+      // combinés) après le verrou optimiste — voir buildDeliveryStatusNotification.
+      return {
+        proofData,
+        mismatch: { mismatched: true, reason: 'distance', distanceMeters: mismatchDistance },
+      };
     }
 
-    return proofData;
+    proofData.locationMismatch = false;
+    proofData.mismatchResolved = false;
+    return { proofData, mismatch: noMismatch };
   }
 
   private async dispatchWebhook(companyId: string, delivery: any, status: DeliveryStatus) {

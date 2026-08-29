@@ -257,6 +257,16 @@ const translations: Record<string, Record<Language, string>> = {
     fr: 'Livraison "{title}" marquée sans coordonnées de destination — écart non vérifiable',
     en: 'Delivery "{title}" marked without destination coordinates — mismatch not verifiable',
   },
+  // Notification UNIQUE combinée (statut + écart de position) : une seule notification
+  // par livraison quand un changement de statut déclenche aussi un écart de position.
+  'delivery.notification.combinedMismatch': {
+    fr: 'Livraison "{title}" marquée {status} à {distance} km du lieu prévu ({meters} m) — à vérifier',
+    en: 'Delivery "{title}" marked {status} {distance} km from the planned location ({meters} m) — please review',
+  },
+  'delivery.notification.combinedNoCoords': {
+    fr: 'Livraison "{title}" marquée {status} sans preuve de position — à vérifier',
+    en: 'Delivery "{title}" marked {status} without a position proof — please review',
+  },
   'billing.paymentDescription': {
     fr: 'Abonnement {planName} — {interval}',
     en: '{planName} subscription — {interval}',
