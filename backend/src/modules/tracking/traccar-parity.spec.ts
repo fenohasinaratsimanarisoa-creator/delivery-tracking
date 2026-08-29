@@ -344,6 +344,100 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
     });
   });
 
+  // ─── 4.6 Dérivation de vitesse (parité avec le chemin phone) ─────────
+  describe('4.6 Dérivation de vitesse quand le traceur ne remonte pas de vitesse', () => {
+    // UUID v4 STRICTEMENT valide (le pont valide le DTO via class-validator @IsUUID('4'),
+    // contrairement à savePosition qui ne vérifie que la longueur).
+    const VALID_TRACKER_VEHICLE_ID = '11111111-1111-4111-8111-111111111111';
+
+    function makeBridge() {
+      const bridgeConfig = {
+        get: jest.fn((key: string) => {
+          if (key === 'TRACCAR_URL') return 'http://traccar:8082';
+          if (key === 'TRACCAR_USER') return 'admin';
+          if (key === 'TRACCAR_PASSWORD') return 'admin';
+          return null;
+        }),
+      };
+      const bridge = new TraccarBridgeService(
+        bridgeConfig as any,
+        mockPrisma as any,
+        trackingService,
+        mockGateway as any,
+        mockNotifications as any,
+        null,
+        null,
+      );
+      (bridge as any).connected = true;
+      (bridge as any).sessionCookie = 'test-cookie';
+      return bridge;
+    }
+
+    beforeEach(() => {
+      mockPrisma.vehicle.findFirst.mockResolvedValue({
+        id: VALID_TRACKER_VEHICLE_ID,
+        companyId: COMPANY_ID,
+        positionSource: 'physical_tracker',
+        isActive: true,
+        deletedAt: null,
+      });
+      mockPrisma.vehicle.findUnique.mockResolvedValue({ companyId: COMPANY_ID });
+    });
+
+    it('dérive la vitesse haversine/Δt quand speed=0 et signal précis (comme le téléphone)', async () => {
+      // Dernière position fiable : 30 s avant, ~166 m au sud, accuracy 12 m.
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue({
+        latitude: DELIVERY_LAT,
+        longitude: DELIVERY_LNG,
+        timestamp: new Date(Date.now() - 30_000),
+        speed: 0,
+        accuracy: 12,
+        suspect: false,
+      });
+
+      await (makeBridge() as any).handlePosition(
+        baseTraccarPos({
+          speed: 0,
+          latitude: DELIVERY_LAT + 0.0015,
+          longitude: DELIVERY_LNG,
+          accuracy: 10,
+          fixTime: new Date().toISOString(),
+          deviceTime: new Date().toISOString(),
+        }),
+      );
+
+      const call = mockPrisma.gpsPosition.create.mock.calls.at(-1)?.[0];
+      expect(call).toBeDefined();
+      expect(call.data.speed).toBeGreaterThan(1); // ~5,5 m/s dérivé, plus 0
+    });
+
+    it('ne dérive PAS quand le signal est dégradé (accuracy > 30 m) — pas de vitesse fabriquée par le bruit', async () => {
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue({
+        latitude: DELIVERY_LAT,
+        longitude: DELIVERY_LNG,
+        timestamp: new Date(Date.now() - 30_000),
+        speed: 0,
+        accuracy: 80,
+        suspect: false,
+      });
+
+      await (makeBridge() as any).handlePosition(
+        baseTraccarPos({
+          speed: 0,
+          latitude: DELIVERY_LAT + 0.0015,
+          longitude: DELIVERY_LNG,
+          accuracy: 85,
+          fixTime: new Date().toISOString(),
+          deviceTime: new Date().toISOString(),
+        }),
+      );
+
+      const call = mockPrisma.gpsPosition.create.mock.calls.at(-1)?.[0];
+      expect(call).toBeDefined();
+      expect(call.data.speed).toBe(0);
+    });
+  });
+
   // ─── 4.5 Sauvegarde en base identique ────────────────────────────────
   describe('4.5 Sauvegarde en base', () => {
     it('phone et physical_tracker utilisent la même table gpsPositions', async () => {

@@ -49,6 +49,7 @@ interface TraccarPosition {
 // UERE pour récepteur GPS grand public : ~5m (combinaison erreurs satellite + atmosphère + récepteur)
 // HDOP * UERE = accuracy estimée ; on prend la plus prudente (max) entre accuracy du device et HDOP dérivé
 import { computeConfidence, computeCombinedAccuracy } from '../../common/geo/gps-quality';
+import { haversineDistance, isAccuracyTrustworthy } from '../../common/geo/geo.utils';
 
 const BACKFILL_MAX_HOURS = 24;
 const BATCH_INTERVAL_MS = 5000;
@@ -459,8 +460,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       },
       protocolPort: {
         exposedByApi: false,
-        message:
-          `Le port d'écoute par protocole (ex: port GT06) n'est PAS exposé par l'API REST Traccar — à confirmer manuellement dans l'interface d'administration Traccar (${this.traccarUrl}) lors de la création ou de la consultation du device.`,
+        message: `Le port d'écoute par protocole (ex: port GT06) n'est PAS exposé par l'API REST Traccar — à confirmer manuellement dans l'interface d'administration Traccar (${this.traccarUrl}) lors de la création ou de la consultation du device.`,
         reference: 'RAPPORT_PORTS_TRACCAR.md — section « Traccar Cloud (production) »',
       },
     };
@@ -1062,9 +1062,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           if (effectiveFrom >= now) return;
 
           try {
-          const url = `${this.traccarUrl}/api/positions?deviceId=${vehicle.traccarDeviceId}&from=${effectiveFrom.toISOString()}&to=${now.toISOString()}`;
-          const response = await fetch(url, {
-            headers: { Cookie: sessionCookie },
+            const url = `${this.traccarUrl}/api/positions?deviceId=${vehicle.traccarDeviceId}&from=${effectiveFrom.toISOString()}&to=${now.toISOString()}`;
+            const response = await fetch(url, {
+              headers: { Cookie: sessionCookie },
               // Un serveur Traccar bloqué ne doit pas geler le backfill de TOUS les devices
               // (le loop par véhicule s'arrêterait sur ce fetch sans timeout).
               signal: AbortSignal.timeout(20000),
@@ -1152,8 +1152,12 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               return null;
             };
 
-            let lastBackfillPos: { latitude: number; longitude: number; timestamp: Date } | null =
-              null;
+            let lastBackfillPos: {
+              latitude: number;
+              longitude: number;
+              timestamp: Date;
+              accuracy: number | null;
+            } | null = null;
             if (this.redis) {
               const stored = await this.redis.get(
                 `traccar:last_position:${vehicle.traccarDeviceId}`,
@@ -1168,6 +1172,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                     latitude: lastDbPos.latitude,
                     longitude: lastDbPos.longitude,
                     timestamp: lastDbPos.timestamp,
+                    accuracy: lastDbPos.accuracy ?? null,
                   };
                 }
               }
@@ -1186,8 +1191,32 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               // Driver résolu AU MOMENT du fix (pas l'affectation courante).
               const backfillDriverId = resolveDriver(timestamp);
 
-              const speedMs = (pos.speed || 0) * 0.514444;
               const { accuracy } = computeCombinedAccuracy(pos.accuracy, pos.attributes);
+
+              // PARITÉ AVEC LE CHEMIN PHONE (saveBatch C8) : même dérivation prudente
+              // de vitesse que le temps réel (handlePosition) — si le device n'a pas
+              // remonté de vitesse Doppler, on la reconstruit haversine/Δt contre le
+              // point précédent, uniquement si les deux extrémités sont assez précises.
+              // Le rattrapage après coupure Traccar produisait sinon des segments à
+              // speed=0 → distance sous-comptée dans le rapport carburant.
+              let speedMs = (pos.speed || 0) * 0.514444;
+              if (
+                speedMs <= 0 &&
+                lastBackfillPos &&
+                isAccuracyTrustworthy(accuracy) &&
+                isAccuracyTrustworthy(lastBackfillPos.accuracy)
+              ) {
+                const dtSec = (timestamp.getTime() - lastBackfillPos.timestamp.getTime()) / 1000;
+                if (dtSec > 0) {
+                  speedMs =
+                    haversineDistance(
+                      lastBackfillPos.latitude,
+                      lastBackfillPos.longitude,
+                      pos.latitude,
+                      pos.longitude,
+                    ) / dtSec;
+                }
+              }
 
               // Télémétrie stockée sur les positions backfillées aussi (historique) :
               // la classification de silence utilisera la dernière télémétrie connue
@@ -1216,7 +1245,12 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                   );
                 }
               }
-              lastBackfillPos = { latitude: pos.latitude, longitude: pos.longitude, timestamp };
+              lastBackfillPos = {
+                latitude: pos.latitude,
+                longitude: pos.longitude,
+                timestamp,
+                accuracy,
+              };
 
               toInsert.push({
                 latitude: pos.latitude,
@@ -1411,10 +1445,33 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           );
         }
 
+        // PARITÉ AVEC LE CHEMIN PHONE (tracking.gateway C8 + saveBatch C8) : si le
+        // traceur ne fournit PAS de vitesse Doppler sur ce fix (fréquent au démarrage
+        // du device, sur certains protocoles, ou après une position LBS), on la dérive
+        // haversine/Δt contre la dernière position fiable — mais UNIQUEMENT si les deux
+        // extrémités sont assez précises (isAccuracyTrustworthy). Sinon le bruit GPS
+        // fabrique une fausse vitesse qui valide son propre segment dans
+        // computeFilteredDistance (sur-comptage). Sans cette dérivation, un véhicule à
+        // traceur physique SOUS-COMPTAIT sa distance (RÈGLE VITESSE de
+        // computeFilteredDistance retombe sur le filtre accuracy quand speed=0) là où
+        // un téléphone ne le fait pas — divergence de comportement entre les 2 sources.
+        let speedMs = (pos.speed || 0) * 0.514444;
+        if (speedMs <= 0 && isAccuracyTrustworthy(derivedAccuracy)) {
+          const lastDb = await this.trackingService.getLastPosition(vehicleMapping.id);
+          if (lastDb && isAccuracyTrustworthy(lastDb.accuracy)) {
+            const dtSec = (timestamp.getTime() - lastDb.timestamp.getTime()) / 1000;
+            if (dtSec > 0) {
+              speedMs =
+                haversineDistance(lastDb.latitude, lastDb.longitude, pos.latitude, pos.longitude) /
+                dtSec;
+            }
+          }
+        }
+
         const updateDto = {
           latitude: pos.latitude,
           longitude: pos.longitude,
-          speed: (pos.speed || 0) * 0.514444,
+          speed: speedMs,
           heading: pos.course || 0,
           altitude: pos.altitude || 0,
           accuracy: derivedAccuracy,
