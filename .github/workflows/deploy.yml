@@ -81,15 +81,17 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy-staging:
-    name: Deploy to Staging
-    needs: build-and-push
+    name: Deploy to Staging (Oracle Cloud — build on host)
+    # needs: build-and-push retiré : la VM staging est une VM Oracle Cloud
+    # Always Free ARM64 (Ampere A1), les images GHCR ci-dessus sont buildées
+    # amd64 par les runners GitHub — inutilisables telles quelles sur cette
+    # VM (pas d'émulation QEMU en prod). On construit donc NATIVEMENT sur la
+    # VM (docker compose build) plutôt que de "pull" les images GHCR. Voir
+    # DEPLOYMENT.md § "Oracle Cloud" pour le détail de ce choix.
     if: github.event.inputs.environment == 'staging' || github.ref == 'refs/heads/main'
     environment: staging
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Deploy to Staging
         uses: appleboy/ssh-action@v1
         with:
@@ -98,8 +100,10 @@ jobs:
           key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
             cd /opt/delivery-tracking-staging
-            docker compose pull
-            docker compose up -d --remove-orphans
+            git fetch origin main
+            git reset --hard origin/main
+            docker compose -f docker-compose.oracle.yml build
+            docker compose -f docker-compose.oracle.yml up -d --remove-orphans
             docker image prune -f
 
       - name: Run database migrations (Staging)
@@ -110,7 +114,7 @@ jobs:
           key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
             cd /opt/delivery-tracking-staging
-            docker compose exec -T backend npx prisma migrate deploy
+            docker compose -f docker-compose.oracle.yml exec -T backend npx prisma migrate deploy
 
       - name: Health check (Staging)
         uses: appleboy/ssh-action@v1
@@ -121,7 +125,9 @@ jobs:
           script: |
             sleep 10
             curl -f http://localhost:3000/health || exit 1
-            curl -f http://localhost:5173 || exit 1
+            # Port 80 = Caddy (reverse-proxy) -> frontend. L'ancien check visait
+            # :5173 (port dev Vite, jamais exposé par la stack Docker) — corrigé.
+            curl -f http://localhost/ || exit 1
 
   deploy-production:
     name: Deploy to Production
