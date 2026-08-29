@@ -8,7 +8,10 @@ import {
   IsUUID,
   ArrayMaxSize,
 } from 'class-validator';
-import { IsPlausibleTimestamp } from '../../../common/validators/plausible-timestamp';
+import {
+  ClampFutureTimestamp,
+  IsPlausibleTimestamp,
+} from '../../../common/validators/plausible-timestamp';
 
 /**
  * Taille maximale d'un lot de positions. Alignée sur BATCH_LIMIT du worker natif
@@ -50,6 +53,10 @@ export class UpdatePositionDto {
   @Max(1000) // 1000m = seuil maximal d'une précision GPS exploitable ; au-delà c'est un fix invalide
   accuracy?: number;
 
+  // Recadre une horloge appareil qui AVANCE (> 5 min) sur l'heure serveur AVANT
+  // validation — parité avec le pont Traccar, qui conserve le point au lieu de le
+  // rejeter. Le passé et le format restent contrôlés par @IsPlausibleTimestamp.
+  @ClampFutureTimestamp()
   @IsDateString()
   @IsPlausibleTimestamp()
   timestamp: string;

@@ -108,6 +108,25 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Seuil (s) au-delà duquel un écart entre deux fix consécutifs compte comme un
+   * TROU de couverture. Pondéré par la source : un téléphone émet ~toutes les 3 s
+   * (3 min de silence = vrai problème), un traceur physique a une cadence SIM plus
+   * lâche et légitimement irrégulière (jusqu'à quelques minutes à l'arrêt selon le
+   * forfait) — sans pondération, sa couverture paraissait anormalement basse à
+   * cadence normale. Env : TRACKING_GAP_THRESHOLD_MIN (phone, défaut 3),
+   * TRACKING_GAP_THRESHOLD_TRACKER_MIN (traceur, défaut 5).
+   */
+  private getGapThresholdSec(source: PositionSource = 'phone'): number {
+    const raw =
+      source === 'physical_tracker'
+        ? Number(this.configService.get<string>('TRACKING_GAP_THRESHOLD_TRACKER_MIN', '5'))
+        : Number(this.configService.get<string>('TRACKING_GAP_THRESHOLD_MIN', '3'));
+    const fallbackMin = source === 'physical_tracker' ? 5 : 3;
+    const min = Number.isFinite(raw) && raw > 0 ? raw : fallbackMin;
+    return min * 60;
+  }
+
+  /**
    * Classifie la cause probable d'un silence de traceur physique à partir de la
    * DERNIÈRE télémétrie stockée (attributes JSONB). Unités normalisées par
    * tracker-telemetry.ts (power en volts, battery en %). Retourne un label humain
@@ -1759,6 +1778,15 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     const positions = await this.getAllPositionsByDelivery(deliveryId, companyId);
     const delivery = await this.getDeliveryInfo(deliveryId, companyId);
 
+    // Source du véhicule de CETTE livraison → seuil de trou pondéré (§3.4) :
+    // un traceur physique a une cadence plus lâche qu'un téléphone.
+    const tripVehicle = await this.prisma.delivery.findFirst({
+      where: { id: deliveryId, companyId },
+      select: { vehicle: { select: { positionSource: true } } },
+    });
+    const tripSource: PositionSource =
+      tripVehicle?.vehicle?.positionSource === 'physical_tracker' ? 'physical_tracker' : 'phone';
+
     const emptyReport = {
       delivery,
       totalDistance: { meters: 0, kilometers: 0 },
@@ -1822,16 +1850,12 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Détection de trous dans le trajet (gap detection) : tout écart de temps anormal
-    // entre deux positions CONSÉCUTIVES (au-delà du seuil, défaut 3 min) est signalé
-    // explicitement dans le rapport au lieu de tracer une ligne droite silencieuse
-    // qui donnerait une fausse impression de trajet continu. Seuil configurable via
-    // TRACKING_GAP_THRESHOLD_MIN (min). Un écart plus court que la cadence normale est
-    // ignoré (arrêt à quai, cadence ralentie à l'arrêt = 20 s).
-    const gapThresholdMin = Number(
-      this.configService.get<string>('TRACKING_GAP_THRESHOLD_MIN', '3'),
-    );
-    const gapThresholdSec =
-      (Number.isFinite(gapThresholdMin) && gapThresholdMin > 0 ? gapThresholdMin : 3) * 60;
+    // entre deux positions CONSÉCUTIVES (au-delà du seuil) est signalé explicitement
+    // dans le rapport au lieu de tracer une ligne droite silencieuse qui donnerait une
+    // fausse impression de trajet continu. Seuil pondéré par la source (§3.4) :
+    // TRACKING_GAP_THRESHOLD_MIN (phone, défaut 3) / TRACKING_GAP_THRESHOLD_TRACKER_MIN
+    // (traceur, défaut 5). Un écart plus court que la cadence normale est ignoré.
+    const gapThresholdSec = this.getGapThresholdSec(tripSource);
     const signalGaps: typeof emptyReport.signalGaps = [];
     for (let i = 1; i < positions.length; i++) {
       const prev = positions[i - 1];
@@ -1885,11 +1909,9 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
    */
   async getTrackingReliability(companyId: string, days = 30) {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    const gapThresholdMin = Number(
-      this.configService.get<string>('TRACKING_GAP_THRESHOLD_MIN', '3'),
-    );
-    const gapThresholdSec =
-      (Number.isFinite(gapThresholdMin) && gapThresholdMin > 0 ? gapThresholdMin : 3) * 60;
+    // Seuil de repli (véhicule sans source résolue) ; le seuil réel est pondéré par
+    // source par véhicule plus bas (gapSecByVehicle, §3.4).
+    const gapThresholdSec = this.getGapThresholdSec('phone');
 
     const deliveries = await this.prisma.delivery.findMany({
       where: {
@@ -1933,6 +1955,21 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       const deliveryIds = [...new Set(deliveryVehiclePairs.map((d) => d.deliveryId))];
       const vehicleIds = [...new Set(deliveryVehiclePairs.map((d) => d.vehicleId))];
 
+      // Source par véhicule → seuil de trou pondéré (§3.4) : la couverture d'un
+      // traceur physique se mesure sur une cadence plus lâche que celle d'un téléphone.
+      const vehiclesForSource = await this.prisma.vehicle.findMany({
+        where: { id: { in: vehicleIds } },
+        select: { id: true, positionSource: true },
+      });
+      const gapSecByVehicle = new Map<string, number>(
+        vehiclesForSource.map((v) => [
+          v.id,
+          this.getGapThresholdSec(
+            v.positionSource === 'physical_tracker' ? 'physical_tracker' : 'phone',
+          ),
+        ]),
+      );
+
       const allPositions = await this.prisma.gpsPosition.findMany({
         where: {
           vehicleId: { in: vehicleIds },
@@ -1956,7 +1993,10 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       for (const pair of deliveryVehiclePairs) {
         const key = `${pair.vehicleId}:${pair.deliveryId}`;
         const positions = positionsByDelivery.get(key) ?? [];
-        const coverage = this.computeCoverage(positions, gapThresholdSec);
+        const coverage = this.computeCoverage(
+          positions,
+          gapSecByVehicle.get(pair.vehicleId) ?? gapThresholdSec,
+        );
         const agg = byVehicle.get(pair.vehicleId) ?? {
           vehicleId: pair.vehicleId,
           deliveries: 0,

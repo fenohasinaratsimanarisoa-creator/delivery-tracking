@@ -1,4 +1,5 @@
 import { registerDecorator, ValidationArguments, ValidationOptions } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 /**
  * FAIBLESSE CORRIGÉE (audit GPS 2026-08-27, MOYENNE) : `@IsDateString()` seul
@@ -19,6 +20,42 @@ import { registerDecorator, ValidationArguments, ValidationOptions } from 'class
  */
 const FUTURE_TOLERANCE_MS = 5 * 60 * 1000; // 5 min
 const PAST_TOLERANCE_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
+
+/**
+ * Recadre un timestamp d'acquisition GPS dont l'horloge appareil AVANCE de plus de
+ * FUTURE_TOLERANCE_MS sur l'heure serveur : la valeur est ramenée à l'instant de
+ * réception (le point est CONSERVÉ, seule sa date est corrigée — jamais de perte).
+ *
+ * PARITÉ AVEC LE PONT TRACCAR (`TraccarBridgeService.parseTimestamp`, même seuil de
+ * 5 min) : avant ce recadrage, `@IsPlausibleTimestamp` REJETAIT la position (perte
+ * totale et invisible pour le chauffeur) là où le traceur physique la garde. Un fix
+ * GPS ne peut pas être acquis dans le futur : le ramener à l'heure de réception est
+ * la meilleure estimation disponible.
+ *
+ * N'agit QUE sur le futur > tolérance. Le passé (rattrapage de file offline après
+ * coupure, jusqu'à 30 j) et le format restent contrôlés par `@IsPlausibleTimestamp`.
+ * Une valeur non-chaîne ou illisible est renvoyée telle quelle (le validateur la
+ * rejettera).
+ */
+export function clampFutureTimestamp(value: unknown, now = Date.now()): unknown {
+  if (typeof value !== 'string') return value;
+  const ms = Date.parse(value);
+  if (Number.isNaN(ms)) return value;
+  if (ms > now + FUTURE_TOLERANCE_MS) {
+    return new Date(now).toISOString();
+  }
+  return value;
+}
+
+/**
+ * Décorateur class-transformer : applique `clampFutureTimestamp` pendant
+ * `plainToInstance` (les deux points d'entrée — gateway `handlePosition` et
+ * `TrackingService.validateAndSaveBatch` — l'appellent). À placer AVANT
+ * `@IsDateString()` / `@IsPlausibleTimestamp()`.
+ */
+export function ClampFutureTimestamp() {
+  return Transform(({ value }) => clampFutureTimestamp(value));
+}
 
 export function IsPlausibleTimestamp(validationOptions?: ValidationOptions) {
   return (object: object, propertyName: string) => {

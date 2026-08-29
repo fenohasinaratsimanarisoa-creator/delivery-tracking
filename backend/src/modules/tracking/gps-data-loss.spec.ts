@@ -89,10 +89,12 @@ describe('Anti-perte de données GPS — contrat de réponse des lots', () => {
     expect(result.validatedCount).toBe(1);
   });
 
-  it('A1 (pire cas) — une horloge décalée invalide TOUT le lot : chaque rejet est listé', async () => {
-    // Cas reproductible sur un appareil bas de gamme dont l'horloge dérive :
-    // AVANT, validatedCount=0 renvoyait un 200 nu et la file native entière
-    // était effacée lot par lot, sans une seule erreur visible.
+  it('A1+§3.3 — une horloge qui AVANCE ne fait plus perdre le lot : timestamps recadrés, positions sauvées', async () => {
+    // Cas reproductible sur un appareil bas de gamme dont l'horloge dérive.
+    // AVANT : @IsPlausibleTimestamp rejetait tout → validatedCount=0 → 200 nu → la
+    // file native entière effacée lot par lot. MAINTENANT : parité avec le pont
+    // Traccar — le timestamp futur est recadré sur l'heure serveur AVANT validation,
+    // la position est CONSERVÉE (aucune perte).
     const farFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const result = await service.validateAndSaveBatch(USER_ID, COMPANY_ID, [
       basePosition({ timestamp: farFuture }),
@@ -101,9 +103,14 @@ describe('Anti-perte de données GPS — contrat de réponse des lots', () => {
 
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
-    expect(result.validatedCount).toBe(0);
-    expect(result.rejected.map((r) => r.index)).toEqual([0, 1]);
-    expect(result.rejected[0].reason).toContain('isPlausibleTimestamp');
+    expect(result.rejected).toEqual([]);
+    expect(result.validatedCount).toBe(2);
+
+    // Les timestamps réellement écrits en base sont recadrés (≈ maintenant), jamais le futur.
+    const inserted = mockPrisma.gpsPosition.createManyAndReturn.mock.calls[0][0].data;
+    for (const row of inserted) {
+      expect(new Date(row.timestamp).getTime()).toBeLessThan(Date.now() + 5000);
+    }
   });
 
   it('A8 — une livraison périmée DÉTACHE la position au lieu de la détruire', async () => {

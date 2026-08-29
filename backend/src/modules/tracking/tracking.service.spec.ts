@@ -1745,6 +1745,56 @@ describe('TrackingService', () => {
       expect(report.signalInterrupted).toBe(false);
       expect(report.trackingCoveragePct).toBe(100);
     });
+
+    it('§3.4 — un écart de 4 min est un TROU pour un téléphone mais PAS pour un traceur physique', async () => {
+      const base = Date.parse('2026-07-21T10:00:00.000Z');
+      const mk = (offsets: number[]) =>
+        offsets.map((t, i) => ({
+          latitude: 48.85 + i * 0.001,
+          longitude: 2.35,
+          speed: 10,
+          heading: 90,
+          altitude: null,
+          accuracy: 10,
+          suspect: false,
+          timestamp: new Date(base + t),
+          driverId: 'driver-1',
+        }));
+      // 3 fix, puis un écart de 4 min, puis 3 fix.
+      const offsets = [0, 60_000, 120_000, 360_000, 420_000, 480_000];
+      mockPrisma.gpsPosition.findMany.mockResolvedValue(mk(offsets));
+
+      const baseDelivery = {
+        id: 'd-gap4',
+        title: 'Gap4',
+        status: 'delivered',
+        pickupAddress: 'A',
+        deliveryAddress: 'B',
+        pickupLat: null,
+        pickupLng: null,
+        deliveryLat: null,
+        deliveryLng: null,
+        scheduledDate: new Date(),
+        publicTrackingRevokedAt: null,
+      };
+
+      // Téléphone (seuil 3 min) → l'écart de 4 min EST un trou.
+      mockPrisma.delivery.findFirst.mockResolvedValue({
+        ...baseDelivery,
+        vehicle: { positionSource: 'phone' },
+      });
+      const phone = await service.getTripReport('d-gap4', 'company-1');
+      expect(phone.signalInterrupted).toBe(true);
+
+      // Traceur physique (seuil 5 min) → le MÊME écart n'est PAS un trou.
+      mockPrisma.delivery.findFirst.mockResolvedValue({
+        ...baseDelivery,
+        vehicle: { positionSource: 'physical_tracker' },
+      });
+      const tracker = await service.getTripReport('d-gap4', 'company-1');
+      expect(tracker.signalInterrupted).toBe(false);
+      expect(tracker.trackingCoveragePct).toBe(100);
+    });
   });
 
   describe('computeCoverage', () => {
