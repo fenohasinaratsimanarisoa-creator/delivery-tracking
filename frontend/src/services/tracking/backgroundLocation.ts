@@ -142,6 +142,29 @@ const GRANTED_DEFAULTS: BackgroundLocationStatus = {
   },
 };
 
+/**
+ * Normalise un statut renvoyé par le plugin natif : garantit que `permissions`
+ * est toujours un objet complet. Sans ça, un natif renvoyant un statut partiel
+ * (ex. `{ running: true }`) fait planter `status.permissions.backgroundGranted`
+ * côté appelant — et, ce plantage étant avalé par un `.catch`, le foreground
+ * service de localisation n'est jamais démarré : perte SILENCIEUSE de tracking.
+ */
+function normalizeStatus(raw: unknown): BackgroundLocationStatus {
+  const s = (raw ?? {}) as Partial<BackgroundLocationStatus>;
+  const p = (s.permissions ?? {}) as Partial<BackgroundLocationPermissions>;
+  return {
+    running: s.running === true,
+    permissions: {
+      fineGranted: p.fineGranted === true,
+      coarseGranted: p.coarseGranted === true,
+      backgroundGranted: p.backgroundGranted === true,
+      notificationsGranted: p.notificationsGranted === true,
+      allGranted: p.allGranted === true,
+      batteryOptimizationIgnored: p.batteryOptimizationIgnored === true,
+    },
+  };
+}
+
 let plugin: BackgroundLocationNative | null = null;
 
 function resolvePlugin(): BackgroundLocationNative | null {
@@ -158,20 +181,20 @@ function resolvePlugin(): BackgroundLocationNative | null {
 export async function startBackgroundLocation(): Promise<BackgroundLocationStatus> {
   const p = resolvePlugin();
   if (!p) return GRANTED_DEFAULTS;
-  return p.start();
+  return normalizeStatus(await p.start());
 }
 
 export async function stopBackgroundLocation(): Promise<BackgroundLocationStatus> {
   const p = resolvePlugin();
   if (!p) return GRANTED_DEFAULTS;
-  return p.stop();
+  return normalizeStatus(await p.stop());
 }
 
 export async function getBackgroundLocationStatus(): Promise<BackgroundLocationStatus> {
   const p = resolvePlugin();
   if (!p) return GRANTED_DEFAULTS;
   try {
-    return await p.getStatus();
+    return normalizeStatus(await p.getStatus());
   } catch {
     return GRANTED_DEFAULTS;
   }
@@ -180,7 +203,7 @@ export async function getBackgroundLocationStatus(): Promise<BackgroundLocationS
 export async function requestBackgroundLocationPermissions(): Promise<BackgroundLocationStatus> {
   const p = resolvePlugin();
   if (!p) return GRANTED_DEFAULTS;
-  return p.requestPermissions();
+  return normalizeStatus(await p.requestPermissions());
 }
 
 /** État persistant de l'exemption batterie (true = l'app ne sera pas Doze'd). */
