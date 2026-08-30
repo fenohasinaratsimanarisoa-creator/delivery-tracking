@@ -955,7 +955,7 @@ export function useDriverTracking() {
       .then((status) => {
         // Observation pure (remonte l'info de fiabilité) — ne modifie pas le
         // flux de demande de permission ci-dessous.
-        setBackgroundPermGranted(status.permissions.backgroundGranted);
+        setBackgroundPermGranted(status.permissions?.backgroundGranted ?? false);
         if (!status.running) {
           return requestBackgroundLocationPermissions()
             .then(() => startBackgroundLocation())
