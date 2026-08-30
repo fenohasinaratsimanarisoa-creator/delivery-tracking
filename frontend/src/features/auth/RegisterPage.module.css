@@ -1,32 +1,5 @@
-:global {
-  @keyframes dt-fade-in-up {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes dt-spin {
-    to { transform: rotate(360deg); }
-  }
-  @keyframes dt-dot-drift {
-    0%   { transform: translate(0, 0); }
-    25%  { transform: translate(4px, -3px); }
-    50%  { transform: translate(-2px, 5px); }
-    75%  { transform: translate(3px, -2px); }
-    100% { transform: translate(0, 0); }
-  }
-  @keyframes dt-pulse-glow {
-    0%, 100% { opacity: 0.4; }
-    50%      { opacity: 0.8; }
-  }
-  @keyframes dt-shimmer {
-    0%   { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .dt-animate { animation: none !important; }
-    .dt-animate-slide { animation: none !important; }
-  }
-}
+/* @keyframes dt-* → feuille globale (src/styles/theme.ts). prefers-reduced-motion
+   géré globalement par ThemeContext. */
 
 .wrapper {
   display: flex;

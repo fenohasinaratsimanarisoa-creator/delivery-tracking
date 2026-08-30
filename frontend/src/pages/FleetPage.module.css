@@ -12,12 +12,7 @@
   font-family: var(--font-body, Inter, sans-serif);
 }
 
-:global {
-  @keyframes dt-row-highlight {
-    0% { background: var(--color-accent-muted); }
-    100% { background: transparent; }
-  }
-}
+/* @keyframes dt-row-highlight → feuille globale (src/styles/theme.ts) */
 
 /* ─── En-tête ─────────────────────────────────────────────── */
 .pageHeader {

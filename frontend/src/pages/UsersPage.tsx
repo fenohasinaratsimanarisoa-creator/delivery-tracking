@@ -317,13 +317,7 @@ export default function UsersPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <style>{`
-        @keyframes dt-row-highlight {
-          0% { background: var(--color-accent-muted); }
-          100% { background: transparent; }
-        }
-      `}</style>
-
+      {/* @keyframes dt-row-highlight vit dans la feuille globale (src/styles/theme.ts) */}
       <header className={styles.pageHeader}>
         <div className={styles.titleIconChip}><UserCog size={24} /></div>
         <div className={styles.headerText}>

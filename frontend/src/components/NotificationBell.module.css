@@ -1,36 +1,6 @@
-:global {
-  @keyframes dt-notif-pop {
-    0%   { transform: scale(0.5); opacity: 0; }
-    60%  { transform: scale(1.15); }
-    100% { transform: scale(1); opacity: 1; }
-  }
-  @keyframes dt-notif-slide-in {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes dt-notif-bell-ring {
-    0%   { transform: rotate(0); }
-    20%  { transform: rotate(-14deg); }
-    40%  { transform: rotate(10deg); }
-    60%  { transform: rotate(-7deg); }
-    80%  { transform: rotate(4deg); }
-    100% { transform: rotate(0); }
-  }
-  @keyframes dt-notif-panel-in {
-    from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .bellRing,
-    .badge,
-    .panel,
-    .notifItem,
-    .dt-notif-animate {
-      animation: none !important;
-    }
-  }
-}
+/* @keyframes dt-notif-* → feuille globale (src/styles/theme.ts). Le respect de
+   prefers-reduced-motion est assuré globalement par ThemeContext (règle
+   *, *::before, *::after { animation-duration: .01ms !important }). */
 
 .container {
   position: relative;
