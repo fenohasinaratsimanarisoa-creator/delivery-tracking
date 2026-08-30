@@ -34,7 +34,11 @@ jobs:
         run: npm ci
 
       - name: Run ESLint
-        run: npm run lint
+        # lint:check ne corrige PAS (pas de --fix) : la CI échoue si du code non
+        # formaté est committé, au lieu de le réécrire en silence. Le plafond
+        # --max-warnings 140 fige la dette `no-explicit-any` actuelle — toute
+        # nouvelle occurrence casse le build (ratchet à sens unique).
+        run: npm run lint:check
 
       - name: Run TypeScript type check
         run: npx tsc --noEmit

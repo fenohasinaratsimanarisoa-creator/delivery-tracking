@@ -124,9 +124,7 @@ export class DeviceTrackingAuthGuard implements CanActivate {
       throw new UnauthorizedException('Token has been revoked');
     }
     if (payload.sessionId) {
-      const sessionRevokedAt = await this.redis.get(
-        `revoked:session:${payload.sessionId}`,
-      );
+      const sessionRevokedAt = await this.redis.get(`revoked:session:${payload.sessionId}`);
       if (sessionRevokedAt && payload.iat < parseInt(sessionRevokedAt, 10)) {
         throw new UnauthorizedException('Token has been revoked');
       }

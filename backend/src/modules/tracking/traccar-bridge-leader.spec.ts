@@ -171,9 +171,7 @@ describe('TraccarBridgeService — Leader Election', () => {
       try {
         const service = createService(mockRedis);
         (service as any).isLeader = true;
-        const disconnectSpy = jest
-          .spyOn(service as any, 'disconnect')
-          .mockImplementation(() => {});
+        const disconnectSpy = jest.spyOn(service as any, 'disconnect').mockImplementation(() => {});
 
         // 1er renouvellement : échec Redis transitoire — toléré, pas de disconnect.
         mockRedis.get.mockRejectedValueOnce(new Error('redis connection timeout'));
@@ -205,9 +203,7 @@ describe('TraccarBridgeService — Leader Election', () => {
       try {
         const service = createService(mockRedis);
         (service as any).isLeader = true;
-        const disconnectSpy = jest
-          .spyOn(service as any, 'disconnect')
-          .mockImplementation(() => {});
+        const disconnectSpy = jest.spyOn(service as any, 'disconnect').mockImplementation(() => {});
 
         // 1er échec : toléré.
         mockRedis.get.mockRejectedValueOnce(new Error('redis timeout 1'));
@@ -236,9 +232,7 @@ describe('TraccarBridgeService — Leader Election', () => {
       try {
         const service = createService(mockRedis);
         (service as any).isLeader = true;
-        const disconnectSpy = jest
-          .spyOn(service as any, 'disconnect')
-          .mockImplementation(() => {});
+        const disconnectSpy = jest.spyOn(service as any, 'disconnect').mockImplementation(() => {});
 
         // 1er échec EXPIRE : toléré.
         mockRedis.get.mockResolvedValueOnce((service as any).instanceId);

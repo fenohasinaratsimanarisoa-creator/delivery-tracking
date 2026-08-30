@@ -1,4 +1,13 @@
-import { IsString, IsNumber, Min, Max, IsDateString, IsOptional, MinLength, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  Min,
+  Max,
+  IsDateString,
+  IsOptional,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 import { IsPlausibleTimestamp } from '../../../common/validators/plausible-timestamp';
 
 /**

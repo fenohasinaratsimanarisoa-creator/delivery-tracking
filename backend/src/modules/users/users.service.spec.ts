@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from './users.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -892,26 +897,26 @@ describe('UsersService', () => {
     it('should throw NotFoundException when user not found', async () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce(null);
 
-      await expect(
-        service.updateEmail('user-1', 'new@test.com', 'OldPass123!'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.updateEmail('user-1', 'new@test.com', 'OldPass123!')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should throw BadRequestException when new email equals current', async () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce(localUser);
 
-      await expect(
-        service.updateEmail('user-1', 'old@test.com', 'OldPass123!'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.updateEmail('user-1', 'old@test.com', 'OldPass123!')).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw ConflictException when email already in use', async () => {
       mockPrisma.user.findUnique.mockResolvedValueOnce(localUser);
       mockPrisma.user.findUnique.mockResolvedValueOnce({ id: 'other-user' });
 
-      await expect(
-        service.updateEmail('user-1', 'taken@test.com', 'OldPass123!'),
-      ).rejects.toThrow(ConflictException);
+      await expect(service.updateEmail('user-1', 'taken@test.com', 'OldPass123!')).rejects.toThrow(
+        ConflictException,
+      );
     });
   });
 

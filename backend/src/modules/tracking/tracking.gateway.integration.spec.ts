@@ -86,7 +86,10 @@ describe('TrackingGateway — ACK WebSocket réel (Test D)', () => {
             exposeUnsetFields: false,
             enableImplicitConversion: true,
           });
-          const errors = await validate(instance, { whitelist: true, skipMissingProperties: false });
+          const errors = await validate(instance, {
+            whitelist: true,
+            skipMissingProperties: false,
+          });
           return { instance, errors };
         }),
       );
@@ -100,8 +103,18 @@ describe('TrackingGateway — ACK WebSocket réel (Test D)', () => {
       if (validatedPositions.length === 0) {
         return { status: 'ok' as const, saved: [], validatedCount: 0, driverId: driver.id };
       }
-      const saved = await trackingService.saveBatch(userId, driver.id, validatedPositions, companyId);
-      return { status: 'ok' as const, saved, validatedCount: validatedPositions.length, driverId: driver.id };
+      const saved = await trackingService.saveBatch(
+        userId,
+        driver.id,
+        validatedPositions,
+        companyId,
+      );
+      return {
+        status: 'ok' as const,
+        saved,
+        validatedCount: validatedPositions.length,
+        driverId: driver.id,
+      };
     },
   );
 

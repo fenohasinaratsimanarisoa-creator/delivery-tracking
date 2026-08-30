@@ -138,7 +138,9 @@ describe('MobileMoneyService', () => {
       expect(String((tokenInit as RequestInit).body)).toContain('grant_type=client_credentials');
 
       const [payUrl, payInit] = fetchMock.mock.calls[1];
-      expect((payUrl as string).endsWith('/mvola/mm/transactions/type/merchantpay/1.0.0/')).toBe(true);
+      expect((payUrl as string).endsWith('/mvola/mm/transactions/type/merchantpay/1.0.0/')).toBe(
+        true,
+      );
       const payHeaders = (payInit as RequestInit).headers as Record<string, string>;
       expect(payHeaders.Authorization).toBe('Bearer tok-1');
       expect(payHeaders['X-Target-Environment']).toBe('prod');
@@ -209,7 +211,9 @@ describe('MobileMoneyService', () => {
       const prodService = makeProdService({ MVOLA_MERCHANT_PHONE: undefined });
       const fetchMock = jest.fn();
       global.fetch = fetchMock as unknown as typeof fetch;
-      fetchMock.mockResolvedValueOnce(mockResponse(200, { access_token: 'tok-1', expires_in: 3600 }));
+      fetchMock.mockResolvedValueOnce(
+        mockResponse(200, { access_token: 'tok-1', expires_in: 3600 }),
+      );
 
       const done = prodService.requestPayment(prodRequest, 'mvola');
       await expect(done).rejects.toThrow(

@@ -135,9 +135,9 @@ describe('PlatformAdminService.login — 2FA optionnelle', () => {
         // Succès ensuite.
         .mockResolvedValueOnce({ ...base, totpEnabled: false, passwordHash });
 
-      await expect(
-        service.login({ email: 'admin@test.com', password: 'wrong' }),
-      ).rejects.toThrow('Invalid credentials');
+      await expect(service.login({ email: 'admin@test.com', password: 'wrong' })).rejects.toThrow(
+        'Invalid credentials',
+      );
       expect(redis.incr).toHaveBeenCalledWith(
         expect.stringMatching(/^admin_login_fail:[0-9a-f]{32}$/),
       );

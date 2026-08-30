@@ -130,7 +130,9 @@ export class GeocodingService {
         await this.redis.set(GOOGLE_LAST_ERROR_KEY, JSON.stringify({ message, at: now }));
         return;
       } catch (err) {
-        this.logger.debug(`Redis write failed for Google Places failure tracking: ${(err as Error).message}`);
+        this.logger.debug(
+          `Redis write failed for Google Places failure tracking: ${(err as Error).message}`,
+        );
       }
     }
     this.googleFailureTimestamps.push(now);
@@ -148,12 +150,17 @@ export class GeocodingService {
         const lastError = raw ? (JSON.parse(raw) as { message: string }).message : null;
         return { count24h: count, lastError };
       } catch (err) {
-        this.logger.debug(`Redis read failed for Google Places failure tracking: ${(err as Error).message}`);
+        this.logger.debug(
+          `Redis read failed for Google Places failure tracking: ${(err as Error).message}`,
+        );
       }
     }
     const cutoff = now - GOOGLE_FAILURE_WINDOW_MS;
     this.googleFailureTimestamps = this.googleFailureTimestamps.filter((t) => t >= cutoff);
-    return { count24h: this.googleFailureTimestamps.length, lastError: this.googleLastError?.message ?? null };
+    return {
+      count24h: this.googleFailureTimestamps.length,
+      lastError: this.googleLastError?.message ?? null,
+    };
   }
 
   /** Ping léger Nominatim (reverse geocode sur Antananarivo), caché 60s pour ne pas spammer le service. */
@@ -166,7 +173,10 @@ export class GeocodingService {
       } catch (err) {
         this.logger.debug(`Redis read failed for Nominatim ping cache: ${(err as Error).message}`);
       }
-    } else if (this.nominatimPingCache && now - this.nominatimPingCache.at < NOMINATIM_PING_CACHE_TTL_MS) {
+    } else if (
+      this.nominatimPingCache &&
+      now - this.nominatimPingCache.at < NOMINATIM_PING_CACHE_TTL_MS
+    ) {
       return this.nominatimPingCache.reachable;
     }
 
@@ -548,7 +558,9 @@ export class GeocodingService {
 
       return result;
     } catch (err) {
-      this.logger.debug(`Nominatim reverse geocode failed (best-effort): ${(err as Error).message}`);
+      this.logger.debug(
+        `Nominatim reverse geocode failed (best-effort): ${(err as Error).message}`,
+      );
       return null;
     }
   }
@@ -620,12 +632,12 @@ export class GeocodingService {
             }
           }
         }
-} catch (err) {
-          this.logger.debug(`Nearby geocode query failed (best-effort): ${(err as Error).message}`);
-          /* continue */
-        }
+      } catch (err) {
+        this.logger.debug(`Nearby geocode query failed (best-effort): ${(err as Error).message}`);
+        /* continue */
+      }
 
-        if (results.length >= 20) break;
+      if (results.length >= 20) break;
     }
 
     const final = results.slice(0, 25);

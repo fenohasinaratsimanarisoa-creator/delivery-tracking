@@ -74,7 +74,7 @@ describe('DeviceTrackingAuthGuard', () => {
     );
   });
 
-  it("accepte un access token normal (scope absent) — compatibilité ascendante", async () => {
+  it('accepte un access token normal (scope absent) — compatibilité ascendante', async () => {
     jwtService.verify.mockReturnValue(payload());
     await expect(guard.canActivate(ctx({ authorization: 'Bearer access' }))).resolves.toBe(true);
   });
@@ -109,7 +109,7 @@ describe('DeviceTrackingAuthGuard', () => {
     );
   });
 
-  it("RÉVOCATION : un device token dont la session a été supprimée est refusé, malgré ses 30 j de validité nominale", async () => {
+  it('RÉVOCATION : un device token dont la session a été supprimée est refusé, malgré ses 30 j de validité nominale', async () => {
     jwtService.verify.mockReturnValue(
       payload({ scope: 'device_tracking', sessionId: 'session-1' }),
     );

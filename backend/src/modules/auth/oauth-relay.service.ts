@@ -1,4 +1,11 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Inject, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Inject,
+  Optional,
+} from '@nestjs/common';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
@@ -82,9 +89,17 @@ export class OAuthRelayService implements OnModuleInit, OnModuleDestroy {
     const relayId = randomBytes(32).toString('hex');
     if (this.redis) {
       const payload: StoredRelay = { codeChallenge };
-      await this.redis.set(RELAY_KEY_PREFIX + relayId, JSON.stringify(payload), 'EX', RELAY_TTL_SECONDS);
+      await this.redis.set(
+        RELAY_KEY_PREFIX + relayId,
+        JSON.stringify(payload),
+        'EX',
+        RELAY_TTL_SECONDS,
+      );
     } else {
-      this.memRelays.set(relayId, { codeChallenge, expiresAt: Date.now() + RELAY_TTL_SECONDS * 1000 });
+      this.memRelays.set(relayId, {
+        codeChallenge,
+        expiresAt: Date.now() + RELAY_TTL_SECONDS * 1000,
+      });
     }
     return relayId;
   }
@@ -109,8 +124,7 @@ export class OAuthRelayService implements OnModuleInit, OnModuleDestroy {
       // Un nonce est consommé une seule fois : GETDEL atomique retire la clé
       // relay dès la lecture, un second appel avec le même relayId échoue.
       const raw = (await this.redis.eval(GET_DEL_SCRIPT, 1, RELAY_KEY_PREFIX + relayId)) as
-        | string
-        | null;
+        string | null;
       if (!raw) return null;
       codeChallenge = (JSON.parse(raw) as StoredRelay).codeChallenge;
     } else {
@@ -145,8 +159,7 @@ export class OAuthRelayService implements OnModuleInit, OnModuleDestroy {
       // GETDEL atomique : garantit le single-use même sous requêtes concurrentes
       // (contrairement à un GET suivi d'un DEL séparé — fenêtre de double-spend).
       const raw = (await this.redis.eval(GET_DEL_SCRIPT, 1, CODE_KEY_PREFIX + code)) as
-        | string
-        | null;
+        string | null;
       if (!raw) return null;
       entry = JSON.parse(raw) as StoredCode;
     } else {

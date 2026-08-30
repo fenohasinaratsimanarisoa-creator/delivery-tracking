@@ -198,9 +198,12 @@ describe('GeocodingService', () => {
 // Redis à null : force de VRAIS appels réseau (simulés) à chaque test — sinon le
 // cache court-circuiterait fetch() et les assertions ne vérifieraient plus rien.
 function makeUncachedService(): GeocodingService {
-  return new GeocodingService(null as any, {
-    get: jest.fn(() => undefined),
-  } as unknown as ConfigService);
+  return new GeocodingService(
+    null as any,
+    {
+      get: jest.fn(() => undefined),
+    } as unknown as ConfigService,
+  );
 }
 
 function nominatimItem(lat: number, lon: number) {

@@ -37,7 +37,7 @@ describe('CreateFuelPriceDto (audit carburant 2026-08-27)', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('rejette toujours un prix négatif (déjà couvert avant l\'audit, non-régression)', async () => {
+  it("rejette toujours un prix négatif (déjà couvert avant l'audit, non-régression)", async () => {
     const errors = await validateDto({ pricePerLiter: -1 });
     expect(errors.length).toBeGreaterThan(0);
   });

@@ -1,4 +1,13 @@
-import { IsNumber, IsString, IsOptional, Min, IsPositive, IsUUID, MaxLength, IsDateString } from 'class-validator';
+import {
+  IsNumber,
+  IsString,
+  IsOptional,
+  Min,
+  IsPositive,
+  IsUUID,
+  MaxLength,
+  IsDateString,
+} from 'class-validator';
 import { IsPlausibleFuelDate } from '../../../common/validators/plausible-fuel-date';
 
 export class CreateFuelLogDto {

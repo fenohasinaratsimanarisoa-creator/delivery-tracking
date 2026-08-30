@@ -56,7 +56,7 @@ describe('CreateFuelLogDto (audit carburant 2026-08-27)', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('FAIBLE #12 : REJETTE un vehicleId qui n\'est pas un UUID', async () => {
+  it("FAIBLE #12 : REJETTE un vehicleId qui n'est pas un UUID", async () => {
     const errors = await validateDto({ vehicleId: 'not-a-uuid' });
     expect(errors.length).toBeGreaterThan(0);
     expect(errors.some((e) => e.property === 'vehicleId')).toBe(true);

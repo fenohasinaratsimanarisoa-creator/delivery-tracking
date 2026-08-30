@@ -120,7 +120,9 @@ export class MobileMoneyService {
     } catch (err) {
       // DOMException (AbortError) n'est PAS instanceof Error — on teste le name.
       const aborted = (err as { name?: string })?.name === 'AbortError';
-      this.logger.error(`MVola HTTP error (${aborted ? 'timeout' : 'network'}): ${(err as Error).message}`);
+      this.logger.error(
+        `MVola HTTP error (${aborted ? 'timeout' : 'network'}): ${(err as Error).message}`,
+      );
       throw new HttpException(
         "L'opérateur MVola est injoignable. Réessayez dans quelques instants.",
         aborted ? HttpStatus.GATEWAY_TIMEOUT : HttpStatus.SERVICE_UNAVAILABLE,
@@ -181,7 +183,7 @@ export class MobileMoneyService {
     if (!data.access_token) {
       this.logger.error(`MVola /token response without access_token: ${JSON.stringify(data)}`);
       throw new HttpException(
-        'Réponse MVola invalide : jeton d\'authentification manquant.',
+        "Réponse MVola invalide : jeton d'authentification manquant.",
         HttpStatus.BAD_GATEWAY,
       );
     }
@@ -214,7 +216,10 @@ export class MobileMoneyService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    return new HttpException(`L'opérateur MVola a refusé le paiement${suffix}`, HttpStatus.BAD_GATEWAY);
+    return new HttpException(
+      `L'opérateur MVola a refusé le paiement${suffix}`,
+      HttpStatus.BAD_GATEWAY,
+    );
   }
 
   /**
@@ -252,7 +257,10 @@ export class MobileMoneyService {
         'X-Correlation-ID': randomUUID(),
         PartnerName: partnerName,
         UserLanguage: 'FR',
-        UserAccountIdentifier: JSON.stringify({ identifierType: 'msisdn', identifier: creditPhone }),
+        UserAccountIdentifier: JSON.stringify({
+          identifierType: 'msisdn',
+          identifier: creditPhone,
+        }),
         'X-Target-Environment': this.isSandbox ? 'sandbox' : 'prod',
         ...(callbackUrl ? { CallbackURL: callbackUrl } : {}),
       },

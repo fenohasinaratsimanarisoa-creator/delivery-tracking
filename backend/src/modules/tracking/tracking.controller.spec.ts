@@ -1,5 +1,10 @@
 import { Test } from '@nestjs/testing';
-import { INestApplication, ValidationPipe, UnauthorizedException, ExecutionContext } from '@nestjs/common';
+import {
+  INestApplication,
+  ValidationPipe,
+  UnauthorizedException,
+  ExecutionContext,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import * as request from 'supertest';
 import { JwtService } from '@nestjs/jwt';
@@ -122,7 +127,7 @@ describe('TrackingController — PATCH /tracking/reliability-status (autorisatio
     );
   });
 
-  it("un driverId injecté dans le body est rejeté (400, forbidNonWhitelisted) — impossible de viser un autre chauffeur", async () => {
+  it('un driverId injecté dans le body est rejeté (400, forbidNonWhitelisted) — impossible de viser un autre chauffeur', async () => {
     const res = await request(app.getHttpServer())
       .patch('/tracking/reliability-status')
       .set('x-test-role', 'driver')
@@ -262,7 +267,7 @@ describe('TrackingController — POST /tracking/positions/native-batch', () => {
     expect(res.body).toEqual({ saved: 3, duplicates: 2 });
   });
 
-  it('sans JWT valide (pas d\'en-tête Authorization) → 401', async () => {
+  it("sans JWT valide (pas d'en-tête Authorization) → 401", async () => {
     const positions = [makeValidPosition(0)];
 
     const res = await request(app.getHttpServer())
@@ -295,7 +300,7 @@ describe('TrackingController — POST /tracking/positions/native-batch', () => {
     expect(mockTrackingService.validateAndSaveBatch).toHaveBeenCalledTimes(1);
   });
 
-  it("aucun profil Driver résolvable (no_driver) → 422, PAS 200 — sinon PositionUploadWorker marquerait synced un lot jamais persisté (perte silencieuse, audit 2026-08-27)", async () => {
+  it('aucun profil Driver résolvable (no_driver) → 422, PAS 200 — sinon PositionUploadWorker marquerait synced un lot jamais persisté (perte silencieuse, audit 2026-08-27)', async () => {
     mockTrackingService.validateAndSaveBatch.mockResolvedValueOnce({ status: 'no_driver' });
 
     const positions = Array.from({ length: 5 }, (_, i) => makeValidPosition(i));
@@ -454,7 +459,7 @@ describe('TrackingController — POST /tracking/positions/sms-relay', () => {
     expect(mockTrackingService.ingestSmsRelayPosition).not.toHaveBeenCalled();
   });
 
-  it("champ vehicleId injecté dans le body est rejeté (400, forbidNonWhitelisted) — le véhicule ne peut être choisi que par le serveur", async () => {
+  it('champ vehicleId injecté dans le body est rejeté (400, forbidNonWhitelisted) — le véhicule ne peut être choisi que par le serveur', async () => {
     const res = await request(app.getHttpServer())
       .post('/tracking/positions/sms-relay')
       .set('x-api-key', 'test-key')

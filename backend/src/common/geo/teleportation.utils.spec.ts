@@ -11,8 +11,12 @@ import { evaluateTeleportation } from './teleportation.utils';
 // La vitesse ne doit plus être échelonnée : un point dont l'accuracy dégradée
 // le fait sembler franchir 200 km/h est du bruit, jamais un déplacement réel.
 // =============================================================================
-describe('evaluateTeleportation — seuil de vitesse non échelonné par l\'accuracy (audit 2026-08-27)', () => {
-  const reference = { latitude: -18.8792, longitude: 47.5079, timestamp: new Date('2026-08-27T00:00:00.000Z') };
+describe("evaluateTeleportation — seuil de vitesse non échelonné par l'accuracy (audit 2026-08-27)", () => {
+  const reference = {
+    latitude: -18.8792,
+    longitude: 47.5079,
+    timestamp: new Date('2026-08-27T00:00:00.000Z'),
+  };
 
   it('DÉTECTE le saut réel observé en production (720m/9s ≈ 288 km/h, accuracy 20.9m)', () => {
     // 720m ≈ 0.00647° de latitude à l'équivalent local (approximation suffisante pour le test).

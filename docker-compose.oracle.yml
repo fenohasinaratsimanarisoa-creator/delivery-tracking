@@ -1,4 +1,3 @@
-version: '3.8'
 
 # ─────────────────────────────────────────────────────────────────────────
 # Stack auto-hébergée pour Oracle Cloud Always Free (VM Ampere A1, ARM64).

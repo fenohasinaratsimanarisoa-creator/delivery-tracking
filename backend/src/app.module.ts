@@ -116,9 +116,7 @@ import { TenantModule } from './common/tenant/tenant.module';
             },
           }),
         ]
-      : [
-          ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 300 }]),
-        ]),
+      : [ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 300 }])]),
     PrismaModule,
     MonitoringModule,
     AlertModule,
