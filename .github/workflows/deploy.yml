@@ -1,8 +1,12 @@
 name: Deploy to Staging/Production
 
+# Déploiement PRODUCTION réel = scripts/deploy-contabo.sh exécuté en SSH sur le
+# VPS Contabo (git pull → build → health-gate → migrate → rollback auto).
+# Ce workflow-ci ne sert QUE pour le staging Oracle Cloud optionnel et n'est
+# donc plus déclenché sur `push` : il tournait à chaque commit et échouait
+# systématiquement (GHCR packages:write non accordé, secrets STAGING_* absents),
+# polluant le statut CI. Déclenchement manuel uniquement.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
@@ -88,7 +92,7 @@ jobs:
     # VM (pas d'émulation QEMU en prod). On construit donc NATIVEMENT sur la
     # VM (docker compose build) plutôt que de "pull" les images GHCR. Voir
     # DEPLOYMENT.md § "Oracle Cloud" pour le détail de ce choix.
-    if: github.event.inputs.environment == 'staging' || github.ref == 'refs/heads/main'
+    if: github.event.inputs.environment == 'staging'
     environment: staging
     runs-on: ubuntu-latest
     steps:
