@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
@@ -10,6 +10,7 @@ import styles from './DeliveryProofsPage.module.css';
 import DataTable from '../components/DataTable';
 import { formatDate } from '../services/i18n/formatDate';
 import { useTranslation } from 'react-i18next';
+import { useCountUp } from '../hooks/useCountUp';
 
 interface DeliveryProof {
   id: string;
@@ -36,27 +37,6 @@ const STATUS_DOT_COLORS: Record<string, string> = {
   delivered: 'var(--color-teal)',
   failed: 'var(--color-red)',
 };
-
-function useCountUp(target: number, duration = 650) {
-  const [value, setValue] = useState(target);
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setValue(target);
-      return;
-    }
-    let raf: number;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(target * eased));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return value;
-}
 
 function KpiCard({ icon, label, value, color }: {
   icon: React.ReactNode; label: string; value: number; color: string; }) {

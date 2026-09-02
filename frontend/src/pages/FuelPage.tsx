@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useCountUp } from "../hooks/useCountUp";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -115,31 +116,6 @@ const FUEL_TYPE_ICONS: Record<string, React.ReactNode> = {
   hybrid: <Leaf size={15} />,
 };
 
-function useCountUp(target: number, decimals = 0, duration = 700) {
-  const [value, setValue] = useState(target);
-  useEffect(() => {
-    const reduced =
-      typeof window !== "undefined" && typeof window.matchMedia === "function"
-        ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        : false;
-    if (reduced) {
-      setValue(target);
-      return;
-    }
-    let raf: number;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const factor = Math.pow(10, decimals);
-      setValue(Math.round(target * eased * factor) / factor);
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, decimals, duration]);
-  return value;
-}
 
 function KpiCard({
   icon,
@@ -160,7 +136,7 @@ function KpiCard({
   format?: (n: number) => string;
   pulse?: boolean;
 }) {
-  const animated = useCountUp(value, decimals);
+  const animated = useCountUp(value, { decimals, duration: 700 });
   const text = format
     ? format(animated)
     : animated.toLocaleString("fr-FR", {

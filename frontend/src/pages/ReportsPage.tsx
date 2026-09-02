@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -14,6 +14,7 @@ import Badge from '../components/Badge';
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import styles from './ReportsPage.module.css';
+import { useCountUp } from '../hooks/useCountUp';
 
 interface DeliveryReport {
   total: number;
@@ -94,27 +95,6 @@ function daysAgo(n: number) {
 
 function formatNumber(n: number) {
   return new Intl.NumberFormat('fr-FR').format(n);
-}
-
-function useCountUp(target: number, duration = 650) {
-  const [value, setValue] = useState(target);
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setValue(target);
-      return;
-    }
-    let raf: number;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(target * eased));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return value;
 }
 
 function KpiCard({ icon, label, value, color, suffix }: {

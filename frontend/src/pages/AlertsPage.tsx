@@ -33,6 +33,7 @@ import { useAuth } from '../hooks/AuthContext';
 
 type ApiError = { response?: { data?: { message?: string } } };
 import styles from './AlertsPage.module.css';
+import { useCountUp } from '../hooks/useCountUp';
 
 interface AlertItem {
   id: string;
@@ -480,27 +481,6 @@ export default function AlertsPage() {
       )}
     </div>
   );
-}
-
-function useCountUp(target: number, duration = 650) {
-  const [value, setValue] = useState(target);
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setValue(target);
-      return;
-    }
-    let raf: number;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(target * eased));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return value;
 }
 
 function KpiCard({ label, value, color, trend, icon }: { label: string; value: number; color: string; trend?: number | null; icon?: React.ReactNode }) {

@@ -15,36 +15,13 @@ import { useEntityForm, type FieldDef, type FormSection } from '../hooks/useEnti
 import { useToast } from '../components/Toast';
 import type { Driver, VehicleListItem } from '../types';
 import styles from './DriversPage.module.css';
+import { useCountUp } from '../hooks/useCountUp';
 
 type ApiError = { response?: { data?: { message?: string } } };
 
 interface DriverFormValues {
   firstName: string; lastName: string; email: string;
   phone: string; licenseNumber: string; vehicleId: string;
-}
-
-function useCountUp(target: number, duration = 650) {
-  const [value, setValue] = useState(target);
-  useEffect(() => {
-    const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false;
-    if (reduced) {
-      setValue(target);
-      return;
-    }
-    let raf: number;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(target * eased));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return value;
 }
 
 function KpiCard({ icon, label, value, color }: {

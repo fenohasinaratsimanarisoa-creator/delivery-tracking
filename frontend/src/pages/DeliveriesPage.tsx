@@ -21,6 +21,7 @@ import { reverseGeocode } from '../services/geocoding/geocodingService';
 import { formatAriary } from '../services/formatAriary';
 import { useToast } from '../components/Toast';
 import type { Delivery, Driver } from '../types';
+import { useCountUp } from '../hooks/useCountUp';
 
 type ApiError = { response?: { data?: { message?: string } }; userMessage?: string };
 
@@ -56,30 +57,6 @@ const STATUS_LABELS_KEY: Record<string, string> = {
   delivered: 'delivered', failed: 'failed', cancelled: 'cancelled',
 };
 
-
-function useCountUp(target: number, duration = 650) {
-  const [value, setValue] = useState(target);
-  useEffect(() => {
-    const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false;
-    if (reduced) {
-      setValue(target);
-      return;
-    }
-    let raf: number;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(target * eased));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return value;
-}
 
 function KpiCard({ icon, label, value, color }: {
   icon: React.ReactNode; label: string; value: number; color: string; }) {

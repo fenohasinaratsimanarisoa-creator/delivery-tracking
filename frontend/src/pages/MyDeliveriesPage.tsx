@@ -1,4 +1,5 @@
-import { useState, useEffect, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
+import { useCountUp } from '../hooks/useCountUp';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -463,30 +464,8 @@ function ActionButtons({ status, loading, onAction }: { status: string; loading:
   return null;
 }
 
-function useCountUp(target: number, duration = 600) {
-  const [value, setValue] = useState(target);
-  useEffect(() => {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduced) {
-      setValue(target);
-      return;
-    }
-    let raf: number;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(target * eased));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return value;
-}
-
 function SummaryCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) {
-  const animated = useCountUp(value);
+  const animated = useCountUp(value, { duration: 600 });
   const cardStyle = { '--kpi': color, '--kpi-muted': `${color}1a` } as CSSProperties;
   return (
     <div className={styles.summaryCard} style={cardStyle}>

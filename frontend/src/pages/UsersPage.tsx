@@ -17,6 +17,7 @@ import { useEntityForm, type FieldDef, type FormSection } from '../hooks/useEnti
 import { useToast } from '../components/Toast';
 import type { AppUser, VehicleListItem } from '../types';
 import styles from './UsersPage.module.css';
+import { useCountUp } from '../hooks/useCountUp';
 
 type ApiError = { response?: { data?: { message?: string } } };
 
@@ -48,27 +49,6 @@ const ROLE_ICONS: Record<string, React.ReactNode> = {
   driver: <Truck size={13} />,
   client: <UserX size={13} />,
 };
-
-function useCountUp(target: number, duration = 650) {
-  const [value, setValue] = useState(target);
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setValue(target);
-      return;
-    }
-    let raf: number;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(target * eased));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return value;
-}
 
 function KpiCard({ icon, label, value, color }: {
   icon: React.ReactNode; label: string; value: number; color: string; }) {

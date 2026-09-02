@@ -18,6 +18,7 @@ import { useToast } from '../components/Toast';
 import { useAuth } from '../hooks/AuthContext';
 import type { Vehicle } from '../types';
 import styles from './FleetPage.module.css';
+import { useCountUp } from '../hooks/useCountUp';
 
 type ApiError = { response?: { data?: { message?: string } } };
 
@@ -26,30 +27,6 @@ interface VehicleFormValues {
   licensePlate: string; fuelType: string;
   vin: string; theoreticalConsumption: string;
   positionSource: string; traccarDeviceId: string;
-}
-
-function useCountUp(target: number, duration = 650) {
-  const [value, setValue] = useState(target);
-  useEffect(() => {
-    const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false;
-    if (reduced) {
-      setValue(target);
-      return;
-    }
-    let raf: number;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(target * eased));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return value;
 }
 
 function KpiCard({ icon, label, value, color }: {
