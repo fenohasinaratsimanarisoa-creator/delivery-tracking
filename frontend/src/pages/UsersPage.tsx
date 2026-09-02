@@ -264,7 +264,7 @@ export default function UsersPage() {
       ] },
     { name: 'password', label: t('users.fields.password'), type: 'password', section: 'account',
       rules: { minLength: 12,
-        pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).+$/,
+        pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).+$/,
         patternMessage: t('users.validation.passwordFormat'),
       } },
     { name: 'licenseNumber', label: t('users.fields.licenseNumber'), type: 'text', required: true, section: 'license',

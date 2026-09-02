@@ -172,7 +172,10 @@ jobs:
         run: npm ci
 
       - name: Run ESLint
-        run: npm run lint
+        # lint:check fige la dette actuelle (--max-warnings 51 : 12 no-explicit-any
+        # + 39 react-hooks/exhaustive-deps). Toute NOUVELLE occurrence casse le
+        # build — ratchet à sens unique, même principe que le backend.
+        run: npm run lint:check
 
       - name: Run TypeScript type check
         run: npx tsc -b --noEmit

@@ -12,7 +12,7 @@ const RULES = [
   { key: 'auth.acceptInvite.passwordRules.uppercase', test: (v: string) => /[A-Z]/.test(v) },
   { key: 'auth.acceptInvite.passwordRules.lowercase', test: (v: string) => /[a-z]/.test(v) },
   { key: 'auth.acceptInvite.passwordRules.digit', test: (v: string) => /\d/.test(v) },
-  { key: 'auth.acceptInvite.passwordRules.special', test: (v: string) => /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(v) },
+  { key: 'auth.acceptInvite.passwordRules.special', test: (v: string) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(v) },
 ];
 
 interface InvitationInfo {

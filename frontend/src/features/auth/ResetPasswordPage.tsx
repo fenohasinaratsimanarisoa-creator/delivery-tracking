@@ -11,7 +11,7 @@ const RULES = [
   { key: 'auth.resetPassword.passwordRules.uppercase', test: (v: string) => /[A-Z]/.test(v) },
   { key: 'auth.resetPassword.passwordRules.lowercase', test: (v: string) => /[a-z]/.test(v) },
   { key: 'auth.resetPassword.passwordRules.digit', test: (v: string) => /\d/.test(v) },
-  { key: 'auth.resetPassword.passwordRules.special', test: (v: string) => /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(v) },
+  { key: 'auth.resetPassword.passwordRules.special', test: (v: string) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(v) },
 ];
 
 export default function ResetPasswordPage() {

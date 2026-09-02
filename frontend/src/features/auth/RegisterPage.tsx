@@ -15,7 +15,7 @@ const RULES = [
   { key: 'auth.register.passwordRules.uppercase', test: (v: string) => /[A-Z]/.test(v) },
   { key: 'auth.register.passwordRules.lowercase', test: (v: string) => /[a-z]/.test(v) },
   { key: 'auth.register.passwordRules.digit', test: (v: string) => /\d/.test(v) },
-  { key: 'auth.register.passwordRules.special', test: (v: string) => /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(v) },
+  { key: 'auth.register.passwordRules.special', test: (v: string) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(v) },
 ];
 
 export default function RegisterPage() {

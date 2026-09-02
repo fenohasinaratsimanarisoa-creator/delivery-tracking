@@ -20,13 +20,17 @@ interface RecentDelivery {
 }
 
 function useCountUp(target: number, duration = 700, decimals = 0) {
-  const [value, setValue] = useState(target);
+  // `target` peut arriver non-fini (KPI encore en chargement) : on le normalise
+  // ici pour que le hook soit toujours appelé inconditionnellement par l'appelant
+  // (Rules of Hooks) sans jamais animer vers NaN.
+  const safeTarget = Number.isFinite(target) ? target : 0;
+  const [value, setValue] = useState(safeTarget);
   useEffect(() => {
     const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
       : false;
     if (reduced) {
-      setValue(target);
+      setValue(safeTarget);
       return;
     }
     let raf: number;
@@ -34,13 +38,13 @@ function useCountUp(target: number, duration = 700, decimals = 0) {
     const tick = (now: number) => {
       const progress = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
-      const val = target * eased;
+      const val = safeTarget * eased;
       setValue(decimals > 0 ? parseFloat(val.toFixed(decimals)) : Math.round(val));
       if (progress < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [target, duration, decimals]);
+  }, [safeTarget, duration, decimals]);
   return value;
 }
 
@@ -48,7 +52,10 @@ function KpiCard({ icon: Icon, label, value, color, decimals = 0 }: {
   icon: React.ElementType; label: string; value: number | string | undefined; color: string; decimals?: number;
 }) {
   const numeric = typeof value === 'number' && isFinite(value);
-  const animated = numeric ? useCountUp(value, 700, decimals) : null;
+  // Hook toujours appelé (Rules of Hooks) ; la valeur animée n'est utilisée
+  // qu'en mode numérique, `useCountUp` neutralise l'entrée non-finie.
+  const animatedRaw = useCountUp(numeric ? (value as number) : 0, 700, decimals);
+  const animated = numeric ? animatedRaw : null;
   return (
     <div className={styles.kpiCard} style={{ ['--kpi' as string]: color }}>
       <span className={styles.kpiIcon} style={{ background: `${color}18`, color }}>

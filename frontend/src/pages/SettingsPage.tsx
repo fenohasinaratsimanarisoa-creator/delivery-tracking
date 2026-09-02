@@ -46,7 +46,7 @@ function PasswordChecklist({ password }: { password: string }) {
     { ok: /[a-z]/.test(password), label: t('settingsSecurity.passwordRequirements.lowercase') },
     { ok: /[A-Z]/.test(password), label: t('settingsSecurity.passwordRequirements.uppercase') },
     { ok: /\d/.test(password), label: t('settingsSecurity.passwordRequirements.digit') },
-    { ok: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password), label: t('settingsSecurity.passwordRequirements.symbol') },
+    { ok: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password), label: t('settingsSecurity.passwordRequirements.symbol') },
   ];
   return (
     <div className={styles.pwChecks}>
@@ -63,7 +63,7 @@ function PasswordChecklist({ password }: { password: string }) {
 function PasswordStrength({ password }: { password: string }) {
   const { t } = useTranslation();
   const score = password.length < 8 ? 0 : (
-    [/[a-z]/, /[A-Z]/, /\d/, /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/].filter(r => r.test(password)).length
+    [/[a-z]/, /[A-Z]/, /\d/, /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/].filter(r => r.test(password)).length
   );
   const index = Math.max(0, score - 1);
   const colors = ['var(--color-red, #E8544C)', 'var(--color-accent, #F2A93C)', 'var(--color-blue, #3b82f6)', 'var(--color-teal, #3FA796)'];

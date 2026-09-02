@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "lint:check": "eslint . --max-warnings 51",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -31,12 +32,12 @@
     "react-dom": "^18.3.1",
     "react-i18next": "^17.0.10",
     "react-leaflet": "^4.2.1",
-    "react-router-dom": "^6.28.0",
+    "react-router-dom": "^7.18.3",
     "recharts": "^2.13.0",
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
-    "@capacitor/cli": "^7.6.8",
+    "@capacitor/cli": "^8.5.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/leaflet": "^1.9.21",
@@ -44,15 +45,20 @@
     "@types/react-dom": "^18.3.1",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
-    "@vitejs/plugin-react": "^4.3.3",
+    "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
     "typescript": "^5.5.0",
-    "vite": "^5.4.0",
+    "vite": "^7.3.6",
     "vite-bundle-visualizer": "^1.2.1",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "xcode": {
+      "uuid": "^11.1.0"
+    }
   }
 }
