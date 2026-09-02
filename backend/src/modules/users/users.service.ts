@@ -5,11 +5,19 @@ import {
   BadRequestException,
   UnauthorizedException,
   Logger,
+  Inject,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type Redis from 'ioredis';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
 import { VehicleAssignmentHistoryService } from '../../common/vehicle-assignment/vehicle-assignment-history.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
+import {
+  revokeUserAccessTokens,
+  accessTokenTtlSeconds,
+} from '../../common/auth/access-token-revocation';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto, ChangePasswordDto, UpdateAvatarDto } from './dto/update-profile.dto';
@@ -19,6 +27,8 @@ export class UsersService {
   constructor(
     private prisma: PrismaService,
     private assignmentHistory: VehicleAssignmentHistoryService,
+    private configService: ConfigService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis | null = null,
   ) {}
 
   async create(companyId: string, dto: CreateUserDto) {
@@ -558,6 +568,15 @@ export class UsersService {
         where: { userId },
       }),
     ]);
+
+    // ...et les access tokens encore vivants (≤ 15 min) : un changement de mot de
+    // passe déclenché pour couper un accès compromis ne doit pas laisser un
+    // access token volé fonctionner un quart d'heure de plus.
+    await revokeUserAccessTokens(
+      this.redis,
+      userId,
+      accessTokenTtlSeconds(this.configService.get<string>('JWT_ACCESS_EXPIRATION')),
+    );
 
     return { message: 'Password changed successfully. You have been logged out from all devices.' };
   }

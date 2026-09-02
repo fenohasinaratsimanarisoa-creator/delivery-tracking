@@ -19,6 +19,7 @@ import { TraccarBridgeService } from '../tracking/traccar-bridge.service';
 import { PlatformAdminLoginDto } from './dto/login.dto';
 import { PlatformAdminVerify2faDto } from './dto/verify-2fa.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
+import { PlatformAdminChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -151,10 +152,9 @@ export class PlatformAdminController {
   @HttpCode(HttpStatus.OK)
   async changePassword(
     @CurrentUser('id') adminId: string,
-    @Body('currentPassword') currentPassword: string,
-    @Body('newPassword') newPassword: string,
+    @Body() dto: PlatformAdminChangePasswordDto,
   ) {
-    await this.service.changePassword(adminId, currentPassword, newPassword);
+    await this.service.changePassword(adminId, dto.currentPassword, dto.newPassword);
     return { message: 'Mot de passe modifié avec succès' };
   }
 
