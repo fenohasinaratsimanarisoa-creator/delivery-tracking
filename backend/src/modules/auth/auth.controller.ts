@@ -23,7 +23,7 @@ import Redis from 'ioredis';
 import { AuthService } from './auth.service';
 import { TotpService } from './totp.service';
 import { OAuthRelayService } from './oauth-relay.service';
-import { GoogleAuthStateGuard } from './guards/google-auth-state.guard';
+import { GoogleAuthStateGuard, OAUTH_WEB_STATE_COOKIE } from './guards/google-auth-state.guard';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -552,6 +552,21 @@ export class AuthController {
         this.logger.log(`Google OAuth success for user ${user.user?.id}`);
 
         const relayId = req.query && typeof req.query.state === 'string' ? req.query.state : null;
+        const isNativeRelay = !!relayId && (await this.oauthRelayService.isRelayValid(relayId));
+
+        // Flux WEB (pas un relay natif) : le `state` renvoyé par Google DOIT
+        // correspondre au cookie httpOnly oauth_state posé au démarrage
+        // (GoogleAuthStateGuard). Sans cette vérification, un attaquant peut
+        // faire compléter l'OAuth avec SON compte dans le navigateur de la
+        // victime (fixation de session / login-CSRF).
+        if (!isNativeRelay) {
+          const stateCookie = req.cookies?.[OAUTH_WEB_STATE_COOKIE];
+          res.clearCookie(OAUTH_WEB_STATE_COOKIE, { path: '/' });
+          if (!relayId || !stateCookie || relayId !== stateCookie) {
+            this.logger.warn('Google OAuth web: state/cookie mismatch — login CSRF blocked');
+            return res.redirect(`${frontendUrl}/auth/callback?error=google_auth_failed`);
+          }
+        }
 
         const tokenParam = encodeURIComponent(user.accessToken);
         // Cookie posé UNIQUEMENT si le refresh token existe réellement : un
@@ -572,7 +587,7 @@ export class AuthController {
         // Flux natif : `state` (nonce) présent et valide → on ne met JAMAIS le
         // JWT de session dans l'URL. On émet un code à usage unique (TTL 60 s)
         // lié au codeChallenge PKCE, échangé ensuite par POST /auth/exchange.
-        if (relayId && (await this.oauthRelayService.isRelayValid(relayId))) {
+        if (isNativeRelay && relayId) {
           const code = await this.oauthRelayService.issueCode(relayId, user.user?.id);
           if (!code) {
             this.logger.error(`Google OAuth native: relay expired for ${user.user?.id}`);

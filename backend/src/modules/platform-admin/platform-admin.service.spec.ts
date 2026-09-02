@@ -278,12 +278,7 @@ describe('PlatformAdminService.refreshSession', () => {
     const res = await service.refreshSession('tok');
     expect(res.accessToken).toBeDefined();
     // fenêtre de grâce : l'ancien hash est stocké côté Redis
-    expect(redis.set).toHaveBeenCalledWith(
-      'admin:refresh:prev:admin-1',
-      'HASH',
-      'EX',
-      30,
-    );
+    expect(redis.set).toHaveBeenCalledWith('admin:refresh:prev:admin-1', 'HASH', 'EX', 30);
   });
 
   it('révoque la session sur rejeu (ni hash courant ni précédent)', async () => {

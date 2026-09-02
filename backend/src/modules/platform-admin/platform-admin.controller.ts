@@ -28,18 +28,11 @@ import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
-import { ADMIN_REFRESH_COOKIE, adminRefreshCookieOptions } from '../../common/auth/auth-cookie';
-
-// Réponse de login admin : le refreshToken part en cookie httpOnly (jamais dans
-// le corps — il y transitait avant, exposé pour rien).
-interface AdminAuthResult {
-  accessToken?: string;
-  refreshToken?: string;
-  admin?: unknown;
-  requiresTwoFactor?: boolean;
-  requires2faSetup?: boolean;
-  tempToken?: string;
-}
+import {
+  ADMIN_REFRESH_COOKIE,
+  clearAdminRefreshCookie,
+  finishAdminAuth,
+} from '../../common/auth/auth-cookie';
 
 @Controller('platform-admin')
 export class PlatformAdminController {
@@ -49,25 +42,6 @@ export class PlatformAdminController {
     private readonly traccarBridgeService: TraccarBridgeService,
     private readonly configService: ConfigService,
   ) {}
-
-  private setAdminRefreshCookie(res: Response, refreshToken: string) {
-    const domain = this.configService.get<string>('COOKIE_DOMAIN');
-    res.clearCookie(ADMIN_REFRESH_COOKIE, { path: '/' });
-    res.cookie(ADMIN_REFRESH_COOKIE, refreshToken, adminRefreshCookieOptions(domain));
-  }
-
-  private clearAdminRefreshCookie(res: Response) {
-    const domain = this.configService.get<string>('COOKIE_DOMAIN');
-    res.clearCookie(ADMIN_REFRESH_COOKIE, adminRefreshCookieOptions(domain, false));
-  }
-
-  /** Pose le cookie de refresh si présent, retire toujours le refreshToken du corps. */
-  private finishAuth(res: Response, result: AdminAuthResult) {
-    if (result.refreshToken) this.setAdminRefreshCookie(res, result.refreshToken);
-    const safe: AdminAuthResult = { ...result };
-    delete safe.refreshToken;
-    return safe;
-  }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Public()
@@ -80,7 +54,7 @@ export class PlatformAdminController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.service.login(dto, req.ip, req.headers?.['user-agent']);
-    return this.finishAuth(res, result);
+    return finishAdminAuth(res, result, this.configService.get<string>('COOKIE_DOMAIN'));
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -94,7 +68,7 @@ export class PlatformAdminController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.service.verify2fa(dto, req.ip, req.headers?.['user-agent']);
-    return this.finishAuth(res, result);
+    return finishAdminAuth(res, result, this.configService.get<string>('COOKIE_DOMAIN'));
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -113,7 +87,7 @@ export class PlatformAdminController {
       req.ip,
       req.headers?.['user-agent'],
     );
-    return this.finishAuth(res, result);
+    return finishAdminAuth(res, result, this.configService.get<string>('COOKIE_DOMAIN'));
   }
 
   // Rotation de session admin : lit le cookie httpOnly admin_refreshToken.
@@ -125,7 +99,7 @@ export class PlatformAdminController {
   @HttpCode(HttpStatus.OK)
   async refresh(@Req() req: any, @Res({ passthrough: true }) res: Response) {
     const result = await this.service.refreshSession(req.cookies?.[ADMIN_REFRESH_COOKIE]);
-    return this.finishAuth(res, result);
+    return finishAdminAuth(res, result, this.configService.get<string>('COOKIE_DOMAIN'));
   }
 
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
@@ -133,7 +107,7 @@ export class PlatformAdminController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(@CurrentUser('id') adminId: string, @Res({ passthrough: true }) res: Response) {
     await this.service.logout(adminId);
-    this.clearAdminRefreshCookie(res);
+    clearAdminRefreshCookie(res, this.configService.get<string>('COOKIE_DOMAIN'));
   }
 
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
