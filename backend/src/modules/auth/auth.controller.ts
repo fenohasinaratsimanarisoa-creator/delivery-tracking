@@ -92,12 +92,16 @@ export class AuthController {
     @Inject(REDIS_CLIENT) private readonly redis: Redis | null,
   ) {}
 
-  private getRefreshCookieOpts() {
+  private getRefreshCookieOpts(persist = true) {
     const domain = this.configService.get<string>('COOKIE_DOMAIN');
-    if (domain) {
-      return { ...REFRESH_COOKIE_OPTIONS, domain };
-    }
-    return REFRESH_COOKIE_OPTIONS;
+    // persist=false (« Se souvenir de moi » décoché) → cookie de session,
+    // supprimé à la fermeture du navigateur au lieu de vivre 7 jours. Le token
+    // d'accès est déjà en sessionStorage (éphémère) côté client : sans
+    // « remember », rien ne survit à la fermeture de l'onglet.
+    const base = persist
+      ? REFRESH_COOKIE_OPTIONS
+      : { ...REFRESH_COOKIE_OPTIONS, maxAge: undefined };
+    return domain ? { ...base, domain } : base;
   }
 
   private getCsrfCookieOpts() {
@@ -179,7 +183,7 @@ export class AuthController {
       // pourrait coexister et le mauvais serait transmis au serveur.
       res.clearCookie('refreshToken', { path: '/' });
       res.clearCookie('csrf-token', { path: '/' });
-      const opts = this.getRefreshCookieOpts();
+      const opts = this.getRefreshCookieOpts(dto.remember !== false);
       res.cookie('refreshToken', result.refreshToken, opts);
       return {
         accessToken: result.accessToken,
