@@ -48,6 +48,7 @@ const mockTotpService = {
 function buildRedisMock() {
   return {
     get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue('OK'),
     incr: jest.fn().mockResolvedValue(1),
     expire: jest.fn(),
     del: jest.fn().mockResolvedValue(1),
@@ -232,5 +233,74 @@ describe('PlatformAdminService.login — 2FA optionnelle', () => {
         data: expect.objectContaining({ action: 'profile_update' }),
       }),
     );
+  });
+});
+
+describe('PlatformAdminService.refreshSession', () => {
+  let service: PlatformAdminService;
+  let redis: ReturnType<typeof buildRedisMock>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    redis = buildRedisMock();
+    service = new PlatformAdminService(
+      mockPrisma as any,
+      mockJwtService as any,
+      mockConfigService as any,
+      mockTotpService as any,
+      redis as any,
+    );
+  });
+
+  it('rejette un cookie absent', async () => {
+    await expect(service.refreshSession(undefined)).rejects.toThrow('Refresh token not found');
+  });
+
+  it('rejette un token non platform_admin', async () => {
+    mockJwtService.verify.mockReturnValueOnce({ sub: 'u1', type: 'user' });
+    await expect(service.refreshSession('tok')).rejects.toThrow('Invalid refresh token');
+  });
+
+  it('émet de nouveaux tokens quand le hash courant correspond', async () => {
+    mockJwtService.verify.mockReturnValueOnce({ sub: 'admin-1', type: 'platform_admin' });
+    mockPrisma.platformAdmin.findUnique.mockResolvedValueOnce({
+      id: 'admin-1',
+      email: 'a@b.com',
+      firstName: 'A',
+      lastName: 'B',
+      isActive: true,
+      totpEnabled: true,
+      refreshTokenHash: 'HASH',
+    });
+    (bcrypt.compare as unknown as jest.Mock).mockResolvedValueOnce(true);
+    mockPrisma.platformAdmin.update.mockResolvedValue({});
+
+    const res = await service.refreshSession('tok');
+    expect(res.accessToken).toBeDefined();
+    // fenêtre de grâce : l'ancien hash est stocké côté Redis
+    expect(redis.set).toHaveBeenCalledWith(
+      'admin:refresh:prev:admin-1',
+      'HASH',
+      'EX',
+      30,
+    );
+  });
+
+  it('révoque la session sur rejeu (ni hash courant ni précédent)', async () => {
+    mockJwtService.verify.mockReturnValueOnce({ sub: 'admin-1', type: 'platform_admin' });
+    mockPrisma.platformAdmin.findUnique.mockResolvedValueOnce({
+      id: 'admin-1',
+      isActive: true,
+      refreshTokenHash: 'HASH',
+    });
+    (bcrypt.compare as unknown as jest.Mock).mockResolvedValue(false);
+    redis.get.mockResolvedValueOnce(null);
+    mockPrisma.platformAdmin.update.mockResolvedValue({});
+
+    await expect(service.refreshSession('stolen')).rejects.toThrow('reuse detected');
+    expect(mockPrisma.platformAdmin.update).toHaveBeenCalledWith({
+      where: { id: 'admin-1' },
+      data: { refreshTokenHash: null },
+    });
   });
 });

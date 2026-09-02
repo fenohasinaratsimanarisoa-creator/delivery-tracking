@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/AuthContext';
+import { fetchCsrfToken } from '../../services/api/csrf';
 import { setAccessToken } from '../../services/auth/tokenStore';
 import { parseToken } from '../../services/jwt';
 import { getApiBaseUrl } from '../../services/api/config';
@@ -45,6 +46,11 @@ export default function AuthCallbackPage() {
     setAccessToken(token);
     clearOAuthNativeState();
     loginRef.current(u, token);
+    // Le serveur a posé un NOUVEAU cookie csrf-token pendant le callback OAuth :
+    // on resynchronise le jeton en mémoire, sinon la 1re mutation part avec un
+    // HMAC périmé → 403 + retry systématique (LoginPage.handleVerify2fa fait
+    // déjà ça pour la 2FA).
+    void fetchCsrfToken();
     setStatus('success');
     navigateRef.current('/', { replace: true });
   };

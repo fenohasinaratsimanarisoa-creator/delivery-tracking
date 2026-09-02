@@ -825,6 +825,84 @@ export class PlatformAdminService {
     return admin;
   }
 
+  /**
+   * Rotation du refresh token admin (endpoint POST /platform-admin/auth/refresh).
+   * Avant, AUCUN endroit ne consommait le refreshTokenHash stocké : l'admin était
+   * renvoyé sur l'écran de login (mot de passe + TOTP) à chaque expiration de
+   * l'access token (~15 min) et à chaque rechargement de page.
+   *
+   * Fenêtre de grâce inter-onglets via Redis (30 s) : deux rafraîchissements
+   * concurrents tenant le même ancien token convergent au lieu de se
+   * déconnecter mutuellement (pas de colonne previous_refresh_token_hash sur
+   * PlatformAdmin, contrairement à UserSession).
+   */
+  async refreshSession(refreshToken: string | undefined) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token not found');
+    }
+    let payload: JwtPayload;
+    try {
+      payload = this.jwtService.verify<JwtPayload>(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET')!,
+        algorithms: ['HS256'],
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    if (payload.type !== 'platform_admin') {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const admin = await this.prisma.platformAdmin.findUnique({ where: { id: payload.sub } });
+    if (!admin || !admin.isActive || !admin.refreshTokenHash) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const matchesCurrent = await bcrypt.compare(refreshToken, admin.refreshTokenHash);
+    let matchesPrevious = false;
+    if (!matchesCurrent && this.redis) {
+      try {
+        const prev = await this.redis.get(`admin:refresh:prev:${admin.id}`);
+        if (prev) matchesPrevious = await bcrypt.compare(refreshToken, prev);
+      } catch {
+        // Redis indisponible : pas de fenêtre de grâce, on retombe sur le
+        // comportement strict (matchesPrevious reste false).
+      }
+    }
+
+    if (!matchesCurrent && !matchesPrevious) {
+      // Rejeu après au moins deux rotations = vol probable → on coupe la session.
+      await this.prisma.platformAdmin.update({
+        where: { id: admin.id },
+        data: { refreshTokenHash: null },
+      });
+      this.logger.warn(`[platform-admin] refresh token REUSE detected admin=${admin.id}`);
+      throw new UnauthorizedException('Refresh token reuse detected — session revoked');
+    }
+
+    if (this.redis) {
+      try {
+        await this.redis.set(`admin:refresh:prev:${admin.id}`, admin.refreshTokenHash, 'EX', 30);
+      } catch {
+        // fenêtre de grâce best-effort
+      }
+    }
+
+    return this.generateTokens(admin);
+  }
+
+  async logout(adminId: string) {
+    await this.prisma.platformAdmin.update({
+      where: { id: adminId },
+      data: { refreshTokenHash: null },
+    });
+    await revokeUserAccessTokens(
+      this.redis,
+      adminId,
+      accessTokenTtlSeconds(this.configService.get<string>('JWT_ACCESS_EXPIRATION')),
+    );
+  }
+
   private async generateTokens(admin: {
     id: string;
     email: string;

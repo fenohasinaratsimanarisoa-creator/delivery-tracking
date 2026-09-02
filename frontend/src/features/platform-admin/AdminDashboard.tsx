@@ -12,7 +12,7 @@ import {
   Eye, EyeOff, DollarSign, UserPlus, Users,
 } from 'lucide-react';
 import Button from '../../components/Button';
-import adminApi from '../../services/api/adminClient';
+import adminApi, { refreshAdminSession } from '../../services/api/adminClient';
 import { getAdminToken, setAdminToken } from '../../services/auth/adminTokenStore';
 import styles from './AdminDashboard.module.css';
 
@@ -123,12 +123,31 @@ export default function AdminDashboard() {
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [createForm, setCreateForm] = useState({ email: '', password: '', firstName: '', lastName: '' });
 
-  const token = getAdminToken();
+  // 'checking' : au (re)chargement de page, l'access token en mémoire est perdu
+  // (adminTokenStore n'est pas persisté). On tente d'abord une rotation
+  // silencieuse via le cookie httpOnly admin_refreshToken AVANT de renvoyer sur
+  // l'écran de login — sinon l'admin ressaisit mot de passe + TOTP à chaque F5.
+  const [authState, setAuthState] = useState<'checking' | 'authed' | 'anon'>(
+    getAdminToken() ? 'authed' : 'checking',
+  );
 
   useEffect(() => {
-    if (!token) { navigate('/admin/login'); return; }
-    loadData();
-  }, [token, tab]);
+    if (getAdminToken()) { setAuthState('authed'); return; }
+    let cancelled = false;
+    refreshAdminSession().then((tok) => {
+      if (!cancelled) setAuthState(tok ? 'authed' : 'anon');
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (authState === 'anon') navigate('/admin/login');
+  }, [authState, navigate]);
+
+  useEffect(() => {
+    if (authState === 'authed') loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authState, tab]);
 
   const loadData = async () => {
     setLoading(true);
@@ -197,7 +216,13 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await adminApi.post('/auth/logout');
+    } catch {
+      // Réseau / token déjà expiré : on nettoie quand même localement. Le cookie
+      // sera de toute façon rejeté au prochain refresh.
+    }
     setAdminToken(null);
     navigate('/admin/login');
   };
@@ -207,7 +232,15 @@ export default function AdminDashboard() {
     t.email?.toLowerCase().includes(tenantSearch.toLowerCase())
   );
 
-  if (!token) return null;
+  if (authState === 'checking') {
+    return (
+      <div className={styles.loadingState}>
+        <Activity size={20} className="spin" />
+        <span>{t('common.loading')}</span>
+      </div>
+    );
+  }
+  if (authState !== 'authed') return null;
 
   if (impersonating) {
     // On cible la page d'accueil du RÔLE impersoné (pas /dashboard, réservé

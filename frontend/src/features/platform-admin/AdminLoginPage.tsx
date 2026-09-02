@@ -4,7 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { Shield, Loader2, Key, Smartphone } from 'lucide-react';
 import axios from 'axios';
 import { setAdminToken } from '../../services/auth/adminTokenStore';
+import { getApiBaseUrl } from '../../services/api/config';
 import styles from './AdminLoginPage.module.css';
+
+// withCredentials : le backend pose un cookie httpOnly admin_refreshToken à la
+// connexion — sans ça, il n'est jamais stocké et la session admin ne survit pas
+// à l'expiration de l'access token (~15 min) ni à un rechargement de page.
+const ADMIN_AXIOS = { withCredentials: true } as const;
 
 export default function AdminLoginPage() {
   const navigate = useNavigate();
@@ -24,7 +30,11 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post('/api/platform-admin/auth/login', { email, password });
+      const res = await axios.post(
+        `${getApiBaseUrl()}/platform-admin/auth/login`,
+        { email, password },
+        ADMIN_AXIOS,
+      );
       if (res.data.requires2faSetup) {
         setTempToken(res.data.tempToken);
         setQrCode(res.data.qrCode || '');
@@ -49,10 +59,11 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post('/api/platform-admin/auth/verify-2fa', {
-        tempToken,
-        token: twoFactorCode,
-      });
+      const res = await axios.post(
+        `${getApiBaseUrl()}/platform-admin/auth/verify-2fa`,
+        { tempToken, token: twoFactorCode },
+        ADMIN_AXIOS,
+      );
       setAdminToken(res.data.accessToken);
       navigate('/admin');
     } catch (err: unknown) {
@@ -67,10 +78,11 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post('/api/platform-admin/auth/setup-2fa', {
-        tempToken,
-        token: twoFactorCode,
-      });
+      const res = await axios.post(
+        `${getApiBaseUrl()}/platform-admin/auth/setup-2fa`,
+        { tempToken, token: twoFactorCode },
+        ADMIN_AXIOS,
+      );
       setAdminToken(res.data.accessToken);
       navigate('/admin');
     } catch (err: unknown) {
