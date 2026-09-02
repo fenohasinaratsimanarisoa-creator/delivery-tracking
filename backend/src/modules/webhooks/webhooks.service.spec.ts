@@ -108,11 +108,22 @@ describe('WebhooksService', () => {
       expect(result).toEqual(webhooks);
       expect(mockPrisma.webhook.findMany).toHaveBeenCalledWith({
         where: { companyId: 'company-1' },
-        include: expect.objectContaining({
+        // `select` explicite (jamais d'`include` seul) : `secret` ne doit pas fuiter.
+        select: expect.objectContaining({
+          url: true,
           deliveries: expect.objectContaining({ take: 5 }),
         }),
         orderBy: { createdAt: 'desc' },
       });
+    });
+
+    it('ne sélectionne jamais le champ `secret`', async () => {
+      mockPrisma.webhook.findMany.mockResolvedValueOnce([]);
+      await service.findAll('company-1');
+      const arg = mockPrisma.webhook.findMany.mock.calls[0][0];
+      expect(arg.include).toBeUndefined();
+      expect(arg.select.secret).toBeUndefined();
+      expect(arg.select.url).toBe(true);
     });
   });
 

@@ -40,10 +40,23 @@ export class WebhooksService {
     };
   }
 
+  // `select` explicite (jamais `include` seul) : le contrat dit que `secret`
+  // n'est renvoyé qu'UNE fois, à la création. Un `include` sans `select`
+  // remontait `secret` (le secret de signature HMAC) sur chaque GET.
+  private static readonly PUBLIC_FIELDS = {
+    id: true,
+    url: true,
+    events: true,
+    isActive: true,
+    createdAt: true,
+    updatedAt: true,
+  } as const;
+
   async findAll(companyId: string) {
     return this.prisma.webhook.findMany({
       where: { companyId },
-      include: {
+      select: {
+        ...WebhooksService.PUBLIC_FIELDS,
         deliveries: {
           take: 5,
           orderBy: { createdAt: 'desc' },
@@ -64,7 +77,8 @@ export class WebhooksService {
   async findOne(companyId: string, id: string) {
     const webhook = await this.prisma.webhook.findFirst({
       where: { id, companyId },
-      include: {
+      select: {
+        ...WebhooksService.PUBLIC_FIELDS,
         deliveries: {
           take: 20,
           orderBy: { createdAt: 'desc' },

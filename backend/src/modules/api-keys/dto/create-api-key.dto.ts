@@ -3,11 +3,14 @@ import {
   IsArray,
   IsOptional,
   IsDateString,
+  IsIn,
   MinLength,
   MaxLength,
   ArrayNotEmpty,
+  ArrayUnique,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { API_KEY_SCOPES } from '../api-key-scopes';
 
 export class CreateApiKeyDto {
   @ApiProperty({
@@ -20,11 +23,19 @@ export class CreateApiKeyDto {
   name: string;
 
   @ApiProperty({
-    description: 'Comma-separated scopes: deliveries:read, tracking:read',
+    description: 'Scopes accordés à la clé (lecture seule)',
+    enum: API_KEY_SCOPES,
+    isArray: true,
     example: ['deliveries:read', 'tracking:read'],
   })
   @IsArray()
   @ArrayNotEmpty()
+  @ArrayUnique()
+  @IsString({ each: true })
+  @IsIn(API_KEY_SCOPES as unknown as string[], {
+    each: true,
+    message: `Chaque scope doit être l'un de : ${API_KEY_SCOPES.join(', ')}`,
+  })
   scopes: string[];
 
   @ApiPropertyOptional({
