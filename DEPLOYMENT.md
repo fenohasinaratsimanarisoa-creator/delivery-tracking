@@ -1,249 +1,222 @@
 # Deployment Guide — Delivery Tracking
 
-## Render (Production)
+La **production tourne sur un VPS Contabo** (x86_64), stack Docker Compose
+auto-hébergée, HTTPS automatique via Caddy + sslip.io (aucun domaine acheté).
 
-Render auto-deploys both services from `main` branch.
-
-- **Backend**: `deliverytrack-api` — Dockerfile in `./backend`
-- **Frontend**: `deliverytrack-web` — Dockerfile in `./frontend`
-
-### Environment
-- **Plan**: Free tier (both services)
-- **Database**: PostgreSQL on Render, free tier (90-day limit)
-- **Redis**: Render Redis, free tier
-
-### ⚠️ Free Tier Limitations
-
-**Service Sleep**: On the free plan, Render puts web services to sleep after 15 minutes of inactivity. The first request after sleep triggers a cold start that can take 30-60 seconds — the user sees a 504 Gateway Timeout during this period. The service then works normally on subsequent requests.
-
-**Mitigation**: A GitHub Actions cron workflow (`keepalive.yml`) pings the health endpoint every 5 minutes to prevent sleep. This keeps the service awake continuously.
-
-**Database Expiration**: The free PostgreSQL tier expires after 90 days. The database for this project was provisioned around July 20, 2026. Expected expiration: ~October 18, 2026. **Migrate to a paid DB plan before this date to avoid data loss.**
-
-### Troubleshooting 504 Errors
-
-| Symptom | Likely Cause | Fix |
-|---------|-------------|-----|
-| 504 on first request after idle period | Free tier sleep | Wait 30-60s, retry. Keepalive should prevent this. |
-| 504 on all requests | DB connection pool exhausted | Check Render logs, restart service |
-| 504 on Google OAuth | Google OAuth misconfig | Verify GOOGLE_CALLBACK_URL in Render env vars |
-| Buttons disappear on login | Google status check failed | Fixed — "Créer un compte" always visible now |
-| Generic "un problème est survenu" | Backend error (check logs) | Check Render logs for exact error |
-
-### Deployment Commands
-
-```bash
-# Verify builds
-cd backend && npm run build
-cd ../frontend && npx tsc --noEmit && npm run build
-
-# Commit & push (triggers Render auto-deploy)
-git add -A && git commit -m "description" && git push origin master:main
-```
-
-### Manual Deploy
-
-If auto-deploy doesn't trigger:
-1. Go to Render dashboard → `deliverytrack-api` → Manual Deploy → Deploy latest commit
-2. Same for `deliverytrack-web`
-3. Wait for both to show "Live"
-
-### Health Check
-
-```
-GET https://deliverytrack-api.onrender.com/health
-→ {"status":"ok","timestamp":"...","checks":{"database":"ok","redis":"ok","queue":"ok"}}
-```
-
-### Upgrading from Free Tier
-
-To eliminate sleep and DB expiration:
-1. **Web services** (~$7/mo each): Upgrade from "Free" to "Starter" plan
-2. **PostgreSQL** (~$7/mo): Upgrade from "Free" to "Starter" plan  
-3. **Redis** (~$0/mo): Free tier has no expiration, keep as-is
-
-Total: ~$21/mo for production-ready hosting.
-
-### Infrastructure History
-
-| Date | Event |
-|------|-------|
-| July 20, 2026 | Database provisioned (90-day timer starts) |
-| July 24, 2026 | Login 504 diagnosed as free tier sleep |
-| July 25, 2026 | Keepalive cron added to prevent sleep |
-| ~Oct 18, 2026 | **DB free tier expires — migrate before this date** |
+- Section [Production — VPS Contabo](#production--vps-contabo) : provisioning initial + déploiement courant.
+- Section [Alternative — Oracle Cloud Always Free](#alternative--oracle-cloud-always-free-arm64) : stack ARM64 gratuite à vie (environnement parallèle / plan B).
+- Section [Historique — Render](#historique--render-désaffecté) : ancienne prod, désaffectée (juillet–août 2026).
 
 ---
 
-## Oracle Cloud (Always Free) — Environnement parallèle
+## Production — VPS Contabo
 
-**Pourquoi :** la base Postgres de Render (free tier) expire le ~18 octobre 2026, et
-le cold start (15 min d'inactivité) provoque des 504 intermittents. Oracle Cloud
-"Always Free" offre une VM ARM (Ampere A1) **jusqu'à 4 OCPU / 24 Go RAM, gratuite
-à vie, sans expiration** — de quoi héberger toute la stack (Postgres, Redis,
-backend, frontend, Traccar, OSRM) sur une seule machine.
+### Vue d'ensemble
 
-Cette section met en place Oracle Cloud **en environnement parallèle** :
-Render continue de servir la production pendant qu'on valide Oracle. Aucune
-bascule DNS n'est faite tant que vous ne l'avez pas décidé explicitement.
+| Élément | Détail |
+|---|---|
+| Hôte | VPS Contabo x86_64, IP publique fixe |
+| Orchestration | `docker-compose.contabo.yml` — postgres/postgis, redis, traccar, backend, worker, frontend, caddy, backup |
+| Source de build | clone git dans `/opt/delivery-tracking` sur le VPS (build **sur l'hôte**, pas d'images GHCR) |
+| HTTPS | Caddy obtient/renouvelle seul un cert Let's Encrypt pour `<IP-tirets>.sslip.io` (voir `Caddyfile`) |
+| Accès API direct | backend aussi exposé en clair sur `127.0.0.1:8080` (debug/tests, hors chemin Caddy) |
+| OSRM (itinéraires) | **omis** volontairement (choix RGPD — `routing.service.ts` renvoie 503 sans fallback public) |
 
-Fichiers déjà prêts dans le repo pour cette migration :
-- `docker-compose.oracle.yml` — stack complète (Postgres+PostGIS, Redis, backend,
-  worker, frontend, Traccar, OSRM, Caddy en reverse-proxy, backups planifiés)
-- `.env.oracle.example` — modèle de configuration à copier en `.env`
-- `Caddyfile` — reverse-proxy HTTP (prêt pour HTTPS dès qu'un domaine existe)
-- `scripts/oracle-vm-setup.sh` — provisioning de la VM (Docker, pare-feu, clé SSH)
-- `.github/workflows/deploy.yml` (job `deploy-staging`) — déploiement automatique
-  sur push vers `main`, une fois les secrets GitHub configurés
+### Déploiement courant
+
+Tout passe par `scripts/deploy-contabo.sh`, exécuté **depuis le VPS** :
+
+```bash
+ssh root@<IP-VPS> '/opt/delivery-tracking/scripts/deploy-contabo.sh'
+```
+
+Le script (voir ses commentaires pour le détail) :
+
+1. `git pull origin main` — sort en 0 sans rien faire si déjà à jour.
+2. `docker compose -f docker-compose.contabo.yml build --no-cache backend worker frontend`
+   (seulement les services applicatifs ; l'infra n'est jamais reconstruite par ce dépôt).
+   Si le build échoue → aucun service redémarré, l'ancien build continue de tourner.
+3. `up -d` des services applicatifs, puis attente 15 s.
+4. **Health-gate** : `docker compose ps` doit montrer `backend` + `frontend` *healthy*,
+   et `GET http://localhost:8080/health` doit répondre 200.
+5. `npx prisma migrate deploy` (idempotent) **après** que le nouveau backend soit sain.
+6. En cas d'échec à une des vérifs 4–5 : **rollback automatique** au commit précédent
+   (`git reset --hard` + rebuild + redémarrage), puis sortie en 1.
+
+Avant de pousser, vérifier les builds en local (identique à la CI) :
+
+```bash
+cd backend  && npm run build
+cd ../frontend && npx tsc -b --noEmit && npm run build
+git add -A && git commit -m "…" && git push origin main
+```
+
+> Il n'y a **pas** de déploiement automatique sur push : le `git pull` + build
+> est déclenché manuellement par la commande SSH ci-dessus. `.github/workflows/ci.yml`
+> valide chaque push (lint, typecheck, tests, e2e) mais ne déploie rien.
+
+### Provisioning initial d'un nouveau VPS
+
+1. **Système** : Docker + plugin compose, pare-feu (ports 80, 443, 22, et
+   `5055`–`5065` TCP pour les protocoles traceurs Traccar).
+2. **Clone** :
+   ```bash
+   sudo mkdir -p /opt/delivery-tracking && sudo chown "$USER" /opt/delivery-tracking
+   git clone https://github.com/<org>/delivery-tracking.git /opt/delivery-tracking
+   cd /opt/delivery-tracking
+   ```
+3. **Configuration** :
+   ```bash
+   cp .env.contabo.example .env
+   nano .env   # générer chaque secret (openssl rand -hex 24/32/64), mettre
+               # CORS_ORIGIN / APP_URL = https://<IP-tirets>.sslip.io
+   ```
+   Éditer aussi `Caddyfile` et `traccar/traccar.xml` (mot de passe admin `users.default`)
+   avec l'IP / les identifiants réels.
+4. **Premier lancement** :
+   ```bash
+   docker compose -f docker-compose.contabo.yml build
+   docker compose -f docker-compose.contabo.yml up -d
+   docker compose -f docker-compose.contabo.yml exec backend npx prisma migrate deploy
+   docker compose -f docker-compose.contabo.yml exec backend npm run prisma:seed   # compte admin initial
+   ```
+5. **Vérifier** :
+   ```bash
+   curl -sf http://localhost:8080/health          # backend
+   curl -sf https://<IP-tirets>.sslip.io/         # frontend via Caddy (HTTPS)
+   docker compose -f docker-compose.contabo.yml ps
+   ```
+6. **Traceurs GPS** : reconfigurer chaque boîtier (IP/port serveur) vers
+   `<IP-VPS>:<port protocole>` — voir `TRACCAR_SETUP.md` et `GT06_SETUP_GUIDE.md`.
+
+### Sauvegardes
+
+Le service `backup` de `docker-compose.contabo.yml` fait un `pg_dump` planifié
+(+ upload S3-compatible optionnel si `BACKUP_S3_*` est renseigné dans `.env`).
+Script : `scripts/backup.sh`. Rétention via `BACKUP_RETENTION_DAYS`.
+
+### Santé / observabilité
+
+```
+GET https://<IP-tirets>.sslip.io/api/health   (public, via Caddy)
+GET http://<IP-VPS>:8080/health               (direct, en clair)
+→ {"status":"ok","checks":{"database":"ok","redis":"ok","queue":"ok"}}
+```
+
+Métriques Prometheus sur `/metrics` (backend). Erreurs → Sentry si `SENTRY_DSN`
+est défini. Alertes critiques → `ALERT_SLACK_WEBHOOK` / `ALERT_DISCORD_WEBHOOK`.
+
+### Dépannage
+
+| Symptôme | Cause probable | Action |
+|---|---|---|
+| 502/504 via Caddy | backend pas *healthy* / en cours de rebuild | `docker compose -f docker-compose.contabo.yml ps` ; `logs --tail=100 backend` |
+| Cookies non conservés (login en boucle) | `CORS_ORIGIN`/`APP_URL` en `http://` alors que l'app est servie en HTTPS | mettre `https://<IP-tirets>.sslip.io`, redémarrer backend |
+| Certificat TLS absent | port 80/443 non joignable depuis Internet, ou nom sslip.io incorrect | vérifier pare-feu + valeur exacte dans `Caddyfile` ; `logs caddy` |
+| 503 sur les itinéraires | OSRM non déployé (volontaire) | ajouter le service `osrm` depuis `docker-compose.oracle.yml` si besoin |
+| Migration Prisma bloquée | schéma divergent | `docker compose ... exec backend npx prisma migrate status` |
+| Backend démarre puis meurt | secret obligatoire manquant en prod | lire le log de boot : `JWT_*`, `CSRF_SECRET`, `ENCRYPTION_KEY`, `REDIS_URL` requis (garde-fous `main.ts`) |
+
+---
+
+## Alternative — Oracle Cloud Always Free (ARM64)
+
+> Environnement **alternatif / plan B** : VM ARM (Ampere A1) jusqu'à 4 OCPU /
+> 24 Go RAM, gratuite à vie. Fichiers dédiés : `docker-compose.oracle.yml`,
+> `.env.oracle.example`, `scripts/oracle-vm-setup.sh`.
+
+Différences notables avec Contabo (ARM64) :
+
+- **PostGIS** : l'image officielle `postgis/postgis` n'a **pas** de variante arm64 ;
+  `docker-compose.oracle.yml` utilise `imresamu/postgis` (fork multi-arch, même tag `16-3.4`).
+- **Moteur Prisma** : `backend/entrypoint.sh` détecte l'architecture (`uname -m`) et
+  sélectionne le bon moteur natif.
+- **OSRM** : présent dans `docker-compose.oracle.yml` (compilé depuis les sources
+  au premier build, ~10–20 min, données routières Madagascar).
 
 ### Étape 1 — Créer le compte Oracle Cloud
 
-1. Allez sur https://www.oracle.com/cloud/free/ → **Start for free**.
-2. Renseignez email, pays, puis une carte bancaire (vérification d'identité
-   uniquement — **le tier Always Free n'est jamais facturé**, sauf si vous
-   upgradez explicitement vers "Pay As You Go").
-3. Choisissez une **Home Region** proche de vous (ex. `eu-frankfurt-1`,
-   `eu-paris-1`, `eu-marseille-1`). Ce choix est définitif pour ce compte.
-4. Validez l'email et le téléphone (SMS).
+1. https://www.oracle.com/cloud/free/ → **Start for free**.
+2. Email, pays, carte bancaire (vérification d'identité — le tier Always Free
+   n'est jamais facturé sauf upgrade explicite vers "Pay As You Go").
+3. **Home Region** proche de vous (`eu-frankfurt-1`, `eu-paris-1`, `eu-marseille-1`) — choix définitif.
+4. Valider email + téléphone.
 
-⚠️ **Piège fréquent — "Out of host capacity"** : la capacité Ampere A1 gratuite
-est limitée par région/zone et parfois indisponible au moment de la création.
-Si l'instance refuse de se créer avec cette erreur : réessayez plus tard (la
-capacité se libère régulièrement), changez d'*Availability Domain* dans le
-formulaire, ou essayez une autre région proche si votre Home Region est saturée.
+⚠️ **"Out of host capacity"** : la capacité Ampere A1 gratuite est limitée par
+zone. Réessayer plus tard, changer d'*Availability Domain*, ou essayer une autre
+région proche.
 
 ### Étape 2 — Provisionner la VM Ampere A1 (ARM64, Always Free)
 
-1. Console Oracle Cloud → menu ☰ → **Compute** → **Instances** → **Create Instance**.
-2. **Name** : `delivery-tracking-staging`.
-3. **Image and shape** → *Edit* → **Image** : Canonical Ubuntu (dernière version
-   22.04/24.04, variante **aarch64**). **Shape** → *Change shape* → onglet
-   **Ampere** → `VM.Standard.A1.Flex` → réglez **4 OCPU / 24 Go RAM** (le
-   maximum Always Free — vous pouvez répartir sur plusieurs VM plus petites,
-   mais une seule VM est plus simple pour cette stack).
-4. **Networking** : gardez le VCN par défaut (ou créez-en un), cochez
-   **Assign a public IPv4 address**.
-5. **Add SSH keys** : générez une nouvelle paire de clés dans le formulaire
-   (téléchargez la clé privée `.key`, gardez-la précieusement) ou collez votre
-   clé publique existante (`~/.ssh/id_ed25519.pub`).
-6. **Boot volume** : la valeur par défaut (~50 Go) suffit largement (le
-   quota Always Free autorise jusqu'à 200 Go de stockage bloc au total).
-7. **Create**. Notez l'**adresse IP publique** une fois l'instance "Running".
+1. Console → **Compute** → **Instances** → **Create Instance**.
+2. **Name** : `delivery-tracking-oracle`.
+3. **Image** : Canonical Ubuntu (22.04/24.04, **aarch64**). **Shape** →
+   **Ampere** → `VM.Standard.A1.Flex` → **4 OCPU / 24 Go RAM**.
+4. **Networking** : VCN par défaut, cocher **Assign a public IPv4 address**.
+5. **SSH keys** : générer une paire (garder la clé privée `.key`) ou coller votre clé publique.
+6. **Boot volume** : défaut (~50 Go) suffit.
+7. **Create** — noter l'IP publique.
 
-### Étape 3 — Ouvrir les ports réseau (DEUX pare-feux à configurer)
+### Étape 3 — Ouvrir les ports (DEUX pare-feux)
 
-Oracle Cloud a **deux couches de pare-feu indépendantes** — il faut ouvrir les
-deux, sinon le port reste bloqué même si l'une des deux l'autorise :
+1. **Security List du VCN** : Console → **Networking** → **Virtual Cloud
+   Networks** → votre VCN → **Security Lists** → *Default* → **Add Ingress
+   Rules** : une règle par port (`80`, `443`, `8082`, `5055`–`5065`), Source
+   `0.0.0.0/0`, TCP.
+2. **iptables OS** (les images Ubuntu d'Oracle bloquent tout sauf SSH) — géré
+   par `scripts/oracle-vm-setup.sh` (étape 4).
 
-1. **Security List du VCN** (pare-feu réseau, niveau console) :
-   Console → **Networking** → **Virtual Cloud Networks** → votre VCN → onglet
-   **Security Lists** → *Default Security List* → **Add Ingress Rules** :
-   ajoutez une règle par port (`80`, `443`, `8082`, et `5055`-`5065` pour
-   Traccar), Source `0.0.0.0/0`, protocole TCP.
-2. **iptables au niveau de l'OS** (les images Ubuntu d'Oracle bloquent tout
-   sauf SSH par défaut, même si la Security List autorise le port) — géré
-   automatiquement par le script de l'étape 4.
+### Étape 4 — Préparer la VM
 
-### Étape 4 — Préparer la VM (Docker, pare-feu OS, clé de déploiement)
-
-Connectez-vous en SSH :
 ```bash
-ssh -i /chemin/vers/votre_cle.key ubuntu@<IP-PUBLIQUE-DE-LA-VM>
+ssh -i /chemin/vers/cle.key ubuntu@<IP-PUBLIQUE>
+sudo mkdir -p /opt/delivery-tracking && sudo chown "$USER" /opt/delivery-tracking
+git clone https://github.com/<org>/delivery-tracking.git /opt/delivery-tracking
+cd /opt/delivery-tracking
+bash scripts/oracle-vm-setup.sh   # Docker + compose, iptables, clé de déploiement
 ```
 
-Clonez le repo puis lancez le script de provisioning :
-```bash
-sudo mkdir -p /opt/delivery-tracking-staging
-sudo chown $USER:$USER /opt/delivery-tracking-staging
-git clone https://github.com/<votre-org>/delivery-tracking.git /opt/delivery-tracking-staging
-cd /opt/delivery-tracking-staging
-bash scripts/oracle-vm-setup.sh
-```
-
-Le script installe Docker + le plugin compose, ouvre les ports côté OS
-(iptables) et **affiche une clé SSH privée à copier dans un secret GitHub**
-(voir étape 6) — gardez le terminal ouvert le temps de la copier.
-
-### Étape 5 — Configurer et lancer la stack
+### Étape 5 — Configurer et lancer
 
 ```bash
-cd /opt/delivery-tracking-staging
 cp .env.oracle.example .env
-nano .env   # générez les secrets indiqués en commentaire (openssl rand -hex ...)
-            # et mettez l'IP publique de la VM dans CORS_ORIGIN et APP_URL
-```
+nano .env    # secrets (openssl rand -hex ...), IP publique dans CORS_ORIGIN / APP_URL
 
-Premier build (compte ~10-20 min : compilation d'OSRM depuis les sources +
-téléchargement des données routières de Madagascar — uniquement au premier
-build, les builds suivants réutilisent le cache Docker) :
-```bash
-docker compose -f docker-compose.oracle.yml build
+docker compose -f docker-compose.oracle.yml build          # ~10-20 min au 1er build (OSRM)
 docker compose -f docker-compose.oracle.yml up -d
 docker compose -f docker-compose.oracle.yml exec backend npx prisma migrate deploy
+
+curl http://localhost:3000/health
+curl http://localhost/
 ```
 
-Vérifiez que tout tourne :
-```bash
-curl http://localhost:3000/health   # backend
-curl http://localhost/              # frontend, via Caddy
-docker compose -f docker-compose.oracle.yml ps
-```
+Traccar : `http://<IP>:8082` (`admin`/`admin` par défaut — **changez-les**
+dans `traccar/traccar.xml`, clé `users.default`, puis redémarrez le conteneur).
 
-Depuis votre navigateur : `http://<IP-PUBLIQUE-DE-LA-VM>` doit afficher
-l'application. L'interface Traccar est sur `http://<IP-PUBLIQUE-DE-LA-VM>:8082`
-(identifiants par défaut `admin`/`admin` — **changez-les immédiatement** dans
-`traccar/traccar.xml`, clé `users.default`, puis redémarrez le conteneur).
+### Étape 6 — Domaine + HTTPS
 
-### Étape 6 — Automatiser les déploiements (GitHub Actions)
+1. Enregistrement DNS `A` du domaine → IP publique de la VM.
+2. `Caddyfile` : commenter le bloc `:80 { … }`, décommenter le bloc domaine
+   (remplacer `app.example.com`).
+3. `docker compose -f docker-compose.oracle.yml restart caddy` (cert Let's Encrypt automatique).
+4. `.env` : `CORS_ORIGIN`/`APP_URL` en `https://…`, `ENFORCE_HTTPS=true`, puis
+   `docker compose -f docker-compose.oracle.yml up -d`.
 
-Dans GitHub → repo → **Settings → Secrets and variables → Actions**, ajoutez :
-- `STAGING_HOST` = IP publique de la VM
-- `STAGING_USER` = `ubuntu` (ou l'utilisateur SSH utilisé)
-- `STAGING_SSH_KEY` = la clé privée affichée par `oracle-vm-setup.sh` à
-  l'étape 4 (contenu complet, `-----BEGIN...-----` à `-----END...-----`)
+---
 
-Chaque push sur `main` déclenche ensuite le job `deploy-staging` (voir
-`.github/workflows/deploy.yml`) : il se connecte en SSH, fait `git pull`,
-reconstruit les images **sur la VM** (nécessaire : les runners GitHub Actions
-sont amd64, les images publiées sur GHCR ne peuvent pas tourner sur cette VM
-ARM64 — voir la note ci-dessous) et redémarre la stack.
+## Historique — Render (désaffecté)
 
-### Étape 7 — Domaine + HTTPS (quand vous en aurez un)
+La production a d'abord tourné sur **Render** (juillet–août 2026 :
+`deliverytrack-api` + `deliverytrack-web` + Postgres/Redis free tier,
+`render.yaml`). Migrée vers Contabo car :
 
-1. Pointez un enregistrement DNS `A` de votre domaine vers l'IP publique de la VM.
-2. Sur la VM, éditez `Caddyfile` : commentez le bloc `:80 { ... }`, décommentez
-   le bloc domaine en remplaçant `app.example.com` par votre domaine.
-3. `docker compose -f docker-compose.oracle.yml restart caddy` — Caddy obtient
-   seul un certificat Let's Encrypt (aucune autre action requise).
-4. Dans `.env` : passez `CORS_ORIGIN`/`APP_URL` en `https://votre-domaine`,
-   `ENFORCE_HTTPS=true`, puis `docker compose -f docker-compose.oracle.yml up -d`
-   pour recharger le backend avec la nouvelle config.
+- le free tier Postgres expirait au bout de 90 jours (provisionné ~20 juillet 2026) ;
+- le *cold start* après 15 min d'inactivité provoquait des 504 intermittents
+  (mitigé un temps par `keepalive.yml`, un cron GitHub Actions qui pingait `/health`).
 
-### Notes techniques importantes
+Migration des données effectuée **une seule fois** par
+`scripts/migrate-from-render.sh` (lit la base Render via son *External Database
+URL*, refuse d'écraser une base cible non vide).
 
-- **PostGIS sur ARM64** : l'image officielle `postgis/postgis` ne publie
-  **aucune** variante arm64 (vérifié sur Docker Hub). `docker-compose.oracle.yml`
-  utilise `imresamu/postgis` à la place — fork communautaire multi-arch, même
-  tag `16-3.4`, compatible avec les migrations existantes sans rien changer côté
-  application.
-- **Moteur Prisma sur ARM64** : `backend/entrypoint.sh` détecte désormais
-  l'architecture CPU (`uname -m`) et sélectionne le bon moteur natif Prisma —
-  le Dockerfile pointait en dur vers le moteur x86_64, ce qui aurait fait
-  planter le backend au démarrage sur une image construite nativement sur ARM.
-- **CI/CD "build on host"** : contrairement à `deploy-production` (qui pull des
-  images GHCR amd64), `deploy-staging` reconstruit les images **sur la VM
-  elle-même**, car les runners GitHub Actions sont amd64 et ne peuvent pas
-  produire d'images arm64 sans configuration multi-arch (buildx + QEMU) —
-  hors périmètre pour l'instant, à envisager si la VM Oracle devient la prod.
-- **Traccar migre avec le reste** : les traceurs GPS déjà configurés pour
-  parler à l'instance Fly.io devront être reconfigurés (IP/port serveur côté
-  boîtier) une fois basculés sur cette VM — à faire uniquement quand vous
-  validez définitivement l'environnement Oracle, pas avant.
-- **Sauvegardes réparées au passage** : le service `backup` de
-  `docker-compose.prod.yml` référençait un `scripts/backup.sh` qui n'existait
-  pas dans le repo, et utilisait `apk` (Alpine) sur une image basée Debian —
-  les deux bugs faisaient échouer silencieusement les sauvegardes planifiées
-  depuis le début. Corrigé dans `docker-compose.prod.yml` ET
-  `docker-compose.oracle.yml` ; `scripts/backup.sh` a été créé (pg_dump +
-  upload S3-compatible optionnel, Oracle Object Storage fonctionne nativement
-  en mode compatible S3).
+`render.yaml`, `keepalive.yml` et le job Render de `deploy.yml` sont conservés
+à titre de référence mais ne sont plus utilisés.
