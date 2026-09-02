@@ -99,12 +99,12 @@ export default function LoginPage() {
     }
   }, [isInitializing, isAuthenticated, navigate, user]);
 
-  const handleLogin = async (email: string, password: string) => {
+  const handleLogin = async (email: string, password: string, remember: boolean) => {
     setLoading(true);
     setError('');
     setShowSwCacheWarning(false);
     try {
-      const res = await api.post('/auth/login', { email, password });
+      const res = await api.post('/auth/login', { email, password, remember });
       const data = res.data as
         | { accessToken?: string; user?: User | null; requiresTwoFactor?: boolean; tempToken?: string }
         | null

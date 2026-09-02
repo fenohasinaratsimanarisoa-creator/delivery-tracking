@@ -90,6 +90,16 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+
+    // register() ET validateGoogleUser() créent désormais company/user (et
+    // acceptent l'invitation) dans une $transaction unique. Le mock de
+    // $transaction passe `mockTx` au callback : on y branche les mêmes fns que
+    // mockPrisma pour que les tests puissent configurer/asserter via l'un ou
+    // l'autre indifféremment.
+    mockTx.company.create = mockPrisma.company.create;
+    mockTx.user.create = mockPrisma.user.create;
+    mockTx.invitation.update = mockPrisma.invitation.update;
+
     jest
       .spyOn(crypto, 'randomBytes')
       .mockReturnValue(
@@ -343,7 +353,7 @@ describe('AuthService', () => {
       const result = await service.login(dto, undefined, undefined);
 
       expect(mockJwtService.sign).toHaveBeenCalledWith(
-        { sub: 'user-1', scope: '2fa_pending' },
+        { sub: 'user-1', scope: '2fa_pending', jti: expect.any(String) },
         {
           secret: 'temp-token-secret',
           expiresIn: '5m',
@@ -677,7 +687,7 @@ describe('AuthService', () => {
       expect(crypto.randomBytes).toHaveBeenCalledWith(48);
       expect(bcrypt.hash).toHaveBeenCalledWith(
         '6d6f636b5f746f6b656e5f70616464696e675f686572655f',
-        10,
+        12,
       );
       expect(mockPrisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
@@ -698,7 +708,10 @@ describe('AuthService', () => {
 
       await service.forgotPassword('unknown@test.com');
 
-      expect(bcrypt.hash).not.toHaveBeenCalled();
+      // Le hash bcrypt est calculé DANS TOUS LES CAS (parité de latence
+      // anti-énumération) — mais aucune écriture ni aucun email pour un compte
+      // inexistant.
+      expect(bcrypt.hash).toHaveBeenCalled();
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
       expect(mockEmailService.sendPasswordReset).not.toHaveBeenCalled();
     });

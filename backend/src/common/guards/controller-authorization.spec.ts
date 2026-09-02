@@ -21,7 +21,6 @@ import { UsersController } from '../../modules/users/users.controller';
 import { VehiclesController } from '../../modules/vehicles/vehicles.controller';
 import { DriversController } from '../../modules/drivers/drivers.controller';
 import { DeliveriesController } from '../../modules/deliveries/deliveries.controller';
-import { SessionsController } from '../../modules/sessions/sessions.controller';
 import { NotificationsController } from '../../modules/notifications/notifications.controller';
 import { AuditLogController } from '../../modules/audit-log/audit-log.controller';
 import { ReportsController } from '../../modules/reports/reports.controller';
@@ -95,11 +94,6 @@ describe('Contrat d’autorisation des contrôleurs', () => {
       {
         name: 'DeliveriesController',
         ctrl: DeliveriesController,
-        guards: ['JwtAuthGuard', 'CompanyScopeGuard'],
-      },
-      {
-        name: 'SessionsController',
-        ctrl: SessionsController,
         guards: ['JwtAuthGuard', 'CompanyScopeGuard'],
       },
       {

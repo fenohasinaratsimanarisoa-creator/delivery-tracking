@@ -74,6 +74,20 @@ export class WsAuthService {
         algorithms: ['HS256'],
       });
 
+      // SCOPE : seul un access token général ouvre un socket. Un device token
+      // (`scope: 'device_tracking'`, 30 j, réservé à POST
+      // /tracking/positions/native-batch) porte `sub` + `companyId` et passerait
+      // sinon la vérification ci-dessous — il donnerait alors accès au flux live
+      // complet pendant 30 jours. Même règle que JwtStrategy (HTTP) et
+      // DeviceTrackingAuthGuard.
+      if (payload.scope && payload.scope !== 'access') {
+        throw new WsAuthError('Invalid token: wrong scope', 'TOKEN_INVALID');
+      }
+      // Un jeton de plateforme (admin) n'a rien à faire sur le socket chauffeur.
+      if (payload.type === 'platform_admin') {
+        throw new WsAuthError('Invalid token: wrong type', 'TOKEN_INVALID');
+      }
+
       // Cache court des contrôles COÛTEUX (révocation Redis + état DB) — voir
       // WS_AUTH_CACHE_TTL_MS. Invalidé si le token présenté change.
       const cached = (client.data as { authCache?: WsAuthCacheEntry }).authCache;

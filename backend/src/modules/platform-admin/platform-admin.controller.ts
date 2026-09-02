@@ -9,21 +9,30 @@ import {
   HttpCode,
   HttpStatus,
   Req,
+  Res,
   Query,
   BadRequestException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 import { PlatformAdminService } from './platform-admin.service';
 import { TrackingService } from '../tracking/tracking.service';
 import { TraccarBridgeService } from '../tracking/traccar-bridge.service';
 import { PlatformAdminLoginDto } from './dto/login.dto';
 import { PlatformAdminVerify2faDto } from './dto/verify-2fa.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
+import { PlatformAdminChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
+import {
+  ADMIN_REFRESH_COOKIE,
+  clearAdminRefreshCookie,
+  finishAdminAuth,
+} from '../../common/auth/auth-cookie';
 
 @Controller('platform-admin')
 export class PlatformAdminController {
@@ -31,6 +40,7 @@ export class PlatformAdminController {
     private readonly service: PlatformAdminService,
     private readonly trackingService: TrackingService,
     private readonly traccarBridgeService: TraccarBridgeService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -38,9 +48,13 @@ export class PlatformAdminController {
   @SkipCsrf()
   @Post('auth/login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: PlatformAdminLoginDto, @Req() req: any) {
+  async login(
+    @Body() dto: PlatformAdminLoginDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = await this.service.login(dto, req.ip, req.headers?.['user-agent']);
-    return result;
+    return finishAdminAuth(res, result, this.configService.get<string>('COOKIE_DOMAIN'));
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -48,8 +62,13 @@ export class PlatformAdminController {
   @SkipCsrf()
   @Post('auth/verify-2fa')
   @HttpCode(HttpStatus.OK)
-  async verify2fa(@Body() dto: PlatformAdminVerify2faDto, @Req() req: any) {
-    return this.service.verify2fa(dto, req.ip, req.headers?.['user-agent']);
+  async verify2fa(
+    @Body() dto: PlatformAdminVerify2faDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.service.verify2fa(dto, req.ip, req.headers?.['user-agent']);
+    return finishAdminAuth(res, result, this.configService.get<string>('COOKIE_DOMAIN'));
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -57,13 +76,38 @@ export class PlatformAdminController {
   @SkipCsrf()
   @Post('auth/setup-2fa')
   @HttpCode(HttpStatus.OK)
-  async setup2fa(@Body() dto: PlatformAdminVerify2faDto, @Req() req: any) {
-    return this.service.verify2faSetupAndLogin(
+  async setup2fa(
+    @Body() dto: PlatformAdminVerify2faDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.service.verify2faSetupAndLogin(
       dto.tempToken,
       dto.token,
       req.ip,
       req.headers?.['user-agent'],
     );
+    return finishAdminAuth(res, result, this.configService.get<string>('COOKIE_DOMAIN'));
+  }
+
+  // Rotation de session admin : lit le cookie httpOnly admin_refreshToken.
+  // CSRF requis (comme /auth/refresh côté utilisateur) — le adminClient envoie
+  // déjà les en-têtes X-CSRF-*.
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Public()
+  @Post('auth/refresh')
+  @HttpCode(HttpStatus.OK)
+  async refresh(@Req() req: any, @Res({ passthrough: true }) res: Response) {
+    const result = await this.service.refreshSession(req.cookies?.[ADMIN_REFRESH_COOKIE]);
+    return finishAdminAuth(res, result, this.configService.get<string>('COOKIE_DOMAIN'));
+  }
+
+  @UseGuards(JwtAuthGuard, SuperAdminGuard)
+  @Post('auth/logout')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async logout(@CurrentUser('id') adminId: string, @Res({ passthrough: true }) res: Response) {
+    await this.service.logout(adminId);
+    clearAdminRefreshCookie(res, this.configService.get<string>('COOKIE_DOMAIN'));
   }
 
   @UseGuards(JwtAuthGuard, SuperAdminGuard)
@@ -151,10 +195,9 @@ export class PlatformAdminController {
   @HttpCode(HttpStatus.OK)
   async changePassword(
     @CurrentUser('id') adminId: string,
-    @Body('currentPassword') currentPassword: string,
-    @Body('newPassword') newPassword: string,
+    @Body() dto: PlatformAdminChangePasswordDto,
   ) {
-    await this.service.changePassword(adminId, currentPassword, newPassword);
+    await this.service.changePassword(adminId, dto.currentPassword, dto.newPassword);
     return { message: 'Mot de passe modifié avec succès' };
   }
 

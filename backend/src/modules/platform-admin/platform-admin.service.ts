@@ -18,6 +18,10 @@ import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { PlatformAdminLoginDto } from './dto/login.dto';
 import { PlatformAdminVerify2faDto } from './dto/verify-2fa.dto';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import {
+  revokeUserAccessTokens,
+  accessTokenTtlSeconds,
+} from '../../common/auth/access-token-revocation';
 
 @Injectable()
 export class PlatformAdminService {
@@ -68,7 +72,12 @@ export class PlatformAdminService {
    */
   private getDummyHash(): string {
     if (!this.dummyHash) {
-      this.dummyHash = bcrypt.hashSync('dummy-timing-attack-mitigation', 10);
+      // Coût 12 — DOIT être identique au coût des vrais hash admin
+      // (bcrypt.hash(..., 12) dans createAdmin/changePassword/generateTokens).
+      // Un coût 10 rendait le bcrypt.compare ~4× plus rapide pour un email admin
+      // inexistant → oracle temporel d'énumération. Même correctif que
+      // AuthService.getDummyHash().
+      this.dummyHash = bcrypt.hashSync('dummy-timing-attack-mitigation', 12);
     }
     return this.dummyHash;
   }
@@ -112,6 +121,61 @@ export class PlatformAdminService {
       await this.redis.del(this.adminLoginFailKey(email));
     } catch {
       // ignore
+    }
+  }
+
+  // --- Anti-brute-force du code 2FA (le flux utilisateur l'avait, pas l'admin,
+  // pourtant plus sensible). Le throttle HTTP est par IP uniquement ; un
+  // attaquant qui a déjà le mot de passe re-génère un tempToken à volonté et
+  // peut varier d'IP. Verrou par compte, N échecs → refus temporaire. Jamais
+  // bloquant sur erreur Redis. ---
+  private readonly twoFaFailMaxAttempts = 8;
+  private twoFaFailKey(adminId: string): string {
+    return `admin_2fa_fail:${adminId}`;
+  }
+  private async checkAdmin2faLockout(adminId: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const count = await this.redis.get(this.twoFaFailKey(adminId));
+      if (count && parseInt(count, 10) >= this.twoFaFailMaxAttempts) {
+        throw new UnauthorizedException('Too many invalid 2FA codes. Please try again later.');
+      }
+    } catch (err) {
+      if (err instanceof UnauthorizedException) throw err;
+    }
+  }
+  private async recordAdmin2faFailure(adminId: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const key = this.twoFaFailKey(adminId);
+      const count = await this.redis.incr(key);
+      if (count === 1) await this.redis.expire(key, this.loginFailWindowSeconds);
+    } catch {
+      // jamais bloquant
+    }
+  }
+  private async clearAdmin2faFailures(adminId: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      await this.redis.del(this.twoFaFailKey(adminId));
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * Consomme le jti d'un tempToken 2FA (usage unique). SET NX atomique : un
+   * même tempToken ne produit qu'UNE session admin, même sous requêtes
+   * concurrentes. Sans Redis : pas d'enforcement (dégradation cohérente).
+   * @returns true si le jeton était encore frais, false s'il a déjà été consommé.
+   */
+  private async consumeAdminTempToken(jti: string | undefined): Promise<boolean> {
+    if (!jti || !this.redis) return true;
+    try {
+      const fresh = await this.redis.set(`admin:2fa:temp:used:${jti}`, '1', 'EX', 360, 'NX');
+      return fresh !== null;
+    } catch {
+      return true;
     }
   }
 
@@ -164,7 +228,7 @@ export class PlatformAdminService {
     });
 
     const tempToken = this.jwtService.sign(
-      { sub: admin.id, scope: '2fa_pending' },
+      { sub: admin.id, scope: '2fa_pending', jti: crypto.randomUUID() },
       {
         secret: this.get2faTempSecret(),
         expiresIn: this.tempTokenExpiration,
@@ -187,12 +251,15 @@ export class PlatformAdminService {
   }
 
   async verify2fa(dto: PlatformAdminVerify2faDto, ip?: string, userAgent?: string) {
-    let payload: { sub: string; scope: string };
+    let payload: { sub: string; scope: string; jti?: string };
     try {
-      payload = this.jwtService.verify<{ sub: string; scope: string }>(dto.tempToken, {
-        secret: this.get2faTempSecret(),
-        algorithms: ['HS256'],
-      });
+      payload = this.jwtService.verify<{ sub: string; scope: string; jti?: string }>(
+        dto.tempToken,
+        {
+          secret: this.get2faTempSecret(),
+          algorithms: ['HS256'],
+        },
+      );
     } catch {
       throw new UnauthorizedException('Invalid or expired temporary token');
     }
@@ -206,10 +273,25 @@ export class PlatformAdminService {
       throw new UnauthorizedException('Admin not found or 2FA not enabled');
     }
 
+    await this.checkAdmin2faLockout(admin.id);
+
     const isValid = this.totpService.verifyToken(admin.totpSecret, dto.token);
     if (!isValid) {
+      await this.recordAdmin2faFailure(admin.id);
+      this.logger.warn(
+        `[platform-admin] échec de code 2FA admin=${admin.id} ip=${ip || 'unknown'}`,
+      );
       throw new UnauthorizedException('Invalid 2FA code');
     }
+
+    // Usage unique : consommé APRÈS un code TOTP valide (un code mal saisi ne
+    // brûle pas le tempToken).
+    if (!(await this.consumeAdminTempToken(payload.jti))) {
+      throw new UnauthorizedException(
+        'This verification step has already been completed. Please log in again.',
+      );
+    }
+    await this.clearAdmin2faFailures(admin.id);
 
     await this.prisma.platformAuditLog.create({
       data: {
@@ -609,12 +691,20 @@ export class PlatformAdminService {
       where: { id: adminId },
       data: { passwordHash, refreshTokenHash: null },
     });
+
+    // Révoque aussi les access tokens admin encore vivants (JwtStrategy lit
+    // revoked:user:<sub>, et le sub d'un token platform_admin EST l'adminId).
+    await revokeUserAccessTokens(
+      this.redis,
+      adminId,
+      accessTokenTtlSeconds(this.configService.get<string>('JWT_ACCESS_EXPIRATION')),
+    );
   }
 
   async verify2faSetupAndLogin(tempToken: string, token: string, ip?: string, userAgent?: string) {
-    let payload: { sub: string; scope: string };
+    let payload: { sub: string; scope: string; jti?: string };
     try {
-      payload = this.jwtService.verify<{ sub: string; scope: string }>(tempToken, {
+      payload = this.jwtService.verify<{ sub: string; scope: string; jti?: string }>(tempToken, {
         secret: this.get2faTempSecret(),
         algorithms: ['HS256'],
       });
@@ -635,10 +725,20 @@ export class PlatformAdminService {
       throw new UnauthorizedException('2FA not set up. Please reconnect.');
     }
 
+    await this.checkAdmin2faLockout(admin.id);
+
     const isValid = this.totpService.verifyToken(admin.totpSecret, token);
     if (!isValid) {
+      await this.recordAdmin2faFailure(admin.id);
       throw new UnauthorizedException('Invalid 2FA code');
     }
+
+    if (!(await this.consumeAdminTempToken(payload.jti))) {
+      throw new UnauthorizedException(
+        'This verification step has already been completed. Please log in again.',
+      );
+    }
+    await this.clearAdmin2faFailures(admin.id);
 
     if (!admin.totpEnabled) {
       await this.prisma.platformAdmin.update({
@@ -723,6 +823,84 @@ export class PlatformAdminService {
     });
     if (!admin) throw new UnauthorizedException('Admin not found');
     return admin;
+  }
+
+  /**
+   * Rotation du refresh token admin (endpoint POST /platform-admin/auth/refresh).
+   * Avant, AUCUN endroit ne consommait le refreshTokenHash stocké : l'admin était
+   * renvoyé sur l'écran de login (mot de passe + TOTP) à chaque expiration de
+   * l'access token (~15 min) et à chaque rechargement de page.
+   *
+   * Fenêtre de grâce inter-onglets via Redis (30 s) : deux rafraîchissements
+   * concurrents tenant le même ancien token convergent au lieu de se
+   * déconnecter mutuellement (pas de colonne previous_refresh_token_hash sur
+   * PlatformAdmin, contrairement à UserSession).
+   */
+  async refreshSession(refreshToken: string | undefined) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token not found');
+    }
+    let payload: JwtPayload;
+    try {
+      payload = this.jwtService.verify<JwtPayload>(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET')!,
+        algorithms: ['HS256'],
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    if (payload.type !== 'platform_admin') {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const admin = await this.prisma.platformAdmin.findUnique({ where: { id: payload.sub } });
+    if (!admin || !admin.isActive || !admin.refreshTokenHash) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const matchesCurrent = await bcrypt.compare(refreshToken, admin.refreshTokenHash);
+    let matchesPrevious = false;
+    if (!matchesCurrent && this.redis) {
+      try {
+        const prev = await this.redis.get(`admin:refresh:prev:${admin.id}`);
+        if (prev) matchesPrevious = await bcrypt.compare(refreshToken, prev);
+      } catch {
+        // Redis indisponible : pas de fenêtre de grâce, on retombe sur le
+        // comportement strict (matchesPrevious reste false).
+      }
+    }
+
+    if (!matchesCurrent && !matchesPrevious) {
+      // Rejeu après au moins deux rotations = vol probable → on coupe la session.
+      await this.prisma.platformAdmin.update({
+        where: { id: admin.id },
+        data: { refreshTokenHash: null },
+      });
+      this.logger.warn(`[platform-admin] refresh token REUSE detected admin=${admin.id}`);
+      throw new UnauthorizedException('Refresh token reuse detected — session revoked');
+    }
+
+    if (this.redis) {
+      try {
+        await this.redis.set(`admin:refresh:prev:${admin.id}`, admin.refreshTokenHash, 'EX', 30);
+      } catch {
+        // fenêtre de grâce best-effort
+      }
+    }
+
+    return this.generateTokens(admin);
+  }
+
+  async logout(adminId: string) {
+    await this.prisma.platformAdmin.update({
+      where: { id: adminId },
+      data: { refreshTokenHash: null },
+    });
+    await revokeUserAccessTokens(
+      this.redis,
+      adminId,
+      accessTokenTtlSeconds(this.configService.get<string>('JWT_ACCESS_EXPIRATION')),
+    );
   }
 
   private async generateTokens(admin: {

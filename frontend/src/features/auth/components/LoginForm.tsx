@@ -11,7 +11,7 @@ import Button from '../../../components/Button';
 import styles from './LoginForm.module.css';
 
 interface Props {
-  onSubmit: (email: string, password: string) => Promise<void>;
+  onSubmit: (email: string, password: string, remember: boolean) => Promise<void>;
   error: string;
   loading: boolean;
   cachedName?: string;
@@ -61,7 +61,7 @@ export default function LoginForm({ onSubmit, error, loading, cachedName, cached
     e.preventDefault();
     setTouched({ email: true, password: true });
     if (!isFormValid) return;
-    onSubmit(email, password);
+    onSubmit(email, password, remember);
   };
 
   return (

@@ -15,6 +15,10 @@ const mockPrisma = {
   },
 };
 
+const mockRedis = {
+  set: jest.fn().mockResolvedValue('OK'),
+};
+
 const mockAuditLog = {
   log: jest.fn(),
 };
@@ -27,7 +31,36 @@ describe('SessionsService', () => {
     service = new SessionsService(
       mockPrisma as unknown as PrismaService,
       mockAuditLog as unknown as AuditLogService,
+      mockRedis as never,
     );
+  });
+
+  describe('findAll', () => {
+    it('ne renvoie que les sessions NON expirées', async () => {
+      mockPrisma.userSession.findMany.mockResolvedValueOnce([]);
+      await service.findAll('user-1');
+      expect(mockPrisma.userSession.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'user-1', expiresAt: { gt: expect.any(Date) } },
+        }),
+      );
+    });
+  });
+
+  describe('purgeExpiredSessions', () => {
+    it('supprime les UserSession dont expiresAt est dépassé', async () => {
+      mockPrisma.userSession.deleteMany.mockResolvedValueOnce({ count: 3 });
+      await service.purgeExpiredSessions();
+      expect(mockPrisma.userSession.deleteMany).toHaveBeenCalledWith({
+        where: { expiresAt: { lt: expect.any(Date) } },
+      });
+    });
+
+    it('passe son tour si le verrou cron est tenu par une autre instance', async () => {
+      mockRedis.set.mockResolvedValueOnce(null);
+      await service.purgeExpiredSessions();
+      expect(mockPrisma.userSession.deleteMany).not.toHaveBeenCalled();
+    });
   });
 
   // ----------------------------------------------------------------

@@ -12,6 +12,7 @@ import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import Redis from 'ioredis';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { TotpService } from './totp.service';
@@ -21,6 +22,10 @@ import { LoginDto } from './dto/login.dto';
 import { Verify2faDto } from './dto/two-factor.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { TokenResponse } from './interfaces/token-response.interface';
+import {
+  revokeUserAccessTokens,
+  accessTokenTtlSeconds,
+} from '../../common/auth/access-token-revocation';
 
 @Injectable()
 export class AuthService {
@@ -329,8 +334,10 @@ export class AuthService {
     await this.clearLoginFailures(dto.email);
 
     if (user.totpEnabled) {
+      // jti : ancre de consommation à usage unique du tempToken (voir
+      // verify2faToken). Un même tempToken ne doit produire qu'UNE session.
       const tempToken = this.jwtService.sign(
-        { sub: user.id, scope: '2fa_pending' },
+        { sub: user.id, scope: '2fa_pending', jti: crypto.randomUUID() },
         {
           secret: this.configService.get<string>(
             'JWT_2FA_TEMP_SECRET',
@@ -371,15 +378,18 @@ export class AuthService {
   }
 
   async verify2faToken(dto: Verify2faDto, ip?: string, userAgent?: string): Promise<TokenResponse> {
-    let payload: { sub: string; scope: string };
+    let payload: { sub: string; scope: string; jti?: string };
     try {
-      payload = this.jwtService.verify<{ sub: string; scope: string }>(dto.tempToken, {
-        secret: this.configService.get<string>(
-          'JWT_2FA_TEMP_SECRET',
-          this.configService.get<string>('JWT_ACCESS_SECRET')!,
-        ),
-        algorithms: ['HS256'],
-      });
+      payload = this.jwtService.verify<{ sub: string; scope: string; jti?: string }>(
+        dto.tempToken,
+        {
+          secret: this.configService.get<string>(
+            'JWT_2FA_TEMP_SECRET',
+            this.configService.get<string>('JWT_ACCESS_SECRET')!,
+          ),
+          algorithms: ['HS256'],
+        },
+      );
     } catch {
       throw new UnauthorizedException('Invalid or expired temporary token');
     }
@@ -400,6 +410,26 @@ export class AuthService {
       await this.record2faFailure(user.id);
       throw new UnauthorizedException('Invalid 2FA code');
     }
+
+    // USAGE UNIQUE : un tempToken donné == une seule session. La consommation
+    // n'a lieu qu'APRÈS un code TOTP valide (un code mal saisi ne « brûle » pas
+    // le tempToken — l'utilisateur peut retenter). SET NX atomique : deux
+    // requêtes concurrentes avec le même jti → une seule gagne.
+    if (payload.jti && this.redis) {
+      try {
+        const fresh = await this.redis.set(`2fa:temp:used:${payload.jti}`, '1', 'EX', 360, 'NX');
+        if (fresh === null) {
+          throw new UnauthorizedException(
+            'This verification step has already been completed. Please log in again.',
+          );
+        }
+      } catch (err) {
+        if (err instanceof UnauthorizedException) throw err;
+        // Panne Redis : on ne bloque pas la connexion (dégradation cohérente
+        // avec le reste — lockout, révocation — qui se désactivent sans Redis).
+      }
+    }
+
     await this.clear2faFailures(user.id);
 
     // Étape 2 du 2FA : c'est ici que la session est matérialisée (l'étape 1 n'en
@@ -535,18 +565,21 @@ export class AuthService {
   async forgotPassword(email: string): Promise<void> {
     email = email.toLowerCase().trim();
     const user = await this.prisma.user.findUnique({ where: { email } });
+
+    // Le coût dominant (bcrypt) est payé DANS TOUS LES CAS, compte existant ou
+    // non : avant, le chemin « compte inconnu » faisait un simple bcrypt.compare
+    // tandis que le chemin réel faisait un bcrypt.hash + un UPDATE — la latence
+    // de réponse permettait donc d'énumérer les comptes. Coût 12 : aligné sur
+    // resetPassword (le hash du secret de reset était en coût 10, incohérent).
+    const resetTokenId = crypto.randomUUID();
+    const rawSecret = crypto.randomBytes(48).toString('hex');
+    const hashedSecret = await bcrypt.hash(rawSecret, 12);
+
     if (!user) {
-      // Consomme le même budget temps qu'un utilisateur existant, afin qu'on ne
-      // puisse pas énumérer les comptes via la latence.
-      await bcrypt.compare('dummy', this.getDummyHash());
       return;
     }
 
-    const resetTokenId = crypto.randomUUID();
-    const rawSecret = crypto.randomBytes(48).toString('hex');
-    const hashedSecret = await bcrypt.hash(rawSecret, 10);
     const expiry = new Date(Date.now() + 30 * 60 * 1000);
-
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
@@ -610,6 +643,15 @@ export class AuthService {
       data: { refreshTokenHash: null },
     });
     await this.prisma.userSession.deleteMany({ where: { userId: user.id } });
+
+    // ...ET révocation des ACCESS tokens encore vivants (≤ 15 min). Sans ça, un
+    // access token phishé restait utilisable un quart d'heure après que la
+    // victime a réinitialisé son mot de passe pour couper l'attaquant.
+    await revokeUserAccessTokens(
+      this.redis,
+      user.id,
+      accessTokenTtlSeconds(this.configService.get<string>('JWT_ACCESS_EXPIRATION')),
+    );
   }
 
   async validateGoogleUser(
@@ -667,43 +709,47 @@ export class AuthService {
       include: { company: true },
     });
 
-    let companyId: string;
-    let role = 'admin' as string;
-
-    if (pendingInvitation) {
-      companyId = pendingInvitation.companyId;
-      role = pendingInvitation.role;
-    } else {
-      const company = await this.prisma.company.create({
-        data: { name: `${firstName} ${lastName}`, email },
-      });
-      companyId = company.id;
-    }
-
     const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
-    user = await this.prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        firstName,
-        lastName,
-        role: role as any,
-        companyId,
-        googleId,
-      },
-    });
 
-    if (pendingInvitation) {
-      await this.prisma.invitation.update({
-        where: { id: pendingInvitation.id },
-        data: { status: 'accepted', acceptedAt: new Date() },
+    // Création atomique : company (si pas d'invitation) + user + acceptation de
+    // l'invitation dans UNE transaction. Avant, des awaits séparés laissaient une
+    // Company orpheline si le user.create échouait juste après.
+    const createdUser = await this.prisma.$transaction(async (tx) => {
+      let companyId: string;
+      let role: UserRole = 'admin';
+
+      if (pendingInvitation) {
+        companyId = pendingInvitation.companyId;
+        role = pendingInvitation.role;
+      } else {
+        const company = await tx.company.create({
+          data: { name: `${firstName} ${lastName}`, email },
+        });
+        companyId = company.id;
+      }
+
+      const u = await tx.user.create({
+        data: { email, passwordHash, firstName, lastName, role, companyId, googleId },
       });
-    }
 
-    return this.generateTokens(user.id, user.email, user.role, user.companyId, undefined, {
-      ip,
-      device: userAgent,
+      if (pendingInvitation) {
+        await tx.invitation.update({
+          where: { id: pendingInvitation.id },
+          data: { status: 'accepted', acceptedAt: new Date() },
+        });
+      }
+
+      return u;
     });
+
+    return this.generateTokens(
+      createdUser.id,
+      createdUser.email,
+      createdUser.role,
+      createdUser.companyId,
+      undefined,
+      { ip, device: userAgent },
+    );
   }
 
   /**

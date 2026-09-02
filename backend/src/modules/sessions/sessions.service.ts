@@ -1,18 +1,28 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Inject, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+import type Redis from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { AuditAction } from '@prisma/client';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
+import { acquireCronLock } from '../../common/scheduling/cron-lock';
 
 @Injectable()
 export class SessionsService {
+  private readonly logger = new Logger(SessionsService.name);
+
   constructor(
     private prisma: PrismaService,
     private auditLog: AuditLogService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis | null = null,
   ) {}
 
   async findAll(userId: string) {
     return this.prisma.userSession.findMany({
-      where: { userId },
+      // Sessions ACTIVES uniquement : une session expirée est déjà refusée par
+      // refresh() mais sa ligne survit — l'afficher dans « Mes appareils » comme
+      // une session ouverte induit l'utilisateur en erreur.
+      where: { userId, expiresAt: { gt: new Date() } },
       orderBy: { lastActivity: 'desc' },
       select: {
         id: true,
@@ -116,5 +126,22 @@ export class SessionsService {
       take: limit,
       select: { createdAt: true, ip: true, device: true, lastActivity: true },
     });
+  }
+
+  /**
+   * Purge des UserSession expirées. Sans ça, chaque session ouverte laisse une
+   * ligne morte indéfiniment (aucun autre module ne les nettoie) : croissance
+   * non bornée de la table + « Mes appareils » pollué avant le filtre ci-dessus.
+   * Toutes les heures ; verrou distribué (plusieurs instances backend/worker).
+   */
+  @Cron('7 * * * *')
+  async purgeExpiredSessions() {
+    if (!(await acquireCronLock(this.redis, 'sessions.purgeExpired', 3000))) return;
+    const result = await this.prisma.userSession.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
+    });
+    if (result.count > 0) {
+      this.logger.log(`Purged ${result.count} expired user session(s)`);
+    }
   }
 }
