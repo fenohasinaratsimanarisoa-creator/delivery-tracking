@@ -12,6 +12,13 @@
 # automatiquement au commit précédent et redémarre dessus.
 set -eu
 
+# `git pull` ci-dessous ne doit JAMAIS ouvrir un prompt interactif : lancé sous
+# nohup / cron / CI il n'y a pas de tty et git échoue sur
+# « could not read Username for 'https://github.com' » au lieu d'échouer
+# proprement. Le dépôt est public → le fetch anonyme suffit ; on coupe juste
+# le prompt.
+export GIT_TERMINAL_PROMPT=0
+
 REPO_DIR="/opt/delivery-tracking"
 COMPOSE="docker compose -f docker-compose.contabo.yml"
 APP_SERVICES="backend worker frontend"
