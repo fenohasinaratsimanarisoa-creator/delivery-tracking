@@ -163,9 +163,12 @@ export class AuthController {
       if (result.requiresTwoFactor) {
         // Étape 1 : aucun cookie de session (refreshToken vide). Le tempToken
         // (usage unique, TTL court) est passé au front pour l'étape 2.
+        // On n'expose ICI que ce dont l'écran 2FA a besoin (email + prénom) :
+        // rôle, companyId et id ne doivent pas fuiter avant la validation du
+        // second facteur.
         return {
           accessToken: '',
-          user: result.user,
+          user: { email: result.user.email, firstName: result.user.firstName },
           requiresTwoFactor: true,
           tempToken: result.tempToken,
         };

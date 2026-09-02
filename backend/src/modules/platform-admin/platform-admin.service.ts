@@ -68,7 +68,12 @@ export class PlatformAdminService {
    */
   private getDummyHash(): string {
     if (!this.dummyHash) {
-      this.dummyHash = bcrypt.hashSync('dummy-timing-attack-mitigation', 10);
+      // Coût 12 — DOIT être identique au coût des vrais hash admin
+      // (bcrypt.hash(..., 12) dans createAdmin/changePassword/generateTokens).
+      // Un coût 10 rendait le bcrypt.compare ~4× plus rapide pour un email admin
+      // inexistant → oracle temporel d'énumération. Même correctif que
+      // AuthService.getDummyHash().
+      this.dummyHash = bcrypt.hashSync('dummy-timing-attack-mitigation', 12);
     }
     return this.dummyHash;
   }
