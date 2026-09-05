@@ -310,10 +310,15 @@ export class VehiclesService {
   }
 
   private async authenticateTraccar(url: string, user: string, password: string): Promise<string> {
+    // Traccar attend du application/x-www-form-urlencoded sur /api/session, pas du
+    // JSON (bug réel observé en prod, 2026-09-05 : 400 systématique sur
+    // GET /vehicles/available-traccar-devices). Même format que l'implémentation
+    // QUI FONCTIONNE dans traccar-bridge.service.ts.authenticate() — dupliquée ici
+    // sans jamais avoir été alignée dessus.
     const loginResponse = await fetch(`${url}/api/session`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user, password }),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `email=${encodeURIComponent(user)}&password=${encodeURIComponent(password)}`,
     });
 
     if (!loginResponse.ok) {

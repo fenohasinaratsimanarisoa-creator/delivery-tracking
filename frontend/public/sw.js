@@ -5,10 +5,9 @@
    - Auto-guérison : ping de version à l'activate pour débloquer les clients coincés
      sur un ancien SW (unregister forcé via SW_FORCE_RESET)
 */
-const VERSION = 'logitrack-v4'; // À bump à chaque déploiement
+const VERSION = 'logitrack-v5'; // À bump à chaque déploiement
 const APP_SHELL = '/';
 const CACHE_URLS = [APP_SHELL, '/manifest.json', '/icons/icon.svg'];
-let consecutiveFallbacks = 0;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -82,21 +81,31 @@ self.addEventListener('fetch', (event) => {
             caches.delete(VERSION).catch(() => {});
             return res;
           }
-          consecutiveFallbacks = 0;
           const copy = res.clone();
           caches.open(VERSION).then((cache) => cache.put(APP_SHELL, copy)).catch(() => {});
           return res;
         })
         .catch(() => {
-          // Hors-ligne : on sert le shell en cache, mais avec une garde anti-boucle —
-          // si le réseau reste KO sur plusieurs navigations, on purge et on laisse le
-          // navigateur afficher son erreur au lieu de servir un vieux shell en boucle
-          // (vieux shell → vieux chunks → 404 → reload → boucle vers la page de login).
-          consecutiveFallbacks += 1;
-          if (consecutiveFallbacks > 3) {
-            caches.delete(VERSION).catch(() => {});
-            return Response.error();
-          }
+          // Échec réseau sur CETTE navigation précise (vraie coupure, OU requête
+          // annulée par le navigateur — ex. l'utilisateur navigue ailleurs avant la
+          // fin du fetch, ce qui arrive constamment en usage normal). Servir le shell
+          // en cache est TOUJOURS le bon repli ici, quelle que soit la cause.
+          //
+          // Un compteur `consecutiveFallbacks > N → Response.error()` existait ici
+          // auparavant pour éviter de boucler indéfiniment sur un vieux shell après
+          // un redéploiement. Bug réel (2026-09-05) : ce compteur est un état PARTAGÉ
+          // pour la durée de vie du Service Worker (pas par requête), et compte AUSSI
+          // les requêtes annulées par des navigations rapides — sans lien avec un
+          // vrai problème réseau. Une fois au-dessus du seuil, TOUTE navigation
+          // suivante recevait une vraie erreur réseau (Response.error()), même en
+          // ligne, même vers une page qui charge normalement par ailleurs — jusqu'à
+          // ce que le Service Worker redémarre. Observé en conditions réelles :
+          // "The FetchEvent for '.../dashboard' resulted in a network error
+          // response" alors que le serveur répondait normalement.
+          // Le cas qu'il visait (vieux shell → vieux chunks → 404 en boucle) est
+          // maintenant détecté et corrigé côté app (services/pwa/chunkRecovery.ts +
+          // ErrorBoundary), donc ce filet de sécurité au niveau SW n'est plus
+          // nécessaire — et il faisait plus de mal que de bien.
           return caches.match(APP_SHELL);
         })
     );

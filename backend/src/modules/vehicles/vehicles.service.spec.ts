@@ -303,6 +303,34 @@ describe('VehiclesService', () => {
       // 102 (prefix bbbbbbbb) et 104 (prefix bbbbbbbb) exclus par préfixe.
       expect(available.map((d) => d.id)).toEqual([101, 103]);
     });
+
+    it("s'authentifie auprès de Traccar en application/x-www-form-urlencoded, pas en JSON (bug réel 2026-09-05 : 400 systématique avec le mauvais content-type)", async () => {
+      enableTraccar();
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([]);
+
+      const fetchMock = jest
+        .fn()
+        // 1er appel : POST /api/session (login)
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: { get: (h: string) => (h === 'set-cookie' ? 'JSESSIONID=abc123; Path=/' : null) },
+        } as unknown as Response)
+        // 2e appel : GET /api/devices
+        .mockResolvedValueOnce({ ok: true, json: async () => traccarDevices } as Response);
+      global.fetch = fetchMock;
+
+      await service.getAvailableTraccarDevices(companyA);
+
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        'http://localhost:8082/api/session',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'email=admin&password=admin',
+        }),
+      );
+    });
   });
 
   describe('remove', () => {
