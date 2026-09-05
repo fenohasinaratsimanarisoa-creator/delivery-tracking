@@ -6,6 +6,7 @@ import { initSentry } from './services/monitoring/sentry';
 import { initNativeOAuthListener } from './services/native/nativeAuth';
 import { initApiOverrideBanner } from './services/api/config';
 import { resetServiceWorkerAndReload } from './services/pwa/reset';
+import { isChunkLoadError, recoverFromChunkLoadError } from './services/pwa/chunkRecovery';
 
 initSentry();
 initNativeOAuthListener();
@@ -123,120 +124,28 @@ if ('serviceWorker' in navigator) {
 }
 
 // Rechargement automatique quand un chunk Vite hashed est introuvable (404) : survient
-// quand Render redéploie pendant une session — le navigateur garde l'ancien index.html
-// qui référence des chunks supprimés. L'import dynamique échoue → on recharge la page
-// pour récupérer le nouvel index.html.
+// quand le serveur redéploie pendant une session — le navigateur garde l'ancien
+// index.html qui référence des chunks supprimés (CHAQUE page de l'app est
+// lazy-loadée, voir App.tsx, et son chunk change de hash à CHAQUE build même si
+// son propre code source n'a pas changé, car le bundle partagé change).
 //
-// Garde anti-boucle persistée (horodatage en sessionStorage, par onglet) :
-//   1er échec                → reload simple (horodaté dans 'dt_chunk_reload')
-//   2e échec (< 10 s)        → l'ancien SW resert le vieux shell : désenregistrement
-//                              des service workers + purge des caches + reload UNE fois
-//                              (horodaté dans 'dt_sw_reset')
-//   3e échec                 → échec loggé clairement, on arrête (pas de boucle infinie)
+// Ce listener ne couvre que la moitié des cas : l'échec de chargement du
+// <script>/<link> lui-même (remonte comme un vrai `error` DOM). L'AUTRE cas,
+// bien plus fréquent en pratique — l'`import()` dynamique d'une page
+// React.lazy() qui échoue PENDANT LE RENDU — ne passe jamais par ici, il est
+// intercepté par ErrorBoundary (voir components/ErrorBoundary.tsx), qui
+// appelle le même recoverFromChunkLoadError() ci-dessous.
 //
-// + Auto-guérison accélérée : si le SW contrôlait la page (hadControllerAtLoad) ET
-//   qu'aucun ping de version n'a été reçu sous 3s, le reset forcé est déclenché
-//   IMMÉDIATEMENT (sans attendre RELOAD_COOLDOWN_MS) sur le 1er chunk-404.
-
-
-
-function isChunkFailure(event: ErrorEvent): boolean {
-  const msg = String(event.message || '');
-  return (
-    msg.includes('Failed to fetch dynamically imported module') ||
-    msg.includes('error loading dynamically imported module') ||
-    msg.includes('Failed to load module script') ||
-    (event.target instanceof HTMLLinkElement && event.target.href?.includes('/assets/'))
-  );
-}
-
-// Capture = true : les erreurs de ressources (ex. <link> CSS des chunks lazy qui 404
-// après redéploiement) ne "bubbent" pas jusqu'à window, il faut les capter à la phase
-// de capture pour déclencher le même chemin de récupération.
+// Capture = true : les erreurs de ressources (<link> CSS des chunks lazy qui 404
+// après redéploiement) ne "bubblent" pas jusqu'à window, il faut les capter à la
+// phase de capture pour déclencher le même chemin de récupération.
 window.addEventListener(
   'error',
   (event) => {
-    if (!isChunkFailure(event)) return;
-
-    const now = Date.now();
-    const lastReload = Number(sessionStorage.getItem(RELOAD_KEY) || 0);
-    const lastSwReset = Number(sessionStorage.getItem(SW_RESET_KEY) || 0);
-
-    // --- Auto-guérison accélérée ---
-    // Si le SW contrôlait la page AVANT le chargement ET qu'aucun ping de version
-    // n'a été reçu sous 3s, on force le reset IMMÉDIATEMENT sans attendre le cooldown.
-    // On ne le fait QU'UNE SEULE FOIS par version (compteur localStorage).
-    if (
-      typeof window !== 'undefined' &&
-      'serviceWorker' in navigator &&
-      !navigator.serviceWorker.controller // Le SW a été purgé ou n'a jamais pris le contrôle
-    ) {
-      // Cas normal : le SW est déjà parti, on suit le chemin standard
-    }
-
-    // Vérification du compteur persistant par version pour auto-guérison accélérée
-    const swVersionKey = 'dt_sw_known_version';
-    const swForceResetPrefix = 'dt_sw_force_reset_done_v';
-    const knownVersion = localStorage.getItem(swVersionKey);
-
-    // Si on détecte un chunk-404 et que le SW avait le contrôle au chargement,
-    // et que le cooldown n'est pas atteint mais on veut accélérer :
-    // La variable globale hadControllerAtLoad est dans le scope du if ci-dessus.
-    // On ne peut pas y accéder ici, donc on utilise une approche différente :
-    // on regarde si sessionStorage a déjà un dt_chunk_reload très récent (< 3s).
-    // Si oui ET qu'on a un knownVersion, on tente le reset forcé accéléré.
-
-    // Si le premier reload a eu lieu il y a < 3s (donc le chunk-404 est le 1er ou 2e)
-    // ET qu'on a une version connue, on tente le reset forcé immédiat.
-    const timeSinceLastReload = now - lastReload;
-    if (
-      knownVersion &&
-      timeSinceLastReload < SW_PING_TIMEOUT_MS && // Reload très récent (< 3s) → auto-guérison accélérée
-      timeSinceLastReload > 0 // Pas le tout premier échec
-    ) {
-      const forceResetKey = `${swForceResetPrefix}${knownVersion}`;
-      if (localStorage.getItem(forceResetKey) !== '1') {
-        localStorage.setItem(forceResetKey, '1');
-        sessionStorage.setItem(SW_RESET_KEY, String(now));
-        console.warn(
-          `[app] Auto-guérison accélérée : chunk-404 après reload récent, reset forcé du SW (version ${knownVersion})`,
-        );
-        void resetServiceWorkerAndReload();
-        return;
-      }
-    }
-
-    if (now - lastReload > RELOAD_COOLDOWN_MS) {
-      sessionStorage.setItem(RELOAD_KEY, String(now));
-      console.warn('[app] chunk périmé détecté — rechargement de l\'app');
-      window.location.reload();
-      return;
-    }
-
-    // Un reload a déjà eu lieu il y a moins de 10 s et le chunk manque toujours :
-    // l'ancien service worker resert le vieux shell. Si on est vraiment hors-ligne,
-    // NE PAS détruire le SW/caches (le mode offline en dépend) : on s'arrête là.
-    if (!navigator.onLine) {
-      console.warn(
-        '[app] hors-ligne : chunk indisponible en cache — rechargements et nettoyage service worker désactivés (mode offline préservé)',
-      );
-      return;
-    }
-    // En ligne : le redéploiement a remplacé les chunks, l'ancien SW resert un vieux
-    // shell. On le désenregistre, on purge les caches, puis on recharge une seule fois.
-    if (now - lastSwReset > RELOAD_COOLDOWN_MS) {
-      sessionStorage.setItem(SW_RESET_KEY, String(now));
-      console.warn(
-        '[app] chunk toujours périmé après reload — désenregistrement du service worker et purge des caches',
-      );
-      void resetServiceWorkerAndReload();
-      return;
-    }
-
-    // 3e échec : reload + reset n'ont rien changé. On abandonne pour ne pas boucler.
-    console.error(
-      '[app] ÉCHEC : chunk introuvable persistant malgré reload + reset du service worker — rechargements stoppés',
-    );
+    const isLinkAssetFailure =
+      event.target instanceof HTMLLinkElement && Boolean(event.target.href?.includes('/assets/'));
+    if (!isChunkLoadError(event.message) && !isLinkAssetFailure) return;
+    recoverFromChunkLoadError(`chunk introuvable (${event.message || 'resource error'})`);
   },
   true,
 );
