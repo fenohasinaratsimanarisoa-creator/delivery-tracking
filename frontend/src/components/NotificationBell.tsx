@@ -145,7 +145,14 @@ export default function NotificationBell() {
 
   function handleItemClick(n: Notification) {
     if (!n.readAt) markRead(n.id);
-    if (n.link) navigate(n.link);
+    if (n.link) {
+      navigate(n.link);
+      // Sans ça, le panneau restait ouvert par-dessus la page de destination
+      // (la navigation avait bien lieu — l'URL changeait — mais visuellement
+      // rien ne semblait se passer, le panneau couvrant tout le contenu).
+      // Le bouton "Voir tout" du footer faisait déjà ce close, pas ce chemin-ci.
+      setOpen(false);
+    }
   }
 
   return (
