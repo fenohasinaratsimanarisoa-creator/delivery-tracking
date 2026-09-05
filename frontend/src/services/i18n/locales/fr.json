@@ -1560,7 +1560,9 @@
   },
   "proximityAlert": {
     "viewDeliveries": "Voir mes livraisons",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "moreAlerts": "+{{count}} autre alerte",
+    "moreAlerts_plural": "+{{count}} autres alertes"
   },
   "trackingIndicator": {
     "physicalTrackerTitle": "Suivi par traceur GPS physique installé sur le véhicule",

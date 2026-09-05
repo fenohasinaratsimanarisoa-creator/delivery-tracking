@@ -3,6 +3,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { BlockImpersonationGuard } from '../../common/guards/block-impersonation.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentCompanyId } from '../../common/decorators/current-company-id.decorator';
 import { WebhooksService } from './webhooks.service';
@@ -18,6 +19,7 @@ export class WebhooksController {
   constructor(private readonly service: WebhooksService) {}
 
   @Post()
+  @UseGuards(BlockImpersonationGuard)
   @ApiOperation({
     summary: 'Create a webhook endpoint',
     description: 'Returns the HMAC secret only once.',
@@ -39,6 +41,7 @@ export class WebhooksController {
   }
 
   @Patch(':id')
+  @UseGuards(BlockImpersonationGuard)
   @ApiOperation({ summary: 'Update webhook configuration' })
   async update(
     @CurrentCompanyId() companyId: string,
@@ -56,6 +59,7 @@ export class WebhooksController {
   }
 
   @Post(':id/toggle')
+  @UseGuards(BlockImpersonationGuard)
   @ApiOperation({ summary: 'Activate or deactivate a webhook' })
   async toggle(@CurrentCompanyId() companyId: string, @Param('id') id: string) {
     return this.service.toggle(companyId, id);

@@ -9,6 +9,7 @@ import {
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { BlockImpersonationGuard } from '../../common/guards/block-impersonation.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentCompanyId } from '../../common/decorators/current-company-id.decorator';
 import { ApiKeysService } from './api-keys.service';
@@ -24,6 +25,7 @@ export class ApiKeysController {
   constructor(private readonly service: ApiKeysService) {}
 
   @Post()
+  @UseGuards(BlockImpersonationGuard)
   @ApiOperation({
     summary: 'Create a new API key',
     description: 'Returns the full key only once. Store it securely.',

@@ -17,6 +17,7 @@ import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CompanyScopeGuard } from '../../common/guards/company-scope.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { BlockImpersonationGuard } from '../../common/guards/block-impersonation.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
@@ -27,7 +28,7 @@ export class InvitationsController {
   constructor(private readonly invitationsService: InvitationsService) {}
 
   @Post()
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, BlockImpersonationGuard)
   @Roles('admin')
   create(
     @CurrentUser('companyId') companyId: string,
@@ -45,7 +46,7 @@ export class InvitationsController {
   }
 
   @Post(':id/resend')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, BlockImpersonationGuard)
   @Roles('admin')
   resend(@CurrentUser('companyId') companyId: string, @Param('id') invitationId: string) {
     return this.invitationsService.resend(companyId, invitationId);

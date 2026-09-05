@@ -177,7 +177,7 @@ describe('EmailService', () => {
       });
     });
 
-    it('should log email when Resend is not configured', async () => {
+    it('should log a redacted (hashed) recipient when Resend is not configured, never the plaintext email', async () => {
       mockConfigService.get.mockImplementation((key: string) => {
         if (key === 'RESEND_API_KEY') return undefined;
         return 'default';
@@ -188,9 +188,8 @@ describe('EmailService', () => {
 
       await (serviceWithoutResend as any).send('to@test.com', 'Test Subject', '<p>Test</p>');
 
-      expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[EMAIL LOG] To: to@test.com'),
-      );
+      expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('[EMAIL LOG] To: sha256:'));
+      expect(loggerSpy).not.toHaveBeenCalledWith(expect.stringContaining('to@test.com'));
     });
   });
 });

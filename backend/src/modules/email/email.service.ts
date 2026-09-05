@@ -1,7 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
+import { createHash } from 'crypto';
 import { t, type Language } from '../../common/i18n';
+
+// Même convention que auth.controller.ts (échec de login) : jamais l'email en
+// clair dans les logs (PII), la liste `redact` de pino ne couvre pas ce champ
+// texte-libre construit par template literal.
+function hashEmail(email: string): string {
+  return createHash('sha256').update(email).digest('hex').slice(0, 16);
+}
 
 @Injectable()
 export class EmailService {
@@ -277,12 +285,12 @@ export class EmailService {
     if (this.resend) {
       try {
         await this.resend.emails.send({ from: this.from, to, subject, html });
-        this.logger.log(`Email sent to ${to}: ${subject}`);
+        this.logger.log(`Email sent to sha256:${hashEmail(to)}: ${subject}`);
       } catch (err) {
-        this.logger.error(`Failed to send email to ${to}`, err);
+        this.logger.error(`Failed to send email to sha256:${hashEmail(to)}`, err);
       }
     } else {
-      this.logger.log(`[EMAIL LOG] To: ${to} | Subject: ${subject}`);
+      this.logger.log(`[EMAIL LOG] To: sha256:${hashEmail(to)} | Subject: ${subject}`);
     }
   }
 }

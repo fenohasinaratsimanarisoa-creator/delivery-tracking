@@ -36,18 +36,26 @@ export function useDataUpdates() {
       }
     };
 
-    socket.on('dataUpdate', handleUpdate);
-    socket.on('connect', () => {
+    const handleReconnect = () => {
       // Refetch all data on reconnect to catch missed events
       Object.values(QUERY_MAP).forEach((keys) => {
         keys.forEach((key) => {
           queryClient.invalidateQueries({ queryKey: [key] });
         });
       });
-    });
+    };
+
+    socket.on('dataUpdate', handleUpdate);
+    // Fonction nommée (pas une closure anonyme) : `getSocket()` renvoie un
+    // singleton qui survit aux démontages, donc chaque montage de ce hook
+    // (App.tsx en racine + MyDeliveriesPage.tsx à chaque navigation) empilait
+    // un nouveau listener 'connect' jamais retiré — invalidations dupliquées
+    // en boucle après plusieurs allers-retours sur la page.
+    socket.on('connect', handleReconnect);
 
     return () => {
       socket.off('dataUpdate', handleUpdate);
+      socket.off('connect', handleReconnect);
     };
   }, [queryClient]);
 }

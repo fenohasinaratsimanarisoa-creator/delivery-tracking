@@ -15,6 +15,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -72,6 +73,9 @@ export class UsersController {
     return this.usersService.updateProfile(userId, dto);
   }
 
+  // Vérifie currentPassword — sans throttle dédié, un token volé permettait
+  // 300 tentatives/min (bucket global par défaut) pour le deviner par force brute.
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Patch('me/email')
   updateEmail(@CurrentUser('id') userId: string, @Body() dto: UpdateEmailDto) {
     return this.usersService.updateEmail(userId, dto.email!, dto.currentPassword);
@@ -87,6 +91,8 @@ export class UsersController {
     return this.usersService.updatePreferences(userId, body);
   }
 
+  // Même raison que updateEmail ci-dessus : vérifie currentPassword.
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @UseGuards(BlockImpersonationGuard)
   @Patch('me/password')
   changePassword(@CurrentUser('id') userId: string, @Body() dto: ChangePasswordDto) {
@@ -131,7 +137,7 @@ export class UsersController {
     return this.usersService.updateAvatar(userId, { avatarUrl });
   }
 
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, BlockImpersonationGuard)
   @Roles('admin')
   @Patch(':id')
   update(

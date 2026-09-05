@@ -30,13 +30,19 @@ export class ReportsService {
               .then((count) => ({ status, count })),
         ),
       ),
+      // status IN (delivered, failed), pas seulement 'delivered' : le taux à
+      // l'heure ci-dessous doit compter les échecs contre lui (même logique que
+      // dashboard.service.ts.getReliabilityScore — sinon les deux écrans
+      // affichent 2 chiffres contradictoires pour la même période, un failed
+      // total donnant 100% « à l'heure » ici et un score dashboard écroulé).
       this.prisma.delivery.findMany({
-        where: { ...where, status: 'delivered', completedAt: { not: null } },
-        select: { completedAt: true, scheduledDate: true, createdAt: true },
+        where: { ...where, status: { in: ['delivered', 'failed'] } },
+        select: { status: true, completedAt: true, scheduledDate: true, createdAt: true },
       }),
     ]);
 
-    const onTimeCount = completed.filter((d) => {
+    const delivered = completed.filter((d) => d.status === 'delivered');
+    const onTimeCount = delivered.filter((d) => {
       if (!d.scheduledDate) return true;
       return d.completedAt && d.completedAt <= d.scheduledDate;
     }).length;
@@ -48,9 +54,11 @@ export class ReportsService {
     const result = {
       total,
       statusBreakdown,
+      // Dénominateur = delivered + failed (failed compte contre le taux) ;
+      // `completedCount` ci-dessous reste delivered-seul (libellé "Livrées").
       onTimeRate: completed.length > 0 ? Math.round((onTimeCount / completed.length) * 100) : 0,
       onTimeCount,
-      completedCount: completed.length,
+      completedCount: delivered.length,
       byDay,
       byWeek,
       byMonth,
@@ -175,10 +183,15 @@ export class ReportsService {
 
     const driverData = drivers.map((d) => {
       const completed = d.deliveries.filter((del) => del.status === 'delivered');
+      const failed = d.deliveries.filter((del) => del.status === 'failed');
       const onTime = completed.filter((del) => {
         if (!del.scheduledDate) return true;
         return del.completedAt && del.completedAt <= del.scheduledDate;
       });
+      // Même dénominateur (delivered+failed) que getDeliveryReport ci-dessus et
+      // dashboard.service.ts — un chauffeur avec des échecs ne doit pas afficher
+      // un taux "à l'heure" de 100% calculé sur ses seules livraisons réussies.
+      const onTimeDenominator = completed.length + failed.length;
 
       return {
         driverId: d.id,
@@ -188,8 +201,9 @@ export class ReportsService {
         totalDeliveries: d.deliveries.length,
         completedDeliveries: completed.length,
         onTimeDeliveries: onTime.length,
-        onTimeRate: completed.length > 0 ? Math.round((onTime.length / completed.length) * 100) : 0,
-        failedDeliveries: d.deliveries.filter((del) => del.status === 'failed').length,
+        onTimeRate:
+          onTimeDenominator > 0 ? Math.round((onTime.length / onTimeDenominator) * 100) : 0,
+        failedDeliveries: failed.length,
         inProgressDeliveries: d.deliveries.filter((del) => del.status === 'in_progress').length,
       };
     });

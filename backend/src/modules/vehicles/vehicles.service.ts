@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
@@ -17,6 +18,18 @@ export class VehiclesService {
     private prisma: PrismaService,
     private configService: ConfigService,
   ) {}
+
+  // Le pré-check applicatif (findFirst ci-dessus/ci-dessous) exclut les véhicules
+  // soft-deleted (deletedAt: null), mais la contrainte DB @@unique([companyId,
+  // licensePlate]) ne les exclut PAS — recréer un véhicule avec la même plaque
+  // qu'un véhicule supprimé passe le pré-check puis lève un P2002 non intercepté
+  // ici (contrairement à drivers.service.ts, qui a ce même garde-fou).
+  private handleUniqueConflict(err: unknown, message: string): never {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw new ConflictException(message);
+    }
+    throw err;
+  }
 
   private validateTrackerConfig(dto: CreateVehicleDto | UpdateVehicleDto) {
     const posSource = dto.positionSource ?? 'phone';
@@ -72,7 +85,9 @@ export class VehiclesService {
       data.positionSource = 'phone';
     }
 
-    return this.prisma.vehicle.create({ data });
+    return this.prisma.vehicle.create({ data }).catch((err) =>
+      this.handleUniqueConflict(err, 'License plate already exists'),
+    );
   }
 
   async findAll(companyId: string, filter: VehicleFilterDto) {
@@ -170,10 +185,9 @@ export class VehiclesService {
       data.traccarDeviceId = null;
     }
 
-    return this.prisma.vehicle.update({
-      where: { id },
-      data,
-    });
+    return this.prisma.vehicle.update({ where: { id }, data }).catch((err) =>
+      this.handleUniqueConflict(err, 'License plate already in use'),
+    );
   }
 
   async remove(companyId: string, id: string) {

@@ -16,6 +16,11 @@ const SENSITIVE_FIELDS: EncryptedField[] = [
   { model: 'Delivery', field: 'pickupAddress' },
   { model: 'Delivery', field: 'deliveryAddress' },
   { model: 'PlatformAdmin', field: 'totpSecret' },
+  // Webhook.secret n'est JAMAIS cherché via un `where` (toujours lu après un
+  // findFirst/findUnique par id) — chiffrement réversible sûr ici, contrairement
+  // à Invitation.token qui est haché (voir invitations.service.ts) car il DOIT
+  // rester matchable par `where: { token }` sur la valeur brute reçue du client.
+  { model: 'Webhook', field: 'secret' },
 ];
 
 @Injectable()
@@ -29,14 +34,27 @@ export class PrismaEncryptionMiddleware implements OnApplicationBootstrap {
     if (!this.encryption.isEnabled()) return;
 
     this.prisma.$use(async (params, next) => {
-      const field = SENSITIVE_FIELDS.find(
-        (f) => f.model === params.model && this.isWriteAction(params.action),
-      );
+      if (this.isWriteAction(params.action)) {
+        const fields = SENSITIVE_FIELDS.filter((f) => f.model === params.model);
+        if (fields.length > 0) {
+          // upsert a une forme {where, create, update} plutôt que {data} : on
+          // chiffre les deux sous-objets s'ils existent, sinon le data plat.
+          const targets: Record<string, unknown>[] = params.args?.create
+            ? [params.args.create, params.args.update].filter(Boolean)
+            : params.args?.data
+              ? [params.args.data]
+              : [];
 
-      if (field && params.args?.data?.[field.field]) {
-        const encrypted = this.encryption.encrypt(params.args.data[field.field]);
-        if (encrypted) {
-          params.args.data[field.field] = encrypted;
+          for (const target of targets) {
+            for (const f of fields) {
+              if (target[f.field]) {
+                const encrypted = this.encryption.encrypt(target[f.field] as string);
+                if (encrypted) {
+                  target[f.field] = encrypted;
+                }
+              }
+            }
+          }
         }
       }
 

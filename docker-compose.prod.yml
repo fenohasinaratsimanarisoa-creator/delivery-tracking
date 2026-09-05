@@ -1,4 +1,15 @@
 
+# ⚠️ CORRECTION 2026-09-05 : ce fichier n'est PAS le déploiement de prod réel
+# aujourd'hui. La prod actuelle tourne sur un VPS Contabo via
+# `docker-compose.contabo.yml` + `scripts/deploy-contabo.sh` (voir ce script
+# et DEPLOYMENT.md, qui ne référencent jamais ce fichier). Celui-ci n'a par
+# ailleurs AUCUN service Caddy/nginx de terminaison TLS défini plus bas,
+# contrairement à `docker-compose.contabo.yml` — s'il est un jour utilisé tel
+# quel, `ENFORCE_HTTPS: true` (backend) provoquerait une boucle de redirection
+# HTTPS sans certificat réel. Corrigé ci-dessous (repli 'false', pas de faux
+# domaine par défaut) pour qu'une utilisation accidentelle échoue proprement
+# plutôt que de démarrer dans un état cassé/silencieusement non sécurisé.
+
 x-logging: &default-logging
   driver: json-file
   options:
@@ -73,7 +84,7 @@ services:
       CSRF_SECRET: ${CSRF_SECRET:?CSRF_SECRET is required}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@deliverytrack.app}
-      APP_URL: ${APP_URL:-https://app.deliverytrack.app}
+      APP_URL: ${APP_URL:?APP_URL is required (no fictitious default domain)}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-}
@@ -89,7 +100,9 @@ services:
       ALERT_DISCORD_WEBHOOK: ${ALERT_DISCORD_WEBHOOK:-}
       ALERT_ON_ERROR: ${ALERT_ON_ERROR:-true}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
-      ENFORCE_HTTPS: 'true'
+      # 'false' par défaut : ce compose n'a pas de reverse-proxy TLS (Caddy/nginx)
+      # défini plus bas — 'true' sans terminaison HTTPS réelle boucle en redirect.
+      ENFORCE_HTTPS: ${ENFORCE_HTTPS:-false}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:

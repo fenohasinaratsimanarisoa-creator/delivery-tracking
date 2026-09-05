@@ -1,33 +1,54 @@
 # Déploiement du pont Traccar — DelivTrack
 
+> ⚠️ **Correction 2026-09-05** : ce document décrivait une architecture
+> Render + Fly.io + Traccar Cloud (`server.traccar.org`) qui est **obsolète**.
+> La prod réelle actuelle est un **Traccar auto-hébergé sur un VPS Contabo**,
+> dans le même `docker-compose.contabo.yml` que le backend (voir
+> `scripts/deploy-contabo.sh`). Les sections ci-dessous ont été corrigées en
+> conséquence. `TRACCAR_FLY_IO_SETUP.md` et les références à
+> Fly.io/Render/`server.traccar.org` ailleurs dans ce dépôt sont du matériel
+> historique, à ignorer pour la prod actuelle.
+
 ## Architecture
 
 ```
-┌─────────────────┐     TCP (GT06 etc.)     ┌──────────────────────┐
-│  GPS Trackers   │───────────────────────▶│  Fly.io              │
-│  (GT06, Teltonika,│     ports 5055-5065  │  Traccar dédié       │
-│   TK103, H02)   │                         │  deliverytrack-traccar│
-│        │        │                         └──────────┬───────────┘
-│        │        │                                      │ HTTPS/API
-│        │        │                         ┌──────────▼───────────┐
-│        │        │     HTTPS/WebSocket     │  Render Web Service  │
-│        └────────┼────────────────────────▶│  deliverytrack-api   │
-│                 │     (outbound)          │                      │
-│                 │                         │  TraccarBridgeService│
-│                 │                         │  (WebSocket client)  │
-│                 │                         │                      │
-│                 │                         │  POST /tracking/...  │
-│                 │                         │  └→ savePosition()  │
-└─────────────────┘                         └──────────────────────┘
+┌──────────────────┐    TCP (GT06 etc.)     ┌───────────────────────────────┐
+│  GPS Trackers    │ ─────────────────────▶ │  VPS Contabo (169.58.237.88)  │
+│  (GT06, Teltonika,│   ports 5055-5065     │  docker-compose.contabo.yml   │
+│   TK103, H02)     │   (publics)           │                               │
+│                   │                       │  ┌─────────────────────────┐ │
+│                   │                       │  │ traccar (conteneur)      │ │
+│                   │                       │  │ admin UI: 127.0.0.1:8082 │ │
+│                   │                       │  │ (accès via tunnel SSH)   │ │
+│                   │                       │  └────────────┬────────────┘ │
+│                   │                       │               │ réseau Docker│
+│                   │                       │               │ interne      │
+│                   │                       │  ┌────────────▼────────────┐ │
+│                   │                       │  │ backend (TraccarBridge)  │ │
+│                   │                       │  │ TRACCAR_URL=             │ │
+│                   │                       │  │  http://traccar:8082     │ │
+│                   │                       │  └─────────────────────────┘ │
+└───────────────────┘                       └───────────────────────────────┘
 ```
 
-**Production :** DelivTrack utilise une **instance Traccar dédiée sur Fly.io** (`deliverytrack-traccar.fly.dev`). Traccar reçoit les connexions TCP des traceurs GPS (GT06, Teltonika, etc.) via les ports 5055-5065. Le `TraccarBridgeService` sur Render se connecte **en outbound** (HTTPS/WebSocket) vers cette instance pour récupérer les positions et les injecter dans `savePosition()`.
+**Production :** DelivTrack utilise un **Traccar auto-hébergé** dans le même
+`docker-compose.contabo.yml` que le reste de l'application, sur le VPS
+`169.58.237.88`. Traccar reçoit les connexions TCP des traceurs GPS (GT06,
+Teltonika, etc.) directement sur les ports **5055-5065, publics** (mêmes
+valeurs que `traccar/traccar.xml` — pas besoin de les "confirmer dans une
+interface cloud", elles sont fixes). Le `TraccarBridgeService` du backend se
+connecte en interne via le réseau Docker (`TRACCAR_URL=http://traccar:8082`),
+jamais par Internet — aucune configuration DNS/HTTPS n'est nécessaire pour
+cette liaison.
 
-> ⚠️ **Pourquoi Fly.io ?** Render ne supporte PAS les ports TCP custom (uniquement HTTP/10000). Traccar a besoin de ports TCP pour les protocoles GPS. Voir `TRACCAR_FLY_IO_SETUP.md` pour le guide de déploiement complet.
-
----
-
-> ⚠️ **Note importante :** Les sections ci-dessous concernent le développement local (docker-compose) et la migration depuis l'ancien serveur de démo (`server.traccar.org`).
+L'interface web d'admin Traccar (port `8082`) est bindée à `127.0.0.1` sur le
+VPS (pas exposée publiquement, mesure de sécurité depuis le commit `be80181`) :
+```bash
+ssh -L 8082:localhost:8082 root@169.58.237.88
+# puis, dans un navigateur : http://localhost:8082
+```
+Identifiants : `TRACCAR_USER`/`TRACCAR_PASSWORD` dans le `.env` du VPS
+(⚠️ voir section 7 — ne JAMAIS laisser le défaut `admin`/`admin`).
 
 ---
 
@@ -69,36 +90,37 @@ volumes:
   traccar_data:
 ```
 
-⚠️ **Les ports 5055-5065 ci-dessus sont ceux du docker-compose local uniquement. Ils ne sont pas utilisés en production.** Traccar Cloud a ses propres ports, différents pour chaque protocole.
+⚠️ **Les ports 5055-5065 ci-dessus sont les MÊMES qu'en production** (contrairement à ce que cette section disait auparavant) : la prod utilise le même `traccar/traccar.xml`, donc les mêmes ports pour chaque protocole. Seul l'hôte change (`169.58.237.88` au lieu de `localhost`).
 
 ---
 
-## 2. Configurer Traccar Cloud (production)
+## 2. Configurer Traccar en production (Contabo, auto-hébergé)
 
-1. Connectez-vous à `https://server.traccar.org`
-2. Allez dans **Configuration → Defaults** et paramétrez :
-   - `deviceManager.updateDevicesState`: `true`
-   - `event.ignoreDuplicatePositions`: `true`
-3. Créez un **device** avec l'IMEI du traceur physique.
-   - **Host** : `45.55.84.20`
-   - **Port** : fourni par l'interface au moment de la création du device
-   - Configurez le traceur avec ce host et ce port (pas les ports 5055-5065)
-4. Notez le `deviceId` Traccar (entier) — il servira pour `Vehicle.traccarDeviceId` dans DelivTrack
-5. Associez le device à un véhicule : `POST /tracking/vehicles/:vehicleId/link-traccar`
+1. Ouvrez un tunnel SSH puis connectez-vous à l'interface admin :
+   ```bash
+   ssh -L 8082:localhost:8082 root@169.58.237.88
+   # puis http://localhost:8082 dans le navigateur
+   ```
+2. Créez un **device** avec l'IMEI du traceur physique (**Devices → Add**).
+   - **Host** : `169.58.237.88`
+   - **Port** : celui du protocole du traceur, **fixe**, listé dans `traccar/traccar.xml` (GT06=5055, Teltonika=5056, H02=5057, TK103=5058, Meitrack=5059, etc. — voir `RAPPORT_PORTS_TRACCAR.md`)
+   - Configurez le traceur physique avec ce host et ce port (par SMS/USB selon le modèle)
+3. Notez le `deviceId` Traccar (entier, généré à la création) — il servira pour `Vehicle.traccarDeviceId` dans DelivTrack
+4. Associez le device à un véhicule : `POST /tracking/vehicles/:vehicleId/link-traccar`
 
 ---
 
-## 3. Connecter DelivTrack (Render) à Traccar Cloud
+## 3. Connexion DelivTrack ↔ Traccar (déjà configurée en prod, rien à faire normalement)
 
-### Dans Render Dashboard
+### Variables dans le `.env` du VPS Contabo
 
-| Variable | Valeur | Commentaire |
+| Variable | Valeur réelle en prod | Commentaire |
 |---|---|---|
-| `TRACCAR_URL` | `https://server.traccar.org` | URL HTTPS de Traccar Cloud |
-| `TRACCAR_USER` | email du compte Traccar Cloud | |
-| `TRACCAR_PASSWORD` | mot de passe du compte Traccar Cloud | |
+| `TRACCAR_URL` | `http://traccar:8082` | Réseau Docker **interne** — pas une URL publique |
+| `TRACCAR_USER` | `admin@delivertrack.local` (ou ce qui a été configuré) | Compte de l'API Traccar, pas un compte email réel |
+| `TRACCAR_PASSWORD` | généré, stocké dans le `.env` du VPS | ⚠️ jamais `admin` par défaut — voir section 7 |
 
-Ces variables sont déclarées dans `render.yaml`. `TRACCAR_URL` est versionnée ; `TRACCAR_USER` et `TRACCAR_PASSWORD` sont en `sync: false` — à saisir dans le Dashboard Render → `deliverytrack-api` → **Environment**.
+Ces 3 variables sont déclarées dans `docker-compose.contabo.yml` pour les services `backend` **et** `worker` (le pont GPS tourne dans les deux process — sans elles sur le `worker`, le pont reste inactif dans ce process).
 
 ---
 
@@ -155,21 +177,24 @@ curl -H "Authorization: Bearer <token>" \
 > DelivTrack : seule la **configuration du serveur Traccar** (protocole + port + device)
 > est à faire, une fois par nouveau protocole.
 
-### 6.1 Production — Traccar Cloud (`server.traccar.org`)
+### 6.1 Production — Traccar auto-hébergé (Contabo, `169.58.237.88`)
 
-Traccar Cloud gère déjà 100+ protocoles. Pour un nouveau modèle de traceur :
+Le `traccar.xml` embarqué gère 11 protocoles (voir `RAPPORT_PORTS_TRACCAR.md`). Pour un nouveau modèle de traceur :
 
-1. Vérifiez que le protocole du traceur est supporté par Traccar : `https://www.traccar.org/protocols/`
-   (GT06, TK103, H02, Teltonika, Meitrack, Concox, Coban, etc. — le standard du marché).
-2. Connectez-vous à `https://server.traccar.org` → **Devices → Ajouter**.
+1. Vérifiez que le protocole du traceur est déjà activé dans `traccar/traccar.xml`
+   (GT06, Teltonika, H02, TK103, Meitrack, OsmAnd, Lézard, WristWatch, Navtelecom,
+   Xexun, AST). Sinon, voir 6.2 pour ajouter le protocole (nécessite un redéploiement).
+2. Tunnel SSH puis `http://localhost:8082` → **Devices → Ajouter**.
    - **Name** : nom du véhicule (libre).
    - **Identifier (uniqueId)** : l'identifiant que le traceur ENVOIE — pour la quasi-totalité
      des protocoles GSM c'est l'**IMEI** (15 chiffres) ; certains protocoles acceptent un
-     identifiant libre non-numérique. L'UI Traccar vous affiche le **Host** et le **Port**
-     à utiliser (le port dépend du protocole, il est fourni par Traccar Cloud).
+     identifiant libre non-numérique.
+   - **Host/Port à donner au traceur** : `169.58.237.88` + le port **fixe** du protocole
+     (GT06=5055, Teltonika=5056, etc. — `traccar/traccar.xml`), jamais "fourni par une interface".
 3. Configurez le traceur physique avec ce Host/Port (via commande SMS, app du fabricant,
-   ou outil de configuration du modèle).
-4. Vérifiez dans Traccar Cloud que le device passe **online** et reçoit des positions
+   ou outil de configuration du modèle — **vérifiez la syntaxe SMS exacte dans le manuel
+   du modèle acheté**, elle varie beaucoup d'un clone à l'autre même au sein du protocole GT06).
+4. Vérifiez dans l'admin Traccar que le device passe **online** et reçoit des positions
    (onglet du device). **Ne liez le device dans DelivTrack qu'ensuite** (étape 6).
 5. Notez le **deviceId numérique** (généré par Traccar à la création — indépendant du
    protocole et de l'IMEI, donc stable quel que soit le modèle).
@@ -177,11 +202,9 @@ Traccar Cloud gère déjà 100+ protocoles. Pour un nouveau modèle de traceur :
    ou `POST /tracking/vehicles/:vehicleId/link-traccar { "traccarDeviceId": "42" }`.
 7. Vérifiez la position live sur la carte temps réel.
 
-> ⚠️ **Les ports 5055-5065 ci-dessous ne concernent QUE l'auto-hébergement (dev).**
-> En production (Traccar Cloud), les ports TCP des traceurs sont OUVERTS par Traccar et
-> fournis par l'interface à la création du device — aucune ouverture de port à faire côté
-> DelivTrack/Render. L'ajout d'un nouveau protocole sur Traccar Cloud ne demande aucune
-> action d'infrastructure.
+> ⚠️ Les ports 5055-5065 sont les mêmes en dev et en prod ici (auto-hébergé) — ce
+> n'est QUE si vous migrez un jour vers un Traccar Cloud tiers que les ports
+> deviendraient dynamiques/fournis par une interface. Ce n'est pas le cas aujourd'hui.
 
 ### 6.2 Auto-hébergé (dev local / VPS DigitalOcean) — `traccar/traccar.xml`
 
@@ -227,7 +250,8 @@ Uniquement si vous hébergez vous-même Traccar (développement local ou VPS).
 ### 6.4 Device créé mais AUCUNE position — causes probables (par ordre de fréquence)
 
 1. **Protocole/port non activé** côté Traccar (le plus fréquent sur auto-hébergé) → 6.2.
-   Sur Traccar Cloud, vérifier le port fourni par l'UI du device.
+   En prod (auto-hébergé), le port est fixe dans `traccar/traccar.xml` — vérifiez qu'il
+   correspond à celui configuré dans le traceur, pas besoin de le chercher dans une UI.
 2. **SIM inactive / APN incorrect / pas de crédit** (protocoles GSM) — la carte SIM doit
    être active et l'APN du pays configuré dans le traceur.
 3. **Firewall** (VPS auto-hébergé : ufw + firewall DigitalOcean) ou **port mal configuré**
@@ -280,14 +304,15 @@ modèle sans ce champ.
 > interne (mV, plage 3.0-4.2V → %) sinon. Vérifiez quand même le format réel de votre
 > modèle la première fois (position → dashboard → colonne « Cause probable »).
 
-### 6.7 Supervision du process Traccar (auto-hébergé / VPS DigitalOcean)
+### 6.7 Supervision du process Traccar (prod Contabo ET dev)
 
-En production DelivTrack utilise Traccar Cloud (géré par Traccar, aucune supervision à
-faire). En **auto-hébergement sur VPS** (dev ou si vous passez hors Traccar Cloud),
-le process Traccar DOIT être relancé automatiquement en cas de crash — un process mort
-sans relance = traceurs muets sans aucune alerte.
+⚠️ Contrairement à ce que cette section disait auparavant : la prod DelivTrack
+**est** un Traccar auto-hébergé (Contabo), donc cette section s'applique
+**directement à la prod**, pas seulement au dev. Le process Traccar DOIT être
+relancé automatiquement en cas de crash — un process mort sans relance =
+traceurs muets sans aucune alerte.
 
-- **Docker** : `docker-compose.yml` → `restart: unless-stopped` (déjà configuré) —
+- **Docker** : `docker-compose.contabo.yml` → `restart: unless-stopped` (déjà configuré) —
   Docker relance le conteneur après un crash/reboot du VPS.
 - **systemd** (service natif, sans Docker) :
   ```ini
@@ -327,8 +352,11 @@ Testé : `traccar-multitenant.spec.ts` + preuve DB réelle (`duplicate key value
 
 ### 7.2 Transport
 
-- La connexion entre Render et Traccar Cloud passe par HTTPS public.
-- Les mots de passe Traccar sont en `sync: false` dans `render.yaml`.
+- La connexion entre le backend et Traccar passe par le réseau Docker **interne**
+  (`http://traccar:8082`), jamais par Internet — pas de HTTPS à gérer pour cette liaison.
+- `TRACCAR_USER`/`TRACCAR_PASSWORD` sont dans le `.env` du VPS Contabo (pas versionnés).
+  Le défaut du compose (`admin`/`admin` si la variable est absente) est dangereux —
+  toujours vérifier qu'une vraie valeur est définie dans le `.env` en prod.
 
 ### 7.3 Tests d'intégration Traccar — base de TEST dédiée
 
@@ -357,8 +385,8 @@ TRACCAR_TEST_DATABASE_URL="postgresql://test:test@localhost:5432/delivery_tracki
 
 | Problème | Cause possible | Solution |
 |---|---|---|
-| `connected: false` | TRACCAR_URL incorrect ou indisponible | Vérifiez `curl https://server.traccar.org/api/server` |
+| `connected: false` | TRACCAR_URL incorrect ou conteneur `traccar` down | `docker compose -f docker-compose.contabo.yml exec backend curl http://traccar:8082/api/server` |
 | `reconnectAttempts` augmente | Session refusée (HTTP 415) | Vérifiez que le bridge utilise `application/x-www-form-urlencoded` |
-| Aucune position reçue | Device non configuré dans Traccar Cloud | Créez le device dans l'interface Traccar |
-| `hasSession: false` | Traccar Cloud inaccessible | Vérifiez l'état du service Traccar Cloud |
-| Notification "Pont Traccar non configuré" | TRACCAR_URL non défini | Configurez les variables dans le Dashboard Render |
+| Aucune position reçue | Device non créé dans Traccar, ou traceur mal configuré | Créez le device via le tunnel SSH → interface admin ; voir 6.4 |
+| `hasSession: false` | Conteneur `traccar` down ou réseau Docker cassé | `docker compose -f docker-compose.contabo.yml ps traccar` et logs |
+| Notification "Pont Traccar non configuré" | `TRACCAR_URL` non défini dans le `.env` du VPS | Vérifiez `/opt/delivery-tracking/.env` sur le VPS |

@@ -33,7 +33,11 @@ export class WebhooksService {
 
     return {
       id: webhook.id,
-      secret: webhook.secret,
+      // `secret` local (en clair), pas `webhook.secret` : `create` n'est pas une
+      // action de LECTURE pour le middleware de chiffrement (prisma-encryption
+      // .middleware.ts ne déchiffre que find*), donc `webhook.secret` renvoyé
+      // par le create() est le texte CHIFFRÉ, pas le secret réel.
+      secret,
       url: webhook.url,
       events: webhook.events as string[],
       isActive: webhook.isActive,

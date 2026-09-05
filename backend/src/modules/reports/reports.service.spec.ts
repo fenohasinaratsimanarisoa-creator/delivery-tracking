@@ -302,7 +302,11 @@ describe('ReportsService', () => {
       expect(result.drivers[0].totalDeliveries).toBe(3);
       expect(result.drivers[0].completedDeliveries).toBe(2);
       expect(result.drivers[0].onTimeDeliveries).toBe(1);
-      expect(result.drivers[0].onTimeRate).toBe(50);
+      // Dénominateur = delivered(2) + failed(1) = 3, pas juste delivered(2) :
+      // un failed compte contre le taux (cohérent avec dashboard.service.ts
+      // getReliabilityScore — voir le commentaire dans reports.service.ts).
+      expect(result.drivers[0].failedDeliveries).toBe(1);
+      expect(result.drivers[0].onTimeRate).toBe(33);
       expect(mockCache.set).toHaveBeenCalled();
     });
   });

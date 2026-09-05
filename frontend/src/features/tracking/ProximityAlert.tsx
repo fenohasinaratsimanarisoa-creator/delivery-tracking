@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -36,13 +36,18 @@ function alertIcon(type: string): React.ReactNode {
 function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingStatus }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const soundEnabledRef = useRef(true);
+  // useState, pas useRef : le bouton "son" doit re-rendre (icône Bell/BellOff,
+  // classe soundOn/soundOff) quand on clique — un useRef ne déclenche aucun
+  // re-render, le bouton restait visuellement figé sur "activé" quel que soit
+  // son état réel, ET l'effet ci-dessous ne vérifiait même pas sa valeur avant
+  // de jouer le son (le mute ne coupait donc jamais rien).
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const audioPlayedRef = useRef(false);
   const urgency = alert.urgency || 'normal';
   const colors = URGENCY_CONFIG[urgency];
 
   useEffect(() => {
-    if (audioPlayedRef.current) return;
+    if (audioPlayedRef.current || !soundEnabled) return;
     try {
       const audio = new Audio('data:audio/wav;base64,' +
         'UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACAf39/f4B/f3' +
@@ -54,7 +59,7 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
       audio.volume = urgency === 'critical' ? 0.8 : 0.5;
       audio.play().then(() => { audioPlayedRef.current = true; }).catch(() => {});
     } catch {}
-  }, [alert.type]);
+  }, [alert.type, soundEnabled]);
 
   return (
     <div className={styles.alertBanner} style={{
@@ -78,10 +83,10 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
           </div>
         </div>
         <div className={styles.alertActions}>
-          <button onClick={() => { soundEnabledRef.current = !soundEnabledRef.current; }}
-            className={`${styles.iconBtn} ${soundEnabledRef.current ? styles.soundOn : styles.soundOff}`}
+          <button onClick={() => setSoundEnabled((prev) => !prev)}
+            className={`${styles.iconBtn} ${soundEnabled ? styles.soundOn : styles.soundOff}`}
             aria-label="Son">
-            {soundEnabledRef.current ? <Bell size={16} /> : <BellOff size={16} />}
+            {soundEnabled ? <Bell size={16} /> : <BellOff size={16} />}
           </button>
           <button onClick={() => status.dismissAlert(alert.type, alert.deliveryId)}
             className={styles.dismissBtn}
@@ -128,6 +133,7 @@ function AlertBanner({ alert, status }: { alert: DriverAlert; status: TrackingSt
 const MAX_VISIBLE_ALERTS = 3;
 
 export default function ProximityAlert({ status }: { status: TrackingStatus }) {
+  const { t } = useTranslation();
   const shownAlerts = status.alerts.filter((a) =>
     a.type === 'proximity' || a.type === 'cascade' || a.type === 'geofence' ||
     a.type === 'poor_accuracy' || a.type === 'queue_full' || a.type === 'queue_near_full' || a.type === 'geo_denied' ||
@@ -150,9 +156,7 @@ export default function ProximityAlert({ status }: { status: TrackingStatus }) {
       ))}
       {hiddenCount > 0 && (
         <button type="button" className={styles.moreBadge}>
-          {hiddenCount === 1
-            ? `+1 autre alerte`
-            : `+${hiddenCount} autres alertes`}
+          {t('proximityAlert.moreAlerts', { count: hiddenCount })}
         </button>
       )}
     </div>

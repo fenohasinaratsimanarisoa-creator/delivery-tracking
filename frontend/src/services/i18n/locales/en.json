@@ -1560,7 +1560,9 @@
   },
   "proximityAlert": {
     "viewDeliveries": "View my deliveries",
-    "retry": "Retry"
+    "retry": "Retry",
+    "moreAlerts": "+{{count}} more alert",
+    "moreAlerts_plural": "+{{count}} more alerts"
   },
   "trackingIndicator": {
     "physicalTrackerTitle": "Tracking via physical GPS tracker installed on the vehicle",

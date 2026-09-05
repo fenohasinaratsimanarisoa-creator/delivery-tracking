@@ -20,8 +20,11 @@ import { PlatformAdminVerify2faDto } from './dto/verify-2fa.dto';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import {
   revokeUserAccessTokens,
+  revokeSessionAccessTokens,
   accessTokenTtlSeconds,
 } from '../../common/auth/access-token-revocation';
+
+const IMPERSONATION_TTL_SECONDS = 30 * 60;
 
 @Injectable()
 export class PlatformAdminService {
@@ -401,6 +404,14 @@ export class PlatformAdminService {
     // Option B: no refresh token for impersonation — only short-lived access token
     // Prevents the bug where a stolen impersonation refresh token could
     // trigger token-reuse detection and revoke the real admin's sessions.
+    //
+    // sessionId : le token n'a pas de UserSession en base (Option B ci-dessus),
+    // donc `revoked:session:<id>` n'avait jamais de raison d'être posé pour lui —
+    // aucun kill-switch avant les 30 min d'expiration naturelle, même si l'admin
+    // plateforme se déconnecte ou est lui-même désactivé. On génère un id dédié,
+    // suivi dans un set Redis par admin, pour que logout() (ci-dessous) puisse le
+    // révoquer immédiatement.
+    const impersonationSessionId = crypto.randomUUID();
     const accessToken = this.jwtService.sign(
       {
         sub: adminUser.id,
@@ -411,12 +422,24 @@ export class PlatformAdminService {
         lastName: adminUser.lastName,
         type: 'user',
         impersonatedBy: adminId,
+        sessionId: impersonationSessionId,
       },
       {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET')!,
         expiresIn: '30m',
       },
     );
+
+    if (this.redis) {
+      try {
+        const key = `impersonation:active:${adminId}`;
+        await this.redis.sadd(key, impersonationSessionId);
+        await this.redis.expire(key, IMPERSONATION_TTL_SECONDS);
+      } catch {
+        // Best-effort : une panne Redis ne doit pas empêcher l'impersonation
+        // elle-même, seulement dégrader le kill-switch de logout().
+      }
+    }
 
     await this.prisma.platformAuditLog.create({
       data: {
@@ -901,6 +924,27 @@ export class PlatformAdminService {
       adminId,
       accessTokenTtlSeconds(this.configService.get<string>('JWT_ACCESS_EXPIRATION')),
     );
+    await this.revokeActiveImpersonations(adminId);
+  }
+
+  // Kill-switch pour les sessions d'impersonation en cours ouvertes par cet
+  // admin (voir commentaire sessionId dans impersonate() ci-dessus) — sans ça,
+  // une impersonation restait valide jusqu'à 30 min même après la déconnexion
+  // (ou la désactivation) de l'admin qui l'avait lancée.
+  private async revokeActiveImpersonations(adminId: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const key = `impersonation:active:${adminId}`;
+      const sessionIds = await this.redis.smembers(key);
+      await Promise.all(
+        sessionIds.map((sessionId) =>
+          revokeSessionAccessTokens(this.redis, sessionId, IMPERSONATION_TTL_SECONDS),
+        ),
+      );
+      await this.redis.del(key);
+    } catch {
+      // Best-effort — voir revokeUserAccessTokens.
+    }
   }
 
   private async generateTokens(admin: {

@@ -1,4 +1,4 @@
-import { CsrfGuard } from './csrf.guard';
+import { CsrfGuard, validateCsrfSecret } from './csrf.guard';
 import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -22,6 +22,41 @@ describe('CsrfGuard', () => {
     configService = { get: jest.fn().mockReturnValue('test-secret') } as any;
     reflector = { getAllAndOverride: jest.fn().mockReturnValue(false) } as any;
     guard = new CsrfGuard(configService, reflector);
+  });
+
+  describe('validateCsrfSecret', () => {
+    function mockConfig(values: Record<string, string | undefined>): ConfigService {
+      return { get: jest.fn((key: string, def?: string) => values[key] ?? def) } as any;
+    }
+
+    it('throws if COOKIE_DOMAIN is set with https APP_URL in production', () => {
+      const cs = mockConfig({
+        CSRF_SECRET: 'x'.repeat(64),
+        NODE_ENV: 'production',
+        COOKIE_DOMAIN: '.example.com',
+        APP_URL: 'https://app.example.com',
+      });
+      expect(() => validateCsrfSecret(cs)).toThrow(/COOKIE_DOMAIN/);
+    });
+
+    it('does not throw when COOKIE_DOMAIN is unset (single-host prod, e.g. Contabo)', () => {
+      const cs = mockConfig({
+        CSRF_SECRET: 'x'.repeat(64),
+        NODE_ENV: 'production',
+        APP_URL: 'https://169-58-237-88.sslip.io',
+      });
+      expect(() => validateCsrfSecret(cs)).not.toThrow();
+    });
+
+    it('does not throw outside production even with COOKIE_DOMAIN set', () => {
+      const cs = mockConfig({
+        CSRF_SECRET: 'x'.repeat(64),
+        NODE_ENV: 'development',
+        COOKIE_DOMAIN: '.example.com',
+        APP_URL: 'https://app.example.com',
+      });
+      expect(() => validateCsrfSecret(cs)).not.toThrow();
+    });
   });
 
   describe('generateToken', () => {
