@@ -59,6 +59,11 @@ const PENDING_POSITIONS_LIMIT = 1000;
 const PENDING_POSITIONS_RETENTION_MS = 3600000;
 const SILENT_DEVICE_CHECK_INTERVAL_MS = 60000;
 const TRACCAR_HEALTH_CHECK_INTERVAL_MS = 300000;
+// Au-delà de ce délai sans le moindre message WS, le socket est considéré zombie
+// (voir `lastMessageAt`) — aligné sur le seuil d'alerte de déconnexion prolongée
+// (startDisconnectionMonitor, 15 min) : au-delà, un vrai problème est déjà signalé
+// ailleurs, ce watchdog sert donc surtout à ne pas rester bloqué plus longtemps.
+const TRACCAR_WS_STALE_MS = 15 * 60 * 1000;
 const NEVER_CONNECTED_GRACE_PERIOD_MS = 30 * 60 * 1000;
 // Tolérance de dérive d'horloge AVANCE (traceurs bon marché à RTC mal synchronisée) :
 // un fixTime dans le futur de plus de 300s est recadré sur l'heure serveur. Aligné sur
@@ -154,6 +159,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private readonly traccarPassword: string;
   private connected = false;
   private sessionCookie: string | null = null;
+  // Horodatage du DERNIER message WS reçu (position ou non), pour détecter un socket
+  // "zombie" : TCP resté ouvert (pas d'event 'close') mais Traccar ne pousse plus rien
+  // dessus (connexion à moitié morte côté serveur/réseau). Sans ce watchdog, un tel
+  // socket reste "connected=true" indéfiniment et bloque le leader Redis (renouvelé en
+  // continu) sans qu'aucune autre instance ne puisse jamais reprendre le pont — vécu en
+  // prod le 2026-09-05 : ~16h de silence GPS non détectées malgré Traccar lui-même
+  // parfaitement à jour (positions reçues normalement côté serveur Traccar).
+  private lastMessageAt: number | null = null;
   private reconnectAttempts = 0;
   private lastPositionReceivedAt: number | null = null;
   private sessionExpiryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -577,40 +590,61 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   }
 
   private startHealthCheck() {
-    this.healthTimer = setInterval(async () => {
-      try {
-        if (!this.sessionCookie) {
-          this.logger.warn('Traccar health check: no session — Traccar may be unreachable');
-          return;
-        }
-        const response = await fetch(`${this.traccarUrl}/api/server`, {
-          headers: { Cookie: this.sessionCookie },
-          signal: AbortSignal.timeout(10000),
-        });
-        if (!response.ok) {
-          this.logger.warn(`Traccar health check failed: HTTP ${response.status}`);
-        }
-        // Session morte (cookie expiré / invalidé côté Traccar) alors que le socket est
-        // toujours "connecté" : AVANT, on attendait passivement le timer de renouvellement
-        // (30 min) — le pont restait aveugle sans recevoir aucune position pendant 30 min.
-        // On déclenche une reconnexion proactive (nouvelle session + re-backfill).
-        if (!response.ok && this.connected) {
-          this.logger.warn('Traccar health check failed — forcing reconnection');
-          // disconnect() ferme le socket + libère la session AVANT de replanifier
-          // (sinon connect() ouvrirait un 2e socket pendant que l'ancien est encore là).
-          this.disconnect();
-          this.scheduleReconnect();
-        }
-      } catch (err: any) {
-        this.logger.warn(`Traccar health check: Traccar serveur injoignable — ${err.message}`);
-        // Serveur injoignable : on force aussi une reconnexion (backoff exponentiel) pour
-        // rétablir le flux dès que Traccar revient, au lieu d'attendre le timer de session.
-        if (this.connected) {
-          this.disconnect();
-          this.scheduleReconnect();
-        }
+    this.healthTimer = setInterval(() => this.runHealthCheck(), TRACCAR_HEALTH_CHECK_INTERVAL_MS);
+  }
+
+  private async runHealthCheck() {
+    // Watchdog socket "zombie" : le WS n'a émis AUCUN message (position ou autre)
+    // depuis trop longtemps alors qu'il est censé être connecté. Un TCP à moitié
+    // mort ne déclenche pas toujours l'event 'close' (cas vécu en prod), donc
+    // `this.connected` reste true indéfiniment sans ce contrôle — voir le
+    // commentaire sur `lastMessageAt`. Contrairement au check de session ci-dessous
+    // (qui vérifie seulement que l'API REST répond), celui-ci vérifie que CE socket
+    // précis reçoit toujours des données.
+    if (this.connected && this.lastMessageAt !== null) {
+      const staleMs = Date.now() - this.lastMessageAt;
+      if (staleMs > TRACCAR_WS_STALE_MS) {
+        this.logger.warn(
+          `Traccar bridge: aucun message WS depuis ${Math.round(staleMs / 60000)} min — socket probablement zombie, reconnexion forcée`,
+        );
+        this.disconnect();
+        this.scheduleReconnect();
+        return;
       }
-    }, TRACCAR_HEALTH_CHECK_INTERVAL_MS);
+    }
+
+    try {
+      if (!this.sessionCookie) {
+        this.logger.warn('Traccar health check: no session — Traccar may be unreachable');
+        return;
+      }
+      const response = await fetch(`${this.traccarUrl}/api/server`, {
+        headers: { Cookie: this.sessionCookie },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) {
+        this.logger.warn(`Traccar health check failed: HTTP ${response.status}`);
+      }
+      // Session morte (cookie expiré / invalidé côté Traccar) alors que le socket est
+      // toujours "connecté" : AVANT, on attendait passivement le timer de renouvellement
+      // (30 min) — le pont restait aveugle sans recevoir aucune position pendant 30 min.
+      // On déclenche une reconnexion proactive (nouvelle session + re-backfill).
+      if (!response.ok && this.connected) {
+        this.logger.warn('Traccar health check failed — forcing reconnection');
+        // disconnect() ferme le socket + libère la session AVANT de replanifier
+        // (sinon connect() ouvrirait un 2e socket pendant que l'ancien est encore là).
+        this.disconnect();
+        this.scheduleReconnect();
+      }
+    } catch (err: any) {
+      this.logger.warn(`Traccar health check: Traccar serveur injoignable — ${err.message}`);
+      // Serveur injoignable : on force aussi une reconnexion (backoff exponentiel) pour
+      // rétablir le flux dès que Traccar revient, au lieu d'attendre le timer de session.
+      if (this.connected) {
+        this.disconnect();
+        this.scheduleReconnect();
+      }
+    }
   }
 
   private async checkNeverConnectedDevices() {
@@ -911,11 +945,13 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         this.connected = true;
         this.disconnectStartTime = null;
         this.reconnectAttempts = 0;
+        this.lastMessageAt = Date.now();
         this.logger.log(`Traccar bridge connected to ${wsUrl}`);
         this.performBackfill();
       });
 
       this.socket.on('message', async (data: Buffer) => {
+        this.lastMessageAt = Date.now();
         try {
           const text = data.toString();
           if (text.startsWith('{')) {
@@ -974,6 +1010,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     }
     this.connected = false;
     this.sessionCookie = null;
+    this.lastMessageAt = null;
   }
 
   /**

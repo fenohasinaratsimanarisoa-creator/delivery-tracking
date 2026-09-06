@@ -135,4 +135,42 @@ describe('Tâche 5 — Surveillance indépendante Traccar', () => {
       await (bridge as any).startNeverConnectedCheck();
     });
   });
+
+  describe('Watchdog socket zombie (aucun message WS reçu alors que connected=true)', () => {
+    // Régression 2026-09-06 : le pont Traccar est resté "connected=true" indéfiniment
+    // (~16h) alors que le WS ne poussait plus rien — Traccar lui-même recevait pourtant
+    // les positions normalement (uniquement le socket de CE pont était mort côté réseau,
+    // sans event 'close'). Le check de session HTTP (/api/server) ne détecte pas ce cas
+    // : la session REST reste valide, seul le canal WS temps réel est mort.
+    it('force une reconnexion si connected=true mais aucun message WS depuis > 15 min', async () => {
+      createBridge();
+      (bridge as any).connected = true;
+      (bridge as any).sessionCookie = 'cookie';
+      (bridge as any).lastMessageAt = Date.now() - 16 * 60 * 1000;
+
+      const disconnectSpy = jest.spyOn(bridge as any, 'disconnect').mockImplementation(() => {});
+      const reconnectSpy = jest
+        .spyOn(bridge as any, 'scheduleReconnect')
+        .mockImplementation(() => {});
+
+      await (bridge as any).runHealthCheck();
+
+      expect(disconnectSpy).toHaveBeenCalled();
+      expect(reconnectSpy).toHaveBeenCalled();
+    });
+
+    it("ne force PAS de reconnexion si des messages WS arrivent toujours (< 15 min)", async () => {
+      createBridge();
+      (bridge as any).connected = true;
+      (bridge as any).sessionCookie = 'cookie';
+      (bridge as any).lastMessageAt = Date.now() - 2 * 60 * 1000;
+      global.fetch = jest.fn().mockResolvedValue({ ok: true }) as any;
+
+      const disconnectSpy = jest.spyOn(bridge as any, 'disconnect').mockImplementation(() => {});
+
+      await (bridge as any).runHealthCheck();
+
+      expect(disconnectSpy).not.toHaveBeenCalled();
+    });
+  });
 });
