@@ -540,9 +540,20 @@ interface RealTimeMapProps {
   onVehiclesUpdate?: (vehicles: VehicleData[]) => void;
   /** Synchronise la sélection (recherche globale MapPage) avec la sélection interne : les deux mécanismes pilotent le MÊME état de suivi. */
   onFocusChange?: (id: string | null) => void;
+  // Superposition constatée en prod (capture utilisateur, 2026-09-06) : MapPage
+  // rend SA PROPRE barre de recherche (véhicule/chauffeur/livraison,
+  // MapPage.module.css .searchContainer) au-dessus de CETTE carte, qui affiche
+  // AUSSI la sienne (ci-dessous, chauffeur uniquement) — les deux, en
+  // position:absolute quasi au même endroit, se chevauchaient visuellement.
+  // Les deux pilotent déjà le MÊME état de suivi (voir onFocusChange
+  // ci-dessus), donc la recherche interne est strictement redondante partout
+  // où MapPage fournit la sienne. Elle reste nécessaire pour DashboardPage
+  // (widget carte embarqué, sans recherche externe) — d'où ce prop plutôt
+  // qu'une suppression pure et simple.
+  hideInternalSearch?: boolean;
 }
 
-export default function RealTimeMap({ deliveryId, readOnly, initialPositions, deliveryLat, deliveryLng, focusId, focusCenter, onVehiclesUpdate, onFocusChange }: RealTimeMapProps) {
+export default function RealTimeMap({ deliveryId, readOnly, initialPositions, deliveryLat, deliveryLng, focusId, focusCenter, onVehiclesUpdate, onFocusChange, hideInternalSearch }: RealTimeMapProps) {
   const { t } = useTranslation();
   const [vehicles, setVehicles] = useState<Map<string, VehicleData>>(new Map());
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
@@ -869,6 +880,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
       <MapLayerSwitcher />
       <MapFocusHandler focusId={focusId} focusCenter={focusCenter} vehicles={allPositions} />
 
+      {!hideInternalSearch && (
       <div style={{
         position: 'absolute', top: 10, left: 50, zIndex: 1000,
       }}>
@@ -946,6 +958,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
           </div>
         )}
       </div>
+      )}
       <MapBoundsUpdater positions={allPositions.map((v) => ({ latitude: v.lat, longitude: v.lng }))} />
 
       {selectedDriver && (

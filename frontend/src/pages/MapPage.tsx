@@ -126,6 +126,7 @@ export default function MapPage() {
         focusCenter={focusCenter}
         onVehiclesUpdate={setVehicles}
         onFocusChange={setFocusId}
+        hideInternalSearch
       />
 
       <div className={styles.liveChip}>
