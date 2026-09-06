@@ -45,9 +45,23 @@ function KpiCard({ icon: Icon, label, value, color, decimals = 0 }: {
   );
 }
 
-function ReliabilityScore({ score, trend }: { score: number; trend: 'up' | 'down' | 'stable' }) {
+// En dessous de ce nombre de livraisons termin\u00E9es (30 derniers jours), le score
+// n'est pas statistiquement repr\u00E9sentatif : UNE seule livraison en retard suffit
+// \u00E0 afficher 0%, ce qui lisait comme une m\u00E9trique cass\u00E9e plut\u00F4t qu'un vrai signal
+// (constat\u00E9 en prod : un compte avec 1 livraison en retard affichait "0%" en
+// rouge vif, alarmant sans raison \u2014 le score est pourtant exact, juste bas\u00E9 sur
+// un \u00E9chantillon trop petit pour en tirer une conclusion).
+const LOW_SAMPLE_THRESHOLD = 5;
+
+function ReliabilityScore({ score, trend, total }: { score: number; trend: 'up' | 'down' | 'stable'; total: number }) {
   const { t } = useTranslation();
-  const color = score >= 95 ? 'var(--color-teal)' : score >= 80 ? 'var(--color-accent)' : 'var(--color-red)';
+  const lowSample = total < LOW_SAMPLE_THRESHOLD;
+  // \u00C9chantillon trop faible : couleur neutre (pas rouge/vert) \u2014 le score reste
+  // affich\u00E9 tel quel (honn\u00EAte, jamais masqu\u00E9), mais sans le traiter comme un
+  // signal d'alarme ou de succ\u00E8s qu'il n'est pas encore.
+  const color = lowSample
+    ? 'var(--color-text-tertiary)'
+    : score >= 95 ? 'var(--color-teal)' : score >= 80 ? 'var(--color-accent)' : 'var(--color-red)';
   const r = 17;
   const c = 2 * Math.PI * r;
   const offset = c * (1 - Math.min(100, score) / 100);
@@ -72,9 +86,15 @@ function ReliabilityScore({ score, trend }: { score: number; trend: 'up' | 'down
         <span className={styles.reliabilityLabel}>{t('dashboard.reliabilityScore')}</span>
         <span className={styles.reliabilityScoreRow}>
           <span className={styles.reliabilityScore} style={{ color }}>{score}%</span>
-          <span className={styles.reliabilityTrend} style={{ color: trendColor }}>
-            {trendIcon} {t('dashboard.vsPreviousMonth')}
-          </span>
+          {lowSample ? (
+            <span className={styles.reliabilityTrend} style={{ color: 'var(--color-text-tertiary)' }}>
+              {t('dashboard.lowSample', { count: total })}
+            </span>
+          ) : (
+            <span className={styles.reliabilityTrend} style={{ color: trendColor }}>
+              {trendIcon} {t('dashboard.vsPreviousMonth')}
+            </span>
+          )}
         </span>
       </div>
     </div>
@@ -223,7 +243,7 @@ export default function DashboardPage() {
   const [fuelData, setFuelData] = useState<FuelChartPoint[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [reliability, setReliability] = useState<{ score: number; trend: 'up' | 'down' | 'stable' } | null>(null);
+  const [reliability, setReliability] = useState<{ score: number; trend: 'up' | 'down' | 'stable'; total: number } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -249,7 +269,14 @@ export default function DashboardPage() {
 
   const currentMonth = useMemo(() => formatMonth(new Date()), []);
 
-  const perfectMonth = useMemo(() => !!reliability && reliability.score === 100, [reliability]);
+  // total >= LOW_SAMPLE_THRESHOLD : sans le seuil, un compte tout juste créé (0
+  // livraison terminée) affichait AUSSI 100% (voir dashboard.service.ts) et
+  // déclenchait ce badge "100% de livraisons à l'heure" sur un mois sans aucune
+  // livraison — même défaut que le 0% alarmant, en miroir.
+  const perfectMonth = useMemo(
+    () => !!reliability && reliability.score === 100 && reliability.total >= LOW_SAMPLE_THRESHOLD,
+    [reliability],
+  );
 
   // Un SEUL RealTimeMap est monté (desktop OU mobile) : avant, les deux layouts
   // étaient rendus simultanément et cachés en CSS → double connexion WebSocket
@@ -298,7 +325,7 @@ export default function DashboardPage() {
             <div className={styles.headerRight}>
               {perfectMonth && <PerfectMonthBadge month={currentMonth} />}
               {kpis && reliability && (
-                <ReliabilityScore score={reliability.score} trend={reliability.trend} />
+                <ReliabilityScore score={reliability.score} trend={reliability.trend} total={reliability.total} />
               )}
             </div>
           </header>
@@ -354,7 +381,7 @@ export default function DashboardPage() {
             </div>
 
             {kpis && reliability && (
-              <ReliabilityScore score={reliability.score} trend={reliability.trend} />
+              <ReliabilityScore score={reliability.score} trend={reliability.trend} total={reliability.total} />
             )}
 
             <div className={styles.kpiPanel}>

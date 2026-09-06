@@ -1226,6 +1226,8 @@
     "reliabilityScore": "Fiabilité opérationnelle",
     "vsPreviousMonth": "vs mois préc.",
     "perfectMonth": "100% de livraisons à l'heure en {{month}}",
+    "lowSample": "sur {{count}} livraison — échantillon encore faible",
+    "lowSample_plural": "sur {{count}} livraisons — échantillon encore faible",
     "error": "Impossible de charger les données du tableau de bord",
     "status": {
       "pending": "En attente",

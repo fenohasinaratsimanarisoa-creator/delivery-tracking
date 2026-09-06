@@ -1226,6 +1226,8 @@
     "reliabilityScore": "Operational reliability",
     "vsPreviousMonth": "vs prev. month",
     "perfectMonth": "100% on-time deliveries in {{month}}",
+    "lowSample": "based on {{count}} delivery — sample still small",
+    "lowSample_plural": "based on {{count}} deliveries — sample still small",
     "error": "Unable to load dashboard data",
     "status": {
       "pending": "Pending",
