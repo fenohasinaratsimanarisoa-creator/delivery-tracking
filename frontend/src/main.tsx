@@ -150,9 +150,28 @@ window.addEventListener(
   true,
 );
 
+// useTransitions={false} — SANS ÇA (défaut : true), <BrowserRouter> enveloppe
+// CHAQUE mise à jour de location dans React.startTransition() (vérifié dans
+// son code source : `history.listen(setState)` où setState fait
+// `useTransitions === false ? setStateImpl(newState) : startTransition(...)`).
+// Une transition est de priorité BASSE et interruptible PAR CONCEPTION.
+// Bug réel observé (2026-09-05) : la page Carte temps réel (RealTimeMap)
+// reçoit des positions GPS en continu (le traceur physique installé
+// aujourd'hui en envoie toutes les 10s) via des mises à jour d'état
+// fréquentes — chacune de priorité normale, donc chacune interrompt la
+// transition de navigation en cours. Résultat : en quittant cette page,
+// naviguer ailleurs pouvait ne JAMAIS aboutir — l'URL et l'historique du
+// navigateur se mettaient à jour immédiatement (history.pushState est
+// synchrone, natif), mais l'arbre React affiché restait figé sur l'ancienne
+// page indéfiniment, sans la moindre erreur console, jusqu'à un F5 (qui
+// repart sans transition en attente). Un refactor du layout (Outlet partagé)
+// et un flushSync sur les clics de navigation ont été essayés en premier et
+// n'ont PAS résolu le problème — le flushSync de l'appelant ne peut pas
+// forcer la synchronicité d'un startTransition déclenché plus tard, à
+// l'intérieur du listener interne de <BrowserRouter> lui-même.
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter useTransitions={false}>
       <App />
     </BrowserRouter>
   </React.StrictMode>,
