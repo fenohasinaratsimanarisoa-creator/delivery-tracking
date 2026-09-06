@@ -50,6 +50,35 @@ export const FALLBACK_DRIVER_NAME = 'Véhicule sans chauffeur assigné';
 
 export const OFFLINE_TIMEOUT_MIN = 15;
 
+// Un traceur motion-triggered (voir traccar-bridge.service.ts côté backend)
+// n'envoie AUCUNE position à l'arrêt — `status` figé sur 'moving' au dernier
+// update reçu (mergePositionUpdate) ne se remet donc jamais à jour tout seul :
+// un véhicule réellement arrêté depuis des minutes continuait d'afficher « EN
+// MOUVEMENT » indéfiniment (aucun nouvel update pour le corriger). Passé ce
+// délai sans nouvelle position, on ne fait plus confiance à un statut
+// "moving" hérité — le badge/icône affichés doivent se dégrader tout seuls
+// avec le temps qui passe, pas seulement à la prochaine donnée reçue.
+export const STALE_MOVEMENT_MS = 120_000;
+
+/**
+ * Statut à AFFICHER (marqueur, badge popup, pill) — jamais `vehicle.status`
+ * brut directement : ce dernier ne reflète que l'INSTANT du dernier update
+ * reçu, sans tenir compte du temps écoulé depuis. Appeler avec un `now` qui
+ * avance réellement (ex. un state rafraîchi par setInterval) pour que
+ * l'affichage se corrige tout seul même sans nouvel événement socket.
+ */
+export function effectiveStatus(
+  status: VehicleData['status'],
+  timestamp: string | undefined,
+  now: number,
+): VehicleData['status'] {
+  if (status === 'offline' || !timestamp) return status;
+  const ageMs = now - new Date(timestamp).getTime();
+  if (ageMs > OFFLINE_TIMEOUT_MIN * 60_000) return 'offline';
+  if (status === 'moving' && ageMs > STALE_MOVEMENT_MS) return 'static';
+  return status;
+}
+
 export interface FollowReference {
   id: string;
   lat: number;

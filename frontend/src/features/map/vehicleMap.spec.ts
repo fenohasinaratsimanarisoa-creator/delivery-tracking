@@ -3,6 +3,9 @@ import {
   mergePositionUpdate,
   mergeBootstrapPositions,
   shouldFollowRecenter,
+  effectiveStatus,
+  STALE_MOVEMENT_MS,
+  OFFLINE_TIMEOUT_MIN,
   FALLBACK_DRIVER_NAME,
   type PositionUpdateInput,
   type VehicleData,
@@ -77,6 +80,36 @@ describe('mergeBootstrapPositions — bootstrap REST par vehicleId', () => {
     expect(after.size).toBe(2);
     expect(after.get('vehicle-1')!.name).toBe(FALLBACK_DRIVER_NAME);
     expect(after.get('vehicle-2')!.name).toBe(FALLBACK_DRIVER_NAME);
+  });
+});
+
+describe('effectiveStatus — dégradation du statut affiché avec le temps (traceur motion-triggered)', () => {
+  // Régression 2026-09-06 signalée en prod : un véhicule réellement arrêté
+  // depuis 5 min affichait toujours "EN MOUVEMENT" — le traceur physique
+  // n'envoie AUCUNE position à l'arrêt, donc `vehicle.status` (figé au dernier
+  // update reçu par mergePositionUpdate) ne se corrigeait jamais tout seul.
+  const T0 = new Date('2026-09-06T18:07:49.000Z').getTime();
+
+  it('reste "moving" tant que la dernière position est récente', () => {
+    expect(effectiveStatus('moving', new Date(T0).toISOString(), T0 + 30_000)).toBe('moving');
+  });
+
+  it('passe "moving" → "static" après STALE_MOVEMENT_MS sans nouvelle position', () => {
+    expect(effectiveStatus('moving', new Date(T0).toISOString(), T0 + STALE_MOVEMENT_MS + 1000)).toBe('static');
+  });
+
+  it('passe "static" → "offline" après OFFLINE_TIMEOUT_MIN sans nouvelle position', () => {
+    const offlineAt = T0 + OFFLINE_TIMEOUT_MIN * 60_000 + 1000;
+    expect(effectiveStatus('static', new Date(T0).toISOString(), offlineAt)).toBe('offline');
+    expect(effectiveStatus('moving', new Date(T0).toISOString(), offlineAt)).toBe('offline');
+  });
+
+  it('un statut déjà "offline" (bootstrap REST) reste "offline", quel que soit `now`', () => {
+    expect(effectiveStatus('offline', new Date(T0).toISOString(), T0)).toBe('offline');
+  });
+
+  it('sans timestamp, ne dégrade jamais un statut réel (garde-fou, ne devrait pas arriver en pratique)', () => {
+    expect(effectiveStatus('moving', undefined, T0 + 999_999_999)).toBe('moving');
   });
 });
 

@@ -59,11 +59,14 @@ function createVehicleIcon(): L.DivIcon {
   });
 }
 
-function syncVehicleMarker(marker: L.Marker, vehicle: VehicleData, focused: boolean) {
+// `status` est passé explicitement (pas lu depuis vehicle.status) : l'appelant
+// doit fournir le statut DÉRIVÉ (effectiveStatus), qui tient compte de
+// l'ancienneté de la position — sinon l'icône reste bloquée "en mouvement"
+// indéfiniment dès que les updates s'arrêtent (traceur motion-triggered).
+function syncVehicleMarker(marker: L.Marker, vehicle: VehicleData, status: VehicleData['status'], focused: boolean) {
   const el = marker.getElement();
   if (!el) return;
 
-  const status = vehicle.status;
   const isMoving = status === 'moving';
   const isOffline = status === 'offline';
   const confidence = vehicle.confidence ?? 1;
@@ -117,7 +120,7 @@ interface SearchResult {
 }
 
 import type { VehicleData } from './vehicleMap';
-import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, type FollowReference } from './vehicleMap';
+import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, effectiveStatus, STALE_MOVEMENT_MS, type FollowReference } from './vehicleMap';
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -130,7 +133,7 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: VehicleData; disableAnimation?: boolean; focused?: boolean }) {
+function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: VehicleData; disableAnimation?: boolean; focused?: boolean; now: number }) {
   const map = useMap();
   const markerRef = useRef<L.Marker | null>(null);
   const animRef = useRef<number>(0);
@@ -151,7 +154,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     // rotation, couleur, confiance, focus) est ensuite piloté par
     // syncVehicleMarker sur l'élément existant, sans recréation d'icône.
     const marker = L.marker([vehicle.lat, vehicle.lng], { icon: createVehicleIcon(), zIndexOffset: focused ? 1000 : 0 }).addTo(map);
-    syncVehicleMarker(marker, vehicle, !!focused);
+    syncVehicleMarker(marker, vehicle, effectiveStatus(vehicle.status, vehicle.timestamp, now), !!focused);
 
     const popupContent = document.createElement('div');
     popupContent.style.minWidth = '180px';
@@ -178,11 +181,11 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
     // Rotation / couleur / confiance / mouvement-arrêt / focus : appliqués sur
     // l'élément existant (pas de setIcon → pas de redémarrage de l'animation
     // CSS du halo = pas de scintillement à chaque fix GPS).
-    syncVehicleMarker(marker, vehicle, !!focused);
+    syncVehicleMarker(marker, vehicle, effectiveStatus(vehicle.status, vehicle.timestamp, now), !!focused);
     marker.setZIndexOffset(focused ? 1000 : 0);
 
-    const now = Date.now();
-    lastUpdateRef.current = now;
+    const nowMs = Date.now();
+    lastUpdateRef.current = nowMs;
 
     lastStateRef.current = {
       lat: vehicle.lat,
@@ -244,6 +247,18 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
 
     animRef.current = requestAnimationFrame(animate);
   }, [vehicle.lat, vehicle.lng, vehicle.id, disableAnimation, vehicle.status, vehicle.heading, vehicle.suspect, focused]);
+
+  // Re-sync PÉRIODIQUE de l'icône (couleur/halo), séparé de l'effet ci-dessus :
+  // celui-ci ne doit tourner QUE sur un vrai changement de véhicule (sinon il
+  // annule/relance l'animation en cours pour rien). Sans cet effet dédié à
+  // `now`, un véhicule qui s'arrête (traceur motion-triggered : plus aucun
+  // update après le dernier "moving") garde indéfiniment son icône "en
+  // mouvement", puisque rien d'autre ne redéclencherait le calcul.
+  useEffect(() => {
+    const marker = markerRef.current;
+    if (!marker) return;
+    syncVehicleMarker(marker, vehicle, effectiveStatus(vehicle.status, vehicle.timestamp, now), !!focused);
+  }, [now, vehicle, focused]);
 
   // Dead reckoning: extrapolate position when GPS update is delayed
   useEffect(() => {
@@ -328,20 +343,24 @@ function AnimatedMarker({ vehicle, disableAnimation, focused }: { vehicle: Vehic
       container.appendChild(suspectBadge);
     }
 
+    // Statut DÉRIVÉ (pas vehicle.status brut) : un traceur motion-triggered
+    // n'envoie rien à l'arrêt, donc `vehicle.status` resterait bloqué sur
+    // 'moving' indéfiniment sans cette correction basée sur `now`.
+    const displayStatus = effectiveStatus(vehicle.status, vehicle.timestamp, now);
     const variant =
-      vehicle.status === 'moving' ? 'enroute' : vehicle.status === 'offline' ? 'offline' : 'idle';
+      displayStatus === 'moving' ? 'enroute' : displayStatus === 'offline' ? 'offline' : 'idle';
     const badge = document.createElement('div');
     badge.className = `dt-popup__badge dt-popup__badge--${variant}`;
     badge.textContent =
-      vehicle.status === 'moving'
+      displayStatus === 'moving'
         ? 'EN MOUVEMENT'
-        : vehicle.status === 'offline'
+        : displayStatus === 'offline'
           ? 'HORS LIGNE'
           : "À L'ARRÊT";
     container.appendChild(badge);
 
     return container;
-  }, [vehicle]);
+  }, [vehicle, now]);
 
   useEffect(() => {
     const marker = markerRef.current;
@@ -885,7 +904,11 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
               </div>
             ) : (
               searchResults.map((v: SearchResult) => {
-                const isOffline = v.isOffline || v.status === 'offline';
+                // Statut DÉRIVÉ (voir effectiveStatus) : sans ça, un véhicule
+                // arrêté depuis un moment (traceur motion-triggered muet à
+                // l'arrêt) restait affiché "en mouvement" dans cette liste.
+                const displayStatus = effectiveStatus((v.status as VehicleData['status']) ?? 'static', v.timestamp, now);
+                const isOffline = v.isOffline || displayStatus === 'offline';
                 return (
                 <div
                   key={v.id}
@@ -904,7 +927,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                   className={`${styles.searchResultItem}${v.isOffline ? ` ${styles.searchResultItemOffline}` : ''}`}
                 >
                   <VehicleStatusPill
-                    status={isOffline ? 'offline' : mapVehicleStatus(v.status ?? 'static')}
+                    status={isOffline ? 'offline' : mapVehicleStatus(displayStatus)}
                     size="sm"
                     iconOnly
                   />
@@ -913,7 +936,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                     <div className={styles.searchResultSub}>
                       {isOffline
                         ? t('vehicleStatus.offline')
-                        : `${t(`vehicleStatus.${mapVehicleStatus(v.status ?? 'static')}`)} · ${v.accuracy !== undefined ? `±${Math.round(v.accuracy)} m · ` : ''}${formatTime(v.timestamp ?? '')}`}
+                        : `${t(`vehicleStatus.${mapVehicleStatus(displayStatus)}`)} · ${v.accuracy !== undefined ? `±${Math.round(v.accuracy)} m · ` : ''}${formatTime(v.timestamp ?? '')}`}
                     </div>
                   </div>
                 </div>
@@ -979,7 +1002,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
             </div>
 
             <div className={styles.driverCardStatusRow}>
-              <VehicleStatusPill status={mapVehicleStatus(selectedDriver.status)} size="sm" />
+              <VehicleStatusPill status={mapVehicleStatus(effectiveStatus(selectedDriver.status, selectedDriver.timestamp, now))} size="sm" />
             </div>
 
             <div className={styles.driverCardBody}>
@@ -1018,12 +1041,12 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                 fréquence (`now`) déclenche le render même quand le véhicule
                 s'arrête — le bandeau apparaît/disparaît tout seul, sans
                 re-sélectionner le véhicule. */}
-            {selectedDriver.status === 'offline' ? (
+            {effectiveStatus(selectedDriver.status, selectedDriver.timestamp, now) === 'offline' ? (
               <div className={`${styles.warningBanner} ${styles.warningBannerOffline}`}>
                 <NavigationOff size={13} className={styles.warningIcon} aria-hidden="true" />
                 {t('map.panel.offlineWarning')}
               </div>
-            ) : (!selectedDriver.timestamp || now - new Date(selectedDriver.timestamp).getTime() > 120_000) && (
+            ) : (!selectedDriver.timestamp || now - new Date(selectedDriver.timestamp).getTime() > STALE_MOVEMENT_MS) && (
               <div className={styles.warningBanner}>
                 <AlertTriangle size={13} className={styles.warningIcon} aria-hidden="true" />
                 {t('map.panel.staleWarning')}
@@ -1096,7 +1119,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
         </div>
       )}
       {visibleVehicles.map((v) => (
-        <AnimatedMarker key={v.id} vehicle={v} disableAnimation={!devPerf.enableAnimations} focused={focusId === v.id} />
+        <AnimatedMarker key={v.id} vehicle={v} disableAnimation={!devPerf.enableAnimations} focused={focusId === v.id} now={now} />
       ))}
     </MapContainer>
   );
