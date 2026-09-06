@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { getGroupedMenuItemsForRole } from './menuItems';
 import { useAuth } from '../hooks/AuthContext';
+import { useUrgentNavigate } from '../hooks/useUrgentNavigate';
 import NotificationBell from './NotificationBell';
 import TrackingStatusIndicator from './TrackingStatusIndicator';
 import { useTrackingStatus } from '../services/tracking/TrackingContext';
@@ -15,7 +16,7 @@ const SIDEBAR_COLLAPSED = 60;
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate = useUrgentNavigate();
   const { t } = useTranslation();
   // Préférence PERSISTÉE : avant, un useEffect remettait `collapsed` à false à
   // CHAQUE navigation — la barre se ré-ouvrait sans arrêt malgré le choix de

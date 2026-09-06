@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useUrgentNavigate } from '../hooks/useUrgentNavigate';
 import {
   Bell, BellRing, Trash2, CheckCheck, ArrowRight, Check,
   Package, Fuel, Timer, WifiOff, Wrench, MapPin, Crosshair, Gauge, Info, Clock, ShieldAlert,
@@ -65,7 +65,7 @@ const MOBILE_BREAKPOINT = 480;
 
 export default function NotificationBell() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const navigate = useUrgentNavigate();
   const { user } = useAuth();
   const { notifications, unreadCount, markRead, markAllRead, remove, removeAll } = useNotifications({ limit: 20 });
   // Contexte field (driver/client) : ne montrer que les types actionnables. Les autres

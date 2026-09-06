@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal, LogOut, UserRound } from 'lucide-react';
 import { useAuth } from '../hooks/AuthContext';
+import { useUrgentNavigate } from '../hooks/useUrgentNavigate';
 import { getMenuItemsForRole, type MenuItem, type Role } from './menuItems';
 import { useNotifications } from '../services/notifications/useNotifications';
 import styles from './BottomNav.module.css';
@@ -19,7 +20,7 @@ const MOBILE_QUERY = '(max-width: 767px)';
 export default function BottomNav() {
   const { t } = useTranslation();
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate = useUrgentNavigate();
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications({ limit: 1 });
   const role = (user?.role || 'client') as Role;
