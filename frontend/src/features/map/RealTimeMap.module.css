@@ -584,6 +584,21 @@
   border-bottom-color: var(--color-border) !important;
 }
 
+/* Le conteneur de la carte (.pageWrap, MapPage.module.css) est en
+   position:absolute + inset:0 — il ignore le padding-bottom réservé pour
+   BottomNav sur mobile (App.module.css, même breakpoint 767px), puisque les
+   enfants en absolute se positionnent contre le padding-box du conteneur
+   parent, pas sa content-box. Sans ce correctif, .leaflet-bottom (contrôle
+   « couches » en bas à gauche, attribution en bas à droite) restait
+   exactement dans la zone recouverte par BottomNav (position:fixed,
+   z-index:1050 > celui des contrôles Leaflet) — superposition constatée en
+   prod. */
+@media (max-width: 767px) {
+  :global(.leaflet-bottom) {
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
 :global(.leaflet-bar a:hover) {
   background: var(--color-surface-hover) !important;
 }

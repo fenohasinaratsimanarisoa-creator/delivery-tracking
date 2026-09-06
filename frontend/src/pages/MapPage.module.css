@@ -312,3 +312,16 @@
     justify-content: center;
   }
 }
+
+/* .pageWrap est en position:absolute + inset:0 : le padding-bottom réservé
+   pour BottomNav sur .appLayoutMain (App.module.css, même breakpoint 767px)
+   ne s'applique PAS aux enfants en absolute (ils se positionnent contre le
+   padding-box du conteneur, pas sa content-box) — .legend restait donc
+   exactement dans la zone que BottomNav (position:fixed, z-index:1050 > 1000
+   ici) recouvre par-dessus. Constaté en prod : superposition carte/nav sur
+   mobile. On réserve le même espace explicitement ici. */
+@media (max-width: 767px) {
+  .legend {
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px) + var(--space-lg));
+  }
+}
