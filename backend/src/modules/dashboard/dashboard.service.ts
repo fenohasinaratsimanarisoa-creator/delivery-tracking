@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { hasFuelAnomaly } from '../../common/fuel/fuel-anomaly.utils';
+import { isOnTime } from '../../common/utils/delivery-timing';
 
 @Injectable()
 export class DashboardService {
@@ -140,11 +141,9 @@ export class DashboardService {
       // Fiabilité = livraisons livrées À TEMPS / toutes les livraisons terminées
       // (delivered + failed). Les échecs comptent donc contre le score, et une
       // livraison failed n'est jamais « on time ».
-      const onTime = deliveries.filter((d) => {
-        if (d.status !== 'delivered') return false;
-        if (!d.scheduledDate) return true;
-        return d.completedAt && d.completedAt <= d.scheduledDate;
-      });
+      const onTime = deliveries.filter(
+        (d) => d.status === 'delivered' && isOnTime(d.completedAt, d.scheduledDate),
+      );
       return {
         score: Math.round((onTime.length / total) * 100),
         onTime: onTime.length,

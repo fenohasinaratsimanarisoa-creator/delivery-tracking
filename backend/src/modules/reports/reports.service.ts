@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { hasFuelAnomaly } from '../../common/fuel/fuel-anomaly.utils';
+import { isOnTime } from '../../common/utils/delivery-timing';
 
 @Injectable()
 export class ReportsService {
@@ -42,10 +43,7 @@ export class ReportsService {
     ]);
 
     const delivered = completed.filter((d) => d.status === 'delivered');
-    const onTimeCount = delivered.filter((d) => {
-      if (!d.scheduledDate) return true;
-      return d.completedAt && d.completedAt <= d.scheduledDate;
-    }).length;
+    const onTimeCount = delivered.filter((d) => isOnTime(d.completedAt, d.scheduledDate)).length;
 
     const byDay = await this.getDeliveryCountByPeriod(companyId, periodStart, periodEnd, 'day');
     const byWeek = await this.getDeliveryCountByPeriod(companyId, periodStart, periodEnd, 'week');
@@ -184,10 +182,7 @@ export class ReportsService {
     const driverData = drivers.map((d) => {
       const completed = d.deliveries.filter((del) => del.status === 'delivered');
       const failed = d.deliveries.filter((del) => del.status === 'failed');
-      const onTime = completed.filter((del) => {
-        if (!del.scheduledDate) return true;
-        return del.completedAt && del.completedAt <= del.scheduledDate;
-      });
+      const onTime = completed.filter((del) => isOnTime(del.completedAt, del.scheduledDate));
       // Même dénominateur (delivered+failed) que getDeliveryReport ci-dessus et
       // dashboard.service.ts — un chauffeur avec des échecs ne doit pas afficher
       // un taux "à l'heure" de 100% calculé sur ses seules livraisons réussies.

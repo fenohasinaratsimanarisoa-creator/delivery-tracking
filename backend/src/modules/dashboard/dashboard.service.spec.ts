@@ -115,24 +115,28 @@ describe('DashboardService', () => {
           {
             status: 'delivered',
             completedAt: new Date('2026-07-20T09:00:00.000Z'),
-            scheduledDate: new Date('2026-07-20T10:00:00.000Z'),
+            scheduledDate: new Date('2026-07-20T00:00:00.000Z'),
           },
           {
+            // Terminée le LENDEMAIN du jour prévu → réellement en retard (contrairement
+            // à une livraison terminée l'après-midi du jour même, qui est à l'heure —
+            // voir isOnTime : la comparaison se fait par jour calendaire, pas par
+            // instant exact de minuit).
             status: 'delivered',
-            completedAt: new Date('2026-07-20T12:00:00.000Z'),
-            scheduledDate: new Date('2026-07-20T10:00:00.000Z'),
+            completedAt: new Date('2026-07-21T09:00:00.000Z'),
+            scheduledDate: new Date('2026-07-20T00:00:00.000Z'),
           },
           {
             status: 'failed',
             completedAt: null,
-            scheduledDate: new Date('2026-07-20T10:00:00.000Z'),
+            scheduledDate: new Date('2026-07-20T00:00:00.000Z'),
           },
         ])
         .mockResolvedValueOnce([
           {
             status: 'delivered',
             completedAt: new Date('2026-06-20T09:00:00.000Z'),
-            scheduledDate: new Date('2026-06-20T10:00:00.000Z'),
+            scheduledDate: new Date('2026-06-20T00:00:00.000Z'),
           },
         ]);
 
