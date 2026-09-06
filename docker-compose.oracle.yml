@@ -213,12 +213,15 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN:-}
-      # TraccarBridgeService tourne aussi dans ce process (QueueModule) — sans
-      # ces 3 variables (identiques à celles du service "backend"), le pont
-      # GPS reste inactif ici (constaté au premier déploiement réel sur Contabo).
-      TRACCAR_URL: http://traccar:8082
-      TRACCAR_USER: ${TRACCAR_USER:-admin}
-      TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-admin}
+      # PAS de TRACCAR_URL/USER/PASSWORD ici : TraccarBridgeService s'instancie
+      # aussi dans ce process (via FuelConsumptionModule → TrackingModule), mais
+      # son onModuleInit sort en no-op immédiat grâce à IS_QUEUE_WORKER=1 (posé
+      # par queue.worker.ts) — ce process n'a aucun serveur WebSocket, donc une
+      # diffusion temps réel faite depuis ici serait silencieusement perdue.
+      # Historique : ces 3 variables étaient AVANT nécessaires ici pour que le
+      # pont "fonctionne" dans le worker — c'était le bug (le worker pouvait
+      # remporter l'élection de leader Redis du pont et bloquer toute diffusion
+      # GPS temps réel vers le navigateur). Voir traccar-bridge.service.ts.
     depends_on:
       postgres:
         condition: service_healthy

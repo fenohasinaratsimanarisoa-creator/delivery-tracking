@@ -147,6 +147,11 @@ services:
       TRACCAR_URL: ${TRACCAR_URL:-http://traccar:8082}
       TRACCAR_USER: ${TRACCAR_USER:?TRACCAR_USER is required}
       TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:?TRACCAR_PASSWORD is required}
+      # Traceur physique reconfiguré (2026-09-06) : upload,10 en mouvement /
+      # uploadstatic,60 à l'arrêt. Seuil abaissé de 10 min (défaut) à 3 min —
+      # confortablement au-dessus du pire cas normal (60s à l'arrêt) tout en
+      # détectant une vraie panne bien plus vite qu'avant.
+      TRACKING_SILENCE_TRACKER_MIN: ${TRACKING_SILENCE_TRACKER_MIN:-3}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN:-}
@@ -199,12 +204,21 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN:-}
-      # TraccarBridgeService tourne aussi dans ce process (QueueModule) — sans
-      # ces 3 variables (identiques à celles du service "backend"), le pont
-      # GPS reste inactif ici (constaté au premier déploiement réel).
-      TRACCAR_URL: ${TRACCAR_URL:-http://traccar:8082}
-      TRACCAR_USER: ${TRACCAR_USER:?TRACCAR_USER is required}
-      TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:?TRACCAR_PASSWORD is required}
+      # TrackingService (silence GPS) tourne aussi ici, indépendamment du pont —
+      # même valeur que "backend" pour que les deux processus s'accordent sur le
+      # même seuil (la notification elle-même est dédupliquée via un cooldown
+      # Redis partagé, mais un seuil différent d'un process à l'autre resterait
+      # trompeur).
+      TRACKING_SILENCE_TRACKER_MIN: ${TRACKING_SILENCE_TRACKER_MIN:-3}
+      # PAS de TRACCAR_URL/USER/PASSWORD ici : TraccarBridgeService s'instancie
+      # aussi dans ce process (via FuelConsumptionModule → TrackingModule), mais
+      # son onModuleInit sort en no-op immédiat grâce à IS_QUEUE_WORKER=1 (posé
+      # par queue.worker.ts) — ce process n'a aucun serveur WebSocket, donc une
+      # diffusion temps réel faite depuis ici serait silencieusement perdue.
+      # Historique : ces 3 variables étaient AVANT nécessaires ici pour que le
+      # pont "fonctionne" dans le worker — c'était le bug (le worker pouvait
+      # remporter l'élection de leader Redis du pont et bloquer toute diffusion
+      # GPS temps réel vers le navigateur). Voir traccar-bridge.service.ts.
     depends_on:
       postgres:
         condition: service_healthy
