@@ -19,16 +19,23 @@ describe('tileProviders (qualité 4K / HiDPI)', () => {
     expect(TILE_PROVIDERS.satelliteHD.url).toBe('');
   });
 
-  it('la couche par défaut « plan » est une tuile CARTO retina (@2x via {r})', () => {
-    expect(TILE_PROVIDERS.plan.url).toContain('{r}');
-    expect(TILE_PROVIDERS.plan.detectRetina).toBe(true);
-    expect(TILE_PROVIDERS.plan.maxZoom).toBeGreaterThanOrEqual(19);
+  // CARTO (l'ancien fournisseur de "plan"/"planDark") a fermé son accès
+  // anonyme le 2026-09-06 (tuiles remplacées par un watermark "API KEY
+  // REQUIRED", constaté en prod). "plan"/"planDark" utilisent maintenant les
+  // styles Mapbox (même token que satelliteHD) quand disponible, sinon un
+  // repli OpenStreetMap brut (garanti sans clé). Comme satelliteHD ci-dessus,
+  // VITE_MAPBOX_TOKEN n'est pas défini dans l'environnement de test — ces
+  // tests couvrent donc le chemin de repli OSM réellement exercé ici.
+  it('« plan » sans token Mapbox retombe sur OpenStreetMap brut (pas de retina, pas de {r})', () => {
+    expect(TILE_PROVIDERS.plan.url).toBe(TILE_PROVIDERS.planLight.url);
+    expect(TILE_PROVIDERS.plan.url).not.toContain('{r}');
+    expect(TILE_PROVIDERS.plan.detectRetina).toBeUndefined();
+    expect(TILE_PROVIDERS.plan.maxNativeZoom).toBe(19);
   });
 
-  it('la couche sombre colle au thème et reste retina', () => {
-    expect(TILE_PROVIDERS.planDark.url).toContain('dark_matter');
-    expect(TILE_PROVIDERS.planDark.url).toContain('{r}');
-    expect(TILE_PROVIDERS.planDark.detectRetina).toBe(true);
+  it('« planDark » sans token Mapbox retombe aussi sur OpenStreetMap brut', () => {
+    expect(TILE_PROVIDERS.planDark.url).toBe(TILE_PROVIDERS.planLight.url);
+    expect(TILE_PROVIDERS.planDark.detectRetina).toBeUndefined();
   });
 
   it('ne force PAS le retina sur les fournisseurs qui ne le servent pas (OSM)', () => {
@@ -46,7 +53,7 @@ describe('tileProviders (qualité 4K / HiDPI)', () => {
     expect(props.url).toBe(TILE_PROVIDERS.plan.url);
     expect(props.attribution).toBe(TILE_PROVIDERS.plan.attribution);
     expect(props.maxZoom).toBe(TILE_PROVIDERS.plan.maxZoom);
-    expect(props.detectRetina).toBe(true);
+    expect(props.maxNativeZoom).toBe(19);
 
     const sat = tileLayerProps(TILE_PROVIDERS.satellite);
     expect(sat.maxNativeZoom).toBe(17);

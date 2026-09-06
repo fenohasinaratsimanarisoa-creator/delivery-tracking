@@ -24,21 +24,36 @@ export const TILE_PROVIDERS: Record<
   'plan' | 'planDark' | 'planLight' | 'satellite' | 'satelliteHD',
   TileProviderConfig
 > = {
+  // CARTO a fermé son accès anonyme aux basemaps (constaté en prod, 2026-09-06 :
+  // chaque tuile renvoyait l'image watermark "API KEY REQUIRED" — un 200 OK,
+  // donc invisible au détecteur d'erreurs de MapLayerSwitcher, qui ne réagit
+  // qu'aux vrais échecs réseau). Basculé sur les styles Mapbox (même token que
+  // Satellite HD, aucun compte supplémentaire nécessaire) quand disponible ;
+  // repli OpenStreetMap brut sinon (garanti sans clé, contrairement à CARTO
+  // désormais).
   plan: {
     key: 'plan',
     name: 'Plan',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    url: MAPBOX_TOKEN
+      ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
+      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: MAPBOX_TOKEN
+      ? '&copy; Mapbox &copy; OpenStreetMap contributors'
+      : '&copy; OpenStreetMap contributors',
     maxZoom: 20,
-    detectRetina: true,
+    ...(MAPBOX_TOKEN ? { detectRetina: true } : { maxNativeZoom: 19 }),
   },
   planDark: {
     key: 'planDark',
     name: 'Sombre',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_matter/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    url: MAPBOX_TOKEN
+      ? `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
+      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: MAPBOX_TOKEN
+      ? '&copy; Mapbox &copy; OpenStreetMap contributors'
+      : '&copy; OpenStreetMap contributors',
     maxZoom: 20,
-    detectRetina: true,
+    ...(MAPBOX_TOKEN ? { detectRetina: true } : { maxNativeZoom: 19 }),
   },
   planLight: {
     key: 'planLight',
