@@ -425,7 +425,7 @@
     "newVehicle": "Nouveau véhicule",
     "searchPlaceholder": "Rechercher un véhicule…",
     "drawerSubtitle": "Ajoutez un véhicule à votre flotte",
-    "editSubtitle": "Année {year} · {fuelType}",
+    "editSubtitle": "Année {{year}} · {{fuelType}}",
     "editVehicle": "Enregistrer",
     "createVehicle": "Créer le véhicule",
     "deleteConfirmLabel": "Supprimer",
@@ -508,7 +508,7 @@
     },
     "confirmDelete": {
       "title": "Supprimer le véhicule",
-      "message": "Supprimer {brand} {model} ({licensePlate}, {year}) ? Cette action est irréversible et retirera le véhicule de l'historique actif."
+      "message": "Supprimer {{brand}} {{model}} ({{licensePlate}}, {{year}}) ? Cette action est irréversible et retirera le véhicule de l'historique actif."
     },
     "count": "{{count}} véhicule dans votre flotte",
     "count_plural": "{{count}} véhicules dans votre flotte",
@@ -1851,6 +1851,35 @@
   "tracking": {
     "geolocationDeniedHint": "Autorisez la géolocalisation dans les paramètres de votre navigateur pour activer le suivi GPS."
   },
+  "trackingHealth": {
+    "kicker": "SUPERVISION",
+    "title": "Santé du tracking",
+    "lastRefresh": "Actualisé à",
+    "autoRefresh": "auto-refresh 60s",
+    "loadingHint": "Chargement…",
+    "vehiclesTracked": "Véhicules suivis",
+    "inSilence": "En silence GPS",
+    "silenceTitle": "Silences GPS en cours (ancienneté du signal)",
+    "noSilence": "Aucun véhicule en silence",
+    "noSilenceHint": "Tous les véhicules actifs transmettent leur position.",
+    "vehicle": "Véhicule",
+    "driver": "Chauffeur",
+    "source": "Source",
+    "signalAge": "Ancienneté signal",
+    "threshold": "Seuil",
+    "status": "État",
+    "cause": "Cause probable (traceur)",
+    "since": "depuis",
+    "neverConnected": "Jamais connecté",
+    "silent": "SILENCE",
+    "ok": "OK",
+    "coverageTitle": "Couverture GPS du jour par véhicule",
+    "noCoverage": "Aucune livraison terminée aujourd'hui",
+    "deliveries": "Livraisons",
+    "positions": "Positions",
+    "coverage": "Couverture",
+    "gaps": "Trous signalés"
+  },
   "notificationsPage": {
     "title": "Notifications",
     "subtitle": "Suivez en temps réel vos alertes de livraison, de carburant et de flotte.",
@@ -2023,7 +2052,7 @@
         "privacy": "Confidentialité",
         "cookies": "Cookies"
       },
-      "copyright": "© {year} DeliveryTrack. Tous droits réservés."
+      "copyright": "© {{year}} DeliveryTrack. Tous droits réservés."
     }
   }
 }

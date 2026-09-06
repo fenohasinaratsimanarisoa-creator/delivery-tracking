@@ -425,7 +425,7 @@
     "newVehicle": "New vehicle",
     "searchPlaceholder": "Search vehicles…",
     "drawerSubtitle": "Add a vehicle to your fleet",
-    "editSubtitle": "Year {year} · {fuelType}",
+    "editSubtitle": "Year {{year}} · {{fuelType}}",
     "editVehicle": "Save",
     "createVehicle": "Create vehicle",
     "deleteConfirmLabel": "Delete",
@@ -508,7 +508,7 @@
     },
     "confirmDelete": {
       "title": "Delete vehicle",
-      "message": "Delete {brand} {model} ({licensePlate}, {year})? This action is irreversible and will remove the vehicle from active history."
+      "message": "Delete {{brand}} {{model}} ({{licensePlate}}, {{year}})? This action is irreversible and will remove the vehicle from active history."
     },
     "count": "{{count}} vehicle in your fleet",
     "count_plural": "{{count}} vehicles in your fleet",
@@ -1851,6 +1851,35 @@
   "tracking": {
     "geolocationDeniedHint": "Enable geolocation in your browser settings to activate GPS tracking."
   },
+  "trackingHealth": {
+    "kicker": "MONITORING",
+    "title": "Tracking health",
+    "lastRefresh": "Refreshed at",
+    "autoRefresh": "auto-refresh 60s",
+    "loadingHint": "Loading…",
+    "vehiclesTracked": "Vehicles tracked",
+    "inSilence": "GPS silent",
+    "silenceTitle": "Ongoing GPS silences (signal age)",
+    "noSilence": "No vehicle in silence",
+    "noSilenceHint": "All active vehicles are transmitting their position.",
+    "vehicle": "Vehicle",
+    "driver": "Driver",
+    "source": "Source",
+    "signalAge": "Signal age",
+    "threshold": "Threshold",
+    "status": "Status",
+    "cause": "Probable cause (tracker)",
+    "since": "since",
+    "neverConnected": "Never connected",
+    "silent": "SILENT",
+    "ok": "OK",
+    "coverageTitle": "Today's GPS coverage per vehicle",
+    "noCoverage": "No delivery completed today",
+    "deliveries": "Deliveries",
+    "positions": "Positions",
+    "coverage": "Coverage",
+    "gaps": "Reported gaps"
+  },
   "notificationsPage": {
     "title": "Notifications",
     "subtitle": "Stay on top of delivery, fuel, and fleet alerts in real time.",
@@ -2023,7 +2052,7 @@
         "privacy": "Privacy",
         "cookies": "Cookies"
       },
-      "copyright": "© {year} DeliveryTrack. All rights reserved."
+      "copyright": "© {{year}} DeliveryTrack. All rights reserved."
     }
   }
 }
