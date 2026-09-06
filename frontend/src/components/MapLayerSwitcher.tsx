@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { TILE_PROVIDERS, tileLayerProps } from '../features/map/tileProviders';
+import { TILE_PROVIDERS, tileLayerProps, isSatelliteHDAvailable } from '../features/map/tileProviders';
 
 const STORAGE_KEY = 'dt_map_layer';
 
@@ -18,6 +18,10 @@ function saveLayer(layer: string) {
 const SWITCHER_LAYERS = [
   TILE_PROVIDERS.plan,
   TILE_PROVIDERS.planDark,
+  // "Satellite HD" seulement si un token Mapbox a été configuré au build —
+  // sinon son url est vide (voir tileProviders.ts) et ajouterait une couche
+  // cassée au sélecteur.
+  ...(isSatelliteHDAvailable ? [TILE_PROVIDERS.satelliteHD] : []),
   TILE_PROVIDERS.satellite,
   TILE_PROVIDERS.planLight,
 ];

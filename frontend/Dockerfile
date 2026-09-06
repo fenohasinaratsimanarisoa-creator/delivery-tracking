@@ -7,6 +7,12 @@ COPY vite.config.ts ./
 COPY index.html ./
 COPY public ./public
 COPY src ./src
+# Variables VITE_* : Vite les inline dans le bundle AU BUILD (pas au runtime du
+# conteneur nginx final) — doivent donc être injectées ICI via ARG/ENV avant
+# `npm run build`, pas dans le `environment:` du service docker-compose (qui
+# n'affecte que le conteneur nginx déjà buildé, trop tard).
+ARG VITE_MAPBOX_TOKEN
+ENV VITE_MAPBOX_TOKEN=$VITE_MAPBOX_TOKEN
 RUN npm run build
 
 FROM nginx:alpine AS runner

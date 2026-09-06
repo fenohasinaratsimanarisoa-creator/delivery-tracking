@@ -1,9 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { TILE_PROVIDERS, tileLayerProps } from './tileProviders';
+import { TILE_PROVIDERS, tileLayerProps, isSatelliteHDAvailable } from './tileProviders';
 
 describe('tileProviders (qualité 4K / HiDPI)', () => {
-  it('expose les 4 couches attendues', () => {
-    expect(Object.keys(TILE_PROVIDERS)).toEqual(['plan', 'planDark', 'planLight', 'satellite']);
+  it('expose les 5 couches attendues', () => {
+    expect(Object.keys(TILE_PROVIDERS)).toEqual([
+      'plan',
+      'planDark',
+      'planLight',
+      'satellite',
+      'satelliteHD',
+    ]);
+  });
+
+  it('satelliteHD (Mapbox) : url vide et indisponible sans token au build (cas de ce test)', () => {
+    // VITE_MAPBOX_TOKEN n'est pas défini dans l'environnement de test — reflète
+    // le comportement réel d'un déploiement sans le token configuré.
+    expect(isSatelliteHDAvailable).toBe(false);
+    expect(TILE_PROVIDERS.satelliteHD.url).toBe('');
   });
 
   it('la couche par défaut « plan » est une tuile CARTO retina (@2x via {r})', () => {

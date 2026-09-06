@@ -8,11 +8,22 @@ export interface TileProviderConfig {
   detectRetina?: boolean;
 }
 
+// Token PUBLIC Mapbox (préfixe pk., fait pour être embarqué côté client — voir
+// Dockerfile pour l'injection au build). Optionnel : sans lui, la couche
+// "Satellite HD" n'apparaît simplement pas dans le sélecteur (voir
+// MapLayerSwitcher.tsx), on garde alors seulement le Satellite Esri (zoom natif
+// limité à 17, voir plus bas).
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
+
 // Config centralisée des tuiles. Les écrans 4K/HiDPI affichent ~2x plus de
 // pixels : les fournisseurs qui le supportent exposent des tuiles @2x via le
-// placeholder {r} (CARTO). `detectRetina` fait remplacer {r} par '@2x' quand
-// devicePixelRatio >= 2 → carte nette au lieu d'un étirement flou des tuiles 256px.
-export const TILE_PROVIDERS: Record<'plan' | 'planDark' | 'planLight' | 'satellite', TileProviderConfig> = {
+// placeholder {r} (CARTO, Mapbox). `detectRetina` fait remplacer {r} par '@2x'
+// quand devicePixelRatio >= 2 → carte nette au lieu d'un étirement flou des
+// tuiles 256px.
+export const TILE_PROVIDERS: Record<
+  'plan' | 'planDark' | 'planLight' | 'satellite' | 'satelliteHD',
+  TileProviderConfig
+> = {
   plan: {
     key: 'plan',
     name: 'Plan',
@@ -50,7 +61,28 @@ export const TILE_PROVIDERS: Record<'plan' | 'planDark' | 'planLight' | 'satelli
     maxZoom: 20,
     maxNativeZoom: 17,
   },
+  // Imagerie généralement plus récente et plus fine qu'Esri (surtout hors
+  // Amérique du Nord/Europe) : zoom natif jusqu'à 22 selon la couverture réelle
+  // pour la zone affichée — reste dépendant des prises de vue disponibles pour
+  // l'endroit précis, aucun fournisseur ne peut garantir du "bâtiment par
+  // bâtiment" partout. Config vide (url: '') si MAPBOX_TOKEN absent — jamais
+  // utilisée dans ce cas, voir isSatelliteHDAvailable ci-dessous.
+  satelliteHD: {
+    key: 'satelliteHD',
+    name: 'Satellite HD',
+    url: MAPBOX_TOKEN
+      ? `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}{r}.jpg90?access_token=${MAPBOX_TOKEN}`
+      : '',
+    attribution: '&copy; Mapbox &copy; OpenStreetMap contributors',
+    maxZoom: 22,
+    detectRetina: true,
+  },
 };
+
+// À vérifier avant d'ajouter satelliteHD au sélecteur (MapLayerSwitcher) : sans
+// token configuré au build, son url est vide et L.tileLayer('') casserait la
+// couche silencieusement (404 en boucle).
+export const isSatelliteHDAvailable = Boolean(MAPBOX_TOKEN);
 
 // Props compatibles à la fois avec <TileLayer> (react-leaflet) et L.tileLayer(url, opts).
 export function tileLayerProps(p: TileProviderConfig) {

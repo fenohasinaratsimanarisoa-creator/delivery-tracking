@@ -244,6 +244,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Token PUBLIC Mapbox (préfixe pk., fait pour être embarqué côté client,
+        # comme une clé Google Maps) — active la couche "Satellite HD" dans le
+        # sélecteur de carte. Sans lui, cette couche est simplement absente du
+        # sélecteur (voir tileProviders.ts). Restreindre ce token par domaine
+        # dans le dashboard Mapbox reste recommandé.
+        VITE_MAPBOX_TOKEN: ${VITE_MAPBOX_TOKEN:-}
     image: deliverytrack-web:latest
     container_name: delivery-tracking-web
     environment:
