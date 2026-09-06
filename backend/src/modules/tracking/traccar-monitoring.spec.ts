@@ -173,4 +173,54 @@ describe('Tâche 5 — Surveillance indépendante Traccar', () => {
       expect(disconnectSpy).not.toHaveBeenCalled();
     });
   });
+
+  describe('Garde-fou process worker (IS_QUEUE_WORKER)', () => {
+    // Régression 2026-09-06 : FuelConsumptionModule importe TrackingModule (pour
+    // TrackingGateway) et instanciait donc AUSSI TraccarBridgeService dans le worker
+    // (queue.worker.ts, bootstrapé via createApplicationContext — sans serveur
+    // WebSocket). Si le worker remportait l'élection de leader Redis du pont, TOUTE
+    // diffusion GPS temps réel vers le navigateur était silencieusement perdue
+    // (TrackingGateway.server est undefined dans ce process). Voir queue.worker.ts.
+    const ORIGINAL_ENV = process.env.IS_QUEUE_WORKER;
+
+    afterEach(() => {
+      if (ORIGINAL_ENV === undefined) delete process.env.IS_QUEUE_WORKER;
+      else process.env.IS_QUEUE_WORKER = ORIGINAL_ENV;
+    });
+
+    it("onModuleInit ne fait RIEN dans le process worker (IS_QUEUE_WORKER=1)", async () => {
+      process.env.IS_QUEUE_WORKER = '1';
+      mockConfig.get.mockImplementation((key: string) => {
+        if (key === 'TRACCAR_URL') return 'http://mon-traccar-vps.com:8082';
+        return null;
+      });
+      createBridge();
+
+      await bridge.onModuleInit();
+
+      // Ni élection de leader, ni connexion, ni minuteurs : le pont ne doit RIEN
+      // démarrer dans ce process (retour anticipé avant tryBecomeLeader()/connect()).
+      expect((bridge as any).isLeader).toBe(false);
+      expect((bridge as any).connected).toBe(false);
+      expect((bridge as any).leaderRetryTimer).toBeNull();
+      expect((bridge as any).healthTimer).toBeNull();
+    });
+
+    it('onModuleInit démarre normalement quand IS_QUEUE_WORKER n\'est PAS défini (process backend)', async () => {
+      delete process.env.IS_QUEUE_WORKER;
+      mockConfig.get.mockImplementation((key: string) => {
+        if (key === 'TRACCAR_URL') return 'disabled';
+        return null;
+      });
+      createBridge();
+
+      await bridge.onModuleInit();
+
+      // Chemin normal atteint : le garde-fou worker n'a pas court-circuité — la suite
+      // de onModuleInit (détection TRACCAR_URL='disabled' → notifyInactiveOnce) a bien
+      // tourné, contrairement au test précédent où RIEN ne s'exécute après le retour
+      // anticipé.
+      expect((bridge as any).inactiveNotified).toBe(true);
+    });
+  });
 });

@@ -240,6 +240,20 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private consecutiveRenewFailures = 0;
 
   async onModuleInit() {
+    // Le worker (queue.worker.ts) importe TrackingModule transitivement (via
+    // FuelConsumptionModule, pour TrackingGateway) et instancierait donc AUSSI ce
+    // service — mais createApplicationContext n'y démarre aucun serveur WebSocket,
+    // donc toute diffusion temps réel faite depuis une instance tournant là-bas est
+    // silencieusement perdue. Voir le commentaire sur IS_QUEUE_WORKER dans
+    // queue.worker.ts. Sans ce garde-fou, le worker pouvait remporter l'élection de
+    // leader Redis du pont et bloquer TOUTE diffusion GPS temps réel vers le
+    // navigateur — vécu en prod (2026-09-06).
+    if (process.env.IS_QUEUE_WORKER === '1') {
+      this.logger.log(
+        'Traccar bridge: désactivé dans le process worker (aucun serveur WebSocket ici) — seul le process backend gère le pont',
+      );
+      return;
+    }
     this.logger.log(
       `Traccar bridge: instance initialisée (id=${this.instanceId}, HOSTNAME=${process.env.HOSTNAME || 'unknown'}, pid=${process.pid})`,
     );
