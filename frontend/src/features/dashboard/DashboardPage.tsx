@@ -100,6 +100,12 @@ const chartTooltip = ChartTooltip();
 
 function MiniChart({ data }: { data: DeliveryStat[] }) {
   const { t } = useTranslation();
+  // Le libellé affiché est traduit ; `status` (clé brute anglaise) reste la clé
+  // React/recharts et pilote toujours la couleur — jamais dérivé du texte affiché.
+  const displayData = useMemo(
+    () => data.map((d) => ({ ...d, statusLabel: t(`dashboard.status.${d.status}`, d.status) })),
+    [data, t],
+  );
   return (
     <div className={styles.chartPanel}>
       <div className={styles.chartPanelHeader}>
@@ -107,12 +113,12 @@ function MiniChart({ data }: { data: DeliveryStat[] }) {
         <span className={styles.chartPanelTitle}>{t('dashboard.charts.deliveryStatus')}</span>
       </div>
       <ResponsiveContainer width="100%" height={110}>
-        <BarChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-          <XAxis dataKey="status" tick={{ fontSize: 9, fill: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
+        <BarChart data={displayData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+          <XAxis dataKey="statusLabel" tick={{ fontSize: 9, fill: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
           <YAxis hide />
           <Tooltip {...chartTooltip} />
           <Bar dataKey="count" radius={[5, 5, 0, 0]}>
-            {data.map((d) => (
+            {displayData.map((d) => (
               <Cell key={d.status} fill={d.status === 'delivered' ? 'var(--color-teal)' : d.status === 'failed' ? 'var(--color-red)' : 'var(--color-accent)'} />
             ))}
           </Bar>
