@@ -16,6 +16,9 @@
 }
 
 .logoExpanded {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
   font-family: var(--font-display);
   font-weight: 700;
   font-size: var(--text-lg);
@@ -29,6 +32,12 @@
   font-weight: 700;
   font-size: var(--text-xl);
   color: var(--color-accent);
+}
+
+.logoImg {
+  border-radius: 22%;
+  flex-shrink: 0;
+  display: block;
 }
 
 .collapseBtn {

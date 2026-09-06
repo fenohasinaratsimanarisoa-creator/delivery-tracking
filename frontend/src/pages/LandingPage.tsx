@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ShieldCheck, Radar, Truck, Fuel, ArrowRight, Check, Gauge } from 'lucide-react';
+import { ShieldCheck, Radar, Truck, Fuel, ArrowRight, Check } from 'lucide-react';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
@@ -34,7 +34,7 @@ export default function LandingPage() {
       <header className={styles.nav}>
         <div className={styles.navInner}>
           <span className={styles.logo}>
-            <span className={styles.logoMark}><Gauge size={16} /></span>
+            <img src="/logo-icon.png" alt="" width={30} height={30} className={styles.logoMark} />
             LogiTrack
           </span>
           <nav className={styles.navLinks}>
@@ -137,7 +137,7 @@ export default function LandingPage() {
         <div className={styles.footerInner}>
           <div className={styles.footerBrand}>
             <span className={styles.logo}>
-              <span className={styles.logoMark}><Gauge size={16} /></span>
+              <img src="/logo-icon.png" alt="" width={30} height={30} className={styles.logoMark} />
               LogiTrack
             </span>
             <p className={styles.footerTagline}>{t('landing.footer.tagline')}</p>

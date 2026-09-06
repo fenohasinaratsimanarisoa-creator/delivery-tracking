@@ -56,13 +56,12 @@ export default function Sidebar() {
         style={{ justifyContent: collapsed ? 'center' : 'space-between', padding: collapsed ? 'var(--space-lg) 0' : 'var(--space-lg) var(--space-lg)' }}>
         {!collapsed && (
           <span className={styles.logoExpanded}>
+            <img src="/logo-icon.png" alt="" width={24} height={24} className={styles.logoImg} />
             LogiTrack
           </span>
         )}
         {collapsed && (
-          <span className={styles.logoCollapsed}>
-            L
-          </span>
+          <img src="/logo-icon.png" alt="LogiTrack" width={28} height={28} className={styles.logoImg} />
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
