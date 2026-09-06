@@ -307,7 +307,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # 22, pas 20 comme les autres jobs de ce workflow : le Capacitor CLI
+          # exige Node >=22 (« [fatal] The Capacitor CLI requires NodeJS
+          # >=22.0.0 »). Ce job est le SEUL à invoquer `npx cap sync` — sans ce
+          # bump, il échoue systématiquement dès cette étape, avant même
+          # d'atteindre le build Gradle/la publication de la release GitHub.
+          # Bug réel constaté en prod : plus aucune release publiée depuis le
+          # 30/08/2026 alors que ce job tournait à chaque push sur main.
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 

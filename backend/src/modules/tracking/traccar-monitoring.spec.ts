@@ -159,7 +159,7 @@ describe('Tâche 5 — Surveillance indépendante Traccar', () => {
       expect(reconnectSpy).toHaveBeenCalled();
     });
 
-    it("ne force PAS de reconnexion si des messages WS arrivent toujours (< 15 min)", async () => {
+    it('ne force PAS de reconnexion si des messages WS arrivent toujours (< 15 min)', async () => {
       createBridge();
       (bridge as any).connected = true;
       (bridge as any).sessionCookie = 'cookie';
@@ -188,7 +188,7 @@ describe('Tâche 5 — Surveillance indépendante Traccar', () => {
       else process.env.IS_QUEUE_WORKER = ORIGINAL_ENV;
     });
 
-    it("onModuleInit ne fait RIEN dans le process worker (IS_QUEUE_WORKER=1)", async () => {
+    it('onModuleInit ne fait RIEN dans le process worker (IS_QUEUE_WORKER=1)', async () => {
       process.env.IS_QUEUE_WORKER = '1';
       mockConfig.get.mockImplementation((key: string) => {
         if (key === 'TRACCAR_URL') return 'http://mon-traccar-vps.com:8082';
@@ -206,7 +206,7 @@ describe('Tâche 5 — Surveillance indépendante Traccar', () => {
       expect((bridge as any).healthTimer).toBeNull();
     });
 
-    it('onModuleInit démarre normalement quand IS_QUEUE_WORKER n\'est PAS défini (process backend)', async () => {
+    it("onModuleInit démarre normalement quand IS_QUEUE_WORKER n'est PAS défini (process backend)", async () => {
       delete process.env.IS_QUEUE_WORKER;
       mockConfig.get.mockImplementation((key: string) => {
         if (key === 'TRACCAR_URL') return 'disabled';

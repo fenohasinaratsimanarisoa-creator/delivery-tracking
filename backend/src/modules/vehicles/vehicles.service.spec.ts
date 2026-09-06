@@ -313,7 +313,9 @@ describe('VehiclesService', () => {
         // 1er appel : POST /api/session (login)
         .mockResolvedValueOnce({
           ok: true,
-          headers: { get: (h: string) => (h === 'set-cookie' ? 'JSESSIONID=abc123; Path=/' : null) },
+          headers: {
+            get: (h: string) => (h === 'set-cookie' ? 'JSESSIONID=abc123; Path=/' : null),
+          },
         } as unknown as Response)
         // 2e appel : GET /api/devices
         .mockResolvedValueOnce({ ok: true, json: async () => traccarDevices } as Response);

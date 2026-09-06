@@ -85,9 +85,9 @@ export class VehiclesService {
       data.positionSource = 'phone';
     }
 
-    return this.prisma.vehicle.create({ data }).catch((err) =>
-      this.handleUniqueConflict(err, 'License plate already exists'),
-    );
+    return this.prisma.vehicle
+      .create({ data })
+      .catch((err) => this.handleUniqueConflict(err, 'License plate already exists'));
   }
 
   async findAll(companyId: string, filter: VehicleFilterDto) {
@@ -185,9 +185,9 @@ export class VehiclesService {
       data.traccarDeviceId = null;
     }
 
-    return this.prisma.vehicle.update({ where: { id }, data }).catch((err) =>
-      this.handleUniqueConflict(err, 'License plate already in use'),
-    );
+    return this.prisma.vehicle
+      .update({ where: { id }, data })
+      .catch((err) => this.handleUniqueConflict(err, 'License plate already in use'));
   }
 
   async remove(companyId: string, id: string) {
