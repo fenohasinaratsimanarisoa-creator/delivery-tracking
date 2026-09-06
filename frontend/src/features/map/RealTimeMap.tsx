@@ -51,9 +51,17 @@ const ROUTE_RECALC_INTERVAL_MS = 30000;
 // inline + classes) — sans recréer l'icône, ce qui redémarrait l'animation CSS
 // du halo à chaque fix GPS (scintillement visuel).
 function createVehicleIcon(): L.DivIcon {
+  // dt-marker-dot : disque PLEIN (jamais transparent, contrairement au halo)
+  // avec anneau blanc — repère visuel fort quel que soit le fond de carte
+  // (satellite, sombre, clair), même principe que le « point bleu » Google
+  // Maps. Avant, la visibilité du marqueur entier dépendait du halo, dont
+  // l'opacité est pilotée par la confiance GPS (color-mix, jusqu'à 50% max
+  // seulement) — un véhicule avec une précision moyenne devenait presque
+  // invisible. Le halo reste, mais uniquement comme rayon de précision
+  // secondaire autour de ce disque désormais toujours net.
   return L.divIcon({
     className: 'dt-marker-vehicle',
-    html: `<div class="dt-marker-halo"></div><div class="dt-marker-icon">${VEHICLE_ARROW_SVG}</div>`,
+    html: `<div class="dt-marker-halo"></div><div class="dt-marker-dot"></div><div class="dt-marker-icon">${VEHICLE_ARROW_SVG}</div>`,
     iconSize: [52, 52],
     iconAnchor: [26, 26],
   });
@@ -94,6 +102,14 @@ function syncVehicleMarker(marker: L.Marker, vehicle: VehicleData, status: Vehic
     halo.style.background = `color-mix(in srgb, ${statusVar} ${Math.round(opacity * 50)}%, transparent)`;
     halo.style.border = `${2 + confidence}px solid color-mix(in srgb, ${statusVar} ${Math.round(opacity * 100)}%, transparent)`;
     halo.style.animationDuration = `${2 - confidence * 0.5}s`;
+  }
+
+  // Disque plein — TOUJOURS opaque, indépendant de la confiance GPS (voir
+  // commentaire dans createVehicleIcon). C'est lui qui garantit la visibilité
+  // du marqueur ; le halo ci-dessus reste un indicateur secondaire.
+  const dot = el.querySelector<HTMLElement>('.dt-marker-dot');
+  if (dot) {
+    dot.style.background = statusVar;
   }
 
   const iconEl = el.querySelector<HTMLElement>('.dt-marker-icon');

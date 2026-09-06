@@ -395,6 +395,30 @@
   opacity: 0.7;
 }
 
+/* Disque plein (repère principal, toujours net) : couleur pilotée en JS
+   (syncVehicleMarker), TOUJOURS opaque — contrairement au halo, sa visibilité
+   ne dépend jamais de la confiance GPS. L'anneau blanc fixe (pas un token
+   thème) garantit le contraste sur n'importe quel fond de carte (satellite,
+   sombre, clair) — même principe que le repère de position Google Maps. */
+:global(.dt-marker-dot) {
+  position: absolute;
+  /* Même boîte que .dt-marker-icon (concentriques) : la flèche reste contenue
+     dans le disque au lieu de dépasser de son anneau. */
+  top: 9px;
+  left: 9px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+}
+
+:global(.dt-marker-vehicle.dt-marker-offline .dt-marker-dot) {
+  filter: grayscale(0.6);
+  opacity: 0.75;
+}
+
 :global(.dt-marker-icon) {
   position: absolute;
   top: 9px;
