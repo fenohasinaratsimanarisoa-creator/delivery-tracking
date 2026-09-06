@@ -65,13 +65,16 @@ export const TILE_PROVIDERS: Record<
   // Amérique du Nord/Europe) : zoom natif jusqu'à 22 selon la couverture réelle
   // pour la zone affichée — reste dépendant des prises de vue disponibles pour
   // l'endroit précis, aucun fournisseur ne peut garantir du "bâtiment par
-  // bâtiment" partout. Config vide (url: '') si MAPBOX_TOKEN absent — jamais
-  // utilisée dans ce cas, voir isSatelliteHDAvailable ci-dessous.
+  // bâtiment" partout. Style "satellite-streets" (PAS le tileset brut
+  // "mapbox.satellite") : superpose noms de rues/lieux et routes sur la photo —
+  // la photo seule n'affiche aucun texte (constaté en prod, voir historique
+  // git). Config vide (url: '') si MAPBOX_TOKEN absent — jamais utilisée dans
+  // ce cas, voir isSatelliteHDAvailable ci-dessous.
   satelliteHD: {
     key: 'satelliteHD',
     name: 'Satellite HD',
     url: MAPBOX_TOKEN
-      ? `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}{r}.jpg90?access_token=${MAPBOX_TOKEN}`
+      ? `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
       : '',
     attribution: '&copy; Mapbox &copy; OpenStreetMap contributors',
     maxZoom: 22,
