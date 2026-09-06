@@ -68,13 +68,18 @@ export const TILE_PROVIDERS: Record<
   // bâtiment" partout. Style "satellite-streets" (PAS le tileset brut
   // "mapbox.satellite") : superpose noms de rues/lieux et routes sur la photo —
   // la photo seule n'affiche aucun texte (constaté en prod, voir historique
-  // git). Config vide (url: '') si MAPBOX_TOKEN absent — jamais utilisée dans
-  // ce cas, voir isSatelliteHDAvailable ci-dessous.
+  // git). Le segment "256" est OBLIGATOIRE dans l'URL : sans lui, l'API Styles
+  // Mapbox sert des tuiles 512×512 par défaut, que Leaflet (qui attend 256px
+  // sans zoomOffset/tileSize dédiés) affiche à la mauvaise échelle/zoom — les
+  // labels existent bien dans la tuile brute (vérifié) mais l'image entière
+  // rendait comme "sans texte" côté app à cause de ce décalage. Config vide
+  // (url: '') si MAPBOX_TOKEN absent — jamais utilisée dans ce cas, voir
+  // isSatelliteHDAvailable ci-dessous.
   satelliteHD: {
     key: 'satelliteHD',
     name: 'Satellite HD',
     url: MAPBOX_TOKEN
-      ? `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
+      ? `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
       : '',
     attribution: '&copy; Mapbox &copy; OpenStreetMap contributors',
     maxZoom: 22,
