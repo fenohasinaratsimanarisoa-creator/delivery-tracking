@@ -147,11 +147,17 @@ services:
       TRACCAR_URL: ${TRACCAR_URL:-http://traccar:8082}
       TRACCAR_USER: ${TRACCAR_USER:?TRACCAR_USER is required}
       TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:?TRACCAR_PASSWORD is required}
-      # Traceur physique reconfiguré (2026-09-06) : upload,10 en mouvement /
-      # uploadstatic,60 à l'arrêt. Seuil abaissé de 10 min (défaut) à 3 min —
-      # confortablement au-dessus du pire cas normal (60s à l'arrêt) tout en
-      # détectant une vraie panne bien plus vite qu'avant.
-      TRACKING_SILENCE_TRACKER_MIN: ${TRACKING_SILENCE_TRACKER_MIN:-3}
+      # Traceur physique reconfiguré (2026-09-06) : upload,10 en mouvement.
+      # uploadstatic,60 envoyé mais son effet réel est incertain — ce modèle bas
+      # de gamme ne répond à aucune commande SMS de requête (fix/check restés
+      # sans réponse), et l'observation terrain montre qu'il ne remonte AUCUNE
+      # position à l'arrêt (le modem reste "en ligne" mais aucun fix GPS tant
+      # que rien ne bouge — comportement motion-triggered probable, pas un bug
+      # logiciel). D'abord abaissé à 3 min en supposant uploadstatic effectif,
+      # remonté à 15 min (défaut d'origine 10) une fois ce comportement confirmé
+      # : sous 3 min, CHAQUE arrêt normal (feu rouge, déchargement) déclencherait
+      # une fausse alerte "silence" pendant une livraison réelle.
+      TRACKING_SILENCE_TRACKER_MIN: ${TRACKING_SILENCE_TRACKER_MIN:-15}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN:-}
@@ -208,8 +214,9 @@ services:
       # même valeur que "backend" pour que les deux processus s'accordent sur le
       # même seuil (la notification elle-même est dédupliquée via un cooldown
       # Redis partagé, mais un seuil différent d'un process à l'autre resterait
-      # trompeur).
-      TRACKING_SILENCE_TRACKER_MIN: ${TRACKING_SILENCE_TRACKER_MIN:-3}
+      # trompeur). Voir le commentaire du service "backend" pour le contexte du
+      # choix de 15 min (traceur motion-triggered, aucun signal à l'arrêt).
+      TRACKING_SILENCE_TRACKER_MIN: ${TRACKING_SILENCE_TRACKER_MIN:-15}
       # PAS de TRACCAR_URL/USER/PASSWORD ici : TraccarBridgeService s'instancie
       # aussi dans ce process (via FuelConsumptionModule → TrackingModule), mais
       # son onModuleInit sort en no-op immédiat grâce à IS_QUEUE_WORKER=1 (posé
