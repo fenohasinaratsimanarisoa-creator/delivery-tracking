@@ -4,6 +4,8 @@ import {
   mergeBootstrapPositions,
   shouldFollowRecenter,
   effectiveStatus,
+  formatVehicleSpeed,
+  isMovingSpeed,
   STALE_MOVEMENT_MS,
   OFFLINE_TIMEOUT_MIN,
   FALLBACK_DRIVER_NAME,
@@ -136,5 +138,38 @@ describe('shouldFollowRecenter — suivi CONTINU de la caméra (le bug #1 de l\'
   it('recentre quand on passe d\'un véhicule à un autre (changement de sélection)', () => {
     const prev = { id: 'v1', lat: -18.8792, lng: 47.5079 };
     expect(shouldFollowRecenter(prev, { id: 'v2', lat: -18.8792, lng: 47.5079 })).toBe(true);
+  });
+});
+
+describe('formatVehicleSpeed / isMovingSpeed — plancher de stationnarité (audit VITESSE FANTÔME 2026-09-09)', () => {
+  it('une vitesse fantôme (< 0,5 m/s) est affichée « À l\'arrêt », jamais en km/h', () => {
+    expect(formatVehicleSpeed(0)).toBe("À l'arrêt");
+    expect(formatVehicleSpeed(0.4)).toBe("À l'arrêt"); // ≈ 1,4 km/h de bruit
+    expect(formatVehicleSpeed(null)).toBe("À l'arrêt");
+    expect(formatVehicleSpeed(undefined)).toBe("À l'arrêt");
+  });
+
+  it('une vitesse réelle est affichée en km/h', () => {
+    expect(formatVehicleSpeed(5)).toBe('18.0 km/h');
+  });
+
+  it('isMovingSpeed ne considère « en mouvement » qu\'au-dessus du plancher', () => {
+    expect(isMovingSpeed(0.4)).toBe(false);
+    expect(isMovingSpeed(0.5)).toBe(false);
+    expect(isMovingSpeed(0.6)).toBe(true);
+    expect(isMovingSpeed(null)).toBe(false);
+  });
+
+  it('mergePositionUpdate : une vitesse fantôme ne met PAS le véhicule « moving »', () => {
+    const upd: PositionUpdateInput = {
+      vehicleId: 'v1',
+      driverName: 'X',
+      latitude: -18.8792,
+      longitude: 47.5079,
+      speed: 0.4,
+      timestamp: '2026-09-09T08:00:00.000Z',
+    };
+    const m = mergePositionUpdate(new Map(), upd);
+    expect(m.get('v1')?.status).toBe('static');
   });
 });

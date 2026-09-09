@@ -58,6 +58,11 @@ const UI_POOR_ACCURACY_THRESHOLD = 50;
 // clignoter le badge à chaque fix.
 const UI_POOR_ACCURACY_FIXES_REQUIRED = 3;
 const SPEED_MOVING_THRESHOLD_MS = 1.39;
+// Sous cette vitesse (m/s ≈ 1,8 km/h), jamais un déplacement réel : c'est du bruit
+// (capteur immobile). On l'envoie à 0 pour ne pas faire afficher « en mouvement » /
+// une vitesse fantôme sur la carte (audit VITESSE FANTÔME 2026-09-09). Le backend
+// applique le même plancher (resolveGroundSpeed) — ceci évite juste un aller-retour.
+const STATIONARY_SPEED_MS = 0.5;
 const STOPPED_DURATION_MS = 30_000;
 // Cadence d'envoi en mouvement : 3s. Alignée sur le LOCATION_INTERVAL_MS natif
 // (LocationForegroundService.java = 3000L) pour un rendu temps réel fluide.
@@ -597,9 +602,13 @@ export function useDriverTracking() {
     // très ancien navigateur) — mieux qu'une valeur manquante, mais alors
     // sans garantie de déduplication contre le natif pour ce fix précis.
     const timestampMs = p.timestamp ?? Date.now();
+    // Plancher de stationnarité : une vitesse résiduelle sous le seuil est du bruit
+    // capteur → 0 (audit VITESSE FANTÔME 2026-09-09).
+    const sendSpeed =
+      p.speed == null ? undefined : p.speed < STATIONARY_SPEED_MS ? 0 : p.speed;
     const payload: Record<string, unknown> = {
       latitude: sendLat, longitude: sendLng,
-      speed: p.speed ?? undefined, heading: p.heading,
+      speed: sendSpeed, heading: p.heading,
       altitude: p.altitude, accuracy: p.accuracy ?? 50,
       timestamp: new Date(timestampMs).toISOString(),
     };

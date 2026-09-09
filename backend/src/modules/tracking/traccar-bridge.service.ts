@@ -49,7 +49,7 @@ interface TraccarPosition {
 // UERE pour récepteur GPS grand public : ~5m (combinaison erreurs satellite + atmosphère + récepteur)
 // HDOP * UERE = accuracy estimée ; on prend la plus prudente (max) entre accuracy du device et HDOP dérivé
 import { computeConfidence, computeCombinedAccuracy } from '../../common/geo/gps-quality';
-import { haversineDistance, isAccuracyTrustworthy } from '../../common/geo/geo.utils';
+import { resolveGroundSpeed } from '../../common/geo/geo.utils';
 
 const BACKFILL_MAX_HOURS = 24;
 const BATCH_INTERVAL_MS = 5000;
@@ -1231,7 +1231,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             }
 
             for (const pos of positions) {
-              const timestamp = this.parseTimestamp(pos);
+              const { date: timestamp, fromServerClock: timestampFromServerClock } =
+                this.parseTimestampMeta(pos);
               if (!this.isValidCoordinates(pos.latitude, pos.longitude)) continue;
               if (pos.valid === false) {
                 this.logger.warn(
@@ -1245,30 +1246,33 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
               const { accuracy } = computeCombinedAccuracy(pos.accuracy, pos.attributes);
 
-              // PARITÉ AVEC LE CHEMIN PHONE (saveBatch C8) : même dérivation prudente
-              // de vitesse que le temps réel (handlePosition) — si le device n'a pas
-              // remonté de vitesse Doppler, on la reconstruit haversine/Δt contre le
-              // point précédent, uniquement si les deux extrémités sont assez précises.
-              // Le rattrapage après coupure Traccar produisait sinon des segments à
-              // speed=0 → distance sous-comptée dans le rapport carburant.
-              let speedMs = (pos.speed || 0) * 0.514444;
-              if (
-                speedMs <= 0 &&
-                lastBackfillPos &&
-                isAccuracyTrustworthy(accuracy) &&
-                isAccuracyTrustworthy(lastBackfillPos.accuracy)
-              ) {
-                const dtSec = (timestamp.getTime() - lastBackfillPos.timestamp.getTime()) / 1000;
-                if (dtSec > 0) {
-                  speedMs =
-                    haversineDistance(
-                      lastBackfillPos.latitude,
-                      lastBackfillPos.longitude,
-                      pos.latitude,
-                      pos.longitude,
-                    ) / dtSec;
-                }
-              }
+              // Vitesse sol FIABLE — source unique `resolveGroundSpeed`, PARITÉ avec le
+              // temps réel (handlePosition) et le chemin phone (saveBatch). Dérive
+              // haversine/Δt quand le device ne remonte pas de vitesse Doppler (sinon
+              // sous-comptage de distance après une coupure Traccar) — mais UNIQUEMENT si
+              // le déplacement dépasse le bruit combiné et que Δt est plausible ; ramène
+              // à 0 une vitesse rapportée alors que le véhicule est immobile (audit
+              // VITESSE FANTÔME 2026-09-09, R2 confirmé en prod). Voir handlePosition
+              // pour le traitement de l'accuracy non renseignée par le device.
+              const deviceReportsAccuracy = pos.accuracy != null && pos.accuracy > 0;
+              const speedMs = resolveGroundSpeed({
+                reportedSpeedMs: (pos.speed || 0) * 0.514444,
+                previous: lastBackfillPos
+                  ? {
+                      latitude: lastBackfillPos.latitude,
+                      longitude: lastBackfillPos.longitude,
+                      timestamp: lastBackfillPos.timestamp,
+                      accuracy: deviceReportsAccuracy ? lastBackfillPos.accuracy : undefined,
+                    }
+                  : null,
+                current: {
+                  latitude: pos.latitude,
+                  longitude: pos.longitude,
+                  timestamp,
+                  accuracy: deviceReportsAccuracy ? accuracy : undefined,
+                },
+                currentTimestampIsServerFallback: timestampFromServerClock,
+              }).speedMs;
 
               // Télémétrie stockée sur les positions backfillées aussi (historique) :
               // la classification de silence utilisera la dernière télémétrie connue
@@ -1442,7 +1446,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
   private async handlePosition(pos: TraccarPosition) {
     try {
-      const timestamp = this.parseTimestamp(pos);
+      const { date: timestamp, fromServerClock: timestampFromServerClock } =
+        this.parseTimestampMeta(pos);
       if (!this.isValidCoordinates(pos.latitude, pos.longitude)) {
         this.logger.warn(
           `Invalid coordinates from Traccar device ${pos.deviceId}: lat=${pos.latitude}, lng=${pos.longitude}`,
@@ -1539,28 +1544,42 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           );
         }
 
-        // PARITÉ AVEC LE CHEMIN PHONE (tracking.gateway C8 + saveBatch C8) : si le
-        // traceur ne fournit PAS de vitesse Doppler sur ce fix (fréquent au démarrage
-        // du device, sur certains protocoles, ou après une position LBS), on la dérive
-        // haversine/Δt contre la dernière position fiable — mais UNIQUEMENT si les deux
-        // extrémités sont assez précises (isAccuracyTrustworthy). Sinon le bruit GPS
-        // fabrique une fausse vitesse qui valide son propre segment dans
-        // computeFilteredDistance (sur-comptage). Sans cette dérivation, un véhicule à
-        // traceur physique SOUS-COMPTAIT sa distance (RÈGLE VITESSE de
-        // computeFilteredDistance retombe sur le filtre accuracy quand speed=0) là où
-        // un téléphone ne le fait pas — divergence de comportement entre les 2 sources.
-        let speedMs = (pos.speed || 0) * 0.514444;
-        if (speedMs <= 0 && isAccuracyTrustworthy(derivedAccuracy)) {
-          const lastDb = await this.trackingService.getLastPosition(vehicleMapping.id);
-          if (lastDb && isAccuracyTrustworthy(lastDb.accuracy)) {
-            const dtSec = (timestamp.getTime() - lastDb.timestamp.getTime()) / 1000;
-            if (dtSec > 0) {
-              speedMs =
-                haversineDistance(lastDb.latitude, lastDb.longitude, pos.latitude, pos.longitude) /
-                dtSec;
-            }
-          }
-        }
+        // Vitesse sol FIABLE — source unique `resolveGroundSpeed`, PARITÉ avec le
+        // chemin phone (gateway + saveBatch) et le backfill. Audit GPS 2026-08-28
+        // « C8 » (dériver haversine/Δt quand le traceur ne fournit pas de vitesse
+        // Doppler — sinon SOUS-comptage de distance) + audit VITESSE FANTÔME
+        // 2026-09-09 : **R2 CONFIRMÉ EN PROD** — le GT06 rapporte lui-même un « fond »
+        // de 3-6 km/h (`motion:true`) alors que le véhicule est garé. On ramène à 0
+        // quand la position ne confirme AUCUN déplacement au-delà du bruit combiné.
+        // `lastDb` chargé INCONDITIONNELLEMENT (avant : seulement si `pos.speed <= 0`).
+        //
+        // ACCURACY : ce traceur renvoie toujours `accuracy = 0` (champ non renseigné,
+        // pas une mesure). `computeCombinedAccuracy` le remonte à 50 m pour le score de
+        // confiance — mais l'utiliser tel quel pour le seuil de bruit le gonfle à 100 m
+        // et écraserait de vrais trajets lents. Quand le device NE RENSEIGNE PAS
+        // l'accuracy, on passe `undefined` à resolveGroundSpeed → seuil = 2 ×
+        // GPS_ACCURACY_FALLBACK_M (50 m), assez pour absorber la dérive à l'arrêt sans
+        // masquer un déplacement franc. `derivedAccuracy` reste stocké pour la confiance.
+        const lastDb = await this.trackingService.getLastPosition(vehicleMapping.id);
+        const deviceReportsAccuracy = pos.accuracy != null && pos.accuracy > 0;
+        const speedMs = resolveGroundSpeed({
+          reportedSpeedMs: (pos.speed || 0) * 0.514444,
+          previous: lastDb
+            ? {
+                latitude: lastDb.latitude,
+                longitude: lastDb.longitude,
+                timestamp: lastDb.timestamp,
+                accuracy: deviceReportsAccuracy ? lastDb.accuracy : undefined,
+              }
+            : null,
+          current: {
+            latitude: pos.latitude,
+            longitude: pos.longitude,
+            timestamp,
+            accuracy: deviceReportsAccuracy ? derivedAccuracy : undefined,
+          },
+          currentTimestampIsServerFallback: timestampFromServerClock,
+        }).speedMs;
 
         const updateDto = {
           latitude: pos.latitude,
@@ -1683,19 +1702,30 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   }
 
   private parseTimestamp(pos: TraccarPosition): Date {
+    return this.parseTimestampMeta(pos).date;
+  }
+
+  /**
+   * Variante de {@link parseTimestamp} qui signale si la date retournée est un
+   * REPLI sur l'heure serveur (fixTime absent/invalide, ou horloge device dans le
+   * futur recadrée). Dans ce cas, Δt (fix précédent → fix courant) n'est pas
+   * fiable : la dérivation de vitesse haversine/Δt DOIT être désactivée (R3, audit
+   * VITESSE FANTÔME 2026-09-09), sinon on fabrique une vitesse à partir d'un Δt faux.
+   */
+  private parseTimestampMeta(pos: TraccarPosition): { date: Date; fromServerClock: boolean } {
     const raw = pos.fixTime || pos.deviceTime;
     if (!raw) {
       this.logger.warn(
         `Traccar device ${pos.deviceId}: missing fixTime/deviceTime — using server time`,
       );
-      return new Date();
+      return { date: new Date(), fromServerClock: true };
     }
     const date = new Date(raw);
     if (isNaN(date.getTime())) {
       this.logger.warn(
         `Traccar device ${pos.deviceId}: invalid timestamp "${raw}" — using server time`,
       );
-      return new Date();
+      return { date: new Date(), fromServerClock: true };
     }
     // Dérive d'horloge AVANCE : un fixTime dans le futur de plus de
     // TRACCAR_FUTURE_SKEW_TOLERANCE_MS est recadré sur l'heure serveur (le point est
@@ -1710,9 +1740,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(
         `Traccar device ${pos.deviceId}: fixTime in the future by ${Math.round(skewMs / 1000)}s — clamping to server time`,
       );
-      return new Date();
+      return { date: new Date(), fromServerClock: true };
     }
-    return date;
+    return { date, fromServerClock: false };
   }
 
   private isValidCoordinates(lat: number, lng: number): boolean {

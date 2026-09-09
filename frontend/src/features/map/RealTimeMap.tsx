@@ -136,7 +136,7 @@ interface SearchResult {
 }
 
 import type { VehicleData } from './vehicleMap';
-import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, effectiveStatus, STALE_MOVEMENT_MS, type FollowReference } from './vehicleMap';
+import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, effectiveStatus, formatVehicleSpeed, isMovingSpeed, STALE_MOVEMENT_MS, type FollowReference } from './vehicleMap';
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -276,9 +276,13 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
     syncVehicleMarker(marker, vehicle, effectiveStatus(vehicle.status, vehicle.timestamp, now), !!focused);
   }, [now, vehicle, focused]);
 
-  // Dead reckoning: extrapolate position when GPS update is delayed
+  // Dead reckoning: extrapolate position when GPS update is delayed.
+  // Uniquement pour un véhicule réellement en mouvement — sinon une vitesse
+  // résiduelle (bruit GPS) faisait « avancer » tout seul le marqueur d'un véhicule
+  // garé (audit VITESSE FANTÔME 2026-09-09). Le backend ramène ces valeurs à 0,
+  // ce garde reste une défense en profondeur.
   useEffect(() => {
-    const maxDrMs = maxDeadReckonTime(vehicle.speed ?? 0);
+    const maxDrMs = isMovingSpeed(vehicle.speed) ? maxDeadReckonTime(vehicle.speed as number) : 0;
     if (maxDrMs <= 0) return;
 
     const interval = setInterval(() => {
@@ -294,7 +298,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
       if (elapsed > maxDrMs) return; // Stop predicting beyond limit
 
       const state = lastStateRef.current;
-      if (!state || state.speed <= 0) return;
+      if (!state || !isMovingSpeed(state.speed)) return;
 
       const predicted = predictPosition(
         { ...state, timestamp: lastUpdateRef.current },
@@ -338,7 +342,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
       row.textContent = text;
       detail.appendChild(row);
     };
-    if (vehicle.speed != null) line(`Vitesse · ${(vehicle.speed * 3.6).toFixed(1)} km/h`);
+    if (vehicle.speed != null) line(`Vitesse · ${formatVehicleSpeed(vehicle.speed)}`);
     if (vehicle.accuracy !== undefined) line(`Précision · ±${Math.round(vehicle.accuracy)} m`);
     if (vehicle.heading != null) line(`Cap · ${vehicle.heading.toFixed(0)}°`);
     if (vehicle.routeDistance && vehicle.routeDistance > 0)
@@ -751,7 +755,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
   const computeETAForVehicle = useCallback((update: PositionUpdate): string | null => {
     const dLat = deliveryLatRef.current;
     const dLng = deliveryLngRef.current;
-    if (!dLat || !dLng || update.speed === undefined || update.speed <= 0) return null;
+    if (!dLat || !dLng || !isMovingSpeed(update.speed)) return null;
     const R = 6371000;
     const toRad = (d: number) => (d * Math.PI) / 180;
     const dLatR = toRad(dLat - update.latitude);
@@ -760,8 +764,9 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
       Math.sin(dLatR / 2) ** 2 +
       Math.cos(toRad(update.latitude)) * Math.cos(toRad(dLat)) * Math.sin(dLon / 2) ** 2;
     const distanceM = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const speedMs = update.speed;
-    const etaSec = speedMs > 0 ? distanceM / speedMs : Infinity;
+    // isMovingSpeed ci-dessus garantit update.speed défini et > STATIONARY_SPEED_MS.
+    const speedMs = update.speed as number;
+    const etaSec = distanceM / speedMs;
     if (etaSec > 86400) return null;
     const hours = Math.floor(etaSec / 3600);
     const minutes = Math.floor((etaSec % 3600) / 60);
@@ -790,7 +795,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
         return prev;
       });
 
-      if (update.speed && update.speed > 0) {
+      if (isMovingSpeed(update.speed)) {
         const now = Date.now();
         if (now - lastRouteCalcTime.current >= ROUTE_RECALC_MIN_DELAY_MS) {
           const lastPos = lastRouteCalcPos.current;
@@ -861,7 +866,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
     routeCalcIntervalRef.current = setInterval(() => {
       if (allPositions.length > 0) {
         const driver = allPositions[0];
-        if (driver.speed && driver.speed > 0) {
+        if (isMovingSpeed(driver.speed)) {
           const now = Date.now();
           if (now - lastRouteCalcTime.current >= ROUTE_RECALC_MIN_DELAY_MS) {
             recalcRoute(driver.lat, driver.lng);
@@ -1036,7 +1041,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
 
             <div className={styles.driverCardBody}>
               {selectedDriver.speed != null && (
-                <DetailRow label={t('map.panel.speed')} value={`${(selectedDriver.speed * 3.6).toFixed(1)} km/h`} />
+                <DetailRow label={t('map.panel.speed')} value={formatVehicleSpeed(selectedDriver.speed)} />
               )}
               {selectedDriver.heading != null && (
                 <DetailRow label={t('map.panel.heading')} value={`${selectedDriver.heading.toFixed(0)}°`} />

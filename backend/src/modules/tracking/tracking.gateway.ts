@@ -21,7 +21,7 @@ import { UpdatePositionDto, BatchPositionDto } from './dto/update-position.dto';
 import { DataUpdateBus, DataUpdateEvent } from '../../common/events/data-update.bus';
 import { WsTrackingExceptionFilter } from '../../common/filters/ws-tracking-exception.filter';
 import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
-import { haversineDistance, isAccuracyTrustworthy } from '../../common/geo/geo.utils';
+import { resolveGroundSpeed } from '../../common/geo/geo.utils';
 import { computeConfidence } from '../../common/geo/gps-quality';
 import { getCorsOrigins } from '../../config/cors';
 
@@ -220,29 +220,32 @@ export class TrackingGateway
         return;
       }
 
-      let speed = dto.speed;
-      // Dérivation PRUDENTE de la vitesse (audit GPS 2026-08-28, C8) : cette
-      // vitesse est persistée indistinctement d'une vitesse mesurée par le
-      // mobile, puis relue par la RÈGLE VITESSE de computeFilteredDistance —
-      // qui compte alors le segment EN ENTIER. Si les positions sont bruitées,
-      // le raisonnement devient circulaire (le bruit fabrique une vitesse qui
-      // valide son propre segment de bruit). On ne dérive donc que si les DEUX
-      // extrémités sont assez précises.
-      if ((!speed || speed <= 0) && isAccuracyTrustworthy(dto.accuracy)) {
-        const last = await this.trackingService.getLastPosition(dto.vehicleId);
-        if (last && isAccuracyTrustworthy(last.accuracy)) {
-          const timeDiffSec = (new Date(dto.timestamp).getTime() - last.timestamp.getTime()) / 1000;
-          if (timeDiffSec > 0) {
-            const distance = haversineDistance(
-              last.latitude,
-              last.longitude,
-              dto.latitude,
-              dto.longitude,
-            );
-            speed = distance / timeDiffSec;
-          }
-        }
-      }
+      // Vitesse sol FIABLE (audit GPS 2026-08-28 « C8 » + audit VITESSE FANTÔME
+      // 2026-09-09) : source unique `resolveGroundSpeed` partagée par les 4 chemins
+      // d'ingestion. Elle (a) dérive haversine/Δt quand l'app ne fournit pas de
+      // vitesse — mais SEULEMENT si le déplacement dépasse le bruit combiné des deux
+      // fixes (plancher partagé avec computeFilteredDistance), et (b) ramène à 0 une
+      // vitesse rapportée sous le plancher de stationnarité ou incohérente avec une
+      // position qui n'a pas bougé. La valeur RÉSOLUE est persistée ET diffusée —
+      // sans elle, un véhicule immobile affichait ≈ 6 km/h en permanence sur la carte.
+      const last = await this.trackingService.getLastPosition(dto.vehicleId);
+      const speed = resolveGroundSpeed({
+        reportedSpeedMs: dto.speed,
+        previous: last
+          ? {
+              latitude: last.latitude,
+              longitude: last.longitude,
+              timestamp: last.timestamp,
+              accuracy: last.accuracy,
+            }
+          : null,
+        current: {
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+          timestamp: new Date(dto.timestamp),
+          accuracy: dto.accuracy,
+        },
+      }).speedMs;
 
       // Le WebSocket de l'app mobile est toujours une source 'phone'.
       // Persiste la vitesse RÉSOLUE (y compris le fallback haversine/Δt) et non le DTO

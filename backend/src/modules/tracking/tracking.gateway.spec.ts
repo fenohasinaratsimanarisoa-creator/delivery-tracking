@@ -579,10 +579,15 @@ describe('TrackingGateway — cross-tenant security', () => {
     });
 
     it('persists the recalculated fallback speed when dto.speed is missing', async () => {
+      // Timestamps RELATIFS à maintenant : @IsPlausibleTimestamp rejette une date
+      // trop ancienne, donc une date en dur finit par sortir de la fenêtre.
+      const prevTs = new Date(Date.now() - 10_000); // -10s
+      const currTs = new Date(Date.now()); // maintenant
       trackingService.getLastPosition.mockResolvedValue({
         latitude: -18.8792,
         longitude: 47.5079,
-        timestamp: new Date('2026-08-10T10:00:00.000Z'),
+        timestamp: prevTs,
+        accuracy: 10,
       });
       const client = mockSocket();
       client.data.user = {
@@ -599,13 +604,48 @@ describe('TrackingGateway — cross-tenant security', () => {
         latitude: -18.88,
         longitude: 47.5085, // ~100m
         speed: undefined,
-        timestamp: '2026-08-10T10:00:10.000Z', // +10s
+        accuracy: 10,
+        timestamp: currTs.toISOString(),
         vehicleId: '11111111-1111-4111-8111-111111111111',
       } as any);
 
       const savedDto = trackingService.savePosition.mock.calls[0][1];
       expect(savedDto.speed).toBeGreaterThan(5);
       expect(savedDto.speed).toBeLessThan(15);
+    });
+
+    it('ne dérive PAS de vitesse fantôme : véhicule immobile, signal précis, micro-dérive GPS', async () => {
+      // Régression audit VITESSE FANTÔME 2026-09-09 : deux fixes précis (± 8 m) à
+      // ~12 m l'un de l'autre sur 8 s, aucune vitesse device → 0, jamais ~5 km/h.
+      const prevTs = new Date(Date.now() - 8_000);
+      trackingService.getLastPosition.mockResolvedValue({
+        latitude: -18.8792,
+        longitude: 47.5079,
+        timestamp: prevTs,
+        accuracy: 8,
+      });
+      const client = mockSocket();
+      client.data.user = {
+        id: 'u1',
+        companyId: 'c1',
+        role: 'driver',
+        firstName: 'A',
+        lastName: 'B',
+      };
+      trackingService.findDriverByUserId.mockResolvedValue({ id: 'd1' });
+      trackingService.assertVehicleOwnership.mockResolvedValue(undefined);
+
+      await gateway.handlePosition(client, {
+        latitude: -18.8792 + 0.0001, // ~11 m
+        longitude: 47.5079,
+        speed: undefined,
+        accuracy: 8,
+        timestamp: new Date().toISOString(),
+        vehicleId: '11111111-1111-4111-8111-111111111111',
+      } as any);
+
+      const savedDto = trackingService.savePosition.mock.calls[0][1];
+      expect(savedDto.speed).toBe(0);
     });
   });
 

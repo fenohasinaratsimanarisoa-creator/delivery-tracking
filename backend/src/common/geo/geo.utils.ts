@@ -146,6 +146,155 @@ export function isAccuracyTrustworthy(accuracy?: number | null): boolean {
   return accuracy == null || accuracy <= MOVEMENT_TRUST_MAX_ACCURACY_M;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// VITESSE SOL FIABLE (audit VITESSE FANTÔME 2026-09-09)
+//
+// Symptôme : un véhicule à traceur physique IMMOBILE affichait en permanence
+// ≈ 6 km/h (parfois 3) sur la carte / le dashboard. Deux causes, aucune filtrée :
+//   R1 — la vitesse DÉRIVÉE de secours (haversine/Δt, chemins « C8 ») n'avait
+//        qu'une garde d'accuracy (≤ 30 m), SANS plancher de distance : deux fixes
+//        précis à ± 8 m peuvent diverger de 12-18 m (dérive GPS à l'arrêt) →
+//        1,5-5 m/s de vitesse fabriquée par le bruit ;
+//   R2 — la vitesse RAPPORTÉE par le traceur (`pos.speed`) n'était jamais filtrée.
+//        **Confirmé en prod (diag 2026-09-09)** : le GT06 rapporte 3-6 km/h
+//        (`motion:true`) alors que le véhicule est garé — 703 fixes fantômes / 830.
+//
+// Règle : une vitesse rapportée n'est ramenée à 0 que si la POSITION ne confirme
+// aucun déplacement au-delà du bruit combiné des deux fixes (combinedGpsNoiseGate,
+// = ~2 × accuracy). Un déplacement franc (device qui roule vraiment) est préservé.
+//
+// `resolveGroundSpeed` est la SOURCE UNIQUE qui neutralise les deux, appelée par
+// les 4 chemins d'ingestion (gateway temps réel, saveBatch, traccar-bridge temps
+// réel + backfill). Elle réutilise le MÊME plancher de bruit que
+// computeFilteredDistance (combinedGpsNoiseGate) — cohérence distance ↔ vitesse.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Sous cette vitesse (m/s ≈ 1,8 km/h), jamais un déplacement de véhicule — c'est du bruit. */
+export const STATIONARY_SPEED_MS = 0.5;
+
+/** Bande de Δt (s) exploitable pour dériver une vitesse haversine/Δt entre deux fixes. */
+export const GROUND_SPEED_MIN_DT_S = 1;
+export const GROUND_SPEED_MAX_DT_S = 120;
+
+/**
+ * Seuil de bruit combiné de deux fixes (m) : en dessous de cette distance entre
+ * deux positions, le déplacement n'est pas distinguable de la dérive GPS.
+ * SOURCE UNIQUE — utilisé par computeFilteredDistance (RÈGLE SEUIL) ET par
+ * resolveGroundSpeed. `rms(a1, a2) = hypot(a1, a2) / √2`, × GPS_NOISE_SIGMA_K,
+ * plancher GPS_NOISE_FLOOR_M. Accuracy absente → GPS_ACCURACY_FALLBACK_M.
+ */
+export function combinedGpsNoiseGate(accuracy1?: number | null, accuracy2?: number | null): number {
+  const a1 = accuracy1 != null && accuracy1 > 0 ? accuracy1 : GPS_ACCURACY_FALLBACK_M;
+  const a2 = accuracy2 != null && accuracy2 > 0 ? accuracy2 : GPS_ACCURACY_FALLBACK_M;
+  return Math.max(GPS_NOISE_FLOOR_M, (GPS_NOISE_SIGMA_K * Math.hypot(a1, a2)) / Math.SQRT2);
+}
+
+export type GroundSpeedSource = 'measured' | 'derived' | 'clamped_zero' | 'unknown';
+
+export interface GroundSpeedRef {
+  latitude: number;
+  longitude: number;
+  timestamp: Date;
+  accuracy?: number | null;
+}
+
+export interface ResolveGroundSpeedInput {
+  /** Vitesse rapportée par l'appareil, en m/s (déjà convertie depuis les nœuds si Traccar). */
+  reportedSpeedMs?: number | null;
+  /** Dernière position FIABLE connue du véhicule (suspects exclus, même source de préférence). */
+  previous?: GroundSpeedRef | null;
+  /** Position courante. */
+  current: GroundSpeedRef;
+  /** true si `current.timestamp` est un repli sur l'heure serveur (Δt non fiable, R3). */
+  currentTimestampIsServerFallback?: boolean;
+}
+
+export interface ResolveGroundSpeedResult {
+  /** Vitesse sol retenue (m/s) — 0 quand le véhicule ne bouge pas au-delà du bruit. */
+  speedMs: number;
+  source: GroundSpeedSource;
+}
+
+/**
+ * Vitesse sol fiable d'un fix GPS. Ne renvoie une vitesse > 0 que si un
+ * déplacement RÉEL (au-delà du bruit combiné des deux fixes) est prouvé, ou si
+ * l'appareil rapporte lui-même une vitesse crédible ET cohérente avec la position.
+ *
+ * - Vitesse rapportée par l'appareil : conservée, SAUF si (a) la position montre
+ *   que le véhicule n'a pas bougé au-delà du bruit → 0 (R2), ou (b) elle est sous
+ *   le plancher de stationnarité → 0.
+ * - Pas de vitesse rapportée : dérivée haversine/Δt UNIQUEMENT si le déplacement
+ *   dépasse le bruit ET que les deux fixes sont assez précis (garde C8 conservée)
+ *   ET que Δt est dans une bande plausible et non issu de l'horloge serveur (R3).
+ * - Aucune info exploitable → 0.
+ */
+export function resolveGroundSpeed(input: ResolveGroundSpeedInput): ResolveGroundSpeedResult {
+  const { reportedSpeedMs, previous, current, currentTimestampIsServerFallback } = input;
+
+  const reported =
+    reportedSpeedMs != null && Number.isFinite(reportedSpeedMs) && reportedSpeedMs > 0
+      ? reportedSpeedMs
+      : null;
+
+  const hasRef =
+    !!previous &&
+    Number.isFinite(previous.latitude) &&
+    Number.isFinite(previous.longitude) &&
+    previous.timestamp instanceof Date;
+
+  const dtSec = hasRef
+    ? (current.timestamp.getTime() - (previous as GroundSpeedRef).timestamp.getTime()) / 1000
+    : 0;
+  const movedMeters = hasRef
+    ? haversineDistance(
+        (previous as GroundSpeedRef).latitude,
+        (previous as GroundSpeedRef).longitude,
+        current.latitude,
+        current.longitude,
+      )
+    : 0;
+  const gate = combinedGpsNoiseGate(previous?.accuracy, current.accuracy);
+
+  // Δt exploitable pour raisonner sur une vitesse : positif et PAS issu de
+  // l'horloge serveur (R3).
+  const dtPositive =
+    hasRef && !currentTimestampIsServerFallback && dtSec > 0 && Number.isFinite(movedMeters);
+  // Bande resserrée pour DÉRIVER une vitesse (au-delà, le point milieu du trajet
+  // est trop incertain — le véhicule a pu partir et revenir).
+  const dtForDerivation =
+    dtPositive && dtSec >= GROUND_SPEED_MIN_DT_S && dtSec <= GROUND_SPEED_MAX_DT_S;
+
+  // Le véhicule est-il DÉMONTRABLEMENT immobile sur l'intervalle ?
+  //   - il n'a pas bougé au-delà du bruit combiné des deux fixes, OU
+  //   - même l'interprétation la plus rapide du déplacement (distance + bruit)
+  //     reste sous le plancher de stationnarité (cas d'un Δt long avec quasi
+  //     aucun déplacement — traceur muet à l'arrêt puis un fix isolé).
+  const demonstrablyStationary =
+    dtPositive && (movedMeters < gate || (movedMeters + gate) / dtSec < STATIONARY_SPEED_MS);
+
+  if (reported != null) {
+    if (demonstrablyStationary) return { speedMs: 0, source: 'clamped_zero' };
+    if (reported < STATIONARY_SPEED_MS) return { speedMs: 0, source: 'clamped_zero' };
+    return { speedMs: reported, source: 'measured' };
+  }
+
+  // Pas de vitesse rapportée → dérivation haversine/Δt, sous conditions strictes :
+  // déplacement franc (> bruit), deux fixes assez précis (garde C8), Δt dans la bande.
+  if (
+    dtForDerivation &&
+    movedMeters >= gate &&
+    isAccuracyTrustworthy(previous?.accuracy) &&
+    isAccuracyTrustworthy(current.accuracy)
+  ) {
+    const derived = movedMeters / dtSec;
+    return derived < STATIONARY_SPEED_MS
+      ? { speedMs: 0, source: 'clamped_zero' }
+      : { speedMs: derived, source: 'derived' };
+  }
+
+  return { speedMs: 0, source: hasRef ? 'clamped_zero' : 'unknown' };
+}
+
 /**
  * Réduit une suite de positions en collapsant les fenêtres d'ARRÊT CONFIRMÉ
  * (voir STATIONARY_RADIUS_M / STATIONARY_MIN_DURATION_S / STATIONARY_MAX_SAMPLE_GAP_S)
@@ -288,12 +437,9 @@ export function computeFilteredDistance(
     }
 
     // (3) Ni vitesse fiable ni arrêt : le segment ne compte que s'il dépasse
-    // NETTEMENT le bruit de position combiné des deux fixes.
-    // rms = hypot(a1, a2) / √2 ≈ « incertitude typique » du segment.
-    const noiseGate = Math.max(
-      GPS_NOISE_FLOOR_M,
-      (GPS_NOISE_SIGMA_K * Math.hypot(a1, a2)) / Math.SQRT2,
-    );
+    // NETTEMENT le bruit de position combiné des deux fixes (combinedGpsNoiseGate,
+    // partagé avec resolveGroundSpeed — cohérence distance ↔ vitesse).
+    const noiseGate = combinedGpsNoiseGate(a1, a2);
     if (segDist >= noiseGate) {
       totalDistance += segDist;
     }

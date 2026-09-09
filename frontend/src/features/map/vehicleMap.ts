@@ -50,6 +50,23 @@ export const FALLBACK_DRIVER_NAME = 'Véhicule sans chauffeur assigné';
 
 export const OFFLINE_TIMEOUT_MIN = 15;
 
+// Sous cette vitesse (m/s ≈ 1,8 km/h), jamais un déplacement de véhicule — c'est du
+// bruit GPS. Miroir de STATIONARY_SPEED_MS côté backend (common/geo/geo.utils.ts).
+// Le backend ramène désormais ces valeurs à 0 à l'ingestion (audit VITESSE FANTÔME
+// 2026-09-09) ; ce seuil reste une défense en profondeur côté affichage.
+export const STATIONARY_SPEED_MS = 0.5;
+
+/** true si la vitesse atteste un vrai déplacement (au-dessus du bruit). */
+export function isMovingSpeed(speedMs: number | null | undefined): boolean {
+  return speedMs != null && speedMs > STATIONARY_SPEED_MS;
+}
+
+/** Libellé de vitesse pour l'IU : « À l'arrêt » sous le seuil, sinon « X km/h ». */
+export function formatVehicleSpeed(speedMs: number | null | undefined): string {
+  if (!isMovingSpeed(speedMs)) return "À l'arrêt";
+  return `${((speedMs as number) * 3.6).toFixed(1)} km/h`;
+}
+
 // Un traceur motion-triggered (voir traccar-bridge.service.ts côté backend)
 // n'envoie AUCUNE position à l'arrêt — `status` figé sur 'moving' au dernier
 // update reçu (mergePositionUpdate) ne se remet donc jamais à jour tout seul :
@@ -147,7 +164,7 @@ export function mergePositionUpdate(
       deliveryId: update.deliveryId,
       confidence: update.confidence ?? (update.accuracy ? Math.max(0.1, 1 - update.accuracy / 50) : 1),
       timestamp: update.timestamp,
-      status: update.speed && update.speed > 0.5 ? 'moving' : 'static',
+      status: isMovingSpeed(update.speed) ? 'moving' : 'static',
       suspect: false,
       eta: etaFor ? etaFor(update) : undefined,
     });
@@ -182,7 +199,7 @@ export function mergeBootstrapPositions(
       deliveryId: pos.deliveryId ?? undefined,
       confidence: pos.accuracy ? Math.max(0.1, 1 - pos.accuracy / 50) : 1,
       timestamp: pos.timestamp,
-      status: isOffline ? 'offline' : pos.speed && pos.speed > 0.5 ? 'moving' : 'static',
+      status: isOffline ? 'offline' : isMovingSpeed(pos.speed) ? 'moving' : 'static',
       suspect: pos.suspect ?? false,
       eta: etaFor ? etaFor(pos) : undefined,
     });

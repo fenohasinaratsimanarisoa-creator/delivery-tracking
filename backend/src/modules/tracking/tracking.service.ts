@@ -31,7 +31,8 @@ import {
   haversineDistance,
   GPS_NOISE_THRESHOLD_M,
   computeFilteredDistance,
-  isAccuracyTrustworthy,
+  resolveGroundSpeed,
+  STATIONARY_RADIUS_M,
 } from '../../common/geo/geo.utils';
 import { evaluateTeleportation } from '../../common/geo/teleportation.utils';
 
@@ -754,7 +755,12 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     companyId: string,
     driverId: string | null,
     _savedPosition: { id: string; suspect: boolean },
-    prevPosition?: { timestamp: Date; speed: number | null } | null,
+    prevPosition?: {
+      timestamp: Date;
+      speed: number | null;
+      latitude?: number;
+      longitude?: number;
+    } | null,
   ) {
     const settings = await this.getCompanySettings(companyId);
     if (!settings) return;
@@ -798,32 +804,41 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    if (
-      prevPosition &&
-      settings.prolongedStopMinutes &&
-      dto.speed !== undefined &&
-      dto.speed < STOP_SPEED_THRESHOLD_MS
-    ) {
+    if (prevPosition && settings.prolongedStopMinutes && dto.speed !== undefined) {
       // La position PRÉCÉDENTE est transmise (capturée AVANT l'insertion) : sans cela,
       // getLastPosition() retournait la position qu'on vient d'écrire → stoppedMs = 0 →
       // l'alerte « arrêt prolongé » ne se déclenchait JAMAIS.
       const lastPos = prevPosition;
-      if (lastPos && lastPos.speed !== null && lastPos.speed < STOP_SPEED_THRESHOLD_MS) {
-        const stoppedMs = new Date(dto.timestamp).getTime() - new Date(lastPos.timestamp).getTime();
-        const stoppedMin = stoppedMs / 60000;
-        if (stoppedMin >= settings.prolongedStopMinutes) {
-          tasks.push(
-            this.notifications.create(companyId, {
-              type: NotificationType.prolonged_stop,
-              priority: NotificationPriority.medium,
-              title: 'Prolonged Stop',
-              message: `Vehicle stopped for ${Math.round(stoppedMin)} minutes`,
-              link: `/tracking/${dto.deliveryId}`,
-              deliveryId: dto.deliveryId,
-              userId: alertUserId ?? undefined,
-            }),
-          );
-        }
+      const stoppedMs = new Date(dto.timestamp).getTime() - new Date(lastPos.timestamp).getTime();
+      const stoppedMin = stoppedMs / 60000;
+
+      // Un arrêt est confirmé par la VITESSE quasi nulle aux deux bouts, OU par le
+      // FAIT que le véhicule n'a pas quitté un petit rayon depuis la position
+      // précédente (audit VITESSE FANTÔME 2026-09-09 : robuste à une vitesse
+      // résiduelle bruitée d'un traceur qui aurait échappé au plancher, et à une
+      // ancienne ligne en base encore porteuse d'une vitesse fantôme).
+      const bothSlow =
+        dto.speed < STOP_SPEED_THRESHOLD_MS &&
+        lastPos.speed !== null &&
+        lastPos.speed < STOP_SPEED_THRESHOLD_MS;
+      const dwelledInPlace =
+        lastPos.latitude != null &&
+        lastPos.longitude != null &&
+        haversineDistance(lastPos.latitude, lastPos.longitude, dto.latitude, dto.longitude) <=
+          STATIONARY_RADIUS_M;
+
+      if ((bothSlow || dwelledInPlace) && stoppedMin >= settings.prolongedStopMinutes) {
+        tasks.push(
+          this.notifications.create(companyId, {
+            type: NotificationType.prolonged_stop,
+            priority: NotificationPriority.medium,
+            title: 'Prolonged Stop',
+            message: `Vehicle stopped for ${Math.round(stoppedMin)} minutes`,
+            link: `/tracking/${dto.deliveryId}`,
+            deliveryId: dto.deliveryId,
+            userId: alertUserId ?? undefined,
+          }),
+        );
       }
     }
 
@@ -1289,25 +1304,35 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       string,
       { latitude: number; longitude: number; timestamp: Date; speed: number | null }
     >();
+    // Accuracy de la dernière position retenue par véhicule — nécessaire à la
+    // dérivation prudente de la vitesse (voir resolveGroundSpeed plus bas). Non porté
+    // par lastPositions, dont la forme est partagée avec la lecture DB ci-dessus.
+    // Amorcé depuis la DB puis maintenu au fil du lot (comme lastPositions).
+    const lastAccuracy = new Map<string, number | null | undefined>();
     if (vehicleIds.length > 0) {
       const rows = await this.prisma.gpsPosition.findMany({
         where: { vehicleId: { in: vehicleIds } },
         orderBy: { timestamp: 'desc' },
         distinct: ['vehicleId'],
-        select: { vehicleId: true, latitude: true, longitude: true, timestamp: true, speed: true },
+        select: {
+          vehicleId: true,
+          latitude: true,
+          longitude: true,
+          timestamp: true,
+          speed: true,
+          accuracy: true,
+        },
       });
       for (const row of rows) {
-        lastPositions.set(row.vehicleId, row);
+        const { accuracy, ...pos } = row;
+        lastPositions.set(row.vehicleId, pos);
+        lastAccuracy.set(row.vehicleId, accuracy);
       }
     }
     // Copie IMMUABLE de la dernière position DB par véhicule : utilisée pour détecter
     // une vraie retransmission du point le plus récent (le Map lastPositions, lui, est
     // mis à jour au fil du lot pour servir de référence téléportation/vitesse).
     const dbLastPositions = new Map(lastPositions);
-    // Accuracy de la dernière position retenue par véhicule — nécessaire à la
-    // dérivation prudente de la vitesse (voir C8 plus bas). Non porté par
-    // lastPositions, dont la forme est partagée avec la lecture DB ci-dessus.
-    const lastAccuracy = new Map<string, number | null | undefined>();
 
     // 1er passage : ne garder que les positions VALIDES (IDs bien formés, livraison du bon
     // chauffeur, véhicule actif). Le tri chronologique s'applique à ce sous-ensemble, pas
@@ -1396,40 +1421,33 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       // dans ce cas on saute ces deux calculs — pas de référence antérieure fiable).
       const timeDiffSec = last ? (ts.getTime() - last.timestamp.getTime()) / 1000 : Infinity;
 
-      // NOUVEAU : vitesse de secours si le device n'a pas fourni pos.speed (cas de la
-      // file offline flushée après une coupure réseau / passage en arrière-plan). Même
-      // fallback que le chemin temps réel (tracking.gateway) : haversine(distance)/Δt
-      // contre la dernière position (lastPositions, maintenue ci-dessous). Sans cela, la
-      // RÈGLE VITESSE du rapport carburant (computeFilteredDistance) retombait sur le
-      // filtre accuracy quand speed restait null en base → sous-comptage de la distance.
-      // Calculé APRÈS le dédoublonnage (timeDiffSec > 1s garanti ici), avant/indépendamment
-      // d'evaluateTeleportation qui ne doit PAS être modifié.
-      let resolvedSpeed = pos.speed;
-      if (
-        (!resolvedSpeed || resolvedSpeed <= 0) &&
-        last &&
-        timeDiffSec > 0 &&
-        Number.isFinite(timeDiffSec) &&
-        // BUG CORRIGÉ (audit GPS 2026-08-28, C8) : cette vitesse DÉRIVÉE
-        // (haversine/Δt) est stockée en base indistinctement d'une vitesse
-        // mesurée par le mobile, puis relue par la RÈGLE VITESSE de
-        // computeFilteredDistance — qui compte alors le segment EN ENTIER.
-        // Raisonnement circulaire : un saut de bruit GPS de 20 m en 3 s produit
-        // une « vitesse » de 6,7 m/s (> MOVEMENT_SPEED_THRESHOLD_MS) qui valide
-        // son propre segment de bruit. On ne dérive donc une vitesse que si les
-        // DEUX extrémités sont assez précises pour que le déplacement mesuré
-        // soit réel (même plafond que MOVEMENT_TRUST_MAX_ACCURACY_M).
-        isAccuracyTrustworthy(pos.accuracy) &&
-        isAccuracyTrustworthy(lastAccuracy.get(pos.vehicleId))
-      ) {
-        const distance = haversineDistance(
-          last.latitude,
-          last.longitude,
-          pos.latitude,
-          pos.longitude,
-        );
-        resolvedSpeed = distance / timeDiffSec;
-      }
+      // Vitesse sol FIABLE — source unique `resolveGroundSpeed` (audit GPS 2026-08-28
+      // « C8 » + audit VITESSE FANTÔME 2026-09-09), partagée avec le temps réel
+      // (gateway) et le pont Traccar. Dérive haversine/Δt quand le device ne fournit
+      // pas de vitesse — mais UNIQUEMENT si le déplacement dépasse le bruit combiné
+      // des deux fixes (plancher partagé avec computeFilteredDistance) et que Δt est
+      // plausible ; ramène aussi à 0 une vitesse rapportée sous le plancher de
+      // stationnarité ou incohérente avec une position immobile. Le backfill
+      // (timeDiffSec ≤ 0 ou hors bande) ne dérive rien : resolveGroundSpeed renvoie
+      // alors la vitesse rapportée si crédible, sinon 0. evaluateTeleportation ci-dessous
+      // reste INCHANGÉ (il a sa propre logique).
+      const resolvedSpeed = resolveGroundSpeed({
+        reportedSpeedMs: pos.speed,
+        previous: last
+          ? {
+              latitude: last.latitude,
+              longitude: last.longitude,
+              timestamp: last.timestamp,
+              accuracy: lastAccuracy.get(pos.vehicleId),
+            }
+          : null,
+        current: {
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          timestamp: ts,
+          accuracy: pos.accuracy,
+        },
+      }).speedMs;
 
       let suspect = false;
       if (last && timeDiffSec > 0) {
@@ -1521,7 +1539,10 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
 
     // Dernier enregistrement inséré par véhicule : sert de position « précédente »
     // pour generateAlerts (arrêt prolongé / signal perdu), comme le chemin temps réel.
-    const lastByVehicle = new Map<string, { timestamp: Date; speed: number | null }>();
+    const lastByVehicle = new Map<
+      string,
+      { timestamp: Date; speed: number | null; latitude: number; longitude: number }
+    >();
     for (const record of inserted) {
       saved.push(record);
       if (companyId && !record.suspect) {
@@ -1546,6 +1567,8 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       lastByVehicle.set(record.vehicleId, {
         timestamp: record.timestamp,
         speed: record.speed ?? null,
+        latitude: record.latitude,
+        longitude: record.longitude,
       });
     }
 
@@ -1835,8 +1858,17 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     const durationMs = last.timestamp.getTime() - first.timestamp.getTime();
     const totalDurationSec = Math.round(durationMs / 1000);
 
-    const speeds = positions.map((p) => p.speed ?? 0);
-    const avgSpeedMs = speeds.reduce((a, b) => a + b, 0) / speeds.length;
+    // Vitesse MOYENNE EN MOUVEMENT : moyenne sur les seuls échantillons où le
+    // véhicule roule réellement (> STOP_SPEED_THRESHOLD_MS). Inclure les arrêts
+    // (speed 0) écrasait la moyenne vers le bas et — avant le correctif VITESSE
+    // FANTÔME — un plancher de vitesse bruitée l'écrasait vers le haut sur les
+    // arrêts. Repli sur 0 si le véhicule n'a jamais roulé sur ce trajet.
+    const movingSpeeds = positions
+      .map((p) => p.speed ?? 0)
+      .filter((s) => s > STOP_SPEED_THRESHOLD_MS);
+    const avgSpeedMs = movingSpeeds.length
+      ? movingSpeeds.reduce((a, b) => a + b, 0) / movingSpeeds.length
+      : 0;
     const avgSpeedKmh = Math.round(avgSpeedMs * 3.6 * 10) / 10;
 
     let stopCount = 0;

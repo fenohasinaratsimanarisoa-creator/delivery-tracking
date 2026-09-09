@@ -1,4 +1,10 @@
-import { computeFilteredDistance, collapseStationaryWindows } from './geo.utils';
+import {
+  computeFilteredDistance,
+  collapseStationaryWindows,
+  resolveGroundSpeed,
+  combinedGpsNoiseGate,
+  STATIONARY_SPEED_MS,
+} from './geo.utils';
 
 // =============================================================================
 // AUDIT TERRAIN 2026-08-28 — sur-comptage confirme sur trace REELLE de production
@@ -235,5 +241,151 @@ describe('computeFilteredDistance v3 — non-regression trajet reel (aller-retou
     const pts = build();
     expect(computeFilteredDistance(pts.slice(0, 800)) / 1000).toBeLessThan(0.3);
     expect(computeFilteredDistance(pts.slice(1080, 1380)) / 1000).toBeLessThan(0.6);
+  });
+});
+
+// =============================================================================
+// AUDIT VITESSE FANTÔME 2026-09-09 — resolveGroundSpeed
+//
+// Un véhicule à traceur physique IMMOBILE affichait ≈ 6 km/h en permanence sur la
+// carte / le dashboard. Deux causes : (R1) la vitesse dérivée haversine/Δt sans
+// plancher de bruit, (R2) la vitesse rapportée par le traceur jamais filtrée.
+// resolveGroundSpeed est la source unique qui neutralise les deux.
+// =============================================================================
+describe('resolveGroundSpeed — vitesse sol fiable (audit VITESSE FANTÔME 2026-09-09)', () => {
+  const T0 = new Date('2026-09-09T08:00:00.000Z');
+  const at = (sec: number) => new Date(T0.getTime() + sec * 1000);
+  // ~11 m de latitude par 0.0001°, ~111 m par 0.001°.
+  const ref = (lat: number, lng: number, sec: number, acc?: number) => ({
+    latitude: lat,
+    longitude: lng,
+    timestamp: at(sec),
+    accuracy: acc,
+  });
+
+  it('R1 — véhicule immobile, signal précis, micro-dérive GPS < bruit : vitesse dérivée = 0', () => {
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 0,
+      previous: ref(-18.8792, 47.5079, 0, 8),
+      current: ref(-18.8792 + 0.0001, 47.5079, 8, 8), // ~11 m en 8 s, gate ≈ 16 m
+    });
+    expect(r.speedMs).toBe(0);
+    expect(r.source).toBe('clamped_zero');
+  });
+
+  it('R1 — déplacement réel bien au-dessus du bruit : vitesse dérivée > 0', () => {
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 0,
+      previous: ref(-18.8792, 47.5079, 0, 10),
+      current: ref(-18.8792 + 0.0015, 47.5079, 30, 10), // ~166 m en 30 s ≈ 5,5 m/s
+    });
+    expect(r.speedMs).toBeGreaterThan(4);
+    expect(r.speedMs).toBeLessThan(7);
+    expect(r.source).toBe('derived');
+  });
+
+  it('R1 — signal dégradé (accuracy > 30 m) : jamais de vitesse fabriquée par le bruit', () => {
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 0,
+      previous: ref(-18.8792, 47.5079, 0, 80),
+      current: ref(-18.8792 + 0.0015, 47.5079, 30, 85),
+    });
+    expect(r.speedMs).toBe(0);
+  });
+
+  it('R2 — traceur qui rapporte un "fond" de ~5 km/h à l\'arrêt (position immobile) : ramené à 0', () => {
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 1.6, // ≈ 5,8 km/h
+      previous: ref(-18.8792, 47.5079, 0, 12),
+      current: ref(-18.8792 + 0.00003, 47.5079, 20, 12), // ~3 m en 20 s
+    });
+    expect(r.speedMs).toBe(0);
+    expect(r.source).toBe('clamped_zero');
+  });
+
+  it('R2 — vitesse rapportée sous le plancher de stationnarité : ramenée à 0 même sans référence', () => {
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: STATIONARY_SPEED_MS - 0.1,
+      previous: null,
+      current: ref(-18.8792, 47.5079, 0, 10),
+    });
+    expect(r.speedMs).toBe(0);
+  });
+
+  it('vitesse Doppler réelle du device + déplacement cohérent : conservée telle quelle', () => {
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 14,
+      previous: ref(-18.8792, 47.5079, 0, 8),
+      current: ref(-18.8792 + 0.0004, 47.5079, 3, 8), // ~44 m en 3 s ≈ 14,8 m/s
+    });
+    expect(r.speedMs).toBe(14);
+    expect(r.source).toBe('measured');
+  });
+
+  it('Δt hors bande (fix précédent trop vieux) : pas de dérivation, vitesse rapportée conservée', () => {
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 12,
+      previous: ref(-18.8792, 47.5079, 0, 8),
+      current: ref(-18.9, 47.5079, 3600, 8), // 1 h plus tard
+    });
+    expect(r.speedMs).toBe(12);
+  });
+
+  it('horloge serveur de repli (Δt non fiable) : pas de dérivation', () => {
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 0,
+      previous: ref(-18.8792, 47.5079, 0, 8),
+      current: ref(-18.8792 + 0.0015, 47.5079, 30, 8),
+      currentTimestampIsServerFallback: true,
+    });
+    expect(r.speedMs).toBe(0);
+  });
+
+  it('premier fix (aucune référence), aucune vitesse device : 0 / unknown', () => {
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: undefined,
+      previous: null,
+      current: ref(-18.8792, 47.5079, 0, 10),
+    });
+    expect(r.speedMs).toBe(0);
+    expect(r.source).toBe('unknown');
+  });
+
+  it('combinedGpsNoiseGate : plancher, échelle par accuracy, repli accuracy absente', () => {
+    expect(combinedGpsNoiseGate(5, 5)).toBeGreaterThanOrEqual(4);
+    expect(combinedGpsNoiseGate(80, 80)).toBeGreaterThan(combinedGpsNoiseGate(10, 10));
+    expect(combinedGpsNoiseGate(null, null)).toBe(combinedGpsNoiseGate(25, 25));
+  });
+
+  // Cas RÉEL de prod (diag 2026-09-09) : GT06 plaque 3944 TBF. Le device rapporte
+  // toujours accuracy=0 → le pont passe `undefined` (pas 50) → seuil de bruit = 50 m.
+  it('R2 prod — GT06 garé, accuracy non renseignée : 3-6 km/h annoncés, ~6-22 m de dérive → 0', () => {
+    // fixTime 17:38:24 → 17:38:31 : 5,4 kn puis 3,24 kn, déplacement 8,6 m puis 5,9 m.
+    expect(
+      resolveGroundSpeed({
+        reportedSpeedMs: 5.4 * 0.514444, // ≈ 2,78 m/s (10 km/h)
+        previous: ref(-18.8, 47.5, 0, undefined),
+        current: ref(-18.8 + 8.6 / 111320, 47.5, 7, undefined), // 8,6 m en 7 s
+      }).speedMs,
+    ).toBe(0);
+    // Le cas à Δt long : 22 m en 196 s, toujours garé.
+    expect(
+      resolveGroundSpeed({
+        reportedSpeedMs: 4.32 * 0.514444,
+        previous: ref(-18.8, 47.5, 0, undefined),
+        current: ref(-18.8 + 22 / 111320, 47.5, 196, undefined),
+      }).speedMs,
+    ).toBe(0);
+  });
+
+  it('R2 prod — GT06 qui roule vraiment (déplacement franc > seuil) : vitesse conservée', () => {
+    // fixTime ~15:15:25 : 35 kn, 174 m en 20 s → mouvement réel, on garde.
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 35 * 0.514444,
+      previous: ref(-18.8, 47.5, 0, undefined),
+      current: ref(-18.8 + 174 / 111320, 47.5, 20, undefined),
+    });
+    expect(r.speedMs).toBeCloseTo(35 * 0.514444, 3);
+    expect(r.source).toBe('measured');
   });
 });
