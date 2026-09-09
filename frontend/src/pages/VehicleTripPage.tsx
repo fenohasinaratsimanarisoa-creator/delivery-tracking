@@ -191,7 +191,9 @@ export default function VehicleTripPage() {
   const center: [number, number] = cur
     ? [cur.latitude, cur.longitude]
     : [-18.8792, 47.5079];
-  const rawColor = themeColor('--color-accent', '#F2A93C');
+  // Trace brute : rouge vif volontairement hors palette + halo sombre, pour
+  // rester lisible sur l'imagerie satellite (terrain ocre) comme sur fond clair.
+  const rawColor = '#FF1F1F';
   const roadColor = themeColor('--color-teal', '#3FA796');
   const maxZoom = Math.max(...Object.values(TILE_PROVIDERS).map((p) => p.maxZoom));
   const rep = trip?.report;
@@ -269,10 +271,13 @@ export default function VehicleTripPage() {
               <MapLayerSwitcher />
               <FitBounds points={matched && matched.length > 1 ? matched : rawPath} />
               {traveled.length > 1 && (
-                <Polyline positions={traveled} color={rawColor} weight={3} opacity={0.55} dashArray="6 5" />
+                <>
+                  <Polyline positions={traveled} color="#000000" weight={9} opacity={0.35} />
+                  <Polyline positions={traveled} color={rawColor} weight={5} opacity={1} />
+                </>
               )}
               {matched && matched.length > 1 && (
-                <Polyline positions={matched} color={roadColor} weight={4} opacity={0.9} />
+                <Polyline positions={matched} color={roadColor} weight={4} opacity={0.9} dashArray="3 7" />
               )}
               {cur && <ReplayMarker position={[cur.latitude, cur.longitude]} />}
             </MapContainer>
