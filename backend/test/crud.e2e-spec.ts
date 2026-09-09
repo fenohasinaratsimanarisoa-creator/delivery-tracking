@@ -188,6 +188,11 @@ describe('CRUD Operations (e2e)', () => {
           title: 'Test Delivery',
           pickupAddress: '123 Pickup St',
           deliveryAddress: '456 Delivery Ave',
+          // Coordonnées EXPLICITES : sans elles, DeliveriesService.create géocode
+          // deliveryAddress via Nominatim (réseau + file throttlée 1,1 s). En CI ce
+          // réseau est lent/bloqué → le test dépassait le timeout Jest de 5 s (flaky).
+          deliveryLat: -18.8792,
+          deliveryLng: 47.5079,
           vehicleId,
           driverId,
         })
