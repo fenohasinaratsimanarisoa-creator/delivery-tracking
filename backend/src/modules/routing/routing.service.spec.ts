@@ -1,5 +1,8 @@
 import { ConfigService } from '@nestjs/config';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { RoutingService } from './routing.service';
+import { MatchRequestDto } from './dto/routing.dto';
 
 const mockConfigService = {
   get: jest.fn((key: string) => {
@@ -179,6 +182,49 @@ describe('RoutingService', () => {
 
       const result = await service.matchToRoad(dto);
       expect(result.snappedTail).toBeNull();
+    });
+
+    // BUG 2026-09-09 : MatchRequestDto sans décorateurs → le ValidationPipe global
+    // (whitelist) rejetait tout le corps (« property coordinates should not exist »).
+    describe('MatchRequestDto — validation (ValidationPipe whitelist)', () => {
+      it('accepte un corps { coordinates, radiuses } valide', async () => {
+        const inst = plainToInstance(MatchRequestDto, {
+          coordinates: [
+            [-18.91, 47.52],
+            [-18.87, 47.53],
+          ],
+          radiuses: [25, 25],
+        });
+        expect(await validate(inst, { whitelist: true, forbidNonWhitelisted: true })).toHaveLength(
+          0,
+        );
+      });
+
+      it('rejette coordinates absent / trop court', async () => {
+        expect(
+          await validate(plainToInstance(MatchRequestDto, {}), { whitelist: true }),
+        ).not.toHaveLength(0);
+        expect(
+          await validate(plainToInstance(MatchRequestDto, { coordinates: [[-18.9, 47.5]] }), {
+            whitelist: true,
+          }),
+        ).not.toHaveLength(0);
+      });
+
+      it('rejette un profile inconnu', async () => {
+        expect(
+          await validate(
+            plainToInstance(MatchRequestDto, {
+              coordinates: [
+                [-18.9, 47.5],
+                [-18.8, 47.6],
+              ],
+              profile: 'flying',
+            }),
+            { whitelist: true },
+          ),
+        ).not.toHaveLength(0);
+      });
     });
 
     it('returns original trace with 0 confidence on local OSRM failure (no external call)', async () => {
