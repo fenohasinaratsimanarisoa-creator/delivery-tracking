@@ -187,3 +187,81 @@ describe('formatVehicleSpeed / isMovingSpeed — plancher de stationnarité (aud
     expect(liveSpeedLabel(1.67, 'moving', ts, T0 + 17 * 3_600_000)).toBe("À l'arrêt");
   });
 });
+
+describe('displayLatitude/displayLongitude — position affichée vs coordonnées brutes (audit PRÉCISION GPS 2026-09-09)', () => {
+  it('mergePositionUpdate : lat/lng = position affichée (ancre), rawLat/rawLng = fix brut', () => {
+    const upd: PositionUpdateInput = {
+      vehicleId: 'v1',
+      driverName: 'X',
+      latitude: -18.8635, // fix brut (faible, au sud)
+      longitude: 47.5638,
+      displayLatitude: -18.8632, // ancre serveur (recalée)
+      displayLongitude: 47.5639,
+      speed: 0,
+      timestamp: '2026-09-09T08:00:00.000Z',
+    };
+    const v = mergePositionUpdate(new Map(), upd).get('v1')!;
+    expect(v.lat).toBe(-18.8632);
+    expect(v.lng).toBe(47.5639);
+    expect(v.rawLat).toBe(-18.8635);
+    expect(v.rawLng).toBe(47.5638);
+  });
+
+  it('mergePositionUpdate : sans displayLatitude → lat/lng = brut (rétrocompat)', () => {
+    const upd: PositionUpdateInput = {
+      vehicleId: 'v1',
+      driverName: 'X',
+      latitude: -18.8635,
+      longitude: 47.5638,
+      speed: 3,
+      timestamp: '2026-09-09T08:00:00.000Z',
+    };
+    const v = mergePositionUpdate(new Map(), upd).get('v1')!;
+    expect(v.lat).toBe(-18.8635);
+    expect(v.rawLat).toBe(-18.8635);
+  });
+
+  it('mergePositionUpdate : un point suspect ne bouge PAS la position affichée mais rafraîchit le brut', () => {
+    const start = mergePositionUpdate(new Map(), {
+      vehicleId: 'v1',
+      driverName: 'X',
+      latitude: -18.8632,
+      longitude: 47.5639,
+      displayLatitude: -18.8632,
+      displayLongitude: 47.5639,
+      speed: 0,
+      timestamp: '2026-09-09T08:00:00.000Z',
+    });
+    const after = mergePositionUpdate(start, {
+      vehicleId: 'v1',
+      driverName: 'X',
+      latitude: -18.9, // glitch
+      longitude: 47.6,
+      speed: 0,
+      suspect: true,
+      timestamp: '2026-09-09T08:00:05.000Z',
+    });
+    const v = after.get('v1')!;
+    expect(v.lat).toBe(-18.8632); // inchangé
+    expect(v.rawLat).toBe(-18.9); // le fix glitché
+    expect(v.suspect).toBe(true);
+  });
+
+  it('mergeBootstrapPositions : displayLatitude appliquée, brut conservé', () => {
+    const v = mergeBootstrapPositions(new Map(), [
+      {
+        vehicleId: 'v1',
+        driverName: 'X',
+        latitude: -18.8635,
+        longitude: 47.5638,
+        displayLatitude: -18.8632,
+        displayLongitude: 47.5639,
+        speed: 0,
+        timestamp: '2026-09-09T08:00:00.000Z',
+        minutesAgo: 1,
+      },
+    ]).get('v1')!;
+    expect(v.lat).toBe(-18.8632);
+    expect(v.rawLat).toBe(-18.8635);
+  });
+});

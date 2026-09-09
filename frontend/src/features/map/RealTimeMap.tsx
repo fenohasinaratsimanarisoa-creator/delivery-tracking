@@ -329,7 +329,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
     const coords = document.createElement('div');
     coords.className = 'dt-popup__time';
     coords.style.fontFamily = 'var(--font-mono)';
-    coords.textContent = `${(vehicle.lat ?? 0).toFixed(6)}, ${(vehicle.lng ?? 0).toFixed(6)}`;
+    coords.textContent = `${(vehicle.rawLat ?? vehicle.lat ?? 0).toFixed(6)}, ${(vehicle.rawLng ?? vehicle.lng ?? 0).toFixed(6)}`;
     container.appendChild(coords);
 
     const detail = document.createElement('div');
@@ -1055,7 +1055,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
               {selectedDriver.heading != null && (
                 <DetailRow label={t('map.panel.heading')} value={`${selectedDriver.heading.toFixed(0)}°`} />
               )}
-              <DetailRow label={t('map.panel.coordinates')} value={`${(selectedDriver.lat ?? 0).toFixed(5)}, ${(selectedDriver.lng ?? 0).toFixed(5)}`} mono />
+              <DetailRow label={t('map.panel.coordinates')} value={`${(selectedDriver.rawLat ?? selectedDriver.lat ?? 0).toFixed(5)}, ${(selectedDriver.rawLng ?? selectedDriver.lng ?? 0).toFixed(5)}`} mono />
               {selectedDriver.accuracy != null && (
                 <DetailRow label={t('map.panel.gpsAccuracy')} value={`±${Math.round(selectedDriver.accuracy)} m`} />
               )}

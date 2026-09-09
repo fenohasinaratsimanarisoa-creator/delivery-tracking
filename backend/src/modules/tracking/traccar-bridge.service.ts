@@ -25,6 +25,7 @@ import { evaluateTeleportation } from '../../common/geo/teleportation.utils';
 import {
   extractTrackerTelemetry,
   toJsonValue,
+  type TrackerTelemetry,
   isPowerCut,
   isBatteryCritical,
   POWER_CUT_VOLTS,
@@ -50,6 +51,7 @@ interface TraccarPosition {
 // HDOP * UERE = accuracy estimée ; on prend la plus prudente (max) entre accuracy du device et HDOP dérivé
 import { computeConfidence, computeCombinedAccuracy } from '../../common/geo/gps-quality';
 import { resolveGroundSpeed } from '../../common/geo/geo.utils';
+import { computeAnchoredPosition, type AnchorFix } from '../../common/geo/stationary-anchor';
 
 const BACKFILL_MAX_HOURS = 24;
 const BATCH_INTERVAL_MS = 5000;
@@ -186,6 +188,18 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   private readonly deviceLocks = new Map<string, Promise<unknown>>();
 
   /**
+   * Historique récent par véhicule (12 derniers fixes BRUTS) — sert au calcul de
+   * l'ANCRE À L'ARRÊT (audit PRÉCISION GPS 2026-09-09, computeAnchoredPosition).
+   * En mémoire uniquement : perdu au redémarrage, reconstruit en quelques fixes ;
+   * le bootstrap /tracking/live recalcule l'ancre depuis la DB en attendant.
+   */
+  private readonly anchorBuffers = new Map<string, AnchorFix[]>();
+  private static readonly ANCHOR_BUFFER_SIZE = 20;
+
+  /** Nombre minimal de satellites pour accepter un fix (audit PRÉCISION GPS 2026-09-09). */
+  private minSatellites = 4;
+
+  /**
    * Pose le verrou du device pendant l'exécution de `task`, puis le libère —
    * y compris en cas d'erreur (try/finally via la chaîne de promesses). Les
    * appels concurrents pour le MÊME device sont chaînés (le suivant attend la
@@ -223,6 +237,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     this.traccarUrl = this.configService.get<string>('TRACCAR_URL', 'http://traccar:8082');
     this.traccarUser = this.configService.get<string>('TRACCAR_USER', 'admin');
     this.traccarPassword = this.configService.get<string>('TRACCAR_PASSWORD', 'admin');
+    const minSat = Number(this.configService.get<string>('TRACCAR_MIN_SATELLITES', '4'));
+    if (Number.isFinite(minSat) && minSat >= 0) this.minSatellites = minSat;
 
     if (this.traccarUser === 'admin' && this.traccarPassword === 'admin') {
       this.logger.warn(
@@ -843,6 +859,24 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Attributs à STOCKER sur la position : télémétrie normalisée (power/battery/
+   * ignition) + `sat` et `motion` bruts du device (audit PRÉCISION GPS 2026-09-09
+   * — nécessaires au recalcul de l'ancre à l'arrêt côté /tracking/live et à
+   * l'analyse a posteriori de la qualité GPS). Purement additif au JSONB.
+   */
+  private buildStoredAttributes(
+    telemetry: TrackerTelemetry,
+    rawAttributes: Record<string, unknown> | undefined,
+  ): Record<string, unknown> | null {
+    const base: Record<string, unknown> = toJsonValue(telemetry) ?? {};
+    const sat = Number(rawAttributes?.sat);
+    if (Number.isFinite(sat) && sat > 0) base.sat = sat;
+    const motion = rawAttributes?.motion;
+    if (typeof motion === 'boolean') base.motion = motion;
+    return Object.keys(base).length > 0 ? base : null;
+  }
+
   private parseStoredTelemetry(attributes: unknown): {
     powerVolts: number | null;
     batteryPercent: number | null;
@@ -1277,7 +1311,10 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               // Télémétrie stockée sur les positions backfillées aussi (historique) :
               // la classification de silence utilisera la dernière télémétrie connue
               // même si la coupure a précédé la reconnexion.
-              const backfillTelemetry = toJsonValue(extractTrackerTelemetry(pos.attributes));
+              const backfillTelemetry = this.buildStoredAttributes(
+                extractTrackerTelemetry(pos.attributes),
+                pos.attributes,
+              );
 
               // MÊME décision de téléportation que le chemin temps réel
               // (evaluateTeleportation, source unique dans teleportation.utils) : la
@@ -1463,6 +1500,20 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
+      // A2 (audit PRÉCISION GPS 2026-09-09) : un fix avec trop peu de satellites
+      // suivis a une erreur de 100-300 m. On le rejette comme un fix LBS. Ne
+      // s'applique QUE si le device remonte `sat` (sinon aucune hypothèse). Traccar
+      // filtre déjà en amont si filter.minSatellites est configuré — garde de
+      // défense en profondeur, agnostique du protocole.
+      const satCount = Number((pos.attributes as Record<string, unknown> | undefined)?.sat);
+      if (Number.isFinite(satCount) && satCount > 0 && satCount < this.minSatellites) {
+        this.logger.warn(
+          `Position rejetée (${satCount} satellites < ${this.minSatellites}) pour device ` +
+            `${pos.deviceId} — fix GPS trop imprécis pour être exploité`,
+        );
+        return;
+      }
+
       // Sérialisation PAR DEVICE (see field deviceLocks) : toute la séquence
       // lecture→écriture pour CE device (lookup véhicule, résolution driver/livraison,
       // dédup + insertion via savePosition) est protégée par le mutex. Un backfill
@@ -1537,7 +1588,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         // d'un silence GPS et à alerter en temps réel (coupure électrique /
         // batterie interne critique) — jamais supposée si le modèle ne la remonte pas.
         const telemetry = extractTrackerTelemetry(pos.attributes);
-        const attributesJson = toJsonValue(telemetry);
+        const attributesJson = this.buildStoredAttributes(telemetry, pos.attributes);
         if (attributesJson) {
           this.logger.debug(
             `Traccar device ${pos.deviceId} telemetry: power=${telemetry.powerVolts ?? 'n/a'}V battery=${telemetry.batteryPercent ?? 'n/a'}% ignition=${telemetry.ignition ?? 'n/a'}`,
@@ -1669,11 +1720,39 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           timestamp: updateDto.timestamp,
         });
 
+        // A3 (audit PRÉCISION GPS 2026-09-09) — ANCRE À L'ARRÊT. On alimente
+        // l'historique par véhicule avec le fix BRUT (jamais les suspects), puis on
+        // calcule la position À AFFICHER : le centroïde pondéré des fixes récents à
+        // l'arrêt (véhicule garé → marqueur STABLE et recalé sur les bons fixes) ou
+        // la position brute (véhicule en mouvement). Le stockage gps_positions reste
+        // 100 % brut — displayLat/Lng sont purement additifs au broadcast.
+        const motionAttr = (pos.attributes as Record<string, unknown> | undefined)?.motion;
+        if (!position.suspect) {
+          const buf = this.anchorBuffers.get(vehicleMapping.id) ?? [];
+          buf.push({
+            latitude: pos.latitude,
+            longitude: pos.longitude,
+            accuracy: updateDto.accuracy,
+            speed: updateDto.speed,
+            motion: typeof motionAttr === 'boolean' ? motionAttr : null,
+            timestamp,
+          });
+          while (buf.length > TraccarBridgeService.ANCHOR_BUFFER_SIZE) buf.shift();
+          this.anchorBuffers.set(vehicleMapping.id, buf);
+        }
+        const anchor = position.suspect
+          ? null
+          : computeAnchoredPosition(this.anchorBuffers.get(vehicleMapping.id) ?? []);
+
         const broadcast = {
           driverId: driverId ?? undefined,
           driverName,
           latitude: pos.latitude,
           longitude: pos.longitude,
+          // Position affichée (ancre à l'arrêt / brute) — le frontend rend celle-ci ;
+          // latitude/longitude ci-dessus restent les coordonnées GPS brutes (popup, litiges).
+          displayLatitude: anchor?.latitude ?? pos.latitude,
+          displayLongitude: anchor?.longitude ?? pos.longitude,
           speed: updateDto.speed,
           heading: updateDto.heading,
           altitude: updateDto.altitude,

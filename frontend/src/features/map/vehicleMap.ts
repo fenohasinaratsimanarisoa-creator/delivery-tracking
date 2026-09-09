@@ -1,7 +1,11 @@
 export interface VehicleData {
   id: string;
+  /** Position à AFFICHER (ancre à l'arrêt / accrochage route côté serveur, sinon brute). */
   lat: number;
   lng: number;
+  /** Coordonnées GPS BRUTES (popup « coordonnées », fiche véhicule, litiges). */
+  rawLat?: number;
+  rawLng?: number;
   name: string;
   speed?: number;
   heading?: number;
@@ -22,6 +26,9 @@ export interface LivePositionInput {
   driverName?: string;
   latitude: number;
   longitude: number;
+  /** Position à afficher recalculée côté serveur (ancre à l'arrêt). Défaut : latitude/longitude. */
+  displayLatitude?: number;
+  displayLongitude?: number;
   speed?: number;
   heading?: number;
   accuracy?: number;
@@ -37,6 +44,9 @@ export interface PositionUpdateInput {
   driverName?: string;
   latitude: number;
   longitude: number;
+  /** Position à afficher recalculée côté serveur (ancre à l'arrêt). Défaut : latitude/longitude. */
+  displayLatitude?: number;
+  displayLongitude?: number;
   speed?: number;
   heading?: number;
   accuracy?: number;
@@ -163,6 +173,10 @@ export function mergePositionUpdate(
     if (!existing) return next;
     next.set(key, {
       ...existing,
+      // Position affichée INCHANGÉE (le point suspect ne bouge pas le marqueur),
+      // mais on rafraîchit les coordonnées BRUTES : c'est là qu'a atterri le fix.
+      rawLat: update.latitude,
+      rawLng: update.longitude,
       speed: update.speed ?? undefined,
       heading: update.heading ?? undefined,
       accuracy: update.accuracy ?? undefined,
@@ -172,8 +186,10 @@ export function mergePositionUpdate(
   } else {
     next.set(key, {
       id: key,
-      lat: update.latitude,
-      lng: update.longitude,
+      lat: update.displayLatitude ?? update.latitude,
+      lng: update.displayLongitude ?? update.longitude,
+      rawLat: update.latitude,
+      rawLng: update.longitude,
       name: update.driverName || FALLBACK_DRIVER_NAME,
       speed: update.speed ?? undefined,
       heading: update.heading ?? undefined,
@@ -207,8 +223,10 @@ export function mergeBootstrapPositions(
     const isOffline = minutesOld > OFFLINE_TIMEOUT_MIN;
     next.set(pos.vehicleId, {
       id: pos.vehicleId,
-      lat: pos.latitude,
-      lng: pos.longitude,
+      lat: pos.displayLatitude ?? pos.latitude,
+      lng: pos.displayLongitude ?? pos.longitude,
+      rawLat: pos.latitude,
+      rawLng: pos.longitude,
       name: pos.driverName || FALLBACK_DRIVER_NAME,
       speed: pos.speed ?? undefined,
       heading: pos.heading ?? undefined,

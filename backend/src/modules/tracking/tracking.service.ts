@@ -34,6 +34,7 @@ import {
   resolveGroundSpeed,
   STATIONARY_RADIUS_M,
 } from '../../common/geo/geo.utils';
+import { computeAnchoredPosition, type AnchorFix } from '../../common/geo/stationary-anchor';
 import { evaluateTeleportation } from '../../common/geo/teleportation.utils';
 
 const STOP_SPEED_THRESHOLD_MS = 0.3; // ~1 km/h — seuil pour détecter l'arrêt (évite les égalités strictes sur flottants)
@@ -2336,23 +2337,77 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       WHERE v.company_id = CAST(${companyId} AS uuid)
       ORDER BY gp.vehicle_id, gp.timestamp DESC
     `;
-    return positions.map((p) => ({
-      driverId: p.driver_id,
-      driverName:
-        p.driver_id == null || !p.driver_first_name || !p.driver_last_name
-          ? 'Véhicule sans chauffeur assigné'
-          : `${p.driver_first_name} ${p.driver_last_name}`,
-      latitude: p.latitude,
-      longitude: p.longitude,
-      speed: p.speed,
-      heading: p.heading,
-      accuracy: p.accuracy,
-      suspect: p.suspect,
-      timestamp: p.timestamp,
-      vehicleId: p.vehicle_id,
-      deliveryId: p.delivery_id,
-      minutesAgo: Number(p.minutes_ago),
-    }));
+
+    // ANCRE À L'ARRÊT (audit PRÉCISION GPS 2026-09-09) : pour un véhicule GARÉ, la
+    // dernière position brute est souvent un fix faible (5-7 sat) à ±50-100 m. On
+    // recalcule la position À AFFICHER = centroïde pondéré des fixes récents à
+    // l'arrêt (même logique que le broadcast temps réel du pont). Uniquement quand
+    // le dernier fix est « à l'arrêt » ET non suspect ; sinon on garde le brut.
+    const stoppedVehicleIds = positions
+      .filter((p) => !p.suspect && (p.speed == null || p.speed < 0.5))
+      .map((p) => p.vehicle_id);
+    const anchorByVehicle = new Map<string, { latitude: number; longitude: number }>();
+    if (stoppedVehicleIds.length > 0) {
+      const recent =
+        (await this.prisma.gpsPosition.findMany({
+          where: {
+            vehicleId: { in: stoppedVehicleIds },
+            suspect: false,
+            timestamp: { gte: new Date(Date.now() - 6 * 60 * 60 * 1000) },
+          },
+          orderBy: { timestamp: 'asc' },
+          select: {
+            vehicleId: true,
+            latitude: true,
+            longitude: true,
+            accuracy: true,
+            speed: true,
+            timestamp: true,
+            attributes: true,
+          },
+        })) ?? [];
+      const byVehicle = new Map<string, AnchorFix[]>();
+      for (const r of recent) {
+        const motionRaw = (r.attributes as Record<string, unknown> | null)?.motion;
+        const list = byVehicle.get(r.vehicleId) ?? [];
+        list.push({
+          latitude: r.latitude,
+          longitude: r.longitude,
+          accuracy: r.accuracy,
+          speed: r.speed,
+          motion: typeof motionRaw === 'boolean' ? motionRaw : null,
+          timestamp: r.timestamp,
+        });
+        byVehicle.set(r.vehicleId, list);
+      }
+      for (const [vehicleId, list] of byVehicle) {
+        const anchor = computeAnchoredPosition(list);
+        if (anchor) anchorByVehicle.set(vehicleId, anchor);
+      }
+    }
+
+    return positions.map((p) => {
+      const anchor = anchorByVehicle.get(p.vehicle_id);
+      return {
+        driverId: p.driver_id,
+        driverName:
+          p.driver_id == null || !p.driver_first_name || !p.driver_last_name
+            ? 'Véhicule sans chauffeur assigné'
+            : `${p.driver_first_name} ${p.driver_last_name}`,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        displayLatitude: anchor?.latitude ?? p.latitude,
+        displayLongitude: anchor?.longitude ?? p.longitude,
+        speed: p.speed,
+        heading: p.heading,
+        accuracy: p.accuracy,
+        suspect: p.suspect,
+        timestamp: p.timestamp,
+        vehicleId: p.vehicle_id,
+        deliveryId: p.delivery_id,
+        minutesAgo: Number(p.minutes_ago),
+      };
+    });
   }
 
   async findNearestVehicle(lat: number, lng: number, companyId: string) {

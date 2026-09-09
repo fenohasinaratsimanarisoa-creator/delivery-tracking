@@ -384,6 +384,46 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       mockPrisma.vehicle.findUnique.mockResolvedValue({ companyId: COMPANY_ID });
     });
 
+    // AUDIT PRÉCISION GPS PHYSIQUE 2026-09-09 — ancre à l'arrêt dans le broadcast
+    it("broadcast : displayLatitude/displayLongitude ajoutés (ancre à l'arrêt), lat/lng restent bruts", async () => {
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
+      const bridge = makeBridge() as any;
+      const now = Date.now();
+      const common = {
+        speed: 0,
+        accuracy: 8,
+        attributes: { sat: 12, motion: false },
+      };
+      for (const [i, dLat] of [0.0, 0.00002, -0.00001].entries()) {
+        await bridge.handlePosition(
+          baseTraccarPos({
+            ...common,
+            latitude: DELIVERY_LAT + dLat,
+            longitude: DELIVERY_LNG,
+            fixTime: new Date(now - (2 - i) * 10_000).toISOString(),
+            deviceTime: new Date(now - (2 - i) * 10_000).toISOString(),
+          }),
+        );
+      }
+
+      const calls = mockGateway.broadcastToCompany.mock.calls.filter(
+        (c: any[]) => c[1] === 'positionUpdate',
+      );
+      expect(calls.length).toBeGreaterThanOrEqual(3);
+      const last = calls[calls.length - 1][2] as {
+        latitude: number;
+        displayLatitude: number;
+        displayLongitude: number;
+      };
+      expect(last).toHaveProperty('displayLatitude');
+      expect(last).toHaveProperty('displayLongitude');
+      // lat/lng = coordonnées BRUTES du dernier fix (jamais l'ancre).
+      expect(last.latitude).toBeCloseTo(DELIVERY_LAT - 0.00001, 7);
+      // displayLatitude = ancre (centroïde des 3 fixes) ≠ exactement le dernier fix brut.
+      expect(last.displayLatitude).not.toBe(last.latitude);
+      expect(Math.abs(last.displayLatitude - DELIVERY_LAT)).toBeLessThan(0.00005);
+    });
+
     it('dérive la vitesse haversine/Δt quand speed=0 et signal précis (comme le téléphone)', async () => {
       // Dernière position fiable : 30 s avant, ~166 m au sud, accuracy 12 m.
       mockPrisma.gpsPosition.findFirst.mockResolvedValue({

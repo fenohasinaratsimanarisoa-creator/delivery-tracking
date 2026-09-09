@@ -31,6 +31,12 @@
     <entry key='filter.enable'>true</entry>
     <entry key='filter.distance'>5</entry>
     <entry key='filter.future'>300</entry>
+    <!-- Audit PRÉCISION GPS 2026-09-09 : rejet des positions approximatives
+         (résolution par cellule / Wi-Fi) — seul un vrai fix GNSS alimente la carte
+         et les rapports. Le filtrage par nombre de satellites (< 4 → 100-300 m
+         d'erreur) est fait côté pont : traccar-bridge.service.ts, TRACCAR_MIN_SATELLITES
+         (Traccar n'expose pas de filtre satellites natif). -->
+    <entry key='filter.approximate'>true</entry>
 
     <entry key='coordinates.format'>dd</entry>
 </properties>

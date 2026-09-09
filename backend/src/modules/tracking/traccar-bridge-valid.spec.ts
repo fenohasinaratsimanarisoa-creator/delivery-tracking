@@ -229,6 +229,38 @@ describe('TraccarBridgeService — Champ valid', () => {
     expect(Math.abs(tsMs - Date.now())).toBeLessThan(5 * 60 * 1000);
   });
 
+  // AUDIT PRÉCISION GPS PHYSIQUE 2026-09-09
+  it('should REJECT a fix with too few satellites (sat < 4)', async () => {
+    mockMappedVehicle();
+
+    await (service as any).handlePosition(basePos({ attributes: { sat: 3 } }));
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('3 satellites < 4'));
+    expect(mockTrackingService.savePosition).not.toHaveBeenCalled();
+  });
+
+  it('should ACCEPT a fix at exactly 4 satellites but with realistic accuracy (150 m)', async () => {
+    mockMappedVehicle();
+    const pos = basePos({ attributes: { sat: 4 } });
+    delete (pos as any).accuracy;
+
+    await (service as any).handlePosition(pos);
+
+    expect(mockTrackingService.savePosition).toHaveBeenCalledTimes(1);
+    expect(mockTrackingService.savePosition.mock.calls[0][1].accuracy).toBe(150);
+  });
+
+  it('should derive a realistic accuracy from a strong satellite count (sat=15 → 8 m)', async () => {
+    mockMappedVehicle();
+    const pos = basePos({ attributes: { sat: 15 } });
+    delete (pos as any).accuracy;
+
+    await (service as any).handlePosition(pos);
+
+    expect(mockTrackingService.savePosition).toHaveBeenCalledTimes(1);
+    expect(mockTrackingService.savePosition.mock.calls[0][1].accuracy).toBe(8);
+  });
+
   it('should ignore an implausible hdop (garbage from low-end tracker) and keep device accuracy', async () => {
     mockMappedVehicle();
 

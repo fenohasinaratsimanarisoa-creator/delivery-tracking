@@ -347,6 +347,13 @@ export interface PositionUpdate {
   driverName?: string;
   latitude: number;
   longitude: number;
+  /**
+   * Position à AFFICHER recalculée côté serveur (ancre à l'arrêt / accrochage
+   * route). Absente → utiliser latitude/longitude. latitude/longitude restent
+   * TOUJOURS les coordonnées GPS brutes.
+   */
+  displayLatitude?: number;
+  displayLongitude?: number;
   speed?: number;
   heading?: number;
   altitude?: number;
