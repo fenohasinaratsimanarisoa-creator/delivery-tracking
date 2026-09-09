@@ -9,6 +9,8 @@ import {
   isMovingSpeed,
   STALE_MOVEMENT_MS,
   OFFLINE_TIMEOUT_MIN,
+  SIGNAL_LOST_MS,
+  signalLostSinceMs,
   FALLBACK_DRIVER_NAME,
   type PositionUpdateInput,
   type VehicleData,
@@ -113,6 +115,29 @@ describe('effectiveStatus — dégradation du statut affiché avec le temps (tra
 
   it('sans timestamp, ne dégrade jamais un statut réel (garde-fou, ne devrait pas arriver en pratique)', () => {
     expect(effectiveStatus('moving', undefined, T0 + 999_999_999)).toBe('moving');
+  });
+});
+
+describe('signalLostSinceMs — avertissement précoce « signal perdu » (audit TEMPS RÉEL 2026-09-09)', () => {
+  const T0 = new Date('2026-09-09T14:07:00.000Z').getTime();
+  const ts = new Date(T0).toISOString();
+
+  it('null tant que le signal est frais (< SIGNAL_LOST_MS)', () => {
+    expect(signalLostSinceMs(ts, T0 + 20_000)).toBeNull();
+    expect(signalLostSinceMs(ts, T0 + SIGNAL_LOST_MS)).toBeNull();
+  });
+
+  it('retourne l\'âge du signal une fois SIGNAL_LOST_MS dépassé', () => {
+    expect(signalLostSinceMs(ts, T0 + SIGNAL_LOST_MS + 5_000)).toBe(SIGNAL_LOST_MS + 5_000);
+    expect(signalLostSinceMs(ts, T0 + 4 * 60_000)).toBe(4 * 60_000);
+  });
+
+  it('null au-delà de OFFLINE_TIMEOUT_MIN : le badge « hors ligne » dédié prend le relais', () => {
+    expect(signalLostSinceMs(ts, T0 + OFFLINE_TIMEOUT_MIN * 60_000 + 1_000)).toBeNull();
+  });
+
+  it('null si le timestamp est absent (pas d\'info exploitable)', () => {
+    expect(signalLostSinceMs(undefined, T0)).toBeNull();
   });
 });
 

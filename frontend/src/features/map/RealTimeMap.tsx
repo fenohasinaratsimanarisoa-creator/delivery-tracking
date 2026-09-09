@@ -71,12 +71,22 @@ function createVehicleIcon(): L.DivIcon {
 // doit fournir le statut DÉRIVÉ (effectiveStatus), qui tient compte de
 // l'ancienneté de la position — sinon l'icône reste bloquée "en mouvement"
 // indéfiniment dès que les updates s'arrêtent (traceur motion-triggered).
-function syncVehicleMarker(marker: L.Marker, vehicle: VehicleData, status: VehicleData['status'], focused: boolean) {
+function syncVehicleMarker(
+  marker: L.Marker,
+  vehicle: VehicleData,
+  status: VehicleData['status'],
+  focused: boolean,
+  signalLost = false,
+) {
   const el = marker.getElement();
   if (!el) return;
 
   const isMoving = status === 'moving';
   const isOffline = status === 'offline';
+  // Signal perdu (véhicule pas encore « hors ligne » mais muet depuis > 1 min) :
+  // marqueur atténué + pulsation lente — indice visible SANS sélectionner le
+  // véhicule que la position affichée est périmée (audit TEMPS RÉEL 2026-09-09).
+  el.classList.toggle('dt-marker-signal-lost', signalLost && !isOffline);
   const confidence = vehicle.confidence ?? 1;
   // Couleurs pilotées par les tokens sémantiques de statut (--status-enroute /
   // -idle / -offline) via color-mix : suit le thème clair/sombre/field sans hex
@@ -136,7 +146,7 @@ interface SearchResult {
 }
 
 import type { VehicleData } from './vehicleMap';
-import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, effectiveStatus, liveSpeedLabel, isMovingSpeed, STALE_MOVEMENT_MS, type FollowReference } from './vehicleMap';
+import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, effectiveStatus, liveSpeedLabel, isMovingSpeed, signalLostSinceMs, type FollowReference } from './vehicleMap';
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -273,7 +283,13 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
   useEffect(() => {
     const marker = markerRef.current;
     if (!marker) return;
-    syncVehicleMarker(marker, vehicle, effectiveStatus(vehicle.status, vehicle.timestamp, now), !!focused);
+    syncVehicleMarker(
+      marker,
+      vehicle,
+      effectiveStatus(vehicle.status, vehicle.timestamp, now),
+      !!focused,
+      signalLostSinceMs(vehicle.timestamp, now) !== null,
+    );
   }, [now, vehicle, focused]);
 
   // Dead reckoning: extrapolate position when GPS update is delayed.
@@ -292,17 +308,22 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
       const elapsed = Date.now() - lastUpdateRef.current;
       // L'animation en cours couvre déjà le délai réel entre deux positions
       // (sa durée = delta timestamp à timestamp) : ne pas la court-circuiter
-      // par une extrapolation. Le dead reckoning ne prend le relais qu'après
+      // par une extrapolation. Le dead reckoning ne prend le relais qu'APRÈS
       // la fin de l'animation (1s minimum au premier fix).
-      if (elapsed < Math.max(durationRef.current, 1000)) return;
-      if (elapsed > maxDrMs) return; // Stop predicting beyond limit
+      const animMs = Math.max(durationRef.current, 1000);
+      if (elapsed < animMs) return;
+      // Fenêtre d'extrapolation mesurée à partir de la FIN de l'animation : à
+      // l'instant du relais, drElapsed ≈ 0 → predictPosition renvoie le dernier
+      // point réel (le marqueur y est déjà, pas de saut), puis l'écart grandit.
+      const drElapsed = elapsed - animMs;
+      if (drElapsed > maxDrMs) return; // Stop predicting beyond limit
 
       const state = lastStateRef.current;
       if (!state || !isMovingSpeed(state.speed)) return;
 
       const predicted = predictPosition(
-        { ...state, timestamp: lastUpdateRef.current },
-        Date.now(),
+        { ...state, timestamp: 0 },
+        drElapsed,
       );
 
       marker.setLatLng([predicted.lat, predicted.lng]);
@@ -1093,12 +1114,28 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                 <NavigationOff size={13} className={styles.warningIcon} aria-hidden="true" />
                 {t('map.panel.offlineWarning')}
               </div>
-            ) : (!selectedDriver.timestamp || now - new Date(selectedDriver.timestamp).getTime() > STALE_MOVEMENT_MS) && (
-              <div className={styles.warningBanner}>
-                <AlertTriangle size={13} className={styles.warningIcon} aria-hidden="true" />
-                {t('map.panel.staleWarning')}
-              </div>
-            )}
+            ) : (() => {
+              const lostMs = signalLostSinceMs(selectedDriver.timestamp, now);
+              if (lostMs !== null) {
+                const sec = Math.round(lostMs / 1000);
+                const dur = sec < 90 ? `${sec} s` : `${Math.round(sec / 60)} min`;
+                return (
+                  <div className={styles.warningBanner}>
+                    <AlertTriangle size={13} className={styles.warningIcon} aria-hidden="true" />
+                    {t('map.panel.signalLostWarning', { duration: dur })}
+                  </div>
+                );
+              }
+              if (!selectedDriver.timestamp) {
+                return (
+                  <div className={styles.warningBanner}>
+                    <AlertTriangle size={13} className={styles.warningIcon} aria-hidden="true" />
+                    {t('map.panel.staleWarning')}
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
         </>
       )}

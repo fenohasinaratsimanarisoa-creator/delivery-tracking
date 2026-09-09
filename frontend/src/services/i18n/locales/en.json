@@ -649,6 +649,7 @@
       "delivery": "Delivery",
       "noDelivery": "No active delivery",
       "staleWarning": "Position not updated for more than 2 minutes",
+      "signalLostWarning": "Signal lost {{duration}} ago — shown position is frozen",
       "offlineWarning": "This vehicle has not reported a position for more than 15 minutes",
       "follow": "Follow",
       "following": "Following",

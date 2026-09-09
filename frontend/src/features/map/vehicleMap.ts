@@ -107,6 +107,34 @@ export function effectiveStatus(
 }
 
 /**
+ * Un véhicule suivi qui n'a plus rien émis depuis ce délai : signal probablement
+ * perdu (réseau GPRS coupé, boîtier en veille, tunnel…). Le marqueur affiché est
+ * alors PÉRIMÉ — il ne bouge plus alors que le véhicule roule peut-être encore.
+ * Plus court que STALE_MOVEMENT_MS (bascule d'icône « moving » → « static ») et
+ * que OFFLINE_TIMEOUT_MIN (bascule « hors ligne ») : c'est un avertissement
+ * précoce, purement visuel (badge + marqueur atténué), sans changer le statut.
+ * Calibré sur la cadence d'un traceur physique en mouvement (~15-20s) + marge.
+ */
+export const SIGNAL_LOST_MS = 60_000;
+
+/**
+ * Depuis combien de temps (ms) le signal est perdu, ou `null` si le signal est
+ * frais (< SIGNAL_LOST_MS) ou si le véhicule est déjà « hors ligne »
+ * (> OFFLINE_TIMEOUT_MIN, badge dédié). Appeler avec un `now` qui avance
+ * réellement pour que l'avertissement apparaisse/disparaisse tout seul.
+ */
+export function signalLostSinceMs(
+  timestamp: string | undefined,
+  now: number,
+): number | null {
+  if (!timestamp) return null;
+  const age = now - new Date(timestamp).getTime();
+  if (age <= SIGNAL_LOST_MS) return null;
+  if (age > OFFLINE_TIMEOUT_MIN * 60_000) return null;
+  return age;
+}
+
+/**
  * Libellé de vitesse à afficher EN DIRECT (popup, fiche véhicule) : « À l'arrêt »
  * dès que le véhicule n'est pas ACTIVEMENT en mouvement — arrêté, signal périmé
  * ou hors ligne. Une vitesse « en direct » sur un véhicule dont la dernière

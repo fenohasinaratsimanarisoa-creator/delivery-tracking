@@ -442,6 +442,33 @@
   box-shadow: 0 0 0 4px var(--color-accent-muted);
 }
 
+/* Signal perdu (muet > 1 min, pas encore « hors ligne ») : marqueur atténué +
+   anneau tireté pulsant lentement — on voit d'un coup d'œil, sans sélectionner
+   le véhicule, que la position affichée n'est plus rafraîchie. Moins fort que
+   l'état « hors ligne » (grisé) : le véhicule est probablement encore actif. */
+:global(.dt-marker-vehicle.dt-marker-signal-lost .dt-marker-dot) {
+  opacity: 0.6;
+}
+
+:global(.dt-marker-vehicle.dt-marker-signal-lost .dt-marker-icon) {
+  opacity: 0.6;
+}
+
+:global(.dt-marker-vehicle.dt-marker-signal-lost .dt-marker-halo) {
+  animation: dt-signal-lost-pulse 1.6s ease-in-out infinite;
+  border-style: dashed !important;
+}
+
+@keyframes dt-signal-lost-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
 /* @keyframes dt-pulse-moving / dt-spin → feuille globale (src/styles/theme.ts) */
 
 /* ─── Popup Leaflet ────────────────────────────────────────── */

@@ -30,8 +30,16 @@ export function predictPosition(
   };
 }
 
+/** Plafond ABSOLU de l'extrapolation. Quelques secondes de plus qu'avant (5s)
+ * pour couvrir l'attente entre deux fixes d'un traceur physique lent
+ * (~15-20s en mouvement) sans laisser le marqueur figé, mais JAMAIS une durée
+ * de coupure (minutes) : au-delà, le marqueur reste au dernier point réel et le
+ * badge « signal perdu » prend le relais (voir vehicleMap.SIGNAL_LOST_MS). */
+export const MAX_DEAD_RECKON_MS = 15_000;
+
 export function maxDeadReckonTime(speed: number): number {
   if (speed <= 0) return 0;
-  // Max prediction: ~5 seconds at normal speed, less at low speed
-  return Math.min(5000, Math.max(1000, speed * 2000 + 1000));
+  // Horizon proportionnel à la vitesse (plus on va vite, plus un fix manquant
+  // crée un écart visible à combler), borné à MAX_DEAD_RECKON_MS.
+  return Math.min(MAX_DEAD_RECKON_MS, Math.max(1000, speed * 2000 + 2000));
 }

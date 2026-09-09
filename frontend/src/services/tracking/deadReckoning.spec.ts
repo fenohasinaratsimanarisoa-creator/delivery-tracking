@@ -42,12 +42,18 @@ describe('deadReckoning — contrat "affichage uniquement"', () => {
   });
 
   it('maxDeadReckonTime borne l\'horizon d\'extrapolation (quelques secondes, jamais une durée de coupure)', () => {
-    // À toute vitesse, l'extrapolation est plafonnée à 5 s — un trou de 5 min de
-    // coupure n'est JAMAIS comblé par une trajectoire inventée sur la durée.
+    // L'extrapolation croît avec la vitesse mais reste plafonnée à 15 s — un trou
+    // de 5 min de coupure n'est JAMAIS comblé par une trajectoire inventée sur la
+    // durée (le marqueur reste alors au dernier point réel).
     expect(maxDeadReckonTime(1)).toBeGreaterThanOrEqual(1000);
-    expect(maxDeadReckonTime(100)).toBe(5000);
     expect(maxDeadReckonTime(0)).toBe(0);
-    expect(maxDeadReckonTime(100)).toBeLessThanOrEqual(5000);
+    expect(maxDeadReckonTime(100)).toBe(15_000);
+    expect(maxDeadReckonTime(100)).toBeLessThanOrEqual(15_000);
+    // Vitesse absurde / durée de coupure : toujours plafonné, jamais des minutes.
+    expect(maxDeadReckonTime(100_000)).toBeLessThanOrEqual(15_000);
+    // Vitesse modérée (moto ~18 km/h = 5 m/s) : horizon de l'ordre de 12 s.
+    expect(maxDeadReckonTime(5)).toBeGreaterThan(5000);
+    expect(maxDeadReckonTime(5)).toBeLessThanOrEqual(15_000);
   });
 
   it('GARDE ANTI-RÉGRESSION : seul RealTimeMap (affichage) importe deadReckoning — aucun chemin d\'envoi', () => {

@@ -649,6 +649,7 @@
       "delivery": "Livraison",
       "noDelivery": "Aucune livraison en cours",
       "staleWarning": "Position non actualisée depuis plus de 2 minutes",
+      "signalLostWarning": "Signal perdu depuis {{duration}} — position affichée figée",
       "offlineWarning": "Ce véhicule n'a plus transmis de position depuis plus de 15 minutes",
       "follow": "Suivre",
       "following": "Suivi actif",
