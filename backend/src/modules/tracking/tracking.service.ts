@@ -2348,14 +2348,19 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       .map((p) => p.vehicle_id);
     const anchorByVehicle = new Map<string, { latitude: number; longitude: number }>();
     if (stoppedVehicleIds.length > 0) {
+      // Fenêtre large (48 h) : computeAnchoredPosition se limite elle-même à la
+      // série d'arrêt CONTIGUË qui précède le dernier fix (ANCHOR_WINDOW_MS). La
+      // fenêtre large sert juste à couvrir un traceur muet depuis longtemps (moto
+      // garée, GT06 motion-triggered) — sinon aucune ancre au bootstrap.
       const recent =
         (await this.prisma.gpsPosition.findMany({
           where: {
             vehicleId: { in: stoppedVehicleIds },
             suspect: false,
-            timestamp: { gte: new Date(Date.now() - 6 * 60 * 60 * 1000) },
+            timestamp: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
           },
-          orderBy: { timestamp: 'asc' },
+          orderBy: { timestamp: 'desc' },
+          take: 400,
           select: {
             vehicleId: true,
             latitude: true,
