@@ -270,10 +270,15 @@ export default function VehicleTripPage() {
             <MapContainer center={center} zoom={14} maxZoom={maxZoom} style={{ height: '100%', width: '100%' }}>
               <MapLayerSwitcher />
               <FitBounds points={matched && matched.length > 1 ? matched : rawPath} />
-              {traveled.length > 1 && (
+              {rawPath.length > 1 && (
                 <>
-                  <Polyline positions={traveled} color="#000000" weight={9} opacity={0.35} />
-                  <Polyline positions={traveled} color={rawColor} weight={5} opacity={1} />
+                  {/* Trajet complet du jour, toujours visible : halo sombre + rouge vif. */}
+                  <Polyline positions={rawPath} color="#000000" weight={9} opacity={0.3} />
+                  <Polyline positions={rawPath} color={rawColor} weight={5} opacity={0.45} />
+                  {/* Portion déjà parcourue (lecture) en rouge plein. */}
+                  {traveled.length > 1 && (
+                    <Polyline positions={traveled} color={rawColor} weight={5} opacity={1} />
+                  )}
                 </>
               )}
               {matched && matched.length > 1 && (
