@@ -450,7 +450,7 @@ model Delivery {
   deliveryLat             Float?         @map("delivery_lat")
   deliveryLng             Float?         @map("delivery_lng")
   deliveryLocationLabel   String?        @map("delivery_location_label")
-  status                  DeliveryStatus @default(pending)
+  status                  DeliveryStatus @default(in_progress)
   scheduledDate           DateTime?      @map("scheduled_date")
   completedAt             DateTime?      @map("completed_at")
   deliveryProofLat        Float?         @map("delivery_proof_lat")

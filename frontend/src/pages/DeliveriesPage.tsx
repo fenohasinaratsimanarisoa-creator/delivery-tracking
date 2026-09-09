@@ -292,10 +292,12 @@ export default function DeliveriesPage() {
     mutationFn: (body: DeliveryFormValues) => {
       const payload: Record<string, unknown> = {
         title: body.title,
-        status: body.status || 'pending',
         pickupAddress: body.pickupAddress,
         deliveryAddress: body.deliveryAddress,
       };
+      // À la création, le statut n'est jamais envoyé : le backend force
+      // « en cours » (in_progress). Le statut ne se modifie qu'en édition.
+      if (editing) payload.status = body.status;
       if (body.description) payload.description = body.description;
       if (body.pickupLat) payload.pickupLat = parseFloat(body.pickupLat);
       if (body.pickupLng) payload.pickupLng = parseFloat(body.pickupLng);
@@ -350,7 +352,7 @@ export default function DeliveriesPage() {
   });
 
   const emptyForm: DeliveryFormValues = {
-    title: '', description: '', status: 'pending', pickupAddress: '', deliveryAddress: '',
+    title: '', description: '', status: 'in_progress', pickupAddress: '', deliveryAddress: '',
     pickupLat: '', pickupLng: '', pickupLocationLabel: '',
     deliveryLat: '', deliveryLng: '', deliveryLocationLabel: '',
     driverId: '', vehicleId: '', scheduledDate: '', notes: '',
@@ -797,16 +799,18 @@ export default function DeliveriesPage() {
                       onBlur={() => deliveryForm.handleBlur('scheduledDate')} />
                   </DialogField>
 
-                  <DialogField label={t('deliveries.fields.status')}>
-                    <select className="dialog-select"
-                      value={deliveryForm.values.status}
-                      onChange={(e) => deliveryForm.setValue('status', e.target.value)}
-                      onBlur={() => deliveryForm.handleBlur('status')}>
-                      {Object.keys(STATUS_LABELS_KEY).map((k) => (
-                        <option key={k} value={k}>{t(`deliveries.status.${k}`)}</option>
-                      ))}
-                    </select>
-                  </DialogField>
+                  {editing && (
+                    <DialogField label={t('deliveries.fields.status')}>
+                      <select className="dialog-select"
+                        value={deliveryForm.values.status}
+                        onChange={(e) => deliveryForm.setValue('status', e.target.value)}
+                        onBlur={() => deliveryForm.handleBlur('status')}>
+                        {Object.keys(STATUS_LABELS_KEY).map((k) => (
+                          <option key={k} value={k}>{t(`deliveries.status.${k}`)}</option>
+                        ))}
+                      </select>
+                    </DialogField>
+                  )}
                 </div>
 
                 <DialogField label={t('deliveries.fields.description')}>

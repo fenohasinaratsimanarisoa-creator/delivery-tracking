@@ -138,19 +138,24 @@ export class DeliveriesService {
       }
     }
 
-    const requestedStatus = dto.status ?? DeliveryStatus.pending;
     if (
-      requestedStatus === DeliveryStatus.delivered ||
-      requestedStatus === DeliveryStatus.failed ||
-      requestedStatus === DeliveryStatus.cancelled
+      dto.status === DeliveryStatus.delivered ||
+      dto.status === DeliveryStatus.failed ||
+      dto.status === DeliveryStatus.cancelled
     ) {
       // Une livraison ne peut pas NAÎTRE dans un état terminal : ces statuts sont
       // réservés au flux d'exécution (updateStatus/updateDriverStatus), sinon une
       // création « delivered » contournait notification, preuve GPS et webhooks.
       throw new BadRequestException(
-        `Cannot create a delivery with terminal status "${requestedStatus}"`,
+        `Cannot create a delivery with terminal status "${dto.status}"`,
       );
     }
+    // Toute livraison NAÎT « en cours » (in_progress), jamais « en attente »
+    // (pending) ni « assignée » (assigned). Le cycle de vie métier — assignation
+    // du chauffeur, preuve GPS, complétion — est piloté par updateStatus /
+    // updateDriverStatus, pas par la création. Aligné sur importExcel qui force
+    // déjà in_progress. Un statut non terminal fourni par le client est ignoré.
+    const requestedStatus = DeliveryStatus.in_progress;
 
     const delivery = await this.prisma.delivery.create({
       data: {

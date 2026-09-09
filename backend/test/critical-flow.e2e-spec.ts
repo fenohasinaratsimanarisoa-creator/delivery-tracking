@@ -110,7 +110,8 @@ describe('Critical delivery flow (e2e)', () => {
       })
       .expect(201);
 
-    expect(deliveryRes.body.status).toBe(DeliveryStatus.pending);
+    // Toute livraison naît « en cours » (in_progress), jamais « en attente ».
+    expect(deliveryRes.body.status).toBe(DeliveryStatus.in_progress);
 
     const driverRes = await withCsrf(
       request(app.getHttpServer()).post('/drivers').set('Authorization', `Bearer ${accessToken}`),
@@ -140,10 +141,11 @@ describe('Critical delivery flow (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`),
       csrf,
     )
-      .send({ status: DeliveryStatus.assigned })
+      // in_progress -> cancelled : transition valide depuis l'état de création.
+      .send({ status: DeliveryStatus.cancelled })
       .expect(200);
 
-    expect(statusRes.body.status).toBe(DeliveryStatus.assigned);
+    expect(statusRes.body.status).toBe(DeliveryStatus.cancelled);
 
     const notification = await prisma.notification.findFirst({
       where: {
@@ -156,9 +158,9 @@ describe('Critical delivery flow (e2e)', () => {
 
     expect(notification).toMatchObject({
       priority: NotificationPriority.medium,
-      title: `Livraison ${DeliveryStatus.assigned}`,
+      title: `Livraison ${DeliveryStatus.cancelled}`,
       link: `/deliveries/${deliveryRes.body.id}`,
     });
-    expect(notification?.message).toContain('est maintenant assigned');
+    expect(notification?.message).toContain('est maintenant cancelled');
   }, 30000);
 });

@@ -669,13 +669,13 @@ describe('DeliveriesService - State Machine', () => {
     });
   });
 
-  describe('default status pending', () => {
-    it('should default to pending when no status provided in create', async () => {
+  describe('default status in_progress', () => {
+    it('should default to in_progress when no status provided in create', async () => {
       mockPrisma.driver.findFirst.mockResolvedValue(null);
       mockPrisma.delivery.create.mockResolvedValueOnce({
         id: 'del-dflt',
         title: 'Default',
-        status: DeliveryStatus.pending,
+        status: DeliveryStatus.in_progress,
         companyId: 'comp-1',
       });
 
@@ -687,34 +687,36 @@ describe('DeliveriesService - State Machine', () => {
 
       expect(mockPrisma.delivery.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ status: DeliveryStatus.pending }),
+          data: expect.objectContaining({ status: DeliveryStatus.in_progress }),
         }),
       );
-      expect(result.status).toBe(DeliveryStatus.pending);
+      expect(result.status).toBe(DeliveryStatus.in_progress);
     });
 
-    it('should respect explicit status when provided in create', async () => {
+    it('should force in_progress even when pending/assigned is explicitly requested', async () => {
       mockPrisma.driver.findFirst.mockResolvedValue(null);
-      mockPrisma.delivery.create.mockResolvedValueOnce({
-        id: 'del-exp',
-        title: 'Explicit',
-        status: DeliveryStatus.assigned,
-        companyId: 'comp-1',
-      });
+      for (const requested of [DeliveryStatus.pending, DeliveryStatus.assigned]) {
+        mockPrisma.delivery.create.mockResolvedValueOnce({
+          id: 'del-exp',
+          title: 'Explicit',
+          status: DeliveryStatus.in_progress,
+          companyId: 'comp-1',
+        });
 
-      const result = await service.create('comp-1', {
-        title: 'Explicit',
-        pickupAddress: 'Pickup',
-        deliveryAddress: 'Delivery',
-        status: DeliveryStatus.assigned,
-      } as any);
+        const result = await service.create('comp-1', {
+          title: 'Explicit',
+          pickupAddress: 'Pickup',
+          deliveryAddress: 'Delivery',
+          status: requested,
+        } as any);
 
-      expect(mockPrisma.delivery.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: DeliveryStatus.assigned }),
-        }),
-      );
-      expect(result.status).toBe(DeliveryStatus.assigned);
+        expect(mockPrisma.delivery.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ status: DeliveryStatus.in_progress }),
+          }),
+        );
+        expect(result.status).toBe(DeliveryStatus.in_progress);
+      }
     });
   });
 
@@ -1093,11 +1095,19 @@ describe('DeliveriesService - State Machine', () => {
       expect(mockPrisma.delivery.create).not.toHaveBeenCalled();
     });
 
-    it('accepte pending/assigned/in_progress à la création', async () => {
-      mockPrisma.delivery.create.mockResolvedValue({ id: 'del-1', status: 'pending' });
-      await expect(
-        service.create('comp-1', { title: 'X', status: DeliveryStatus.pending } as any),
-      ).resolves.toBeDefined();
+    it('accepte pending/assigned/in_progress à la création (ramenés à in_progress)', async () => {
+      for (const status of [
+        DeliveryStatus.pending,
+        DeliveryStatus.assigned,
+        DeliveryStatus.in_progress,
+      ]) {
+        mockPrisma.delivery.create.mockResolvedValueOnce({
+          id: 'del-1',
+          status: DeliveryStatus.in_progress,
+        });
+        const result = await service.create('comp-1', { title: 'X', status } as any);
+        expect(result.status).toBe(DeliveryStatus.in_progress);
+      }
     });
   });
 

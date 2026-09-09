@@ -193,14 +193,29 @@ describe('CRUD Operations (e2e)', () => {
         })
         .expect(201);
 
-      expect(res.body.status).toBe('pending');
+      // Toute livraison naît « en cours » (in_progress), jamais « en attente ».
+      expect(res.body.status).toBe('in_progress');
       deliveryId = res.body.id;
     });
 
     it('PATCH /deliveries/:id/status - should transition pending -> assigned', async () => {
+      // Un statut « pending » n'est plus produit à la création : on le fabrique
+      // explicitement en base pour tester la transition héritée.
+      const d = await prisma.delivery.create({
+        data: {
+          title: 'Pending -> assigned',
+          pickupAddress: 'A',
+          deliveryAddress: 'B',
+          companyId,
+          vehicleId,
+          driverId,
+          status: 'pending',
+        },
+      });
+
       const res = await withCsrf(
         request(app.getHttpServer())
-          .patch(`/deliveries/${deliveryId}/status`)
+          .patch(`/deliveries/${d.id}/status`)
           .set('Authorization', `Bearer ${accessToken}`),
         csrf,
       )
@@ -208,6 +223,8 @@ describe('CRUD Operations (e2e)', () => {
         .expect(200);
 
       expect(res.body.status).toBe('assigned');
+
+      await prisma.delivery.delete({ where: { id: d.id } });
     });
 
     it('PATCH /deliveries/:id/status - should reject invalid transition pending -> delivered', async () => {
@@ -220,6 +237,7 @@ describe('CRUD Operations (e2e)', () => {
           companyId,
           vehicleId,
           driverId,
+          status: 'pending',
         },
       });
 
@@ -235,16 +253,8 @@ describe('CRUD Operations (e2e)', () => {
       await prisma.delivery.delete({ where: { id: d.id } });
     });
 
-    it('PATCH /deliveries/:id/status - should transition assigned -> in_progress -> delivered', async () => {
-      await withCsrf(
-        request(app.getHttpServer())
-          .patch(`/deliveries/${deliveryId}/status`)
-          .set('Authorization', `Bearer ${accessToken}`),
-        csrf,
-      )
-        .send({ status: 'in_progress' })
-        .expect(200);
-
+    it('PATCH /deliveries/:id/status - should transition in_progress -> delivered', async () => {
+      // deliveryId est déjà « en cours » depuis sa création.
       const res = await withCsrf(
         request(app.getHttpServer())
           .patch(`/deliveries/${deliveryId}/status`)

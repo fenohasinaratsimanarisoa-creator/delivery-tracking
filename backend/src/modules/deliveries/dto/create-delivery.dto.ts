@@ -19,6 +19,11 @@ export class CreateDeliveryDto {
   @IsString()
   description?: string;
 
+  /**
+   * @deprecated Ignoré à la création : toute livraison naît « en cours »
+   * (in_progress). Champ conservé uniquement pour ne pas rejeter (400) les
+   * anciens clients qui l'envoient encore. Voir DeliveriesService.create.
+   */
   @IsOptional()
   @IsEnum(DeliveryStatus)
   status?: DeliveryStatus;
