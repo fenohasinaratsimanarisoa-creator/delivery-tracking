@@ -87,7 +87,8 @@
     "title": "Main navigation",
     "more": "More",
     "moreTitle": "More options",
-    "signedInAs": "Signed in as"
+    "signedInAs": "Signed in as",
+    "vehicleTrip": "Vehicle Trip"
   },
   "auth": {
     "callback": {
@@ -2060,5 +2061,21 @@
       },
       "copyright": "© {{year}} DeliveryTrack. All rights reserved."
     }
+  },
+  "vehicleTrip": {
+    "title": "Vehicle Trip",
+    "selectVehicle": "— Select a vehicle —",
+    "date": "Date",
+    "noData": "No position for this vehicle on that day.",
+    "snapToRoad": "Snap to road",
+    "snapping": "Snapping…",
+    "confidence": "confidence",
+    "distance": "Distance",
+    "duration": "Duration",
+    "stops": "Stops",
+    "coverage": "GPS coverage",
+    "gaps": "Signal gaps",
+    "rawTrace": "Raw GPS trace",
+    "roadTrace": "Road-snapped trace"
   }
 }

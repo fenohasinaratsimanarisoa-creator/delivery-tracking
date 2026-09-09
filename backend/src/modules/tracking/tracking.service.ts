@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  BadRequestException,
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
@@ -1929,6 +1930,138 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       signalInterrupted: signalGaps.length > 0,
       uniqueDriverCount: uniqueDrivers.size,
       trackingCoveragePct: coverage.coveragePct,
+    };
+  }
+
+  /**
+   * Trajet d'un VÉHICULE sur un jour (fuseau Afrique/Madagascar, UTC+3), toutes
+   * livraisons confondues et même sans livraison. Renvoie les positions BRUTES
+   * (le frontend les accroche à la route via /routing/match) + les mêmes
+   * statistiques que getTripReport (distance filtrée, durée, arrêts, trous de
+   * signal, couverture). Vue « Trajet d'un véhicule » (audit PRÉCISION GPS 2026-09-09).
+   *
+   * @param dateStr `YYYY-MM-DD` ; défaut = aujourd'hui.
+   */
+  async getVehicleTrip(vehicleId: string, companyId: string, dateStr?: string) {
+    await this.assertVehicleOwnership(vehicleId, companyId);
+
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, companyId, deletedAt: null },
+      select: { licensePlate: true, brand: true, model: true, positionSource: true },
+    });
+    const source: PositionSource =
+      vehicle?.positionSource === 'physical_tracker' ? 'physical_tracker' : 'phone';
+
+    // Jour malgache : 00h00 Antananarivo = 21h00 UTC (J-1) → 20h59:59 UTC (J).
+    const base = dateStr ? new Date(`${dateStr}T00:00:00Z`) : new Date();
+    if (isNaN(base.getTime())) {
+      throw new BadRequestException(`Invalid date: "${dateStr}"`);
+    }
+    const start = new Date(base);
+    start.setUTCHours(21, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - 1);
+    const end = new Date(base);
+    end.setUTCHours(20, 59, 59, 999);
+    const dayStr = new Date(base.getTime()).toISOString().slice(0, 10);
+
+    const rows = await this.prisma.gpsPosition.findMany({
+      where: { vehicleId, suspect: false, timestamp: { gte: start, lte: end } },
+      orderBy: { timestamp: 'asc' },
+      select: {
+        latitude: true,
+        longitude: true,
+        speed: true,
+        accuracy: true,
+        heading: true,
+        timestamp: true,
+        driverId: true,
+      },
+    });
+
+    const gapThresholdSec = this.getGapThresholdSec(source);
+
+    const positions = rows.map((p) => ({
+      latitude: p.latitude,
+      longitude: p.longitude,
+      speed: p.speed,
+      accuracy: p.accuracy,
+      heading: p.heading,
+      timestamp: p.timestamp.toISOString(),
+    }));
+
+    let totalDistanceM = 0;
+    let avgSpeedKmh = 0;
+    let totalDurationSec = 0;
+    let stopCount = 0;
+    const signalGaps: Array<{
+      fromTimestamp: string;
+      toTimestamp: string;
+      durationSec: number;
+      fromLatitude: number;
+      fromLongitude: number;
+      toLatitude: number;
+      toLongitude: number;
+    }> = [];
+
+    if (rows.length >= 2) {
+      totalDistanceM = computeFilteredDistance(rows);
+      totalDurationSec = Math.round(
+        (rows[rows.length - 1].timestamp.getTime() - rows[0].timestamp.getTime()) / 1000,
+      );
+      const movingSpeeds = rows.map((p) => p.speed ?? 0).filter((s) => s > STOP_SPEED_THRESHOLD_MS);
+      avgSpeedKmh = movingSpeeds.length
+        ? Math.round((movingSpeeds.reduce((a, b) => a + b, 0) / movingSpeeds.length) * 3.6 * 10) /
+          10
+        : 0;
+      for (let i = 1; i < rows.length; i++) {
+        const prev = rows[i - 1];
+        const curr = rows[i];
+        if (prev.speed !== null && curr.speed !== null) {
+          if (prev.speed < STOP_SPEED_THRESHOLD_MS && curr.speed >= STOP_SPEED_THRESHOLD_MS) {
+            stopCount++;
+          }
+        }
+        const gapSec = (curr.timestamp.getTime() - prev.timestamp.getTime()) / 1000;
+        if (gapSec > gapThresholdSec) {
+          signalGaps.push({
+            fromTimestamp: prev.timestamp.toISOString(),
+            toTimestamp: curr.timestamp.toISOString(),
+            durationSec: Math.round(gapSec),
+            fromLatitude: prev.latitude,
+            fromLongitude: prev.longitude,
+            toLatitude: curr.latitude,
+            toLongitude: curr.longitude,
+          });
+        }
+      }
+    }
+
+    const coverage = this.computeCoverage(
+      rows.map((p) => ({ timestamp: p.timestamp })),
+      gapThresholdSec,
+    );
+
+    return {
+      vehicleId,
+      vehiclePlate: vehicle?.licensePlate ?? null,
+      vehicleLabel: vehicle
+        ? [vehicle.brand, vehicle.model].filter(Boolean).join(' ') || vehicle.licensePlate
+        : null,
+      date: dayStr,
+      positions,
+      report: {
+        totalDistance: {
+          meters: Math.round(totalDistanceM),
+          kilometers: Math.round(totalDistanceM / 10) / 100,
+        },
+        avgSpeedKmh,
+        totalDurationSec,
+        stopCount,
+        positionCount: rows.length,
+        signalGaps,
+        signalInterrupted: signalGaps.length > 0,
+        trackingCoveragePct: coverage.coveragePct,
+      },
     };
   }
 

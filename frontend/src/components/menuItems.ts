@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Truck, Users, MapPin, Fuel, FileText, Settings, UserCog,
-  Package, ClipboardList, Eye, Bell, BellRing, CreditCard, Activity, Camera,
+  Package, ClipboardList, Eye, Bell, BellRing, CreditCard, Activity, Camera, Route,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Role } from '../types';
@@ -32,6 +32,7 @@ const allMenuItems: MenuItem[] = [
   { labelKey: 'nav.billing', icon: CreditCard, path: '/billing', roles: ['admin'], section: 'admin' },
   { labelKey: 'nav.alerts', icon: Bell, path: '/alerts', roles: ['admin', 'dispatcher', 'driver'], section: 'operations' },
   { labelKey: 'nav.trackingHealth', icon: Activity, path: '/tracking-health', roles: ['admin', 'dispatcher'], section: 'operations' },
+  { labelKey: 'nav.vehicleTrip', icon: Route, path: '/tracking/vehicle-trip', roles: ['admin', 'dispatcher'], section: 'operations' },
   // Bell est déjà pris par Alertes/Notifications — Camera colle mieux à "preuves
   // de livraison" (photos horodatées) et évite deux entrées avec la même icône.
   { labelKey: 'nav.deliveryProofs', icon: Camera, path: '/delivery-proofs', roles: ['admin', 'dispatcher'], section: 'operations' },

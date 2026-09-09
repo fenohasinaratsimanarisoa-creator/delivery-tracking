@@ -87,7 +87,8 @@
     "title": "Navigation principale",
     "more": "Plus",
     "moreTitle": "Plus d'options",
-    "signedInAs": "Connecté en tant que"
+    "signedInAs": "Connecté en tant que",
+    "vehicleTrip": "Trajet véhicule"
   },
   "auth": {
     "callback": {
@@ -2060,5 +2061,21 @@
       },
       "copyright": "© {{year}} DeliveryTrack. Tous droits réservés."
     }
+  },
+  "vehicleTrip": {
+    "title": "Trajet d’un véhicule",
+    "selectVehicle": "— Choisir un véhicule —",
+    "date": "Date",
+    "noData": "Aucune position pour ce véhicule ce jour-là.",
+    "snapToRoad": "Aligner sur la route",
+    "snapping": "Alignement…",
+    "confidence": "confiance",
+    "distance": "Distance",
+    "duration": "Durée",
+    "stops": "Arrêts",
+    "coverage": "Couverture GPS",
+    "gaps": "Trous de signal",
+    "rawTrace": "Trace GPS brute",
+    "roadTrace": "Trace alignée route"
   }
 }

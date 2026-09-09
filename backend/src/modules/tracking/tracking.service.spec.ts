@@ -2141,6 +2141,110 @@ describe('TrackingService', () => {
     });
   });
 
+  describe('getVehicleTrip — trajet par véhicule + jour (audit PRÉCISION GPS 2026-09-09)', () => {
+    const VID = '00000000-0000-4000-0000-0000000000v1';
+    const COMPANY = 'company-1';
+
+    it('404 si le véhicule n’appartient pas à la société', async () => {
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null);
+      await expect(service.getVehicleTrip(VID, COMPANY, '2026-09-08')).rejects.toThrow();
+    });
+
+    it('renvoie positions brutes + stats (distance filtrée, arrêts, trous)', async () => {
+      // assertVehicleOwnership + lookup véhicule
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: VID }).mockResolvedValueOnce({
+        licensePlate: 'MOTO-1',
+        brand: 'Honda',
+        model: 'XR',
+        positionSource: 'physical_tracker',
+      });
+
+      const t = (min: number) =>
+        new Date(
+          `2026-09-08T${String(6 + Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}:00Z`,
+        );
+      // trajet ~1 km, puis un trou de 20 min, puis reprise
+      const rows = [
+        {
+          latitude: 0,
+          longitude: 0,
+          speed: 8,
+          accuracy: 10,
+          heading: 90,
+          timestamp: t(0),
+          driverId: 'd1',
+        },
+        {
+          latitude: 0,
+          longitude: 0.0027,
+          speed: 8,
+          accuracy: 10,
+          heading: 90,
+          timestamp: t(1),
+          driverId: 'd1',
+        },
+        {
+          latitude: 0,
+          longitude: 0.0054,
+          speed: 0,
+          accuracy: 10,
+          heading: 90,
+          timestamp: t(2),
+          driverId: 'd1',
+        },
+        {
+          latitude: 0,
+          longitude: 0.0081,
+          speed: 8,
+          accuracy: 10,
+          heading: 90,
+          timestamp: t(24),
+          driverId: 'd1',
+        },
+      ];
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce(rows);
+
+      const r = await service.getVehicleTrip(VID, COMPANY, '2026-09-08');
+
+      expect(r.vehiclePlate).toBe('MOTO-1');
+      expect(r.date).toBe('2026-09-08');
+      expect(r.positions).toHaveLength(4);
+      expect(r.positions[0]).not.toHaveProperty('driverId'); // positions brutes exposées sans driverId
+      expect(r.report.positionCount).toBe(4);
+      expect(r.report.totalDistance.meters).toBeGreaterThan(200);
+      // arrêt : speed passe sous puis au-dessus du seuil (fix 3 → fix 4)
+      expect(r.report.stopCount).toBe(1);
+      // trou de 22 min > seuil traceur (5 min)
+      expect(r.report.signalGaps).toHaveLength(1);
+      expect(r.report.signalInterrupted).toBe(true);
+    });
+
+    it('jour sans données → rapport vide, jamais d’erreur', async () => {
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: VID }).mockResolvedValueOnce({
+        licensePlate: 'MOTO-1',
+        brand: null,
+        model: null,
+        positionSource: 'phone',
+      });
+      mockPrisma.gpsPosition.findMany.mockResolvedValueOnce([]);
+
+      const r = await service.getVehicleTrip(VID, COMPANY, '2026-09-01');
+      expect(r.positions).toHaveLength(0);
+      expect(r.report.totalDistance.meters).toBe(0);
+      expect(r.report.trackingCoveragePct).toBe(100);
+    });
+
+    it('date invalide → 400', async () => {
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({ id: VID }).mockResolvedValueOnce({
+        licensePlate: 'X',
+        brand: null,
+        model: null,
+        positionSource: 'phone',
+      });
+      await expect(service.getVehicleTrip(VID, COMPANY, 'pas-une-date')).rejects.toThrow();
+    });
+  });
+
   describe('findNearestVehicle', () => {
     it('filters out suspect=true positions (a vehicle whose only recent position is suspect is never returned)', async () => {
       mockPrisma.$queryRaw = jest.fn().mockResolvedValue([]);

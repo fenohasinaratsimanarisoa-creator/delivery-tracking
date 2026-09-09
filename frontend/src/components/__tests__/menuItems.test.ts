@@ -40,15 +40,17 @@ describe('getMenuItemsForRole', () => {
     expect(labels).toContain('Alertes');
   });
 
-  it('dispatcher has access to 9 items (incl. Santé du tracking)', () => {
+  it('dispatcher has access to 10 items (incl. Santé du tracking + Trajet véhicule)', () => {
     const items = getMenuItemsForRole('dispatcher', mockT);
-    expect(items).toHaveLength(9);
+    expect(items).toHaveLength(10);
     for (const item of items) {
       expect(item.roles).toContain('dispatcher');
     }
     // La supervision santé du tracking est disponible pour le dispatcher :
     // c'est lui qui surveille les véhicules en silence GPS au quotidien.
     expect(items.map((i) => i.path)).toContain('/tracking-health');
+    // Le trajet d'un véhicule sur une journée (trace brute + accrochée route).
+    expect(items.map((i) => i.path)).toContain('/tracking/vehicle-trip');
   });
 
   it('driver has access to 4 items', () => {

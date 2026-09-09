@@ -45,6 +45,7 @@ const DriverTrackingWrapper = lazy(() => import('./features/tracking/DriverTrack
 const MyOrdersPage = lazy(() => import('./pages/MyOrdersPage'));
 const ClientTrackingPage = lazy(() => import('./pages/ClientTrackingPage'));
 const TripReplayPage = lazy(() => import('./pages/TripReplayPage'));
+const VehicleTripPage = lazy(() => import('./pages/VehicleTripPage'));
 const TripReportPage = lazy(() => import('./pages/TripReportPage'));
 const AlertsPage = lazy(() => import('./pages/AlertsPage'));
 const TrackingHealthPage = lazy(() => import('./pages/TrackingHealthPage'));
@@ -203,6 +204,11 @@ export default function App() {
                 <Route path="/tracking/replay" element={
                   <ProtectedRoute roles={['admin', 'dispatcher']}>
                     <SuspenseWrapper><TripReplayPage /></SuspenseWrapper>
+                  </ProtectedRoute>
+                } />
+                <Route path="/tracking/vehicle-trip" element={
+                  <ProtectedRoute roles={['admin', 'dispatcher']}>
+                    <SuspenseWrapper><VehicleTripPage /></SuspenseWrapper>
                   </ProtectedRoute>
                 } />
                 <Route path="/tracking/report" element={

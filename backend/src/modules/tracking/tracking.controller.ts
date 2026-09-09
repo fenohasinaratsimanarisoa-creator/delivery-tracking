@@ -130,6 +130,21 @@ export class TrackingController {
   @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
   @Roles('admin', 'dispatcher')
   @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Trajet d'un véhicule sur un jour (positions brutes + stats), sans livraison requise",
+  })
+  @Get('vehicle-trip/:vehicleId')
+  getVehicleTrip(
+    @CurrentUser('companyId') companyId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Query('date') date?: string,
+  ) {
+    return this.trackingService.getVehicleTrip(vehicleId, companyId, date);
+  }
+
+  @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)
+  @Roles('admin', 'dispatcher')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Export trip report as PDF' })
   @Header('Content-Type', 'application/pdf')
   @Get('report/:deliveryId/export')
