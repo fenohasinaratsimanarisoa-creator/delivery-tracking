@@ -117,9 +117,24 @@ export default memo(function LocationSearchInput({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
   const pendingRef = useRef('')
   const gpsPreloaded = useRef(false)
+  const lastExternalLabel = useRef(value.label)
   const { nearbyPlaces, preload } = useGpsPreload()
 
-  useEffect(() => { if (value.label && !inputValue) setInputValue(value.label) }, [value.label])
+  // Synchronise le champ quand le libellé CONTRÔLÉ par le parent change réellement
+  // (chargement d'une livraison à éditer, ou remise à zéro du formulaire) — y compris
+  // vers "" . Avant, `if (value.label && !inputValue)` ne poussait jamais un vide :
+  // le tiroir « Nouvelle livraison » ré-ouvert gardait l'adresse de la livraison
+  // précédente à l'écran alors que la valeur du formulaire était vide (« ce champ
+  // est obligatoire » sur un champ visuellement rempli). On ne se déclenche que sur
+  // un vrai changement de `value.label`, jamais pendant la frappe (l'utilisateur
+  // tape dans l'état local, le parent n'est notifié qu'au choix d'une suggestion
+  // ou au blur).
+  useEffect(() => {
+    if (value.label !== lastExternalLabel.current) {
+      lastExternalLabel.current = value.label
+      setInputValue(value.label || '')
+    }
+  }, [value.label])
 
   const onInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const q = e.target.value

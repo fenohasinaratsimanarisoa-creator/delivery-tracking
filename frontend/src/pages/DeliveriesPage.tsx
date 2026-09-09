@@ -38,18 +38,33 @@ interface DeliveryFormValues {
   notes: string;
 }
 
+// TOUT champ piloté via deliveryForm.values / setValue DOIT figurer ici : useEntityForm
+// ne construit `values` (et ne le reconstruit à chaque reset()) qu'à partir de cette
+// liste. Un champ manquant reste `undefined` → l'<input>/<select> lié passe en
+// « non contrôlé » et le DOM GARDE sa valeur précédente d'une ouverture du tiroir à
+// la suivante. Bug constaté : on affecte un chauffeur à la livraison A, on ouvre la
+// livraison B, le <select> montre encore le chauffeur de A alors que values.driverId
+// est undefined → à l'enregistrement `driverId` n'est pas envoyé → B reste sans
+// chauffeur. Idem pour description / notes / date planifiée / libellés de lieu.
 const deliveryFields: FieldDef<DeliveryFormValues>[] = [
   { name: 'title', label: 'Titre de la livraison', type: 'text', required: true, section: 'main', autoFocus: true,
     rules: { minLength: 2, maxLength: 200 } },
   { name: 'status', label: 'Statut', type: 'text', section: 'main' },
+  { name: 'driverId', label: 'Chauffeur', type: 'text', section: 'main' },
+  { name: 'vehicleId', label: 'Véhicule', type: 'text', section: 'main' },
   { name: 'pickupAddress', label: "Adresse d'enlèvement", type: 'text', required: true, section: 'addresses',
     rules: { minLength: 3 } },
   { name: 'deliveryAddress', label: 'Adresse de livraison', type: 'text', required: true, section: 'addresses',
     rules: { minLength: 3 } },
   { name: 'pickupLat', label: 'Latitude (enlèvement)', type: 'text', section: 'gps' },
   { name: 'pickupLng', label: 'Longitude (enlèvement)', type: 'text', section: 'gps' },
+  { name: 'pickupLocationLabel', label: 'Libellé (enlèvement)', type: 'text', section: 'gps' },
   { name: 'deliveryLat', label: 'Latitude (livraison)', type: 'text', section: 'gps' },
   { name: 'deliveryLng', label: 'Longitude (livraison)', type: 'text', section: 'gps' },
+  { name: 'deliveryLocationLabel', label: 'Libellé (livraison)', type: 'text', section: 'gps' },
+  { name: 'description', label: 'Description', type: 'text', section: 'advanced' },
+  { name: 'notes', label: 'Notes', type: 'text', section: 'advanced' },
+  { name: 'scheduledDate', label: 'Date planifiée', type: 'text', section: 'advanced' },
 ];
 
 const STATUS_LABELS_KEY: Record<string, string> = {
