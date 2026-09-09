@@ -96,6 +96,24 @@ export function effectiveStatus(
   return status;
 }
 
+/**
+ * Libellé de vitesse à afficher EN DIRECT (popup, fiche véhicule) : « À l'arrêt »
+ * dès que le véhicule n'est pas ACTIVEMENT en mouvement — arrêté, signal périmé
+ * ou hors ligne. Une vitesse « en direct » sur un véhicule dont la dernière
+ * position remonte à des heures (traceur motion-triggered endormi) est la valeur
+ * FIGÉE de son dernier fix : l'afficher laisse croire qu'il roule encore.
+ * Ne remplace pas les vues historiques (rapport de trajet, relecture).
+ */
+export function liveSpeedLabel(
+  speedMs: number | null | undefined,
+  status: VehicleData['status'],
+  timestamp: string | undefined,
+  now: number,
+): string {
+  if (effectiveStatus(status, timestamp, now) !== 'moving') return "À l'arrêt";
+  return formatVehicleSpeed(speedMs);
+}
+
 export interface FollowReference {
   id: string;
   lat: number;

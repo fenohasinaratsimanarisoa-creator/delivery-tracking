@@ -5,6 +5,7 @@ import {
   shouldFollowRecenter,
   effectiveStatus,
   formatVehicleSpeed,
+  liveSpeedLabel,
   isMovingSpeed,
   STALE_MOVEMENT_MS,
   OFFLINE_TIMEOUT_MIN,
@@ -171,5 +172,18 @@ describe('formatVehicleSpeed / isMovingSpeed — plancher de stationnarité (aud
     };
     const m = mergePositionUpdate(new Map(), upd);
     expect(m.get('v1')?.status).toBe('static');
+  });
+
+  it('liveSpeedLabel : « À l\'arrêt » dès que le véhicule n\'est plus activement en mouvement', () => {
+    const T0 = Date.parse('2026-09-09T08:00:00.000Z');
+    const ts = new Date(T0).toISOString();
+    // Position fraîche + statut moving + vraie vitesse → affichée.
+    expect(liveSpeedLabel(12, 'moving', ts, T0 + 30_000)).toBe('43.2 km/h');
+    // Même vitesse mais dernière position vieille de 20 min → HORS LIGNE → « À l'arrêt ».
+    expect(liveSpeedLabel(12, 'moving', ts, T0 + 20 * 60_000)).toBe("À l'arrêt");
+    // Statut static (véhicule garé) → « À l'arrêt » quelle que soit la vitesse figée.
+    expect(liveSpeedLabel(1.67, 'static', ts, T0 + 30_000)).toBe("À l'arrêt");
+    // Régression signalée : traceur endormi 17 h, dernier fix à 6 km/h → plus « 6.0 km/h ».
+    expect(liveSpeedLabel(1.67, 'moving', ts, T0 + 17 * 3_600_000)).toBe("À l'arrêt");
   });
 });

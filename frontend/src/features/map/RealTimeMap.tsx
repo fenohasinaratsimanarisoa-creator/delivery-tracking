@@ -136,7 +136,7 @@ interface SearchResult {
 }
 
 import type { VehicleData } from './vehicleMap';
-import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, effectiveStatus, formatVehicleSpeed, isMovingSpeed, STALE_MOVEMENT_MS, type FollowReference } from './vehicleMap';
+import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, effectiveStatus, liveSpeedLabel, isMovingSpeed, STALE_MOVEMENT_MS, type FollowReference } from './vehicleMap';
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -342,7 +342,8 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
       row.textContent = text;
       detail.appendChild(row);
     };
-    if (vehicle.speed != null) line(`Vitesse · ${formatVehicleSpeed(vehicle.speed)}`);
+    if (vehicle.speed != null)
+      line(`Vitesse · ${liveSpeedLabel(vehicle.speed, vehicle.status, vehicle.timestamp, now)}`);
     if (vehicle.accuracy !== undefined) line(`Précision · ±${Math.round(vehicle.accuracy)} m`);
     if (vehicle.heading != null) line(`Cap · ${vehicle.heading.toFixed(0)}°`);
     if (vehicle.routeDistance && vehicle.routeDistance > 0)
@@ -1041,7 +1042,15 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
 
             <div className={styles.driverCardBody}>
               {selectedDriver.speed != null && (
-                <DetailRow label={t('map.panel.speed')} value={formatVehicleSpeed(selectedDriver.speed)} />
+                <DetailRow
+                  label={t('map.panel.speed')}
+                  value={liveSpeedLabel(
+                    selectedDriver.speed,
+                    selectedDriver.status,
+                    selectedDriver.timestamp,
+                    now,
+                  )}
+                />
               )}
               {selectedDriver.heading != null && (
                 <DetailRow label={t('map.panel.heading')} value={`${selectedDriver.heading.toFixed(0)}°`} />

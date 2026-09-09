@@ -4,7 +4,7 @@ import { Search, X, User, Truck, Package, MapPin, SearchX, Radio } from 'lucide-
 import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import RealTimeMap from '../features/map/RealTimeMap';
-import { formatVehicleSpeed } from '../features/map/vehicleMap';
+import { liveSpeedLabel } from '../features/map/vehicleMap';
 import Button from '../components/Button';
 import VehicleStatusPill from '../components/VehicleStatusPill';
 import styles from './MapPage.module.css';
@@ -51,7 +51,7 @@ export default function MapPage() {
 
     for (const v of vehicles) {
       if (v.name?.toLowerCase().includes(lower)) {
-        matches.push({ type: 'driver', id: v.id, label: v.name, subLabel: formatVehicleSpeed(v.speed), lat: v.lat, lng: v.lng });
+        matches.push({ type: 'driver', id: v.id, label: v.name, subLabel: liveSpeedLabel(v.speed, v.status, v.timestamp, Date.now()), lat: v.lat, lng: v.lng });
       }
     }
 
