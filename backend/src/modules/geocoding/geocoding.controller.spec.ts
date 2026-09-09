@@ -14,17 +14,19 @@ const mockService = {
 };
 
 describe('GeocodingController — rate limiting (proxy API externes coûteuses)', () => {
-  it('porte un @Throttle strict (20 req/min par IP) sur le controller', () => {
+  it('porte un @Throttle dédié (100 req/min par IP) sur le controller', () => {
     // Le décorateur @Throttle({ default: {...} }) stocke les métadonnées sous les clés
     // THROTTLER_LIMIT+name / THROTTLER_TTL+name (concaténées), sur la classe cible.
-    // Il doit écraser le défaut global pour TOUTES les routes du controller (public,
-    // proxy Google Places facturé + Nominatim 1 req/s).
+    // Il doit écraser le défaut global pour TOUTES les routes du controller. Le plafond
+    // vise à borner un scraping SANS gêner l'autocomplétion d'adresse (2 req/frappe
+    // débouncée × 2 champs) ; Nominatim reste protégé par la file 1,1 s du service et
+    // Google Places par son cache Redis 24 h.
     const limit = Reflect.getMetadata(THROTTLER_LIMIT + 'default', GeocodingController) as
       number | undefined;
     const ttl = Reflect.getMetadata(THROTTLER_TTL + 'default', GeocodingController) as
       number | undefined;
 
-    expect(limit).toBe(20);
+    expect(limit).toBe(100);
     expect(ttl).toBe(60000);
   });
 

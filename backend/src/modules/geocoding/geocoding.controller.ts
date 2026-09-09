@@ -5,13 +5,21 @@ import { Public } from '../../common/decorators/public.decorator';
 import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
 import type { GeocodingResult } from './geocoding.service';
 
-// Throttle STRICT : ce controller est public et fait office de proxy vers des API
-// externes coûteuses/limitées — Google Places (facturé par requête, GOOGLE_MAPS_API_KEY)
-// et Nominatim OSM (usage policy : max 1 req/s, bannissement d'IP sinon). Le throttle
-// global (100 req/min par IP) laissait un attaquant épuiser le budget Google Places ou
-// faire bannir l'IP serveur par OSM (→ tout le geocoding de l'app tombait). Un utilisateur
-// légitime tape quelques adresses par minute, 20 req/min par IP est amplement suffisant.
-@Throttle({ default: { limit: 20, ttl: 60000 } })
+// Throttle de ce controller public, proxy vers des API externes coûteuses/limitées —
+// Google Places (facturé par requête, GOOGLE_MAPS_API_KEY) et Nominatim OSM (max 1 req/s,
+// bannissement d'IP sinon). Deux garde-fous rendent un plafond HTTP serré INUTILE et
+// même nuisible :
+//   • Nominatim : GeocodingService sérialise TOUS les appels sortants dans une file
+//     unique au niveau du process (1 requête / 1,1 s), quel que soit le débit HTTP entrant.
+//   • Google Places : réponses cachées 24 h en Redis + quota/alertes budget côté Google.
+// L'ancien plafond de 20 req/min était en revanche atteint par l'usage NORMAL :
+// l'autocomplétion d'adresse déclenche 2 requêtes par frappe débouncée
+// (/places/autocomplete + /search), sur 2 champs (enlèvement + livraison). Saisir
+// deux adresses réelles dépassait 20 → 429 → les DEUX fournisseurs renvoyaient vide
+// côté front → il ne restait que la liste hors-ligne des communes (« grandes villes »),
+// bug remonté en prod. 100 req/min couvre la saisie de plusieurs livraisons par minute
+// tout en bloquant un scraping.
+@Throttle({ default: { limit: 100, ttl: 60000 } })
 @Controller('geocoding')
 @Public()
 @SkipCsrf()

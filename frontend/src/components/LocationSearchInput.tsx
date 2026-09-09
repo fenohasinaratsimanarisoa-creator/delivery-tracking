@@ -43,31 +43,60 @@ function DraggableMarker({ position, onChange }: { position: [number, number]; o
 }
 function MapUpdater({ center }: { center: [number, number] }) { const map = useMap(); useEffect(() => { map.setView(center, map.getZoom()) }, [center, map]); return null }
 
-async function fetchGooglePlaces(input: string): Promise<GeocodingResult[]> {
-  try {
-    const r = await fetch(`${getApiBaseUrl()}/geocoding/places/autocomplete?input=${encodeURIComponent(input)}`)
-    if (!r.ok) return []
-    const predictions: { placeId: string; description: string; mainText: string }[] = await r.json()
-    return predictions.map(p => ({ lat: 0, lng: 0, label: p.mainText, displayName: p.description, placeId: p.placeId, pendingDetails: true }))
-  } catch { return [] }
+// fetch avec 1 retry sur 429 (respecte Retry-After, plafonné à 3 s). Renvoie null
+// quand la donnée n'est PAS exploitable (429 persistant, erreur réseau, HTTP non-ok)
+// — distinct de [] (réponse valide, aucun résultat) : sur null, l'appelant garde
+// les suggestions déjà affichées au lieu de retomber sur la seule liste hors-ligne
+// des communes (symptôme « il ne trouve que les grandes villes »).
+async function fetchGeo(url: string): Promise<unknown[] | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch(url)
+      if (r.status === 429) {
+        const retryAfter = Math.min(Number(r.headers.get('retry-after')) || 1, 3)
+        await new Promise(res => setTimeout(res, retryAfter * 1000))
+        continue
+      }
+      if (!r.ok) return null
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    } catch {
+      return null
+    }
+  }
+  return null
 }
 
-async function fetchNominatim(input: string): Promise<GeocodingResult[]> {
-  try {
-    const r = await fetch(`${getApiBaseUrl()}/geocoding/search?q=${encodeURIComponent(input)}`)
-    if (!r.ok) return []
-    return await r.json()
-  } catch { return [] }
+async function fetchGooglePlaces(input: string): Promise<GeocodingResult[] | null> {
+  const data = await fetchGeo(`${getApiBaseUrl()}/geocoding/places/autocomplete?input=${encodeURIComponent(input)}`)
+  if (data === null) return null
+  return (data as { placeId: string; description: string; mainText: string }[])
+    .map(p => ({ lat: 0, lng: 0, label: p.mainText, displayName: p.description, placeId: p.placeId, pendingDetails: true }))
+}
+
+async function fetchNominatim(input: string): Promise<GeocodingResult[] | null> {
+  const data = await fetchGeo(`${getApiBaseUrl()}/geocoding/search?q=${encodeURIComponent(input)}`)
+  return data === null ? null : (data as GeocodingResult[])
 }
 
 async function fetchPlaceDetails(placeId: string): Promise<GeocodingResult | null> {
-  try {
-    const r = await fetch(`${getApiBaseUrl()}/geocoding/places/details?placeid=${placeId}`)
-    if (!r.ok) return null
-    const d = await r.json()
-    if (!d?.lat) return null
-    return { lat: d.lat, lng: d.lng, label: d.name, displayName: d.address, placeId }
-  } catch { return null }
+  // 1 retry sur 429 : cet appel résout les coordonnées du lieu choisi dans la
+  // liste ; s'il échoue, la livraison partait sans coordonnées exploitables.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch(`${getApiBaseUrl()}/geocoding/places/details?placeid=${placeId}`)
+      if (r.status === 429) {
+        const retryAfter = Math.min(Number(r.headers.get('retry-after')) || 1, 3)
+        await new Promise(res => setTimeout(res, retryAfter * 1000))
+        continue
+      }
+      if (!r.ok) return null
+      const d = await r.json()
+      if (!d?.lat) return null
+      return { lat: d.lat, lng: d.lng, label: d.name, displayName: d.address, placeId }
+    } catch { return null }
+  }
+  return null
 }
 
 export default memo(function LocationSearchInput({
@@ -104,15 +133,37 @@ export default memo(function LocationSearchInput({
         pendingRef.current = q
         setNetLoading(true)
         try {
-          const [google, nominatim] = await Promise.all([fetchGooglePlaces(q), fetchNominatim(q)])
+          // Google Places d'abord (POI / petits commerces / lieux précis) et
+          // affichage IMMÉDIAT. Avant, Promise.all attendait aussi /geocoding/search,
+          // dont la file Nominatim throttlée (1,1 s, souvent 2-4 s) retardait — voire
+          // masquait — des résultats Google pourtant déjà prêts.
+          const google = await fetchGooglePlaces(q)
           if (pendingRef.current !== q) return
-          const merged = dedupeByCoord([...google, ...nominatim])
-          setResults(merged)
-          if (merged.length > 0) setOpen(true)
+          if (google && google.length > 0) {
+            setResults(dedupeByCoord(google))
+            setOpen(true)
+          } else if (google === null) {
+            // 429 / erreur réseau : ne PAS vider les résultats déjà affichés.
+            return
+          }
+          // Nominatim seulement en complément quand Google est pauvre : ~2× moins
+          // de requêtes (ne sature plus le plafond anti-scraping) et sert de repli
+          // pour les lieux que Google ne connaît pas.
+          if (!google || google.length < 5) {
+            const nominatim = await fetchNominatim(q)
+            if (pendingRef.current !== q) return
+            if (nominatim !== null) {
+              const merged = dedupeByCoord([...(google ?? []), ...nominatim])
+              if (merged.length > 0) {
+                setResults(merged)
+                setOpen(true)
+              }
+            }
+          }
         } finally {
           if (pendingRef.current === q) setNetLoading(false)
         }
-      }, 150)
+      }, 300)
     }
   }, [onChange, nearbyPlaces, recentPlaces])
 
@@ -120,7 +171,11 @@ export default memo(function LocationSearchInput({
     if (r.placeId && (!r.lat || r.lat === 0)) {
       const details = await fetchPlaceDetails(r.placeId)
       if (details) { setInputValue(details.displayName); onChange({ lat: details.lat, lng: details.lng, label: details.displayName }) }
-      else { setInputValue(r.displayName); onChange({ lat: r.lat, lng: r.lng, label: r.displayName }) }
+      // Résolution des coordonnées échouée : on garde le libellé choisi mais SANS
+      // coordonnées (lat/lng null) — le backend les géocodera depuis l'adresse.
+      // Avant, on posait r.lat/r.lng = 0,0 → livraison enregistrée au large de
+      // l'Afrique de l'Ouest.
+      else { setInputValue(r.displayName); onChange({ lat: null, lng: null, label: r.displayName }) }
     } else {
       setInputValue(r.displayName || r.label); onChange({ lat: r.lat, lng: r.lng, label: r.displayName || r.label })
     }
@@ -129,7 +184,10 @@ export default memo(function LocationSearchInput({
 
   const allResults = useMemo(() => {
     const locals = inputValue.trim() ? dedupeByCoord([...localDb, ...nearbyPlaces, ...(recentPlaces?.map(p => ({ lat: p.lat, lng: p.lng, label: p.label, displayName: p.label })) || [])].filter(r => fuzzyMatch(r.label, inputValue) || fuzzyMatch(r.displayName, inputValue))).slice(0, 15) : []
-    const net = results.filter(r => !locals.some(l => (l.placeId && l.placeId === r.placeId) || (l.lat === r.lat && l.lng === r.lng)))
+    // Dédoublonnage net↔locals : par placeId, ou par coordonnées RÉELLES uniquement.
+    // Les prédictions Google ont lat/lng = 0 (coords résolues à la sélection) : sans
+    // le garde `r.lat`, un local à 0,0 les aurait toutes masquées.
+    const net = results.filter(r => !locals.some(l => (l.placeId && l.placeId === r.placeId) || (!!r.lat && l.lat === r.lat && l.lng === r.lng)))
     return [...locals, ...net]
   }, [inputValue, nearbyPlaces, recentPlaces, results])
 
