@@ -196,16 +196,17 @@ export class RoutingService {
         (c) => [c[1], c[0]] as [number, number],
       );
 
-      // Point accroché du DERNIER fix d'entrée (dernier tracepoint non-null).
-      let snappedTail: [number, number] | null = null;
+      // Point accroché du DERNIER fix d'entrée : tracepoints[i] correspond à la
+      // coordonnée d'entrée i ; null = ce point est un aberrant non-accroché. Pour
+      // le suivi temps réel on ne veut QUE l'accrochage du fix courant — si OSRM
+      // n'a pas pu le placer sur une route, on garde le brut (pas d'accrochage
+      // d'un fix plus ancien qui ferait « reculer » le marqueur).
       const tps = data.tracepoints ?? [];
-      for (let i = tps.length - 1; i >= 0; i--) {
-        const loc = tps[i]?.location;
-        if (loc && Number.isFinite(loc[0]) && Number.isFinite(loc[1])) {
-          snappedTail = [loc[1], loc[0]]; // OSRM renvoie [lng, lat] → [lat, lng]
-          break;
-        }
-      }
+      const lastLoc = tps.length > 0 ? tps[tps.length - 1]?.location : undefined;
+      const snappedTail: [number, number] | null =
+        lastLoc && Number.isFinite(lastLoc[0]) && Number.isFinite(lastLoc[1])
+          ? [lastLoc[1], lastLoc[0]] // OSRM renvoie [lng, lat] → [lat, lng]
+          : null;
 
       return {
         matchedPolyline,

@@ -158,7 +158,7 @@ describe('RoutingService', () => {
       expect(result.snappedTail).toEqual([-18.91, 47.52]);
     });
 
-    it("snappedTail = null si le dernier point n'a pas pu être accroché", async () => {
+    it("snappedTail = null si le DERNIER fix (courant) n'a pas pu être accroché", async () => {
       mockFetchOnce(
         {
           code: 'Ok',
@@ -170,14 +170,15 @@ describe('RoutingService', () => {
               duration: 1,
             },
           ],
+          // Le dernier point d'entrée est un aberrant (null) — on ne veut PAS
+          // accrocher un fix plus ancien à sa place.
           tracepoints: [{ location: [47.52, -18.91], waypoint_index: 0 }, null],
         },
         true,
       );
 
       const result = await service.matchToRoad(dto);
-      // Le dernier tracepoint est null → on remonte au précédent non-null.
-      expect(result.snappedTail).toEqual([-18.91, 47.52]);
+      expect(result.snappedTail).toBeNull();
     });
 
     it('returns original trace with 0 confidence on local OSRM failure (no external call)', async () => {
