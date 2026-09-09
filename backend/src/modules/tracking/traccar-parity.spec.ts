@@ -350,13 +350,13 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
     // contrairement à savePosition qui ne vérifie que la longueur).
     const VALID_TRACKER_VEHICLE_ID = '11111111-1111-4111-8111-111111111111';
 
-    function makeBridge() {
+    function makeBridge(routingService: any = null) {
       const bridgeConfig = {
-        get: jest.fn((key: string) => {
+        get: jest.fn((key: string, d?: string) => {
           if (key === 'TRACCAR_URL') return 'http://traccar:8082';
           if (key === 'TRACCAR_USER') return 'admin';
           if (key === 'TRACCAR_PASSWORD') return 'admin';
-          return null;
+          return d ?? null;
         }),
       };
       const bridge = new TraccarBridgeService(
@@ -367,6 +367,7 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
         mockNotifications as any,
         null,
         null,
+        routingService,
       );
       (bridge as any).connected = true;
       (bridge as any).sessionCookie = 'test-cookie';
@@ -422,6 +423,81 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       // displayLatitude = ancre (centroïde des 3 fixes) ≠ exactement le dernier fix brut.
       expect(last.displayLatitude).not.toBe(last.latitude);
       expect(Math.abs(last.displayLatitude - DELIVERY_LAT)).toBeLessThan(0.00005);
+    });
+
+    it('map-matching : véhicule EN MOUVEMENT → displayLat/Lng = point accroché à la route (OSRM)', async () => {
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
+      // OSRM renvoie un point accroché à ~15 m à l'est du DERNIER fix (i=4), confiance 0,9.
+      const lastRawLat = DELIVERY_LAT + 4 * 0.0002;
+      const snapLat = lastRawLat;
+      const snapLng = DELIVERY_LNG + 15 / (111320 * Math.cos((lastRawLat * Math.PI) / 180));
+      const matchToRoad = jest.fn().mockResolvedValue({
+        matchedPolyline: [],
+        confidence: 0.9,
+        originalPolyline: [],
+        snappedTail: [snapLat, snapLng],
+      });
+      const bridge = makeBridge({ matchToRoad }) as any;
+      const now = Date.now();
+      // 5 fixes en mouvement (motion:true, speed > 0), progression vers le nord.
+      for (let i = 0; i < 5; i++) {
+        await bridge.handlePosition(
+          baseTraccarPos({
+            speed: 8,
+            accuracy: 12,
+            attributes: { sat: 11, motion: true },
+            latitude: DELIVERY_LAT + i * 0.0002,
+            longitude: DELIVERY_LNG,
+            fixTime: new Date(now - (4 - i) * 5_000).toISOString(),
+            deviceTime: new Date(now - (4 - i) * 5_000).toISOString(),
+          }),
+        );
+      }
+
+      expect(matchToRoad).toHaveBeenCalled();
+      const calls = mockGateway.broadcastToCompany.mock.calls.filter(
+        (c: any[]) => c[1] === 'positionUpdate',
+      );
+      const last = calls[calls.length - 1][2] as {
+        latitude: number;
+        longitude: number;
+        displayLatitude: number;
+        displayLongitude: number;
+      };
+      // displayLat/Lng = point accroché OSRM (≈ 15 m de côté), pas le fix brut.
+      expect(last.displayLongitude).toBeCloseTo(snapLng, 6);
+      expect(last.displayLongitude).not.toBe(last.longitude);
+      expect(last.latitude).toBeCloseTo(lastRawLat, 6);
+    });
+
+    it('map-matching : confiance OSRM trop faible → position brute conservée', async () => {
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
+      const matchToRoad = jest.fn().mockResolvedValue({
+        matchedPolyline: [],
+        confidence: 0.2, // sous le seuil
+        originalPolyline: [],
+        snappedTail: [DELIVERY_LAT + 15 / 111320, DELIVERY_LNG],
+      });
+      const bridge = makeBridge({ matchToRoad }) as any;
+      const now = Date.now();
+      for (let i = 0; i < 5; i++) {
+        await bridge.handlePosition(
+          baseTraccarPos({
+            speed: 8,
+            accuracy: 12,
+            attributes: { sat: 11, motion: true },
+            latitude: DELIVERY_LAT + i * 0.0002,
+            longitude: DELIVERY_LNG,
+            fixTime: new Date(now - (4 - i) * 5_000).toISOString(),
+            deviceTime: new Date(now - (4 - i) * 5_000).toISOString(),
+          }),
+        );
+      }
+      const calls = mockGateway.broadcastToCompany.mock.calls.filter(
+        (c: any[]) => c[1] === 'positionUpdate',
+      );
+      const last = calls[calls.length - 1][2] as { latitude: number; displayLatitude: number };
+      expect(last.displayLatitude).toBe(last.latitude); // = brut
     });
 
     it('dérive la vitesse haversine/Δt quand speed=0 et signal précis (comme le téléphone)', async () => {

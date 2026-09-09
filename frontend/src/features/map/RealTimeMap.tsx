@@ -788,10 +788,14 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
     setVehicles((prev) => mergePositionUpdate(prev, update, computeETAForVehicle));
 
     if (deliveryId && update.deliveryId === deliveryId && dLat && dLng) {
+      // Trail = position AFFICHÉE (ancre à l'arrêt / accrochage route), brut en repli —
+      // cohérent avec le marqueur.
+      const trailLat = update.displayLatitude ?? update.latitude;
+      const trailLng = update.displayLongitude ?? update.longitude;
       setRoutePath((prev) => {
         const last = prev[prev.length - 1];
-        if (!last || last[0] !== update.latitude || last[1] !== update.longitude) {
-          return [...prev, [update.latitude, update.longitude] as [number, number]];
+        if (!last || last[0] !== trailLat || last[1] !== trailLng) {
+          return [...prev, [trailLat, trailLng] as [number, number]];
         }
         return prev;
       });

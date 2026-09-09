@@ -154,6 +154,30 @@ describe('RoutingService', () => {
       expect(result.confidence).toBe(0.95);
       expect(result.matchedPolyline).toBeDefined();
       expect(result.originalPolyline).toBeDefined();
+      // snappedTail = dernier tracepoint non-null, converti [lng,lat] → [lat,lng].
+      expect(result.snappedTail).toEqual([-18.91, 47.52]);
+    });
+
+    it("snappedTail = null si le dernier point n'a pas pu être accroché", async () => {
+      mockFetchOnce(
+        {
+          code: 'Ok',
+          matchings: [
+            {
+              confidence: 0.9,
+              geometry: { coordinates: [[47.52, -18.91]] },
+              distance: 1,
+              duration: 1,
+            },
+          ],
+          tracepoints: [{ location: [47.52, -18.91], waypoint_index: 0 }, null],
+        },
+        true,
+      );
+
+      const result = await service.matchToRoad(dto);
+      // Le dernier tracepoint est null → on remonte au précédent non-null.
+      expect(result.snappedTail).toEqual([-18.91, 47.52]);
     });
 
     it('returns original trace with 0 confidence on local OSRM failure (no external call)', async () => {

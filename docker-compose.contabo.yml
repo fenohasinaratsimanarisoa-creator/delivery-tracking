@@ -115,6 +115,33 @@ services:
         limits: { cpus: '1', memory: 1G }
         reservations: { cpus: '0.1', memory: 256M }
 
+  # OSRM auto-hébergé — routage + MAP-MATCHING (accrochage aux rues) du suivi GPS
+  # temps réel et de la relecture de trajet. Graphe Madagascar construit à
+  # l'image (osrm/Dockerfile, ~10 min au 1er build). Réseau Docker interne
+  # uniquement (backend/worker via http://osrm:5000). Conformité DPA : aucun
+  # appel à l'OSRM public ni à Google (routing.service.ts n'a aucun fallback).
+  osrm:
+    build:
+      context: ./osrm
+      dockerfile: Dockerfile
+    image: deliverytrack-osrm:latest
+    container_name: delivery-tracking-osrm
+    expose:
+      - "5000"
+    <<: *restart-policy
+    logging: *default-logging
+    healthcheck:
+      test:
+        ["CMD-SHELL", "wget -q -O - 'http://localhost:5000/nearest/v1/driving/47.52,-18.88' | grep -q Ok || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits: { cpus: '1', memory: 1G }
+        reservations: { cpus: '0.1', memory: 256M }
+
   backend:
     build:
       context: ./backend
@@ -123,6 +150,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      OSRM_BASE_URL: ${OSRM_BASE_URL:-http://osrm:5000}
       DATABASE_URL: postgresql://${POSTGRES_USER:-delivery_app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-delivery_tracking}?schema=public
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
@@ -180,6 +208,8 @@ services:
         condition: service_healthy
       traccar:
         condition: service_started
+      osrm:
+        condition: service_started
     <<: *restart-policy
     logging: *default-logging
     deploy:
@@ -206,6 +236,7 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-delivery_app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-delivery_tracking}?schema=public
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      OSRM_BASE_URL: ${OSRM_BASE_URL:-http://osrm:5000}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       LOG_LEVEL: ${LOG_LEVEL:-info}

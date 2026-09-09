@@ -65,10 +65,18 @@ export class MatchRequestDto {
   coordinates!: [number, number][];
   profile?: 'driving' | 'walking' | 'cycling';
   radiuses?: number[];
+  /** Délai max de l'appel OSRM (ms). Défaut 15000 (relecture) ; le suivi temps réel passe ~2000. */
+  timeoutMs?: number;
 }
 
 export interface MatchResponse {
   matchedPolyline: [number, number][];
   confidence: number;
   originalPolyline: [number, number][];
+  /**
+   * Coordonnée [lat, lng] du DERNIER point d'entrée accrochée à la route
+   * (tracepoint OSRM), ou null si ce point n'a pas pu être accroché. Utilisé par
+   * le suivi temps réel pour placer le marqueur du véhicule sur la route.
+   */
+  snappedTail: [number, number] | null;
 }

@@ -52,6 +52,12 @@ interface TraccarPosition {
 import { computeConfidence, computeCombinedAccuracy } from '../../common/geo/gps-quality';
 import { resolveGroundSpeed } from '../../common/geo/geo.utils';
 import { computeAnchoredPosition, type AnchorFix } from '../../common/geo/stationary-anchor';
+import {
+  selectMatchWindow,
+  matchRadiuses,
+  acceptSnappedTail,
+} from '../../common/geo/live-map-match';
+import { RoutingService } from '../routing/routing.service';
 
 const BACKFILL_MAX_HOURS = 24;
 const BATCH_INTERVAL_MS = 5000;
@@ -199,6 +205,11 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
   /** Nombre minimal de satellites pour accepter un fix (audit PRÉCISION GPS 2026-09-09). */
   private minSatellites = 4;
 
+  /** Map-matching temps réel activé (audit PRÉCISION GPS 2026-09-09, déploiement 2). */
+  private mapMatchingEnabled = true;
+  /** Véhicules dont un appel OSRM /match est déjà en cours (évite le chevauchement). */
+  private readonly matchInFlight = new Set<string>();
+
   /**
    * Pose le verrou du device pendant l'exécution de `task`, puis le libère —
    * y compris en cas d'erreur (try/finally via la chaîne de promesses). Les
@@ -233,12 +244,15 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     private notifications: NotificationsService,
     @Optional() private alertService: AlertService | null,
     @Optional() @Inject(REDIS_CLIENT) private redis: Redis | null,
+    @Optional() private routingService?: RoutingService | null,
   ) {
     this.traccarUrl = this.configService.get<string>('TRACCAR_URL', 'http://traccar:8082');
     this.traccarUser = this.configService.get<string>('TRACCAR_USER', 'admin');
     this.traccarPassword = this.configService.get<string>('TRACCAR_PASSWORD', 'admin');
     const minSat = Number(this.configService.get<string>('TRACCAR_MIN_SATELLITES', '4'));
     if (Number.isFinite(minSat) && minSat >= 0) this.minSatellites = minSat;
+    this.mapMatchingEnabled =
+      this.configService.get<string>('LIVE_MAP_MATCHING_ENABLED', 'true') !== 'false';
 
     if (this.traccarUser === 'admin' && this.traccarPassword === 'admin') {
       this.logger.warn(
@@ -1744,15 +1758,50 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           ? null
           : computeAnchoredPosition(this.anchorBuffers.get(vehicleMapping.id) ?? []);
 
+        // Position À AFFICHER : ancre à l'arrêt > accrochage route (véhicule en
+        // mouvement) > position brute. Le map-matching (déploiement 2) n'est tenté
+        // que si le véhicule bouge (pas d'ancre) et que OSRM est disponible ;
+        // timeout court (2 s) pour ne jamais retarder le broadcast, fallback brut.
+        let display: { latitude: number; longitude: number } | null = anchor;
+        if (
+          !display &&
+          !position.suspect &&
+          this.mapMatchingEnabled &&
+          this.routingService &&
+          !this.matchInFlight.has(vehicleMapping.id)
+        ) {
+          const window = selectMatchWindow(this.anchorBuffers.get(vehicleMapping.id) ?? []);
+          if (window) {
+            this.matchInFlight.add(vehicleMapping.id);
+            try {
+              const res = await this.routingService.matchToRoad({
+                coordinates: window.map((f) => [f.latitude, f.longitude] as [number, number]),
+                radiuses: matchRadiuses(window),
+                timeoutMs: 2000,
+              });
+              display = acceptSnappedTail(
+                { latitude: pos.latitude, longitude: pos.longitude },
+                res.snappedTail,
+                res.confidence,
+              );
+            } catch (err: any) {
+              this.logger.debug(`Live map-match skipped: ${err?.message ?? err}`);
+            } finally {
+              this.matchInFlight.delete(vehicleMapping.id);
+            }
+          }
+        }
+
         const broadcast = {
           driverId: driverId ?? undefined,
           driverName,
           latitude: pos.latitude,
           longitude: pos.longitude,
-          // Position affichée (ancre à l'arrêt / brute) — le frontend rend celle-ci ;
-          // latitude/longitude ci-dessus restent les coordonnées GPS brutes (popup, litiges).
-          displayLatitude: anchor?.latitude ?? pos.latitude,
-          displayLongitude: anchor?.longitude ?? pos.longitude,
+          // Position affichée (ancre à l'arrêt / accrochage route / brute) — le
+          // frontend rend celle-ci ; latitude/longitude ci-dessus restent les
+          // coordonnées GPS brutes (popup, fiche véhicule, litiges).
+          displayLatitude: display?.latitude ?? pos.latitude,
+          displayLongitude: display?.longitude ?? pos.longitude,
           speed: updateDto.speed,
           heading: updateDto.heading,
           altitude: updateDto.altitude,

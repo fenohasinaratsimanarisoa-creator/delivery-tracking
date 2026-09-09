@@ -165,7 +165,7 @@ export class RoutingService {
       this.logger.debug(`OSRM match request: ${url}`);
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), dto.timeoutMs ?? 15000);
       const response = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 
@@ -196,10 +196,22 @@ export class RoutingService {
         (c) => [c[1], c[0]] as [number, number],
       );
 
+      // Point accroché du DERNIER fix d'entrée (dernier tracepoint non-null).
+      let snappedTail: [number, number] | null = null;
+      const tps = data.tracepoints ?? [];
+      for (let i = tps.length - 1; i >= 0; i--) {
+        const loc = tps[i]?.location;
+        if (loc && Number.isFinite(loc[0]) && Number.isFinite(loc[1])) {
+          snappedTail = [loc[1], loc[0]]; // OSRM renvoie [lng, lat] → [lat, lng]
+          break;
+        }
+      }
+
       return {
         matchedPolyline,
         confidence: best.confidence,
         originalPolyline: dto.coordinates.map((c) => [c[0], c[1]] as [number, number]),
+        snappedTail,
       };
     };
 
@@ -220,6 +232,7 @@ export class RoutingService {
       matchedPolyline: dto.coordinates.map((c) => [c[0], c[1]] as [number, number]),
       confidence: 0,
       originalPolyline: dto.coordinates.map((c) => [c[0], c[1]] as [number, number]),
+      snappedTail: null,
     };
   }
 }

@@ -16,6 +16,7 @@ import { ApiKeyOrJwtGuard } from '../api-keys/guards/api-key-or-jwt.guard';
 import { DeviceTrackingAuthGuard } from '../../common/guards/device-tracking-auth.guard';
 import { CacheModule } from '../../common/cache/cache.module';
 import { RedisModule } from '../../common/redis/redis.module';
+import { RoutingModule } from '../routing/routing.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { RedisModule } from '../../common/redis/redis.module';
     NotificationsModule,
     CacheModule,
     RedisModule,
+    RoutingModule,
   ],
   controllers: [TrackingController, GeofenceController],
   providers: [
