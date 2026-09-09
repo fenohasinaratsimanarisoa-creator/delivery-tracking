@@ -137,10 +137,20 @@ export class NotificationsService {
       !data.digestOnly && (data.priority === 'critical' || data.priority === 'high');
 
     if (shouldSendImmediately) {
+      // `server` est undefined dans le process WORKER : celui-ci est bootstrappé par
+      // NestFactory.createApplicationContext (aucun adaptateur WebSocket — cf. le
+      // commentaire de queue.worker.ts). Or les jobs de la queue créent des
+      // notifications `high` (anomalie carburant, cross-check GPS) : sans le `?.`,
+      // `this.gateway.server.to(...)` levait « Cannot read properties of null
+      // (reading 'to') » → job en échec → retries BullMQ → LIGNES DE NOTIFICATION
+      // DUPLIQUÉES à chaque tentative. Même parti pris que TrackingGateway (`this.server?.`) :
+      // la diffusion temps réel depuis le worker est un no-op silencieux ; la
+      // notification est déjà persistée (ci-dessus) et le front la récupère par
+      // polling (liste 60 s / compteur 30 s).
       const room = `company:${companyId}`;
-      this.gateway.server.to(room).emit('notification', notification);
+      this.gateway.server?.to(room).emit('notification', notification);
       if (data.userId) {
-        this.gateway.server.to(`user:${data.userId}`).emit('notification', notification);
+        this.gateway.server?.to(`user:${data.userId}`).emit('notification', notification);
       }
 
       // Email immédiat pour critical (et high avec fallback) si personne n'est connecté

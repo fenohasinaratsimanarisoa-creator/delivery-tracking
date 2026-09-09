@@ -191,6 +191,31 @@ describe('NotificationsService', () => {
 
       expect(to).not.toHaveBeenCalled();
     });
+
+    it('ne crashe PAS quand le serveur WS est absent (process worker) — la notif reste persistée', async () => {
+      // Régression : dans le process worker (createApplicationContext, aucun adaptateur
+      // WS), gateway.server est undefined. Les jobs de queue créent des notifs `high`
+      // (anomalie carburant) → `server.to(...)` levait « Cannot read properties of null »
+      // → job en échec → retries BullMQ → lignes de notification DUPLIQUÉES.
+      const noServerService = new NotificationsService(
+        mockPrisma as unknown as PrismaService,
+        { server: undefined } as unknown as NotificationsGateway,
+        mockEmailService as any,
+      );
+      mockPrisma.notification.create.mockResolvedValueOnce(baseNotification);
+
+      await expect(
+        noServerService.create('company-1', {
+          type: NotificationType.fuel_anomaly,
+          priority: NotificationPriority.high,
+          title: 'Fuel Consumption Anomaly',
+          message: 'Vehicle X: consumption deviates',
+          userId: 'user-1',
+        }),
+      ).resolves.toEqual(baseNotification);
+
+      expect(mockPrisma.notification.create).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("échappe le HTML des champs utilisateur avant interpolation dans l'email critique (anti-XSS)", async () => {
