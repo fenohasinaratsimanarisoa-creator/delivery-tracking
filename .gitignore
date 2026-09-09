@@ -60,3 +60,7 @@ frontend/android/app/build/
 frontend/android/local.properties
 frontend/android/keystore.properties
 frontend/android/captures/
+
+# OSRM : extrait OSM téléchargé à la préparation (osrm/prepare.sh), jamais commité
+osrm/*.pbf
+osrm/*.osrm*

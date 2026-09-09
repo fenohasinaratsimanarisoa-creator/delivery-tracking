@@ -120,6 +120,8 @@ services:
   # l'image (osrm/Dockerfile, ~10 min au 1er build). Réseau Docker interne
   # uniquement (backend/worker via http://osrm:5000). Conformité DPA : aucun
   # appel à l'OSRM public ni à Google (routing.service.ts n'a aucun fallback).
+  # Prérequis build : `sh osrm/prepare.sh` (télécharge madagascar.osm.pbf sur
+  # l'hôte — l'image de base a un apt cassé, on ne télécharge rien dans le build).
   osrm:
     build:
       context: ./osrm
@@ -130,13 +132,9 @@ services:
       - "5000"
     <<: *restart-policy
     logging: *default-logging
-    healthcheck:
-      test:
-        ["CMD-SHELL", "wget -q -O - 'http://localhost:5000/nearest/v1/driving/47.52,-18.88' | grep -q Ok || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    # Pas de healthcheck : l'image de base OSRM n'a ni wget ni curl. Le backend
+    # dépend en `service_started` (pas `service_healthy`) et matchToRoad() dégrade
+    # proprement si OSRM ne répond pas (trace brute, confiance 0).
     deploy:
       resources:
         limits: { cpus: '1', memory: 1G }
