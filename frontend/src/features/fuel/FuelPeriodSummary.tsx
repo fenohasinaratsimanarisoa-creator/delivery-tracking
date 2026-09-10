@@ -46,6 +46,7 @@ interface SummaryResponse {
   groupBy: GroupBy;
   source: Source;
   estimated: boolean;
+  mixedSettings: boolean;
   range: { from: string; to: string; clamped: boolean };
   buckets: Bucket[];
   totals: {
@@ -327,6 +328,13 @@ export default function FuelPeriodSummary({ vehicles }: { vehicles?: VehicleOpt[
             </div>
           )}
 
+          {data.mixedSettings && (
+            <div className={styles.warnNote}>
+              <AlertTriangle size={14} />
+              {t("fuel.summary.mixedSettingsNote")}
+            </div>
+          )}
+
           {/* ── KPI de la fenêtre ─────────────────────────────── */}
           <div className={styles.kpis}>
             <Kpi
@@ -351,7 +359,7 @@ export default function FuelPeriodSummary({ vehicles }: { vehicles?: VehicleOpt[
             />
             <Kpi
               icon={<Activity size={15} />}
-              label={t("fuel.summary.kpiAvg")}
+              label={activeSource === "gps" ? t("fuel.summary.kpiAvgTheoretical") : t("fuel.summary.kpiAvg")}
               value={data.totals.avgConsumption != null ? nf1.format(data.totals.avgConsumption) : "—"}
               unit={data.totals.avgConsumption != null ? t("fuel.unitPer100") : undefined}
               accent="var(--color-purple, #8b5cf6)"

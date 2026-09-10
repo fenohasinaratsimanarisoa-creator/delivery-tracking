@@ -510,11 +510,23 @@ export class FuelConsumptionService {
       anomaly: boolean;
     }
     let points: Point[];
+    // Vrai quand les rapports GPS de la fenêtre ont été générés avec des réglages
+    // différents (conso. théorique ou prix modifiés depuis) et jamais régénérés :
+    // les moyennes mélangent alors deux régimes. Le frontend invite à régénérer.
+    let mixedSettings = false;
     if (source === 'gps') {
       const reports = await this.prisma.dailyFuelReport.findMany({
         where: { companyId, reportDate: { gte: from, lte: to }, ...vehicleWhere },
         orderBy: { reportDate: 'asc' },
       });
+      const contributing = reports.filter((r) => r.distanceKm > 0);
+      const distinctCons = new Set(
+        contributing.map((r) => r.consumptionLPer100Km).filter((c) => c != null),
+      );
+      const distinctPrice = new Set(
+        contributing.map((r) => r.pricePerLiterUsed).filter((p) => p != null && p > 0),
+      );
+      mixedSettings = distinctCons.size > 1 || distinctPrice.size > 1;
       points = reports.map((r) => ({
         ts: r.reportDate,
         km: r.distanceKm,
@@ -584,6 +596,7 @@ export class FuelConsumptionService {
       groupBy,
       source,
       estimated: source === 'gps',
+      mixedSettings,
       range: { from: from.toISOString(), to: to.toISOString(), clamped },
       buckets,
       totals: {

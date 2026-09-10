@@ -2760,6 +2760,7 @@ describe('FuelConsumptionService', () => {
 
       expect(res.source).toBe('gps');
       expect(res.estimated).toBe(true);
+      expect(res.mixedSettings).toBe(false); // même conso (5) sur les 2 rapports
       const sep = res.buckets.find((b) => b.key === '2026-09')!;
       expect(sep.totalKm).toBe(60);
       expect(sep.totalCost).toBe(15900);
@@ -2767,6 +2768,36 @@ describe('FuelConsumptionService', () => {
       expect(sep.avgConsumption).toBe(5); // 3/60*100
       expect(sep.anomalyCount).toBe(1); // 1 rapport "suspicious"
       expect(mockPrisma.fuelLog.findMany).not.toHaveBeenCalled();
+    });
+
+    it('source=gps : mixedSettings=true quand la conso théorique change en cours de période', async () => {
+      mockPrisma.dailyFuelReport.findMany.mockResolvedValueOnce([
+        {
+          reportDate: new Date('2026-09-05T00:00:00.000Z'),
+          distanceKm: 30,
+          consumptionLPer100Km: 2,
+          estimatedCost: 2940,
+          pricePerLiterUsed: 4900,
+          gpsDataQuality: 'sufficient',
+        },
+        {
+          reportDate: new Date('2026-09-10T00:00:00.000Z'),
+          distanceKm: 30,
+          consumptionLPer100Km: 3.5,
+          estimatedCost: 5565,
+          pricePerLiterUsed: 5300,
+          gpsDataQuality: 'sufficient',
+        },
+      ]);
+
+      const res = await service.getPeriodSummary('company-1', {
+        groupBy: 'month',
+        source: 'gps',
+        from: '2026-09-01T12:00:00.000Z',
+        to: '2026-09-25T12:00:00.000Z',
+      });
+
+      expect(res.mixedSettings).toBe(true);
     });
 
     it('sans `source` : bascule sur GPS quand aucun plein saisi sur la période', async () => {

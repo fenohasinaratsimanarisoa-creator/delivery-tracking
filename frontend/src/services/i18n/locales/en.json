@@ -728,7 +728,9 @@
       "colAnomalies": "Anomalies",
       "total": "Total",
       "kpiDays": "Days tracked",
-      "colDays": "Days"
+      "colDays": "Days",
+      "kpiAvgTheoretical": "Theoretical cons.",
+      "mixedSettingsNote": "Some days in this period were computed with older settings (theoretical consumption or price changed since). Regenerate the GPS reports for the period (\"GPS Report\" tab) to harmonise them."
     },
     "pricesHelp": "Set the fuel prices used to estimate GPS report costs. The most recent price applicable to the report date is used.",
     "defaultPricesTitle": "Default prices (per fuel type)",

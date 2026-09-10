@@ -728,7 +728,9 @@
       "colAnomalies": "Anomalies",
       "total": "Total",
       "kpiDays": "Jours suivis",
-      "colDays": "Jours"
+      "colDays": "Jours",
+      "kpiAvgTheoretical": "Conso. théorique",
+      "mixedSettingsNote": "Certains jours de cette période ont été calculés avec d'anciens réglages (conso. théorique ou prix modifiés depuis). Régénérez les rapports GPS de la période (onglet « Rapport GPS ») pour tout harmoniser."
     },
     "pricesHelp": "Définissez ici les prix du carburant utilisés pour estimer les coûts du rapport GPS. Le prix le plus récent applicable à la date du rapport est utilisé.",
     "defaultPricesTitle": "Prix par défaut (par type de carburant)",
