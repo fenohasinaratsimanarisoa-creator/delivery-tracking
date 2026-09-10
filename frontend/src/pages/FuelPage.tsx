@@ -39,6 +39,7 @@ import EntityDialog, {
 } from "../components/EntityDialog";
 import ConfirmDialog from "../components/ConfirmDialog";
 import ErrorState from "../components/ErrorState";
+import FuelPeriodSummary from "../features/fuel/FuelPeriodSummary";
 import { useToast } from "../components/Toast";
 import { formatAriary } from "../services/formatAriary";
 import type { FuelLog, Vehicle } from "../types";
@@ -181,7 +182,7 @@ export default function FuelPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [page, setPage] = useState(1);
-  const [tab, setTab] = useState<"manual" | "gps" | "prices">("manual");
+  const [tab, setTab] = useState<"manual" | "gps" | "prices" | "summary">("manual");
   const [reportDate, setReportDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
@@ -590,6 +591,11 @@ export default function FuelPage() {
       label: t("fuel.tabManual"),
       icon: <PenLine size={15} />,
     },
+    {
+      key: "summary" as const,
+      label: t("fuel.tabSummary"),
+      icon: <CalendarDays size={15} />,
+    },
     { key: "gps" as const, label: t("fuel.tabGps"), icon: <Radar size={15} /> },
     {
       key: "prices" as const,
@@ -710,6 +716,9 @@ export default function FuelPage() {
           </button>
         ))}
       </div>
+
+      {/* Synthèse par période (jour / semaine / mois / année) */}
+      {tab === "summary" && <FuelPeriodSummary vehicles={vehicles} />}
 
       {/* Saisie manuelle */}
       {tab === "manual" && (

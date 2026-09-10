@@ -2634,4 +2634,108 @@ describe('FuelConsumptionService', () => {
       expect(reportFinal.create.distanceKm).toBeCloseTo(totalKm, 1);
     });
   });
+
+  describe('getPeriodSummary — synthèse carburant par période', () => {
+    // Pleins réels : 10 sept (100 L / 1000 km / 400 000), 8 sept (50 L / 400 km / 200 000),
+    // 15 août (80 L / 800 km / 320 000, avec anomalie de conso).
+    const logs = [
+      {
+        liters: 100,
+        kilometers: 1000,
+        cost: 400000,
+        fillDate: new Date('2026-09-10T06:00:00.000Z'),
+        consumptionAnomalyFlag: false,
+        gpsAnomalyFlag: false,
+      },
+      {
+        liters: 50,
+        kilometers: 400,
+        cost: 200000,
+        fillDate: new Date('2026-09-08T06:00:00.000Z'),
+        consumptionAnomalyFlag: false,
+        gpsAnomalyFlag: false,
+      },
+      {
+        liters: 80,
+        kilometers: 800,
+        cost: 320000,
+        fillDate: new Date('2026-08-15T06:00:00.000Z'),
+        consumptionAnomalyFlag: true,
+        gpsAnomalyFlag: false,
+      },
+    ];
+
+    it('groupe par mois avec les totaux réels, la conso L/100km et le compte d’anomalies', async () => {
+      mockPrisma.fuelLog.findMany.mockResolvedValueOnce(logs);
+
+      const res = await service.getPeriodSummary('company-1', {
+        groupBy: 'month',
+        from: '2026-08-05T12:00:00.000Z',
+        to: '2026-09-25T12:00:00.000Z',
+      });
+
+      expect(res.groupBy).toBe('month');
+      expect(res.buckets.map((b) => b.key)).toEqual(['2026-08', '2026-09']);
+
+      const aug = res.buckets.find((b) => b.key === '2026-08')!;
+      expect(aug.totalLiters).toBe(80);
+      expect(aug.totalKm).toBe(800);
+      expect(aug.totalCost).toBe(320000);
+      expect(aug.avgConsumption).toBe(10); // 80/800*100
+      expect(aug.anomalyCount).toBe(1);
+
+      const sep = res.buckets.find((b) => b.key === '2026-09')!;
+      expect(sep.totalLiters).toBe(150); // 100 + 50
+      expect(sep.totalKm).toBe(1400);
+      expect(sep.avgConsumption).toBe(10.71); // 150/1400*100, arrondi 2 déc.
+      expect(sep.logCount).toBe(2);
+
+      expect(res.totals.totalLiters).toBe(230);
+      expect(res.totals.totalCost).toBe(920000);
+      expect(res.totals.anomalyCount).toBe(1);
+      expect(res.totals.activePeriodCount).toBe(2);
+
+      // periodStart = marqueur calendrier LOCAL MG à 00:00Z (formaté timeZone:'UTC'
+      // côté client) — sinon minuit MG = 21:00Z veille → mois décalé d'un cran.
+      expect(sep.periodStart).toBe('2026-09-01T00:00:00.000Z');
+      expect(aug.periodStart).toBe('2026-08-01T00:00:00.000Z');
+    });
+
+    it('renvoie une série continue (tranches vides incluses) pour un tableau lisible', async () => {
+      mockPrisma.fuelLog.findMany.mockResolvedValueOnce([logs[0]]); // un seul plein, en sept.
+
+      const res = await service.getPeriodSummary('company-1', {
+        groupBy: 'month',
+        from: '2026-06-01T00:00:00.000Z',
+        to: '2026-09-15T00:00:00.000Z',
+      });
+
+      expect(res.buckets.map((b) => b.key)).toEqual(['2026-06', '2026-07', '2026-08', '2026-09']);
+      expect(res.buckets.filter((b) => b.logCount === 0)).toHaveLength(3);
+      expect(res.buckets.find((b) => b.key === '2026-09')!.totalLiters).toBe(100);
+    });
+
+    it('resserre la fenêtre quand elle dépasse le plafond de tranches (groupBy=day)', async () => {
+      mockPrisma.fuelLog.findMany.mockResolvedValueOnce([]);
+
+      const res = await service.getPeriodSummary('company-1', {
+        groupBy: 'day',
+        from: '2024-01-01T00:00:00.000Z',
+        to: '2026-09-10T00:00:00.000Z',
+      });
+
+      expect(res.buckets.length).toBeLessThanOrEqual(92);
+      expect(res.range.clamped).toBe(true);
+    });
+
+    it('rejette une fenêtre from > to', async () => {
+      await expect(
+        service.getPeriodSummary('company-1', {
+          groupBy: 'month',
+          from: '2026-09-01T00:00:00.000Z',
+          to: '2026-08-01T00:00:00.000Z',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 });

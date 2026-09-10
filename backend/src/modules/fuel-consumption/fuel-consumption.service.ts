@@ -433,6 +433,211 @@ export class FuelConsumptionService {
     };
   }
 
+  /**
+   * Synthèse carburant agrégée par période — GET /fuel-consumption/summary.
+   *
+   * Regroupe les pleins (FuelLog : litres / km / coût RÉELLEMENT saisis) en
+   * tranches jour / semaine / mois / année, en heure locale Madagascar (UTC+3),
+   * avec une fenêtre par défaut adaptée à la granularité et bornée pour rester
+   * lisible. Chaque tranche de la fenêtre est renvoyée même vide (série continue
+   * pour le tableau et le graphe côté frontend).
+   */
+  async getPeriodSummary(
+    companyId: string,
+    query: {
+      groupBy?: 'day' | 'week' | 'month' | 'year';
+      vehicleId?: string;
+      from?: string;
+      to?: string;
+    },
+  ) {
+    const groupBy = query.groupBy ?? 'month';
+    // Nombre max de tranches renvoyées (au-delà, la fenêtre est resserrée sur les
+    // périodes les plus récentes — un tableau de 400 lignes n'est plus « lisible »).
+    const MAX_BUCKETS: Record<typeof groupBy, number> = {
+      day: 92,
+      week: 53,
+      month: 24,
+      year: 12,
+    };
+
+    const to = query.to ? this.parseDateOrThrow(query.to, 'to') : new Date();
+    let from: Date;
+    if (query.from) {
+      from = this.parseDateOrThrow(query.from, 'from');
+      if (from > to) {
+        throw new BadRequestException('`from` doit être antérieur à `to`');
+      }
+    } else {
+      from = new Date(to);
+      if (groupBy === 'day') from.setUTCDate(from.getUTCDate() - 30);
+      else if (groupBy === 'week') from.setUTCDate(from.getUTCDate() - 7 * 12);
+      else if (groupBy === 'month') from.setUTCMonth(from.getUTCMonth() - 11);
+      else from.setUTCFullYear(from.getUTCFullYear() - 4);
+    }
+
+    // Liste ordonnée des tranches de la fenêtre, resserrée si elle dépasse le plafond.
+    let periods = this.enumeratePeriods(groupBy, from, to);
+    let clamped = false;
+    if (periods.length > MAX_BUCKETS[groupBy]) {
+      periods = periods.slice(periods.length - MAX_BUCKETS[groupBy]);
+      from = periods[0].start;
+      clamped = true;
+    }
+
+    const where: {
+      companyId: string;
+      fillDate: { gte: Date; lte: Date };
+      vehicleId?: string;
+    } = { companyId, fillDate: { gte: from, lte: to } };
+    if (query.vehicleId) where.vehicleId = query.vehicleId;
+
+    const logs = await this.prisma.fuelLog.findMany({
+      where,
+      orderBy: { fillDate: 'asc' },
+    });
+
+    interface Agg {
+      liters: number;
+      km: number;
+      cost: number;
+      logCount: number;
+      anomalyCount: number;
+    }
+    const empty = (): Agg => ({ liters: 0, km: 0, cost: 0, logCount: 0, anomalyCount: 0 });
+    const byKey = new Map<string, Agg>();
+    for (const p of periods) byKey.set(p.key, empty());
+
+    for (const log of logs) {
+      const { key } = this.periodKeyStart(groupBy, log.fillDate);
+      const agg = byKey.get(key) ?? empty();
+      agg.liters += log.liters;
+      agg.km += log.kilometers;
+      agg.cost += log.cost;
+      agg.logCount += 1;
+      if (hasFuelAnomaly(log)) agg.anomalyCount += 1;
+      byKey.set(key, agg);
+    }
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const buckets = periods.map((p) => {
+      const a = byKey.get(p.key) ?? empty();
+      return {
+        key: p.key,
+        // Marqueur calendrier LOCAL MG (à formater côté client avec timeZone:'UTC').
+        periodStart: `${p.localStart}T00:00:00.000Z`,
+        periodEnd: p.end.toISOString(),
+        totalLiters: round2(a.liters),
+        totalKm: round2(a.km),
+        totalCost: Math.round(a.cost),
+        avgConsumption: a.km > 0 ? round2((a.liters / a.km) * 100) : null,
+        costPerKm: a.km > 0 ? Math.round(a.cost / a.km) : null,
+        logCount: a.logCount,
+        anomalyCount: a.anomalyCount,
+      };
+    });
+
+    const tLiters = logs.reduce((s, l) => s + l.liters, 0);
+    const tKm = logs.reduce((s, l) => s + l.kilometers, 0);
+    const tCost = logs.reduce((s, l) => s + l.cost, 0);
+
+    return {
+      groupBy,
+      range: { from: from.toISOString(), to: to.toISOString(), clamped },
+      buckets,
+      totals: {
+        totalLiters: round2(tLiters),
+        totalKm: round2(tKm),
+        totalCost: Math.round(tCost),
+        avgConsumption: tKm > 0 ? round2((tLiters / tKm) * 100) : null,
+        costPerKm: tKm > 0 ? Math.round(tCost / tKm) : null,
+        logCount: logs.length,
+        anomalyCount: logs.filter((l) => hasFuelAnomaly(l)).length,
+        periodCount: buckets.length,
+        activePeriodCount: buckets.filter((b) => b.logCount > 0).length,
+      },
+    };
+  }
+
+  // ── Bucketing par période, en heure locale Madagascar (UTC+3) ────────────────
+  private static readonly MG_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+  /** Instant réel (UTC) correspondant à minuit local MG le y-m-day (m : 0-indexé). */
+  private mgMidnight(y: number, m: number, day: number): Date {
+    return new Date(Date.UTC(y, m, day) - FuelConsumptionService.MG_OFFSET_MS);
+  }
+
+  /**
+   * Clé + bornes de la tranche contenant `d`, en calendrier local MG.
+   * Semaine = lundi→dimanche ; la clé de semaine est la date du lundi (triable).
+   */
+  private periodKeyStart(
+    groupBy: 'day' | 'week' | 'month' | 'year',
+    d: Date,
+  ): { key: string; start: Date; end: Date; localStart: string } {
+    const local = new Date(d.getTime() + FuelConsumptionService.MG_OFFSET_MS);
+    const y = local.getUTCFullYear();
+    const m = local.getUTCMonth();
+    const day = local.getUTCDate();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    // Date-calendrier LOCALE MG en « faux UTC » (00:00Z) : le frontend la formate
+    // avec timeZone:'UTC' et retrouve le bon jour/mois. `start`/`end` restent des
+    // instants réels pour l'itération et le filtrage Prisma.
+    const localMarker = (yy: number, mm: number, dd: number) => `${yy}-${pad(mm + 1)}-${pad(dd)}`;
+
+    if (groupBy === 'year') {
+      return {
+        key: `${y}`,
+        localStart: localMarker(y, 0, 1),
+        start: this.mgMidnight(y, 0, 1),
+        end: this.mgMidnight(y + 1, 0, 1),
+      };
+    }
+    if (groupBy === 'month') {
+      return {
+        key: `${y}-${pad(m + 1)}`,
+        localStart: localMarker(y, m, 1),
+        start: this.mgMidnight(y, m, 1),
+        end: this.mgMidnight(y, m + 1, 1),
+      };
+    }
+    if (groupBy === 'week') {
+      const mondayOffset = (local.getUTCDay() + 6) % 7; // 0 = lundi
+      const start = this.mgMidnight(y, m, day - mondayOffset);
+      const sl = new Date(start.getTime() + FuelConsumptionService.MG_OFFSET_MS);
+      const mk = localMarker(sl.getUTCFullYear(), sl.getUTCMonth(), sl.getUTCDate());
+      return {
+        key: mk,
+        localStart: mk,
+        start,
+        end: this.mgMidnight(y, m, day - mondayOffset + 7),
+      };
+    }
+    const mk = localMarker(y, m, day);
+    return {
+      key: mk,
+      localStart: mk,
+      start: this.mgMidnight(y, m, day),
+      end: this.mgMidnight(y, m, day + 1),
+    };
+  }
+
+  /** Toutes les tranches (croissantes) chevauchant [from, to], bornes locales MG. */
+  private enumeratePeriods(
+    groupBy: 'day' | 'week' | 'month' | 'year',
+    from: Date,
+    to: Date,
+  ): { key: string; start: Date; end: Date; localStart: string }[] {
+    const out: { key: string; start: Date; end: Date; localStart: string }[] = [];
+    let cursor = this.periodKeyStart(groupBy, from);
+    // Garde-fou dur : jamais plus de 400 itérations quelle que soit la fenêtre.
+    for (let i = 0; i < 400 && cursor.start <= to; i++) {
+      out.push(cursor);
+      cursor = this.periodKeyStart(groupBy, new Date(cursor.end.getTime()));
+    }
+    return out;
+  }
+
   async getDailyReports(companyId: string, reportDate?: string) {
     const where: any = { companyId };
     if (reportDate) {

@@ -14,6 +14,7 @@ import { FuelConsumptionService } from './fuel-consumption.service';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
 import { UpdateFuelLogDto } from './dto/update-fuel-log.dto';
 import { FuelFilterDto } from './dto/fuel-filter.dto';
+import { FuelSummaryQueryDto } from './dto/fuel-summary.dto';
 import { CreateFuelPriceDto } from './dto/create-fuel-price.dto';
 import { UpdateFuelPriceDto } from './dto/update-fuel-price.dto';
 import { UpdateDefaultFuelPricesDto } from './dto/update-default-fuel-prices.dto';
@@ -44,6 +45,12 @@ export class FuelConsumptionController {
   @Get('stats')
   getStats(@CurrentUser('companyId') companyId: string, @Query('vehicleId') vehicleId?: string) {
     return this.fuelService.getConsumptionStats(companyId, vehicleId);
+  }
+
+  @Roles('admin', 'dispatcher')
+  @Get('summary')
+  getSummary(@CurrentUser('companyId') companyId: string, @Query() query: FuelSummaryQueryDto) {
+    return this.fuelService.getPeriodSummary(companyId, query);
   }
 
   @Roles('admin', 'dispatcher')
