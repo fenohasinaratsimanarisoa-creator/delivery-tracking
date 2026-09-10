@@ -365,7 +365,7 @@ export default function FuelPeriodSummary({ vehicles }: { vehicles?: VehicleOpt[
             />
             <Kpi
               icon={<Fuel size={15} />}
-              label={t("fuel.summary.kpiFills")}
+              label={activeSource === "gps" ? t("fuel.summary.kpiDays") : t("fuel.summary.kpiFills")}
               value={nf.format(data.totals.logCount)}
               sub={
                 data.totals.anomalyCount > 0
@@ -482,7 +482,11 @@ export default function FuelPeriodSummary({ vehicles }: { vehicles?: VehicleOpt[
                         <th>{t("fuel.summary.colDistance")}</th>
                         <th>{t("fuel.summary.colAvg")}</th>
                         <th>{t("fuel.summary.colCostPerKm")}</th>
-                        <th>{t("fuel.summary.colFills")}</th>
+                        <th>
+                          {activeSource === "gps"
+                            ? t("fuel.summary.colDays")
+                            : t("fuel.summary.colFills")}
+                        </th>
                         <th>{t("fuel.summary.colAnomalies")}</th>
                       </tr>
                     </thead>

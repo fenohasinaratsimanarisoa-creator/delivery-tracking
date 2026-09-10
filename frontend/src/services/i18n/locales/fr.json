@@ -726,7 +726,9 @@
       "colCostPerKm": "Coût/km",
       "colFills": "Pleins",
       "colAnomalies": "Anomalies",
-      "total": "Total"
+      "total": "Total",
+      "kpiDays": "Jours suivis",
+      "colDays": "Jours"
     },
     "pricesHelp": "Définissez ici les prix du carburant utilisés pour estimer les coûts du rapport GPS. Le prix le plus récent applicable à la date du rapport est utilisé.",
     "defaultPricesTitle": "Prix par défaut (par type de carburant)",

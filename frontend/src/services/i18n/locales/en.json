@@ -726,7 +726,9 @@
       "colCostPerKm": "Cost/km",
       "colFills": "Fill-ups",
       "colAnomalies": "Anomalies",
-      "total": "Total"
+      "total": "Total",
+      "kpiDays": "Days tracked",
+      "colDays": "Days"
     },
     "pricesHelp": "Set the fuel prices used to estimate GPS report costs. The most recent price applicable to the report date is used.",
     "defaultPricesTitle": "Default prices (per fuel type)",
