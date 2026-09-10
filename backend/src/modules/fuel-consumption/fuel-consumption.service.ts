@@ -446,6 +446,7 @@ export class FuelConsumptionService {
     companyId: string,
     query: {
       groupBy?: 'day' | 'week' | 'month' | 'year';
+      source?: 'logs' | 'gps';
       vehicleId?: string;
       from?: string;
       to?: string;
@@ -485,17 +486,55 @@ export class FuelConsumptionService {
       clamped = true;
     }
 
-    const where: {
-      companyId: string;
-      fillDate: { gte: Date; lte: Date };
-      vehicleId?: string;
-    } = { companyId, fillDate: { gte: from, lte: to } };
-    if (query.vehicleId) where.vehicleId = query.vehicleId;
+    // Résolution de la source :
+    //  - 'logs' : pleins RÉELLEMENT saisis (FuelLog) — argent réellement dépensé ;
+    //  - 'gps'  : estimation à partir des trajets GPS (DailyFuelReport) — distance
+    //             GPS × conso théorique × prix configuré.
+    // Sans `source` explicite : 'logs' si la période contient au moins un plein
+    // saisi, sinon 'gps' (la plupart des flottes ne saisissent pas les pleins).
+    const vehicleWhere = query.vehicleId ? { vehicleId: query.vehicleId } : {};
+    let source = query.source;
+    if (!source) {
+      const logCount = await this.prisma.fuelLog.count({
+        where: { companyId, fillDate: { gte: from, lte: to }, ...vehicleWhere },
+      });
+      source = logCount > 0 ? 'logs' : 'gps';
+    }
 
-    const logs = await this.prisma.fuelLog.findMany({
-      where,
-      orderBy: { fillDate: 'asc' },
-    });
+    // Points normalisés (une entrée = un plein OU un rapport journalier).
+    interface Point {
+      ts: Date;
+      liters: number;
+      km: number;
+      cost: number;
+      anomaly: boolean;
+    }
+    let points: Point[];
+    if (source === 'gps') {
+      const reports = await this.prisma.dailyFuelReport.findMany({
+        where: { companyId, reportDate: { gte: from, lte: to }, ...vehicleWhere },
+        orderBy: { reportDate: 'asc' },
+      });
+      points = reports.map((r) => ({
+        ts: r.reportDate,
+        km: r.distanceKm,
+        cost: r.estimatedCost,
+        liters: (r.distanceKm * (r.consumptionLPer100Km ?? 0)) / 100,
+        anomaly: r.gpsDataQuality === 'suspicious',
+      }));
+    } else {
+      const logs = await this.prisma.fuelLog.findMany({
+        where: { companyId, fillDate: { gte: from, lte: to }, ...vehicleWhere },
+        orderBy: { fillDate: 'asc' },
+      });
+      points = logs.map((l) => ({
+        ts: l.fillDate,
+        km: l.kilometers,
+        cost: l.cost,
+        liters: l.liters,
+        anomaly: hasFuelAnomaly(l),
+      }));
+    }
 
     interface Agg {
       liters: number;
@@ -508,14 +547,14 @@ export class FuelConsumptionService {
     const byKey = new Map<string, Agg>();
     for (const p of periods) byKey.set(p.key, empty());
 
-    for (const log of logs) {
-      const { key } = this.periodKeyStart(groupBy, log.fillDate);
+    for (const pt of points) {
+      const { key } = this.periodKeyStart(groupBy, pt.ts);
       const agg = byKey.get(key) ?? empty();
-      agg.liters += log.liters;
-      agg.km += log.kilometers;
-      agg.cost += log.cost;
+      agg.liters += pt.liters;
+      agg.km += pt.km;
+      agg.cost += pt.cost;
       agg.logCount += 1;
-      if (hasFuelAnomaly(log)) agg.anomalyCount += 1;
+      if (pt.anomaly) agg.anomalyCount += 1;
       byKey.set(key, agg);
     }
 
@@ -537,12 +576,14 @@ export class FuelConsumptionService {
       };
     });
 
-    const tLiters = logs.reduce((s, l) => s + l.liters, 0);
-    const tKm = logs.reduce((s, l) => s + l.kilometers, 0);
-    const tCost = logs.reduce((s, l) => s + l.cost, 0);
+    const tLiters = points.reduce((s, p) => s + p.liters, 0);
+    const tKm = points.reduce((s, p) => s + p.km, 0);
+    const tCost = points.reduce((s, p) => s + p.cost, 0);
 
     return {
       groupBy,
+      source,
+      estimated: source === 'gps',
       range: { from: from.toISOString(), to: to.toISOString(), clamped },
       buckets,
       totals: {
@@ -551,8 +592,8 @@ export class FuelConsumptionService {
         totalCost: Math.round(tCost),
         avgConsumption: tKm > 0 ? round2((tLiters / tKm) * 100) : null,
         costPerKm: tKm > 0 ? Math.round(tCost / tKm) : null,
-        logCount: logs.length,
-        anomalyCount: logs.filter((l) => hasFuelAnomaly(l)).length,
+        logCount: points.length,
+        anomalyCount: points.filter((p) => p.anomaly).length,
         periodCount: buckets.length,
         activePeriodCount: buckets.filter((b) => b.logCount > 0).length,
       },

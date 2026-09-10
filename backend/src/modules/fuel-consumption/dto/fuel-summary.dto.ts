@@ -10,6 +10,16 @@ export class FuelSummaryQueryDto {
   @IsIn(['day', 'week', 'month', 'year'])
   groupBy?: 'day' | 'week' | 'month' | 'year';
 
+  /**
+   * Source des chiffres :
+   *  - `logs` : pleins réellement saisis (FuelLog) ;
+   *  - `gps`  : estimation à partir des trajets GPS (DailyFuelReport).
+   * Défaut : `logs` si des pleins existent sur la période, sinon `gps`.
+   */
+  @IsOptional()
+  @IsIn(['logs', 'gps'])
+  source?: 'logs' | 'gps';
+
   /** Restreint à un véhicule (sinon toute la flotte). */
   @IsOptional()
   @IsString()

@@ -27,6 +27,7 @@ import ErrorState from "../../components/ErrorState";
 import styles from "./FuelPeriodSummary.module.css";
 
 type GroupBy = "day" | "week" | "month" | "year";
+type Source = "logs" | "gps";
 
 interface Bucket {
   key: string;
@@ -43,6 +44,8 @@ interface Bucket {
 
 interface SummaryResponse {
   groupBy: GroupBy;
+  source: Source;
+  estimated: boolean;
   range: { from: string; to: string; clamped: boolean };
   buckets: Bucket[];
   totals: {
@@ -157,17 +160,19 @@ function Kpi({
 export default function FuelPeriodSummary({ vehicles }: { vehicles?: VehicleOpt[] }) {
   const { t } = useTranslation();
   const [groupBy, setGroupBy] = useState<GroupBy>("month");
+  const [sourceOverride, setSourceOverride] = useState<Source | null>(null);
   const [vehicleId, setVehicleId] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
   const qs = useMemo(() => {
     const p = new URLSearchParams({ groupBy });
+    if (sourceOverride) p.set("source", sourceOverride);
     if (vehicleId) p.set("vehicleId", vehicleId);
     if (from) p.set("from", new Date(`${from}T00:00:00`).toISOString());
     if (to) p.set("to", new Date(`${to}T23:59:59`).toISOString());
     return p.toString();
-  }, [groupBy, vehicleId, from, to]);
+  }, [groupBy, sourceOverride, vehicleId, from, to]);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery<SummaryResponse>({
     queryKey: ["fuel-summary", qs],
@@ -195,6 +200,11 @@ export default function FuelPeriodSummary({ vehicles }: { vehicles?: VehicleOpt[
 
   const hasActivity = (data?.totals.activePeriodCount ?? 0) > 0;
   const rows = data ? [...data.buckets].reverse() : [];
+  const activeSource: Source = sourceOverride ?? data?.source ?? "gps";
+  const sources: { key: Source; label: string }[] = [
+    { key: "logs", label: t("fuel.summary.srcLogs") },
+    { key: "gps", label: t("fuel.summary.srcGps") },
+  ];
 
   return (
     <div className={styles.wrap}>
@@ -211,6 +221,22 @@ export default function FuelPeriodSummary({ vehicles }: { vehicles?: VehicleOpt[
                 className={`${styles.segBtn} ${groupBy === p.key ? styles.segBtnActive : ""}`}
               >
                 {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={styles.filterField}>
+          <label className={styles.filterLabel}>{t("fuel.summary.source")}</label>
+          <div className={styles.segmented} role="group">
+            {sources.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setSourceOverride(s.key)}
+                className={`${styles.segBtn} ${activeSource === s.key ? styles.segBtnActive : ""}`}
+              >
+                {s.label}
               </button>
             ))}
           </div>
@@ -254,7 +280,7 @@ export default function FuelPeriodSummary({ vehicles }: { vehicles?: VehicleOpt[
           />
         </div>
 
-        {(from || to || vehicleId) && (
+        {(from || to || vehicleId || sourceOverride) && (
           <button
             type="button"
             className={styles.resetBtn}
@@ -262,6 +288,7 @@ export default function FuelPeriodSummary({ vehicles }: { vehicles?: VehicleOpt[
               setFrom("");
               setTo("");
               setVehicleId("");
+              setSourceOverride(null);
             }}
           >
             {t("fuel.summary.reset")}
@@ -293,6 +320,13 @@ export default function FuelPeriodSummary({ vehicles }: { vehicles?: VehicleOpt[
 
       {data && !isError && (
         <>
+          {data.estimated && (
+            <div className={styles.estimatedNote}>
+              <Activity size={14} />
+              {t("fuel.summary.estimatedNote")}
+            </div>
+          )}
+
           {/* ── KPI de la fenêtre ─────────────────────────────── */}
           <div className={styles.kpis}>
             <Kpi
@@ -347,7 +381,11 @@ export default function FuelPeriodSummary({ vehicles }: { vehicles?: VehicleOpt[
             <div className={styles.empty}>
               <Inbox size={28} />
               <p className={styles.emptyTitle}>{t("fuel.summary.emptyTitle")}</p>
-              <p>{t("fuel.summary.emptyText")}</p>
+              <p>
+                {activeSource === "gps"
+                  ? t("fuel.summary.emptyTextGps")
+                  : t("fuel.summary.emptyText")}
+              </p>
             </div>
           ) : (
             <>
