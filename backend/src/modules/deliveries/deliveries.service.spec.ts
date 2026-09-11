@@ -21,6 +21,20 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
+import * as fs from 'fs';
+import * as path from 'path';
+import { execFileSync } from 'child_process';
+
+// parsePdfImportRows() charge pdfjs-dist (ESM pur, `import.meta`), inexécutable dans le
+// bac à sable VM de Jest — voir le describe 'importDeliveriesFile (pdf)' plus bas, qui
+// teste le VRAI parsing PDF via un sous-process Node. Ici on mocke uniquement cette
+// fonction pour vérifier que importDeliveriesFile() route bien vers elle sur un nom de
+// fichier .pdf et traite correctement les lignes qu'elle renvoie.
+jest.mock('./delivery-import-parser', () => ({
+  ...jest.requireActual('./delivery-import-parser'),
+  parsePdfImportRows: jest.fn(),
+}));
+import { parsePdfImportRows } from './delivery-import-parser';
 
 describe('DeliveriesService - State Machine', () => {
   let service: DeliveriesService;
@@ -284,7 +298,7 @@ describe('DeliveriesService - State Machine', () => {
     });
   });
 
-  describe('importExcel', () => {
+  describe('importDeliveriesFile (xlsx)', () => {
     async function createXlsxBuffer(rows: string[][]): Promise<Buffer> {
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('Sheet1');
@@ -311,7 +325,12 @@ describe('DeliveriesService - State Machine', () => {
         ],
       ]);
 
-      const result = await service.importExcel('comp-1', buffer, 'Entrepôt principal');
+      const result = await service.importDeliveriesFile(
+        'comp-1',
+        buffer,
+        'test.xlsx',
+        'Entrepôt principal',
+      );
 
       expect(result.created).toBe(2);
       expect(result.errors).toHaveLength(0);
@@ -338,7 +357,7 @@ describe('DeliveriesService - State Machine', () => {
         ['CMD-003', 'Analakely', '30000'],
       ]);
 
-      const result = await service.importExcel('comp-1', buffer, 'Dépôt');
+      const result = await service.importDeliveriesFile('comp-1', buffer, 'test.xlsx', 'Dépôt');
 
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0].reason).toContain('N° Commande manquant');
@@ -351,7 +370,7 @@ describe('DeliveriesService - State Machine', () => {
         ['CMD-004', '', '50000'],
       ]);
 
-      const result = await service.importExcel('comp-1', buffer, 'Dépôt');
+      const result = await service.importDeliveriesFile('comp-1', buffer, 'test.xlsx', 'Dépôt');
 
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0].reason).toContain('Lieu');
@@ -379,7 +398,7 @@ describe('DeliveriesService - State Machine', () => {
         ['CMD-005', 'Analakely'],
       ]);
 
-      const result = await service.importExcel('comp-1', buffer, 'Dépôt');
+      const result = await service.importDeliveriesFile('comp-1', buffer, 'test.xlsx', 'Dépôt');
 
       expect(result.created).toBe(1);
       expect(result.skipped).toHaveLength(1);
@@ -396,7 +415,7 @@ describe('DeliveriesService - State Machine', () => {
         ['CMD-006', 'Ivato', 'Matinée 8h-12h'],
       ]);
 
-      const result = await service.importExcel('comp-1', buffer, 'Dépôt');
+      const result = await service.importDeliveriesFile('comp-1', buffer, 'test.xlsx', 'Dépôt');
 
       expect(result.created).toBe(1);
       expect(mockPrisma.delivery.create).toHaveBeenCalledWith(
@@ -419,7 +438,13 @@ describe('DeliveriesService - State Machine', () => {
         ['CMD-NEW', 'Analakely', '20000'],
       ]);
 
-      const result = await service.importExcel('comp-1', buffer, 'Dépôt', 'upsert');
+      const result = await service.importDeliveriesFile(
+        'comp-1',
+        buffer,
+        'test.xlsx',
+        'Dépôt',
+        'upsert',
+      );
 
       expect(result.created).toBe(1);
       expect(result.updated).toBe(1);
@@ -446,8 +471,8 @@ describe('DeliveriesService - State Machine', () => {
         ['CMD-SCOPE', 'Ivato'],
       ]);
 
-      const result1 = await service.importExcel('comp-1', buffer, 'Dépôt');
-      const result2 = await service.importExcel('comp-2', buffer, 'Dépôt');
+      const result1 = await service.importDeliveriesFile('comp-1', buffer, 'test.xlsx', 'Dépôt');
+      const result2 = await service.importDeliveriesFile('comp-2', buffer, 'test.xlsx', 'Dépôt');
 
       expect(result1.created).toBe(1);
       expect(result2.created).toBe(1);
@@ -478,7 +503,7 @@ describe('DeliveriesService - State Machine', () => {
         ['CMD-RACE', 'Ivato'],
       ]);
 
-      const result = await service.importExcel('comp-1', buffer, 'Dépôt');
+      const result = await service.importDeliveriesFile('comp-1', buffer, 'test.xlsx', 'Dépôt');
 
       expect(result.created).toBe(0);
       expect(result.skipped).toHaveLength(1);
@@ -1182,7 +1207,7 @@ describe('DeliveriesService - State Machine', () => {
     });
   });
 
-  describe('importExcel — avancement du statut en upsert (M2)', () => {
+  describe('importDeliveriesFile (xlsx) — avancement du statut en upsert (M2)', () => {
     it('avance une livraison pending/assigned à in_progress', async () => {
       // Génère un buffer Excel minimal avec l'en-tête attendu.
       const wb = new ExcelJS.Workbook();
@@ -1197,9 +1222,10 @@ describe('DeliveriesService - State Machine', () => {
       });
       mockPrisma.delivery.update.mockResolvedValue({ id: 'del-1' });
 
-      const result = await service.importExcel(
+      const result = await service.importDeliveriesFile(
         'comp-1',
         buffer as unknown as Buffer,
+        'test.xlsx',
         'Entrepôt',
         'upsert',
       );
@@ -1224,9 +1250,121 @@ describe('DeliveriesService - State Machine', () => {
       });
       mockPrisma.delivery.update.mockResolvedValue({ id: 'del-1' });
 
-      await service.importExcel('comp-1', buffer as unknown as Buffer, 'Entrepôt', 'upsert');
+      await service.importDeliveriesFile(
+        'comp-1',
+        buffer as unknown as Buffer,
+        'test.xlsx',
+        'Entrepôt',
+        'upsert',
+      );
       const updateArg = mockPrisma.delivery.update.mock.calls[0][0];
       expect(updateArg.data.status).toBeUndefined();
+    });
+  });
+
+  describe('importDeliveriesFile (pdf)', () => {
+    // pdfjs-dist est publié en ESM pur (utilise `import.meta`), que le bac à sable VM de
+    // Jest ne sait pas exécuter — même via l'`import()` dynamique downlevelé par ts-jest.
+    // On vérifie donc le parsing PDF réel dans un VRAI process Node (celui utilisé en
+    // production), via le script `__fixtures__/parse-pdf-cli.ts`, plutôt qu'en appelant
+    // parsePdfImportRows()/importDeliveriesFile() directement depuis ce test.
+    it('parses the real-world "livraison_exemple.pdf" fixture into 26 rows', () => {
+      const cliPath = path.join(__dirname, '__fixtures__/parse-pdf-cli.ts');
+      const pdfPath = path.join(__dirname, '../../../../livraison_exemple.pdf');
+      const stdout = execFileSync('npx', ['ts-node', '--transpile-only', cliPath, pdfPath], {
+        cwd: path.join(__dirname, '../../..'),
+        encoding: 'utf-8',
+        timeout: 30000,
+      });
+      const rows = JSON.parse(stdout);
+
+      expect(rows).toHaveLength(26);
+      expect(rows[0]).toEqual(
+        expect.objectContaining({
+          orderRef: '260909-02965',
+          lieu: 'ANTANINARENINA',
+          adresse: 'Poste de police',
+          telephone: '034 07 505 13',
+          montant: '25 000',
+          prix: '25000',
+          produits: '1 Montre Tomi Luckyfox pour femme',
+          observation: '2026-09-11',
+        }),
+      );
+      // Ligne payée en MVOLA (mobile money) : le "montant" (COD à collecter) n'est pas
+      // un nombre — parseAmount() le convertira en `undefined` côté service.
+      const mvolaRow = rows.find((r: any) => r.orderRef === '260910-03009');
+      expect(mvolaRow.montant).toBe('MVOLA');
+      expect(mvolaRow.prix).toBe('145000');
+
+      // Toutes les commandes doivent avoir un N° Commande et un Lieu (sinon la ligne
+      // serait rejetée en erreur par importDeliveriesFile).
+      for (const row of rows) {
+        expect(row.orderRef).toMatch(/^\d{6}-\d{5}$/);
+        expect(row.lieu).toBeTruthy();
+      }
+    }, 30000);
+
+    it('routes .pdf files to parsePdfImportRows and creates deliveries from its rows', async () => {
+      (parsePdfImportRows as jest.Mock).mockResolvedValueOnce([
+        {
+          row: 1,
+          orderRef: '260909-02965',
+          lieu: 'ANTANINARENINA',
+          adresse: 'Poste de police',
+          telephone: '034 07 505 13',
+          montant: '25 000',
+          prix: '25000',
+          produits: '1 Montre Tomi Luckyfox pour femme',
+          observation: '2026-09-11',
+        },
+      ]);
+      mockPrisma.delivery.findFirst.mockResolvedValue(null);
+      mockPrisma.delivery.create.mockResolvedValue({});
+
+      const result = await service.importDeliveriesFile(
+        'comp-1',
+        Buffer.from('%PDF-fake'),
+        'livraison_exemple.pdf',
+        'Entrepôt principal',
+      );
+
+      expect(parsePdfImportRows).toHaveBeenCalledTimes(1);
+      expect(result.created).toBe(1);
+      expect(result.errors).toHaveLength(0);
+      expect(mockPrisma.delivery.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            externalOrderRef: '260909-02965',
+            deliveryAddress: 'ANTANINARENINA',
+            deliveryLocationLabel: 'Poste de police',
+            clientPhone: '034 07 505 13',
+            amount: 25000,
+            articlePrice: 25000,
+            productDescription: '1 Montre Tomi Luckyfox pour femme',
+            notes: 'Observation: 2026-09-11',
+          }),
+        }),
+      );
+    });
+
+    it('surfaces a clear error when the PDF cannot be parsed', async () => {
+      (parsePdfImportRows as jest.Mock).mockRejectedValueOnce(new Error('boom'));
+
+      await expect(
+        service.importDeliveriesFile('comp-1', Buffer.from('%PDF-fake'), 'x.pdf', 'Dépôt'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects a non-.xlsx/.pdf filename with a clear error before hitting the parsers', async () => {
+      // Le contrôleur filtre déjà l'extension, mais on vérifie que le fallback
+      // .xlsx d'importDeliveriesFile échoue proprement sur un PDF mal renommé
+      // plutôt que d'essayer de le lire comme un classeur Excel.
+      const pdfBuffer = fs.readFileSync(path.join(__dirname, '../../../../livraison_exemple.pdf'));
+
+      await expect(
+        service.importDeliveriesFile('comp-1', pdfBuffer, 'test.xlsx', 'Entrepôt'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

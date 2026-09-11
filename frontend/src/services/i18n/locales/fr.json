@@ -332,8 +332,8 @@
       "deleted": "Livraison supprimée",
       "deleteError": "Erreur lors de la suppression",
       "mismatchResolved": "Alerte marquée comme traitée",
-      "importError": "Erreur lors de l'import Excel",
-      "invalidFile": "Format de fichier invalide, .xlsx attendu"
+      "importError": "Erreur lors de l'import",
+      "invalidFile": "Format de fichier invalide, .xlsx ou .pdf attendu"
     },
     "confirmDelete": {
       "title": "Supprimer la livraison",
@@ -348,7 +348,7 @@
       "validNumber": "Doit être un nombre valide"
     },
     "import": {
-      "action": "Importer Excel",
+      "action": "Importer Excel/PDF",
       "importing": "Import en cours…",
       "resultTitle": "Résultat de l'import",
       "stats": {

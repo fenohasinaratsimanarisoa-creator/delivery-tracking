@@ -22,6 +22,13 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (config.method && !['get', 'head', 'options'].includes(config.method) && config.headers) {
     Object.assign(config.headers, getCsrfHeaders());
   }
+  // Le Content-Type par défaut de l'instance est 'application/json' — pour un body
+  // FormData (upload de fichier), il faut le retirer pour qu'axios/le navigateur
+  // pose eux-mêmes 'multipart/form-data; boundary=...'. Sinon le body FormData est
+  // sérialisé en JSON ("null" côté serveur) et multer ne reçoit jamais le fichier.
+  if (config.data instanceof FormData && config.headers) {
+    delete config.headers['Content-Type'];
+  }
   return config;
 });
 

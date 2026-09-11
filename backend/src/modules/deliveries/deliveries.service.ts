@@ -9,7 +9,6 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DeliveryStatus, NotificationType, NotificationPriority, Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
-import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
@@ -21,6 +20,7 @@ import { UpdateDeliveryStatusDto } from './dto/update-delivery-status.dto';
 import { haversineDistance } from '../../common/geo/geo.utils';
 import { t, type Language } from '../../common/i18n';
 import { parseAmount } from '../../common/utils/parse-amount';
+import { parseXlsxImportRows, parsePdfImportRows, RawImportRow } from './delivery-import-parser';
 
 const TRANSITION_MATRIX: Record<DeliveryStatus, DeliveryStatus[]> = {
   [DeliveryStatus.pending]: [DeliveryStatus.assigned, DeliveryStatus.cancelled],
@@ -953,9 +953,10 @@ export class DeliveriesService {
     return result;
   }
 
-  async importExcel(
+  async importDeliveriesFile(
     companyId: string,
     fileBuffer: Uint8Array,
+    originalName: string,
     defaultPickupAddress: string,
     mode: 'create-only' | 'upsert' = 'create-only',
   ): Promise<{
@@ -964,26 +965,24 @@ export class DeliveriesService {
     skipped: { row: number; orderRef: string; reason: string }[];
     errors: { row: number; reason: string }[];
   }> {
-    const workbook = new ExcelJS.Workbook();
-    await (workbook.xlsx as any).load(fileBuffer);
-    const worksheet = workbook.worksheets[0];
-    if (!worksheet) throw new BadRequestException('Le fichier Excel est vide');
-
-    const headerRow = worksheet.getRow(1);
-    const colMap = new Map<string, number>();
-    headerRow.eachCell((cell, colNumber) => {
-      const val = String(cell.value || '').trim();
-      if (val) colMap.set(val, colNumber);
-    });
-
-    const getCol = (row: number, name: string): string | undefined => {
-      const col = colMap.get(name);
-      if (!col) return undefined;
-      const cell = worksheet.getRow(row).getCell(col);
-      const v = cell.value;
-      if (v === null || v === undefined) return undefined;
-      return String(v).trim();
-    };
+    const isPdf = /\.pdf$/i.test(originalName);
+    let rawRows: RawImportRow[];
+    try {
+      rawRows = isPdf
+        ? await parsePdfImportRows(fileBuffer)
+        : await parseXlsxImportRows(fileBuffer);
+    } catch (err) {
+      throw new BadRequestException(
+        isPdf
+          ? 'Impossible de lire le PDF (fichier corrompu ou format inattendu)'
+          : 'Impossible de lire le fichier Excel (fichier corrompu ou format inattendu)',
+      );
+    }
+    if (rawRows.length === 0) {
+      throw new BadRequestException(
+        isPdf ? 'Aucune livraison détectée dans le PDF' : 'Le fichier Excel est vide',
+      );
+    }
 
     const result = {
       created: 0,
@@ -992,10 +991,10 @@ export class DeliveriesService {
       errors: [] as { row: number; reason: string }[],
     };
 
-    const totalRows = worksheet.rowCount;
-    for (let rowNum = 2; rowNum <= totalRows; rowNum++) {
-      const orderRef = getCol(rowNum, 'N° Commande');
-      const lieu = getCol(rowNum, 'Lieu');
+    for (const raw of rawRows) {
+      const rowNum = raw.row;
+      const orderRef = raw.orderRef;
+      const lieu = raw.lieu;
 
       if (!orderRef) {
         result.errors.push({ row: rowNum, reason: 'N° Commande manquant' });
@@ -1011,13 +1010,13 @@ export class DeliveriesService {
         select: { id: true, status: true },
       });
 
-      const adresse = getCol(rowNum, 'Adresse') || undefined;
-      const telephone = getCol(rowNum, 'Téléphone') || undefined;
-      const montant = parseAmount(getCol(rowNum, 'Montant'));
-      const prix = parseAmount(getCol(rowNum, 'Prix'));
-      const produits = getCol(rowNum, 'Produits commandés') || undefined;
-      const observation = getCol(rowNum, 'Observation');
-      const notesExistantes = getCol(rowNum, 'Notes');
+      const adresse = raw.adresse;
+      const telephone = raw.telephone;
+      const montant = parseAmount(raw.montant);
+      const prix = parseAmount(raw.prix);
+      const produits = raw.produits;
+      const observation = raw.observation;
+      const notesExistantes = raw.notes;
       const notes =
         [notesExistantes, observation ? `Observation: ${observation}` : null]
           .filter(Boolean)
@@ -1092,7 +1091,7 @@ export class DeliveriesService {
       }
     }
     Logger.log(
-      `Import Excel (${mode}): ${result.created} créées, ${result.updated} mises à jour, ${result.skipped.length} ignorées, ${result.errors.length} erreurs`,
+      `Import ${isPdf ? 'PDF' : 'Excel'} (${mode}): ${result.created} créées, ${result.updated} mises à jour, ${result.skipped.length} ignorées, ${result.errors.length} erreurs`,
       'DeliveriesService',
     );
     return result;

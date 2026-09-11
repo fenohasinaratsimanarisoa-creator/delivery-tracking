@@ -332,8 +332,8 @@
       "deleted": "Delivery deleted",
       "deleteError": "Error deleting delivery",
       "mismatchResolved": "Alert marked as handled",
-      "importError": "Error importing Excel file",
-      "invalidFile": "Invalid file format, .xlsx expected"
+      "importError": "Error importing file",
+      "invalidFile": "Invalid file format, .xlsx or .pdf expected"
     },
     "confirmDelete": {
       "title": "Delete delivery",
@@ -348,7 +348,7 @@
       "validNumber": "Must be a valid number"
     },
     "import": {
-      "action": "Import Excel",
+      "action": "Import Excel/PDF",
       "importing": "Importing…",
       "resultTitle": "Import results",
       "stats": {

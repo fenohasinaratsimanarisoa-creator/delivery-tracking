@@ -272,7 +272,7 @@ export default function DeliveriesPage() {
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.match(/\.xlsx$/i)) {
+    if (!file.name.match(/\.(xlsx|pdf)$/i)) {
       toast(t('deliveries.toast.invalidFile'), 'error');
       return;
     }
@@ -473,7 +473,7 @@ export default function DeliveriesPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".xlsx"
+            accept=".xlsx,.pdf"
             className={styles.hiddenFileInput}
             onChange={handleFileChange}
           />
