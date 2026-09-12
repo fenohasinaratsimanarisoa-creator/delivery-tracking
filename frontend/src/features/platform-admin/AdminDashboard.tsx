@@ -12,9 +12,29 @@ import {
   Eye, EyeOff, DollarSign, UserPlus, Users,
 } from 'lucide-react';
 import Button from '../../components/Button';
+import DataTable from '../../components/DataTable';
+import Badge, { type BadgeVariant } from '../../components/Badge';
+import Modal from '../../components/Modal';
+import Input from '../../components/Input';
+import { useToast } from '../../components/Toast';
 import adminApi, { refreshAdminSession } from '../../services/api/adminClient';
 import { getAdminToken, setAdminToken } from '../../services/auth/adminTokenStore';
 import styles from './AdminDashboard.module.css';
+
+// Une seule table tier/action → variante par écran (voir aussi
+// services/deliveryStatus.ts pour le même principe côté livraisons).
+const TIER_VARIANT: Record<string, BadgeVariant> = {
+  enterprise: 'accent',
+  pro: 'success',
+  free: 'neutral',
+};
+
+const AUDIT_ACTION_VARIANT: Record<string, BadgeVariant> = {
+  impersonate: 'accent',
+  login: 'success',
+  login_success: 'success',
+  tenant_toggle: 'warning',
+};
 
 interface Metrics {
   mrr: number;
@@ -111,6 +131,7 @@ function ImpersonationBanner({ user, onStop }: { user: { email: string; name: st
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [tab, setTab] = useState<'dashboard' | 'tenants' | 'audit' | 'admins'>('dashboard');
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -190,7 +211,7 @@ export default function AdminDashboard() {
         role: u.role,
       });
     } catch (err: unknown) {
-      alert(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('common.error'));
+      toast(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('common.error'), 'error');
     }
   };
 
@@ -212,7 +233,7 @@ export default function AdminDashboard() {
       const a = await adminApi.get('/admins').then(r => r.data);
       setAdmins(a);
     } catch (err: unknown) {
-      alert(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('common.error'));
+      toast(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('common.error'), 'error');
     }
   };
 
@@ -381,37 +402,34 @@ export default function AdminDashboard() {
                 {t('admin.dashboard.topCompanies')}
               </h3>
             </div>
-            <div className={styles.scrollTable}>
-              <table className={styles.table}>
-                <thead>
-                  <tr className={styles.tableHeadRow}>
-                    <th className={styles.tableHeadCell}>{t('admin.dashboard.companyTable.company')}</th>
-                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.companyTable.plan')}</th>
-                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.companyTable.users')}</th>
-                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.companyTable.vehicles')}</th>
-                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.companyTable.deliveries')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {metrics.topCompanies.map((c) => (
-                    <tr key={c.id} className={styles.tableRow}>
-                      <td className={styles.tableCell}><span className={styles.cellPrimary}>{c.name}</span></td>
-                      <td className={styles.tableCellCenter}>
-                        <span className={styles.badge} style={{
-                          background: c.tier === 'enterprise' ? 'var(--color-accent-muted)' : c.tier === 'pro' ? 'var(--color-teal-muted)' : 'transparent',
-                          color: c.tier === 'enterprise' ? 'var(--color-accent)' : c.tier === 'pro' ? 'var(--color-teal)' : 'var(--color-text-secondary)',
-                        }}>
-                          {c.tier === 'free' ? t('admin.dashboard.companyTable.freeTier') : c.plan}
-                        </span>
-                      </td>
-                      <td className={styles.tableCellSecondaryCenter}>{c.users}</td>
-                      <td className={styles.tableCellSecondaryCenter}>{c.vehicles}</td>
-                      <td className={styles.tableCellSecondaryCenter}>{c.deliveries}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              keyExtractor={(c: Metrics['topCompanies'][number]) => c.id}
+              total={metrics.topCompanies.length}
+              page={1}
+              limit={Math.max(metrics.topCompanies.length, 1)}
+              onPageChange={() => {}}
+              data={metrics.topCompanies}
+              columns={[
+                {
+                  key: 'name',
+                  label: t('admin.dashboard.companyTable.company'),
+                  render: (c) => <span className={styles.cellPrimary}>{c.name}</span>,
+                },
+                {
+                  key: 'plan',
+                  label: t('admin.dashboard.companyTable.plan'),
+                  align: 'center',
+                  render: (c) => (
+                    <Badge variant={TIER_VARIANT[c.tier] || 'neutral'} size="sm">
+                      {c.tier === 'free' ? t('admin.dashboard.companyTable.freeTier') : c.plan}
+                    </Badge>
+                  ),
+                },
+                { key: 'users', label: t('admin.dashboard.companyTable.users'), align: 'right' },
+                { key: 'vehicles', label: t('admin.dashboard.companyTable.vehicles'), align: 'right' },
+                { key: 'deliveries', label: t('admin.dashboard.companyTable.deliveries'), align: 'right' },
+              ]}
+            />
           </div>
         </>
       )}
@@ -423,78 +441,80 @@ export default function AdminDashboard() {
               {t('admin.dashboard.tenantsTab.title', { count: filteredTenants.length })}
             </h3>
             <div className={styles.searchWrapper}>
-              <Search size={14} className={styles.searchIcon} />
-              <input
-                type="text"
+              <Input
                 value={tenantSearch}
                 onChange={(e) => setTenantSearch(e.target.value)}
                 placeholder={t('admin.dashboard.tenantsTab.search')}
-                className={styles.searchInput}
+                prefixIcon={<Search size={14} />}
+                aria-label={t('admin.dashboard.tenantsTab.search')}
               />
             </div>
           </div>
-          <div className={styles.scrollTable}>
-            <table className={styles.table}>
-              <thead>
-                <tr className={styles.tableHeadRow}>
-                  <th className={styles.tableHeadCell}>{t('admin.dashboard.companyTable.company')}</th>
-                  <th className={styles.tableHeadCell}>{t('admin.dashboard.tenantsTab.contact')}</th>
-                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.tenantsTab.plan')}</th>
-                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.tenantsTab.users')}</th>
-                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.tenantsTab.vehicles')}</th>
-                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.tenantsTab.deliveries')}</th>
-                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.tenantsTab.createdDate')}</th>
-                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.tenantsTab.actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTenants.map((tenant) => (
-                  <tr key={tenant.id} className={styles.tableRow}>
-                    <td className={styles.tableCell}><span className={styles.cellPrimary}>{tenant.name}</span></td>
-                    <td className={`${styles.tableCellSecondary} ${styles.tableEllipsis}`}>
-                      {tenant.email || tenant.users[0]?.email || '—'}
-                    </td>
-                    <td className={styles.tableCellCenter}>
-                      <span className={styles.badge} style={{
-                        background: tenant.subscription?.plan.tier === 'enterprise' ? 'var(--color-accent-muted)' :
-                          tenant.subscription?.plan.tier === 'pro' ? 'var(--color-teal-muted)' : 'transparent',
-                        color: tenant.subscription?.plan.tier === 'enterprise' ? 'var(--color-accent)' :
-                          tenant.subscription?.plan.tier === 'pro' ? 'var(--color-teal)' : 'var(--color-text-secondary)',
-                      }}>
-                        {tenant.subscription ? tenant.subscription.plan.name : '—'}
-                      </span>
-                    </td>
-                    <td className={styles.tableCellSecondaryCenter}>{tenant._count.users}</td>
-                    <td className={styles.tableCellSecondaryCenter}>{tenant._count.vehicles}</td>
-                    <td className={styles.tableCellSecondaryCenter}>{tenant._count.deliveries}</td>
-                    <td className={styles.tableCellTiny}>
-                      {formatDate(tenant.createdAt)}
-                    </td>
-                    <td className={styles.actionsCell}>
-                      <div className={styles.actionsRow}>
-                        <button
-                          onClick={() => handleImpersonate(tenant.id)}
-                          title={t('admin.dashboard.tenantsTab.impersonate')}
-                          className={styles.iconBtn}
-                          style={{ color: 'var(--color-accent)' }}
-                        >
-                          <Eye size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleToggleTenant(tenant.id)}
-                          title={t('admin.dashboard.tenantsTab.toggle')}
-                          className={styles.iconBtn}
-                          style={{ color: 'var(--color-red)' }}
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            keyExtractor={(tenant: Tenant) => tenant.id}
+            total={filteredTenants.length}
+            page={1}
+            limit={Math.max(filteredTenants.length, 1)}
+            onPageChange={() => {}}
+            data={filteredTenants}
+            columns={[
+              {
+                key: 'name',
+                label: t('admin.dashboard.companyTable.company'),
+                render: (tenant) => <span className={styles.cellPrimary}>{tenant.name}</span>,
+              },
+              {
+                key: 'contact',
+                label: t('admin.dashboard.tenantsTab.contact'),
+                render: (tenant) => (
+                  <span className={styles.tableEllipsis}>{tenant.email || tenant.users[0]?.email || '—'}</span>
+                ),
+              },
+              {
+                key: 'plan',
+                label: t('admin.dashboard.tenantsTab.plan'),
+                align: 'center',
+                render: (tenant) => (
+                  tenant.subscription ? (
+                    <Badge variant={TIER_VARIANT[tenant.subscription.plan.tier] || 'neutral'} size="sm">
+                      {tenant.subscription.plan.name}
+                    </Badge>
+                  ) : <span>—</span>
+                ),
+              },
+              { key: 'users', label: t('admin.dashboard.tenantsTab.users'), align: 'right', render: (tenant) => tenant._count.users },
+              { key: 'vehicles', label: t('admin.dashboard.tenantsTab.vehicles'), align: 'right', render: (tenant) => tenant._count.vehicles },
+              { key: 'deliveries', label: t('admin.dashboard.tenantsTab.deliveries'), align: 'right', render: (tenant) => tenant._count.deliveries },
+              { key: 'createdAt', label: t('admin.dashboard.tenantsTab.createdDate'), render: (tenant) => formatDate(tenant.createdAt) },
+              {
+                key: 'actions',
+                label: t('admin.dashboard.tenantsTab.actions'),
+                align: 'center',
+                render: (tenant) => (
+                  <div className={styles.actionsRow}>
+                    <button
+                      onClick={() => handleImpersonate(tenant.id)}
+                      title={t('admin.dashboard.tenantsTab.impersonate')}
+                      aria-label={t('admin.dashboard.tenantsTab.impersonate')}
+                      className={styles.iconBtn}
+                      style={{ color: 'var(--color-accent)' }}
+                    >
+                      <Eye size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleToggleTenant(tenant.id)}
+                      title={t('admin.dashboard.tenantsTab.toggle')}
+                      aria-label={t('admin.dashboard.tenantsTab.toggle')}
+                      className={styles.iconBtn}
+                      style={{ color: 'var(--color-red)' }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       )}
 
@@ -505,65 +525,55 @@ export default function AdminDashboard() {
               {t('admin.dashboard.auditTab.title', { count: auditLogs.total })}
             </h3>
           </div>
-          <div className={styles.scrollTable}>
-            <table className={styles.table}>
-              <thead>
-                <tr className={styles.tableHeadRow}>
-                  <th className={styles.tableHeadCell}>{t('admin.dashboard.auditTab.admin')}</th>
-                  <th className={styles.tableHeadCell}>{t('admin.dashboard.auditTab.action')}</th>
-                  <th className={styles.tableHeadCell}>{t('admin.dashboard.auditTab.target')}</th>
-                  <th className={styles.tableHeadCell}>{t('admin.dashboard.auditTab.ip')}</th>
-                  <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.auditTab.date')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {auditLogs.data.map((log) => (
-                  <tr key={log.id} className={styles.tableRow}>
-                    <td className={styles.tableCell}><span className={styles.cellPrimary}>{log.admin.firstName} {log.admin.lastName}</span></td>
-                    <td style={{ padding: '10px var(--space-md)' }}>
-                      <span className={styles.badge} style={{
-                        background: log.action === 'impersonate' ? 'var(--color-accent-muted)' :
-                          log.action === 'login' || log.action === 'login_success' ? 'var(--color-teal-muted)' :
-                          log.action === 'tenant_toggle' ? 'var(--color-orange-muted)' : 'transparent',
-                        color: log.action === 'impersonate' ? 'var(--color-accent)' :
-                          log.action === 'login' || log.action === 'login_success' ? 'var(--color-teal)' :
-                          log.action === 'tenant_toggle' ? 'var(--color-orange)' : 'var(--color-text-secondary)',
-                      }}>
-                        {log.action === 'login' ? t('admin.dashboard.auditActions.login') :
-                         log.action === 'login_2fa_required' ? t('admin.dashboard.auditActions.login2faRequired') :
-                         log.action === 'login_success' ? t('admin.dashboard.auditActions.loginSuccess') :
-                         log.action === 'impersonate' ? t('admin.dashboard.auditActions.impersonate') :
-                         log.action === 'tenant_toggle' ? t('admin.dashboard.auditActions.tenantToggle') :
-                         log.action === 'logout' ? t('admin.dashboard.auditActions.logout') : log.action}
-                      </span>
-                    </td>
-                    <td className={styles.tableCellSecondary}>
-                      {log.targetCompany?.name || (log.metadata?.impersonatedAs ? `→ ${log.metadata.impersonatedAs}` : '—')}
-                    </td>
-                    <td className={styles.tableCellTiny}>
-                      {log.ip || '—'}
-                    </td>
-                    <td className={styles.tableCellTiny}>
-                      {formatDateTime(log.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {auditLogs.totalPages > 1 && (
-            <div className={styles.paginationBar}>
-              {Array.from({ length: auditLogs.totalPages }, (_, i) => i + 1).map(p => (
-                <button
-                  key={p}
-                  onClick={() => { setAuditPage(p); }}
-                  className={`${styles.pageBtn} ${p === auditPage ? styles.pageBtnActive : ''}`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          )}
+          <DataTable
+            keyExtractor={(log: AuditLog) => log.id}
+            total={auditLogs.total}
+            page={auditPage}
+            limit={20}
+            onPageChange={setAuditPage}
+            data={auditLogs.data}
+            columns={[
+              {
+                key: 'admin',
+                label: t('admin.dashboard.auditTab.admin'),
+                render: (log) => <span className={styles.cellPrimary}>{log.admin.firstName} {log.admin.lastName}</span>,
+              },
+              {
+                key: 'action',
+                label: t('admin.dashboard.auditTab.action'),
+                render: (log) => (
+                  <Badge variant={AUDIT_ACTION_VARIANT[log.action] || 'neutral'} size="sm">
+                    {log.action === 'login' ? t('admin.dashboard.auditActions.login') :
+                     log.action === 'login_2fa_required' ? t('admin.dashboard.auditActions.login2faRequired') :
+                     log.action === 'login_success' ? t('admin.dashboard.auditActions.loginSuccess') :
+                     log.action === 'impersonate' ? t('admin.dashboard.auditActions.impersonate') :
+                     log.action === 'tenant_toggle' ? t('admin.dashboard.auditActions.tenantToggle') :
+                     log.action === 'logout' ? t('admin.dashboard.auditActions.logout') : log.action}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'target',
+                label: t('admin.dashboard.auditTab.target'),
+                render: (log) => (
+                  <span className={styles.tableCellSecondary}>
+                    {log.targetCompany?.name || (log.metadata?.impersonatedAs ? `→ ${log.metadata.impersonatedAs}` : '—')}
+                  </span>
+                ),
+              },
+              {
+                key: 'ip',
+                label: t('admin.dashboard.auditTab.ip'),
+                render: (log) => <span className={styles.tableCellSecondary}>{log.ip || '—'}</span>,
+              },
+              {
+                key: 'createdAt',
+                label: t('admin.dashboard.auditTab.date'),
+                align: 'right',
+                render: (log) => formatDateTime(log.createdAt),
+              },
+            ]}
+          />
         </div>
       )}
 
@@ -574,133 +584,103 @@ export default function AdminDashboard() {
               <h3 className={styles.sectionTitle}>
                 {t('admin.dashboard.adminsTab.title', { count: admins.length })}
               </h3>
-              <button
-                onClick={() => setShowCreateAdmin(true)}
-                className={styles.addBtn}
-              >
-                <UserPlus size={14} />
+              <Button variant="primary" size="sm" icon={<UserPlus size={14} />} onClick={() => setShowCreateAdmin(true)}>
                 {t('admin.dashboard.adminsTab.add')}
-              </button>
+              </Button>
             </div>
-            <div className={styles.scrollTable}>
-              <table className={styles.table}>
-                <thead>
-                  <tr className={styles.tableHeadRow}>
-                    <th className={styles.tableHeadCell}>{t('admin.dashboard.adminsTab.name')}</th>
-                    <th className={styles.tableHeadCell}>{t('admin.dashboard.adminsTab.email')}</th>
-                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.adminsTab.tfa')}</th>
-                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.adminsTab.active')}</th>
-                    <th className={styles.tableHeadCellCenter}>{t('admin.dashboard.adminsTab.createdDate')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {admins.map((a: Admin) => (
-                    <tr key={a.id} className={styles.tableRow}>
-                      <td className={styles.tableCell}>
-                        <span className={styles.cellPrimary}>{a.firstName} {a.lastName}</span>
-                      </td>
-                      <td className={styles.tableCellSecondary}>
-                        {a.email}
-                      </td>
-                      <td className={styles.tableCellCenter}>
-                        <span className={styles.badge} style={{
-                          background: a.totpEnabled ? 'var(--color-teal-muted)' : 'var(--color-orange-muted)',
-                          color: a.totpEnabled ? 'var(--color-teal)' : 'var(--color-orange)',
-                        }}>
-                          {a.totpEnabled ? t('admin.dashboard.adminsTab.tfaEnabled') : t('admin.dashboard.adminsTab.tfaDisabled')}
-                        </span>
-                      </td>
-                      <td className={styles.tableCellCenter}>
-                        <span className={styles.badge} style={{
-                          background: a.isActive ? 'var(--color-teal-muted)' : 'var(--color-red-muted)',
-                          color: a.isActive ? 'var(--color-teal)' : 'var(--color-red)',
-                        }}>
-                          {a.isActive ? t('admin.dashboard.adminsTab.isActiveYes') : t('admin.dashboard.adminsTab.isActiveNo')}
-                        </span>
-                      </td>
-                      <td className={styles.tableCellTiny}>
-                        {formatDate(a.createdAt)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              keyExtractor={(a: Admin) => a.id}
+              total={admins.length}
+              page={1}
+              limit={Math.max(admins.length, 1)}
+              onPageChange={() => {}}
+              data={admins}
+              columns={[
+                {
+                  key: 'name',
+                  label: t('admin.dashboard.adminsTab.name'),
+                  render: (a) => <span className={styles.cellPrimary}>{a.firstName} {a.lastName}</span>,
+                },
+                { key: 'email', label: t('admin.dashboard.adminsTab.email') },
+                {
+                  key: 'tfa',
+                  label: t('admin.dashboard.adminsTab.tfa'),
+                  align: 'center',
+                  render: (a) => (
+                    <Badge variant={a.totpEnabled ? 'success' : 'warning'} size="sm">
+                      {a.totpEnabled ? t('admin.dashboard.adminsTab.tfaEnabled') : t('admin.dashboard.adminsTab.tfaDisabled')}
+                    </Badge>
+                  ),
+                },
+                {
+                  key: 'active',
+                  label: t('admin.dashboard.adminsTab.active'),
+                  align: 'center',
+                  render: (a) => (
+                    <Badge variant={a.isActive ? 'success' : 'danger'} size="sm">
+                      {a.isActive ? t('admin.dashboard.adminsTab.isActiveYes') : t('admin.dashboard.adminsTab.isActiveNo')}
+                    </Badge>
+                  ),
+                },
+                {
+                  key: 'createdAt',
+                  label: t('admin.dashboard.adminsTab.createdDate'),
+                  align: 'right',
+                  render: (a) => formatDate(a.createdAt),
+                },
+              ]}
+            />
           </div>
 
-          {showCreateAdmin && (
-            <div className={styles.modalOverlay} onClick={() => setShowCreateAdmin(false)}>
-              <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
-                <h3 className={styles.modalTitle}>
-                  {t('admin.dashboard.createAdmin.title')}
-                </h3>
-                <form onSubmit={handleCreateAdmin}>
-                  <div className={styles.formField}>
-                    <label className={styles.formLabel}>
-                      {t('admin.dashboard.createAdmin.firstName')}
-                    </label>
-                    <input
-                      value={createForm.firstName}
-                      onChange={e => setCreateForm({ ...createForm, firstName: e.target.value })}
-                      required
-                      className={styles.formInput}
-                    />
-                  </div>
-                  <div className={styles.formField}>
-                    <label className={styles.formLabel}>
-                      {t('admin.dashboard.createAdmin.lastName')}
-                    </label>
-                    <input
-                      value={createForm.lastName}
-                      onChange={e => setCreateForm({ ...createForm, lastName: e.target.value })}
-                      required
-                      className={styles.formInput}
-                    />
-                  </div>
-                  <div className={styles.formField}>
-                    <label className={styles.formLabel}>
-                      {t('admin.dashboard.createAdmin.email')}
-                    </label>
-                    <input
-                      type="email"
-                      value={createForm.email}
-                      onChange={e => setCreateForm({ ...createForm, email: e.target.value })}
-                      required
-                      className={styles.formInput}
-                    />
-                  </div>
-                  <div className={styles.lastFormField}>
-                    <label className={styles.formLabel}>
-                      {t('admin.dashboard.createAdmin.password')}
-                    </label>
-                    <input
-                      type="password"
-                      value={createForm.password}
-                      onChange={e => setCreateForm({ ...createForm, password: e.target.value })}
-                      required
-                      minLength={6}
-                      className={styles.formInput}
-                    />
-                  </div>
-                  <div className={styles.formActions}>
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateAdmin(false)}
-                      className={styles.cancelBtn}
-                    >
-                      {t('admin.dashboard.createAdmin.cancel')}
-                    </button>
-                    <button
-                      type="submit"
-                      className={styles.submitBtn}
-                    >
-                      {t('admin.dashboard.createAdmin.create')}
-                    </button>
-                  </div>
-                </form>
+          <Modal
+            open={showCreateAdmin}
+            onClose={() => setShowCreateAdmin(false)}
+            title={t('admin.dashboard.createAdmin.title')}
+          >
+            <form onSubmit={handleCreateAdmin}>
+              <div className={styles.formFields}>
+                <Input
+                  label={t('admin.dashboard.createAdmin.firstName')}
+                  value={createForm.firstName}
+                  onChange={e => setCreateForm({ ...createForm, firstName: e.target.value })}
+                  required
+                  fullWidth
+                />
+                <Input
+                  label={t('admin.dashboard.createAdmin.lastName')}
+                  value={createForm.lastName}
+                  onChange={e => setCreateForm({ ...createForm, lastName: e.target.value })}
+                  required
+                  fullWidth
+                />
+                <Input
+                  type="email"
+                  label={t('admin.dashboard.createAdmin.email')}
+                  value={createForm.email}
+                  onChange={e => setCreateForm({ ...createForm, email: e.target.value })}
+                  required
+                  fullWidth
+                />
+                <Input
+                  type="password"
+                  label={t('admin.dashboard.createAdmin.password')}
+                  value={createForm.password}
+                  onChange={e => setCreateForm({ ...createForm, password: e.target.value })}
+                  required
+                  minLength={6}
+                  fullWidth
+                />
               </div>
-            </div>
-          )}
+              <div className={styles.formActions}>
+                <Button type="button" variant="ghost" onClick={() => setShowCreateAdmin(false)}>
+                  {t('admin.dashboard.createAdmin.cancel')}
+                </Button>
+                <Button type="submit" variant="primary">
+                  {t('admin.dashboard.createAdmin.create')}
+                </Button>
+              </div>
+            </form>
+          </Modal>
         </div>
       )}
     </div>

@@ -6,6 +6,7 @@ import { fetchCsrfToken } from '../../services/api/csrf';
 import { useAuth } from '../../hooks/AuthContext';
 import { resetServiceWorkerAndReload } from '../../services/pwa/reset';
 import type { User } from '../../types';
+import Button from '../../components/Button';
 import LoginLayout from './components/LoginLayout';
 import VisualPanel from './components/VisualPanel';
 import LoginForm from './components/LoginForm';
@@ -224,38 +225,25 @@ export default function LoginPage() {
         <div
           role="alert"
           style={{
-            marginTop: '16px',
-            padding: '12px 16px',
-            backgroundColor: '#fef3c7',
-            border: '1px solid #f59e0b',
-            borderRadius: '8px',
-            fontSize: '13px',
-            lineHeight: '1.5',
-            color: '#92400e',
+            marginTop: 'var(--space-lg)',
+            padding: 'var(--space-md) var(--space-lg)',
+            backgroundColor: 'var(--color-warning-muted)',
+            border: '1px solid color-mix(in srgb, var(--color-warning) 32%, transparent)',
+            borderRadius: 'var(--radius-lg)',
+            fontSize: 'var(--text-sm)',
+            lineHeight: 'var(--lh-relaxed)',
+            color: 'var(--color-warning)',
           }}
         >
-          <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>
+          <p style={{ margin: '0 0 var(--space-sm) 0', fontWeight: 600 }}>
             ⚠️ {t('auth.login.swCacheWarning')}
           </p>
-          <p style={{ margin: '0 0 12px 0' }}>
+          <p style={{ margin: '0 0 var(--space-md) 0' }}>
             {t('auth.login.swCacheHint')}
           </p>
-          <button
-            type="button"
-            onClick={handleResetApp}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#dc2626',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 600,
-            }}
-          >
+          <Button type="button" variant="danger" size="sm" onClick={handleResetApp}>
             🔄 {t('auth.login.swCacheResetButton')}
-          </button>
+          </Button>
         </div>
       )}
     </LoginLayout>

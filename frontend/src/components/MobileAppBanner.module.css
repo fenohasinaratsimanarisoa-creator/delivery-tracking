@@ -7,8 +7,8 @@
   margin: 0 16px 12px;
   border-radius: 10px;
   background: var(--color-accent);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  color: var(--color-bg);
+  box-shadow: var(--shadow-md);
   font-size: 13px;
 }
 
@@ -46,7 +46,7 @@
   display: inline-block;
   padding: var(--space-sm) 12px;
   border-radius: 6px;
-  background: #fff;
+  background: var(--color-bg);
   color: var(--color-accent);
   font-weight: 600;
   text-decoration: none;
@@ -55,10 +55,10 @@
 
 .dismiss {
   padding: var(--space-sm) var(--space-sm);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  border: 1px solid color-mix(in srgb, var(--color-bg) 60%, transparent);
   border-radius: 6px;
   background: transparent;
-  color: #fff;
+  color: var(--color-bg);
   cursor: pointer;
   white-space: nowrap;
 }

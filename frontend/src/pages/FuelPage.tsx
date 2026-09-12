@@ -39,6 +39,7 @@ import EntityDialog, {
 } from "../components/EntityDialog";
 import ConfirmDialog from "../components/ConfirmDialog";
 import ErrorState from "../components/ErrorState";
+import DataTable from "../components/DataTable";
 import FuelPeriodSummary from "../features/fuel/FuelPeriodSummary";
 import { useToast } from "../components/Toast";
 import { formatAriary } from "../services/formatAriary";
@@ -783,189 +784,145 @@ export default function FuelPage() {
           )}
 
           {entries.length > 0 && (
-            <>
-              <div className={styles.tableCard}>
-                <div className={styles.tableWrap}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr className={styles.tableHeadRow}>
-                        <th className={styles.tableHeadCell}>
-                          {t("fuel.table.vehicle")}
-                        </th>
-                        <th className={styles.tableHeadCell}>
-                          {t("fuel.table.liters")}
-                        </th>
-                        <th className={styles.tableHeadCell}>
-                          {t("fuel.table.kmHeader")}
-                        </th>
-                        <th className={styles.tableHeadCell}>
-                          {t("fuel.table.consumption")}
-                        </th>
-                        <th className={styles.tableHeadCellRight}>
-                          {t("fuel.table.cost")}
-                        </th>
-                        <th className={styles.tableHeadCell}>
-                          {t("fuel.table.date")}
-                        </th>
-                        <th className={styles.tableHeadCell}>
-                          {t("fuel.table.anomaly")}
-                        </th>
-                        <th className={styles.tableHeadCellRight}>
-                          {t("common.actions")}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {entries.map((l) => (
-                        <tr key={l.id} className={styles.tableRow}>
-                          <td className={styles.tableCell}>
-                            <span className={styles.fuelVehicle}>
-                              <span className={styles.fuelVehicleIcon}>
-                                <Car size={14} />
-                              </span>
-                              <span className={styles.fuelVehiclePlate}>
-                                {l.vehicle?.licensePlate ?? "-"}
-                              </span>
-                            </span>
-                          </td>
-                          <td className={styles.tableCell}>
-                            <span className={styles.monoValue}>{l.liters}</span>
-                            <span className={styles.monoUnit}>L</span>
-                          </td>
-                          <td className={styles.tableCell}>
-                            <span className={styles.monoValue}>
-                              {l.kilometers}
-                            </span>
-                            <span className={styles.monoUnit}>km</span>
-                          </td>
-                          <td className={styles.tableCell}>
-                            <span className={styles.consPill}>
-                              {l.calculatedConsumption?.toFixed(1) ?? "-"}
-                              <span className={styles.consUnit}>L/100km</span>
-                            </span>
-                          </td>
-                          <td
-                            className={`${styles.tableCell} ${styles.tableCellRight}`}
-                          >
-                            <span className={styles.costCell}>
-                              {formatAriary(l.cost)}
-                            </span>
-                          </td>
-                          <td className={styles.tableCell}>
-                            <span className={styles.dateCell}>
-                              <Calendar size={13} />
-                              {new Date(l.fillDate).toLocaleDateString(
-                                i18n.language,
-                              )}
-                            </span>
-                          </td>
-                          <td className={styles.tableCell}>
-                            {l.anomalyFlag ? (
-                              <span
-                                className={`${styles.badge} ${styles.badgeAnomaly}`}
-                                title={
-                                  l.consumptionDeviationDirection
-                                    ? l.consumptionDeviationDirection === "over"
-                                      ? t("fuel.overConsumption")
-                                      : t("fuel.underConsumption")
-                                    : undefined
-                                }
-                              >
-                                {l.consumptionDeviationDirection === "over" ? (
-                                  <ArrowUpRight size={12} />
-                                ) : l.consumptionDeviationDirection ===
-                                  "under" ? (
-                                  <ArrowDownRight size={12} />
-                                ) : (
-                                  <AlertTriangle size={12} />
-                                )}
-                                {t("fuel.anomaly")}
-                              </span>
-                            ) : l.gpsCoverageInsufficientFlag ? (
-                              // Signal « non vérifiable » : couverture GPS absente sur la
-                              // période (gpsCoverageInsufficientFlag), affiché en neutre
-                              // (gris), distinct du rouge des anomalies confirmées.
-                              <span
-                                className={`${styles.badge} ${styles.badgeMuted}`}
-                                title={
-                                  l.gpsCoverageInsufficientReason ?? undefined
-                                }
-                              >
-                                <HelpCircle size={12} />{" "}
-                                {t("fuel.nonVerifiable")}
-                              </span>
-                            ) : (
-                              <span
-                                className={`${styles.badge} ${styles.badgeNormal}`}
-                              >
-                                <CheckCircle2 size={12} /> {t("fuel.normal")}
-                              </span>
-                            )}
-                          </td>
-                          <td
-                            className={`${styles.tableCell} ${styles.tableCellRight}`}
-                          >
-                            <div className={styles.actionsRow}>
-                              <button
-                                type="button"
-                                className={styles.actionBtn}
-                                onClick={() => openEdit(l)}
-                                title={t("common.edit")}
-                                aria-label={t("common.edit")}
-                              >
-                                <Pencil size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                className={`${styles.actionBtn} ${styles.danger}`}
-                                onClick={() => setDeleting(l)}
-                                title={t("common.delete")}
-                                aria-label={t("common.delete")}
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {meta.totalPages > 1 && (
-                <div className={styles.pagination}>
-                  <button
-                    type="button"
-                    className={styles.pageBtn}
-                    disabled={page <= 1}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    ←
-                  </button>
-                  {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map(
-                    (p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        className={`${styles.pageBtn} ${p === page ? styles.pageBtnActive : ""}`}
-                        onClick={() => setPage(p)}
+            <DataTable
+              keyExtractor={(l: FuelLog) => l.id}
+              total={meta.total}
+              page={page}
+              limit={meta.limit}
+              onPageChange={setPage}
+              data={entries}
+              columns={[
+                {
+                  key: "vehicle",
+                  label: t("fuel.table.vehicle"),
+                  render: (l) => (
+                    <span className={styles.fuelVehicle}>
+                      <span className={styles.fuelVehicleIcon}>
+                        <Car size={14} />
+                      </span>
+                      <span className={styles.fuelVehiclePlate}>
+                        {l.vehicle?.licensePlate ?? "-"}
+                      </span>
+                    </span>
+                  ),
+                },
+                {
+                  key: "liters",
+                  label: t("fuel.table.liters"),
+                  render: (l) => (
+                    <>
+                      <span className={styles.monoValue}>{l.liters}</span>
+                      <span className={styles.monoUnit}>L</span>
+                    </>
+                  ),
+                },
+                {
+                  key: "kilometers",
+                  label: t("fuel.table.kmHeader"),
+                  render: (l) => (
+                    <>
+                      <span className={styles.monoValue}>{l.kilometers}</span>
+                      <span className={styles.monoUnit}>km</span>
+                    </>
+                  ),
+                },
+                {
+                  key: "consumption",
+                  label: t("fuel.table.consumption"),
+                  render: (l) => (
+                    <span className={styles.consPill}>
+                      {l.calculatedConsumption?.toFixed(1) ?? "-"}
+                      <span className={styles.consUnit}>L/100km</span>
+                    </span>
+                  ),
+                },
+                {
+                  key: "cost",
+                  label: t("fuel.table.cost"),
+                  align: "right",
+                  render: (l) => (
+                    <span className={styles.costCell}>{formatAriary(l.cost)}</span>
+                  ),
+                },
+                {
+                  key: "fillDate",
+                  label: t("fuel.table.date"),
+                  render: (l) => (
+                    <span className={styles.dateCell}>
+                      <Calendar size={13} />
+                      {new Date(l.fillDate).toLocaleDateString(i18n.language)}
+                    </span>
+                  ),
+                },
+                {
+                  key: "anomaly",
+                  label: t("fuel.table.anomaly"),
+                  render: (l) =>
+                    l.anomalyFlag ? (
+                      <span
+                        className={`${styles.badge} ${styles.badgeAnomaly}`}
+                        title={
+                          l.consumptionDeviationDirection
+                            ? l.consumptionDeviationDirection === "over"
+                              ? t("fuel.overConsumption")
+                              : t("fuel.underConsumption")
+                            : undefined
+                        }
                       >
-                        {p}
-                      </button>
+                        {l.consumptionDeviationDirection === "over" ? (
+                          <ArrowUpRight size={12} />
+                        ) : l.consumptionDeviationDirection === "under" ? (
+                          <ArrowDownRight size={12} />
+                        ) : (
+                          <AlertTriangle size={12} />
+                        )}
+                        {t("fuel.anomaly")}
+                      </span>
+                    ) : l.gpsCoverageInsufficientFlag ? (
+                      // Signal « non vérifiable » : couverture GPS absente sur la
+                      // période (gpsCoverageInsufficientFlag), affiché en neutre
+                      // (gris), distinct du rouge des anomalies confirmées.
+                      <span
+                        className={`${styles.badge} ${styles.badgeMuted}`}
+                        title={l.gpsCoverageInsufficientReason ?? undefined}
+                      >
+                        <HelpCircle size={12} /> {t("fuel.nonVerifiable")}
+                      </span>
+                    ) : (
+                      <span className={`${styles.badge} ${styles.badgeNormal}`}>
+                        <CheckCircle2 size={12} /> {t("fuel.normal")}
+                      </span>
                     ),
-                  )}
-                  <button
-                    type="button"
-                    className={styles.pageBtn}
-                    disabled={page >= meta.totalPages}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    →
-                  </button>
-                </div>
-              )}
-            </>
+                },
+                {
+                  key: "actions",
+                  label: t("common.actions"),
+                  align: "right",
+                  render: (l) => (
+                    <div className={styles.actionsRow}>
+                      <button
+                        type="button"
+                        className={styles.actionBtn}
+                        onClick={() => openEdit(l)}
+                        title={t("common.edit")}
+                        aria-label={t("common.edit")}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.actionBtn} ${styles.danger}`}
+                        onClick={() => setDeleting(l)}
+                        title={t("common.delete")}
+                        aria-label={t("common.delete")}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
           )}
         </>
       )}
@@ -1056,130 +1013,124 @@ export default function FuelPage() {
           )}
 
           {!reportsLoading && !reportsError && reportList.length > 0 && (
-            <div className={styles.tableCard}>
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr className={styles.tableHeadRow}>
-                      <th className={styles.tableHeadCell}>
-                        {t("fuel.table.driver")}
-                      </th>
-                      <th className={styles.tableHeadCell}>
-                        {t("fuel.table.vehicle")}
-                      </th>
-                      <th className={styles.tableHeadCell}>
-                        {t("fuel.gpsDistance")}
-                      </th>
-                      <th className={styles.tableHeadCell}>
-                        {t("fuel.table.consumption")}
-                      </th>
-                      <th className={styles.tableHeadCellRight}>
-                        {t("fuel.estimatedCost")}
-                      </th>
-                      <th className={styles.tableHeadCell}>
-                        {t("fuel.table.date")}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reportList.map((r: FuelReport, i: number) => (
-                      <tr key={r.id || i} className={styles.tableRow}>
-                        <td className={styles.tableCell}>
-                          <span className={styles.driverCell}>
-                            <span className={styles.driverAvatar}>
-                              {initials(r.driverName)}
-                            </span>
-                            <span className={styles.driverName}>
-                              {r.driverName || "—"}
-                            </span>
-                          </span>
-                        </td>
-                        <td className={styles.tableCell}>
-                          <span className={styles.plateChip}>
-                            <Car size={12} /> {r.vehiclePlate || "—"}
-                          </span>
-                        </td>
-                        <td className={styles.tableCell}>
-                          <div className={styles.distCell}>
-                            <span className={styles.monoValue}>
-                              {r.distanceKm?.toFixed(1)} km
-                            </span>
-                            {r.gpsDataQuality === "insufficient" && (
-                              // gpsDataQuality='insufficient' : des positions GPS existent mais la
-                              // distance calculée est trop faible pour être fiable (< 0.1 km) — ce
-                              // n'est PAS une anomalie confirmée, juste une donnée peu fiable ce
-                              // jour-là. Badge neutre (orange clair), distinct de
-                              // gpsCoverageInsufficientFlag (aucune position du tout) et du rouge
-                              // des anomalies.
-                              <span
-                                className={`${styles.badge} ${styles.badgeWarn}`}
-                                title={t("fuel.gpsQualityInsufficient")}
-                              >
-                                <HelpCircle size={12} />{" "}
-                                {t("fuel.gpsQualityBadge")}
-                              </span>
-                            )}
-                            {r.gpsDataQuality === "suspicious" && (
-                              // gpsDataQuality='suspicious' (audit 2026-08-27) : la distance a bien
-                              // été calculée mais porte la signature d'une dérive GPS stationnaire
-                              // (nombreux allers-retours sans progression réelle + accuracy dégradée)
-                              // plutôt qu'un vrai trajet — cas réel confirmé : 68 km calculés pour un
-                              // véhicule resté immobile toute la nuit. Distinct du badge "GPS faible"
-                              // (donnée simplement insuffisante) : ici un chiffre existe mais il ne
-                              // faut PAS lui faire confiance sans vérification.
-                              <span
-                                className={`${styles.badge} ${styles.badgeWarn}`}
-                                title={t("fuel.gpsQualitySuspicious")}
-                              >
-                                <AlertTriangle size={12} />{" "}
-                                {t("fuel.gpsQualitySuspiciousBadge")}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className={styles.tableCell}>
-                          <span className={styles.consPill}>
-                            {r.consumptionLPer100Km?.toFixed(1) ?? "-"}
-                            <span className={styles.consUnit}>L/100km</span>
-                          </span>
-                        </td>
-                        <td
-                          className={`${styles.tableCell} ${styles.tableCellRight}`}
+            <DataTable
+              keyExtractor={(r: FuelReport) => String(r.id)}
+              total={reportList.length}
+              page={1}
+              limit={Math.max(reportList.length, 1)}
+              onPageChange={() => {}}
+              data={reportList}
+              columns={[
+                {
+                  key: "driver",
+                  label: t("fuel.table.driver"),
+                  render: (r) => (
+                    <span className={styles.driverCell}>
+                      <span className={styles.driverAvatar}>
+                        {initials(r.driverName)}
+                      </span>
+                      <span className={styles.driverName}>
+                        {r.driverName || "—"}
+                      </span>
+                    </span>
+                  ),
+                },
+                {
+                  key: "vehicle",
+                  label: t("fuel.table.vehicle"),
+                  render: (r) => (
+                    <span className={styles.plateChip}>
+                      <Car size={12} /> {r.vehiclePlate || "—"}
+                    </span>
+                  ),
+                },
+                {
+                  key: "distance",
+                  label: t("fuel.gpsDistance"),
+                  render: (r) => (
+                    <div className={styles.distCell}>
+                      <span className={styles.monoValue}>
+                        {r.distanceKm?.toFixed(1)} km
+                      </span>
+                      {r.gpsDataQuality === "insufficient" && (
+                        // gpsDataQuality='insufficient' : des positions GPS existent mais la
+                        // distance calculée est trop faible pour être fiable (< 0.1 km) — ce
+                        // n'est PAS une anomalie confirmée, juste une donnée peu fiable ce
+                        // jour-là. Badge neutre (orange clair), distinct de
+                        // gpsCoverageInsufficientFlag (aucune position du tout) et du rouge
+                        // des anomalies.
+                        <span
+                          className={`${styles.badge} ${styles.badgeWarn}`}
+                          title={t("fuel.gpsQualityInsufficient")}
                         >
-                          {/* Coût indicatif : un chiffre est TOUJOURS affiché
-                              quand un prix carburant est configuré (même si la
-                              qualité GPS est "suspicious" — le badge ⚠️ porte
-                              l'avertissement). "—" uniquement si aucun prix
-                              n'existe (véhicule électrique non configuré). */}
-                          {r.pricePerLiterUsed == null ? (
-                            <span
-                              className={styles.costCellAr}
-                              title={t("fuel.costNoPrice")}
-                            >
-                              —
-                            </span>
-                          ) : (
-                            <span className={styles.costCellAr}>
-                              {formatAriary(r.estimatedCost)}
-                            </span>
-                          )}
-                        </td>
-                        <td className={styles.tableCell}>
-                          <span className={styles.dateCell}>
-                            <Calendar size={13} />
-                            {r.reportDate
-                              ? new Date(r.reportDate).toLocaleDateString(
-                                  i18n.language,
-                                )
-                              : "-"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                          <HelpCircle size={12} /> {t("fuel.gpsQualityBadge")}
+                        </span>
+                      )}
+                      {r.gpsDataQuality === "suspicious" && (
+                        // gpsDataQuality='suspicious' (audit 2026-08-27) : la distance a bien
+                        // été calculée mais porte la signature d'une dérive GPS stationnaire
+                        // (nombreux allers-retours sans progression réelle + accuracy dégradée)
+                        // plutôt qu'un vrai trajet — cas réel confirmé : 68 km calculés pour un
+                        // véhicule resté immobile toute la nuit. Distinct du badge "GPS faible"
+                        // (donnée simplement insuffisante) : ici un chiffre existe mais il ne
+                        // faut PAS lui faire confiance sans vérification.
+                        <span
+                          className={`${styles.badge} ${styles.badgeWarn}`}
+                          title={t("fuel.gpsQualitySuspicious")}
+                        >
+                          <AlertTriangle size={12} />{" "}
+                          {t("fuel.gpsQualitySuspiciousBadge")}
+                        </span>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: "consumption",
+                  label: t("fuel.table.consumption"),
+                  render: (r) => (
+                    <span className={styles.consPill}>
+                      {r.consumptionLPer100Km?.toFixed(1) ?? "-"}
+                      <span className={styles.consUnit}>L/100km</span>
+                    </span>
+                  ),
+                },
+                {
+                  key: "cost",
+                  label: t("fuel.estimatedCost"),
+                  align: "right",
+                  render: (r) =>
+                    // Coût indicatif : un chiffre est TOUJOURS affiché quand un prix
+                    // carburant est configuré (même si la qualité GPS est "suspicious" —
+                    // le badge ⚠️ porte l'avertissement). "—" uniquement si aucun prix
+                    // n'existe (véhicule électrique non configuré).
+                    r.pricePerLiterUsed == null ? (
+                      <span
+                        className={styles.costCellAr}
+                        title={t("fuel.costNoPrice")}
+                      >
+                        —
+                      </span>
+                    ) : (
+                      <span className={styles.costCellAr}>
+                        {formatAriary(r.estimatedCost)}
+                      </span>
+                    ),
+                },
+                {
+                  key: "date",
+                  label: t("fuel.table.date"),
+                  render: (r) => (
+                    <span className={styles.dateCell}>
+                      <Calendar size={13} />
+                      {r.reportDate
+                        ? new Date(r.reportDate).toLocaleDateString(i18n.language)
+                        : "-"}
+                    </span>
+                  ),
+                },
+              ]}
+            />
           )}
 
           <div className={styles.diagCard}>
@@ -1237,128 +1188,129 @@ export default function FuelPage() {
                 {diagnostics.vehicles.length === 0 ? (
                   <p className={styles.emptyText}>{t("fuel.gpsDiagEmpty")}</p>
                 ) : (
-                  <div className={styles.tableWrap}>
-                    <table className={styles.table}>
-                      <thead>
-                        <tr className={styles.tableHeadRow}>
-                          <th className={styles.tableHeadCell}>
-                            {t("fuel.gpsDiagColVehicle")}
-                          </th>
-                          <th className={styles.tableHeadCell}>
-                            {t("fuel.gpsDiagColDriver")}
-                          </th>
-                          <th className={styles.tableHeadCell}>
-                            {t("fuel.gpsDiagColFixes")}
-                          </th>
-                          <th className={styles.tableHeadCell}>
-                            {t("fuel.gpsDiagColSuspect")}
-                          </th>
-                          <th className={styles.tableHeadCell}>
-                            {t("fuel.gpsDiagColCoverage")}
-                          </th>
-                          <th className={styles.tableHeadCell}>
-                            {t("fuel.gpsDiagColGap")}
-                          </th>
-                          <th className={styles.tableHeadCell}>
-                            {t("fuel.gpsDiagColDist")}
-                          </th>
-                          <th className={styles.tableHeadCell}>
-                            {t("fuel.gpsDiagColReport")}
-                          </th>
-                          <th className={styles.tableHeadCell}>
-                            {t("fuel.gpsDiagColFuel")}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {diagnostics.vehicles.map((v, i) => (
-                          <tr
-                            key={v.vehicleId || i}
-                            className={styles.tableRow}
-                          >
-                            <td className={styles.tableCell}>
-                              <span className={styles.plateChip}>
-                                <Car size={12} /> {v.vehiclePlate}
+                  <DataTable
+                    keyExtractor={(v: GpsVehicleDiagnostics) => v.vehicleId}
+                    total={diagnostics.vehicles.length}
+                    page={1}
+                    limit={Math.max(diagnostics.vehicles.length, 1)}
+                    onPageChange={() => {}}
+                    data={diagnostics.vehicles}
+                    columns={[
+                      {
+                        key: "vehicle",
+                        label: t("fuel.gpsDiagColVehicle"),
+                        render: (v) => (
+                          <span className={styles.plateChip}>
+                            <Car size={12} /> {v.vehiclePlate}
+                          </span>
+                        ),
+                      },
+                      {
+                        key: "driver",
+                        label: t("fuel.gpsDiagColDriver"),
+                        render: (v) => v.driverName || "—",
+                      },
+                      {
+                        key: "fixes",
+                        label: t("fuel.gpsDiagColFixes"),
+                        render: (v) => (
+                          <span className={styles.monoValue}>
+                            {v.validCount}/{v.fixCount}
+                          </span>
+                        ),
+                      },
+                      {
+                        key: "suspect",
+                        label: t("fuel.gpsDiagColSuspect"),
+                        render: (v) => (v.suspectCount > 0 ? v.suspectCount : "—"),
+                      },
+                      {
+                        key: "coverage",
+                        label: t("fuel.gpsDiagColCoverage"),
+                        render: (v) => (
+                          <span className={styles.monoValue}>
+                            {v.coveragePercent}%
+                          </span>
+                        ),
+                      },
+                      {
+                        key: "gap",
+                        label: t("fuel.gpsDiagColGap"),
+                        render: (v) => (
+                          <>
+                            <span className={styles.monoValue}>
+                              {gpsDur(v.avgGapSec)}
+                            </span>
+                            <span className={styles.diagSlash}>{" / "}</span>
+                            <span className={styles.monoValue}>
+                              {gpsDur(v.maxGapSec)}
+                            </span>
+                          </>
+                        ),
+                      },
+                      {
+                        key: "dist",
+                        label: t("fuel.gpsDiagColDist"),
+                        render: (v) => (
+                          <>
+                            <span className={styles.monoValue}>
+                              {v.rawDistanceKm.toFixed(2)}
+                            </span>
+                            <span className={styles.diagSlash}>{" / "}</span>
+                            <span className={styles.monoValue}>
+                              {v.filteredDistanceKm.toFixed(2)}
+                            </span>
+                            {" km"}
+                          </>
+                        ),
+                      },
+                      {
+                        key: "report",
+                        label: t("fuel.gpsDiagColReport"),
+                        render: (v) => (
+                          <>
+                            <span className={styles.monoValue}>
+                              {v.reportDistanceKm != null
+                                ? v.reportDistanceKm.toFixed(1)
+                                : "—"}
+                            </span>
+                            {" km"}
+                          </>
+                        ),
+                      },
+                      {
+                        key: "fuel",
+                        label: t("fuel.gpsDiagColFuel"),
+                        render: (v) =>
+                          v.fuelType ? (
+                            <span className={styles.fuelTypeCell}>
+                              <span
+                                className={styles.fuelTypeIcon}
+                                style={{
+                                  background: `color-mix(in srgb, ${FUEL_TYPE_COLORS[v.fuelType]} 14%, transparent)`,
+                                  color: FUEL_TYPE_COLORS[v.fuelType],
+                                }}
+                              >
+                                {FUEL_TYPE_ICONS[v.fuelType]}
                               </span>
-                            </td>
-                            <td className={styles.tableCell}>
-                              {v.driverName || "—"}
-                            </td>
-                            <td className={styles.tableCell}>
-                              <span className={styles.monoValue}>
-                                {v.validCount}/{v.fixCount}
+                              <span className={styles.fuelTypeName}>
+                                {t(`fuel.types.${v.fuelType}`, {
+                                  defaultValue: v.fuelType,
+                                })}
                               </span>
-                            </td>
-                            <td className={styles.tableCell}>
-                              {v.suspectCount > 0 ? v.suspectCount : "—"}
-                            </td>
-                            <td className={styles.tableCell}>
+                              <span className={styles.diagSlash}>{" · "}</span>
                               <span className={styles.monoValue}>
-                                {v.coveragePercent}%
-                              </span>
-                            </td>
-                            <td className={styles.tableCell}>
-                              <span className={styles.monoValue}>
-                                {gpsDur(v.avgGapSec)}
-                              </span>
-                              <span className={styles.diagSlash}>{" / "}</span>
-                              <span className={styles.monoValue}>
-                                {gpsDur(v.maxGapSec)}
-                              </span>
-                            </td>
-                            <td className={styles.tableCell}>
-                              <span className={styles.monoValue}>
-                                {v.rawDistanceKm.toFixed(2)}
-                              </span>
-                              <span className={styles.diagSlash}>{" / "}</span>
-                              <span className={styles.monoValue}>
-                                {v.filteredDistanceKm.toFixed(2)}
-                              </span>
-                              {" km"}
-                            </td>
-                            <td className={styles.tableCell}>
-                              <span className={styles.monoValue}>
-                                {v.reportDistanceKm != null
-                                  ? v.reportDistanceKm.toFixed(1)
+                                {v.reportPricePerLiter != null
+                                  ? `${v.reportPricePerLiter} Ar/L`
                                   : "—"}
                               </span>
-                              {" km"}
-                            </td>
-                            <td className={styles.tableCell}>
-                              {v.fuelType ? (
-                                <span className={styles.fuelTypeCell}>
-                                  <span
-                                    className={styles.fuelTypeIcon}
-                                    style={{
-                                      background: `color-mix(in srgb, ${FUEL_TYPE_COLORS[v.fuelType]} 14%, transparent)`,
-                                      color: FUEL_TYPE_COLORS[v.fuelType],
-                                    }}
-                                  >
-                                    {FUEL_TYPE_ICONS[v.fuelType]}
-                                  </span>
-                                  <span className={styles.fuelTypeName}>
-                                    {t(`fuel.types.${v.fuelType}`, {
-                                      defaultValue: v.fuelType,
-                                    })}
-                                  </span>
-                                  <span className={styles.diagSlash}>
-                                    {" · "}
-                                  </span>
-                                  <span className={styles.monoValue}>
-                                    {v.reportPricePerLiter != null
-                                      ? `${v.reportPricePerLiter} Ar/L`
-                                      : "—"}
-                                  </span>
-                                </span>
-                              ) : (
-                                "—"
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                            </span>
+                          ) : (
+                            "—"
+                          ),
+                      },
+                    ]}
+                  />
                 )}
               </>
             )}
@@ -1494,110 +1446,102 @@ export default function FuelPage() {
             )}
 
             {!pricesLoading && priceHistory.length > 0 && (
-              <div className={styles.tableCard}>
-                <div className={styles.tableWrap}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr className={styles.tableHeadRow}>
-                        <th className={styles.tableHeadCell}>
-                          {t("fuel.fuelType")}
-                        </th>
-                        <th className={styles.tableHeadCellRight}>
-                          {t("fuel.pricePerLiter")}
-                        </th>
-                        <th className={styles.tableHeadCell}>
-                          {t("fuel.effectiveFrom")}
-                        </th>
-                        <th className={styles.tableHeadCell}>
-                          {t("fuel.effectiveUntil")}
-                        </th>
-                        <th className={styles.tableHeadCellRight}>
-                          {t("common.actions")}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {priceHistory.map((p) => {
-                        const color =
-                          FUEL_TYPE_COLORS[p.fuelType] || "var(--color-accent)";
-                        return (
-                          <tr key={p.id} className={styles.tableRow}>
-                            <td className={styles.tableCell}>
-                              <span className={styles.fuelTypeCell}>
-                                <span
-                                  className={styles.fuelTypeIcon}
-                                  style={{
-                                    background: `color-mix(in srgb, ${color} 14%, transparent)`,
-                                    color,
-                                  }}
-                                >
-                                  {FUEL_TYPE_ICONS[p.fuelType]}
-                                </span>
-                                <span className={styles.fuelTypeName}>
-                                  {t(`fuel.types.${p.fuelType}`, {
-                                    defaultValue: p.fuelType,
-                                  })}
-                                </span>
-                              </span>
-                            </td>
-                            <td
-                              className={`${styles.tableCell} ${styles.tableCellRight}`}
-                            >
-                              <span className={styles.costCellAr}>
-                                {formatAriary(p.pricePerLiter)}
-                              </span>
-                            </td>
-                            <td className={styles.tableCell}>
-                              <span className={styles.dateCell}>
-                                <Calendar size={13} />
-                                {new Date(p.effectiveFrom).toLocaleDateString(
-                                  i18n.language,
-                                )}
-                              </span>
-                            </td>
-                            <td className={styles.tableCell}>
-                              {p.effectiveUntil ? (
-                                <span className={styles.dateCell}>
-                                  <Calendar size={13} />
-                                  {new Date(
-                                    p.effectiveUntil,
-                                  ).toLocaleDateString(i18n.language)}
-                                </span>
-                              ) : (
-                                <span className={styles.openPill}>∞</span>
-                              )}
-                            </td>
-                            <td
-                              className={`${styles.tableCell} ${styles.tableCellRight}`}
-                            >
-                              <div className={styles.actionsRow}>
-                                <button
-                                  type="button"
-                                  className={styles.actionBtn}
-                                  onClick={() => openEditPrice(p)}
-                                  title={t("common.edit")}
-                                  aria-label={t("common.edit")}
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`${styles.actionBtn} ${styles.danger}`}
-                                  onClick={() => setDeletingPrice(p)}
-                                  title={t("common.delete")}
-                                  aria-label={t("common.delete")}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <DataTable
+                keyExtractor={(p: FuelPrice) => p.id}
+                total={priceHistory.length}
+                page={1}
+                limit={Math.max(priceHistory.length, 1)}
+                onPageChange={() => {}}
+                data={priceHistory}
+                columns={[
+                  {
+                    key: "fuelType",
+                    label: t("fuel.fuelType"),
+                    render: (p) => {
+                      const color =
+                        FUEL_TYPE_COLORS[p.fuelType] || "var(--color-accent)";
+                      return (
+                        <span className={styles.fuelTypeCell}>
+                          <span
+                            className={styles.fuelTypeIcon}
+                            style={{
+                              background: `color-mix(in srgb, ${color} 14%, transparent)`,
+                              color,
+                            }}
+                          >
+                            {FUEL_TYPE_ICONS[p.fuelType]}
+                          </span>
+                          <span className={styles.fuelTypeName}>
+                            {t(`fuel.types.${p.fuelType}`, {
+                              defaultValue: p.fuelType,
+                            })}
+                          </span>
+                        </span>
+                      );
+                    },
+                  },
+                  {
+                    key: "pricePerLiter",
+                    label: t("fuel.pricePerLiter"),
+                    align: "right",
+                    render: (p) => (
+                      <span className={styles.costCellAr}>
+                        {formatAriary(p.pricePerLiter)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "effectiveFrom",
+                    label: t("fuel.effectiveFrom"),
+                    render: (p) => (
+                      <span className={styles.dateCell}>
+                        <Calendar size={13} />
+                        {new Date(p.effectiveFrom).toLocaleDateString(i18n.language)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "effectiveUntil",
+                    label: t("fuel.effectiveUntil"),
+                    render: (p) =>
+                      p.effectiveUntil ? (
+                        <span className={styles.dateCell}>
+                          <Calendar size={13} />
+                          {new Date(p.effectiveUntil).toLocaleDateString(i18n.language)}
+                        </span>
+                      ) : (
+                        <span className={styles.openPill}>∞</span>
+                      ),
+                  },
+                  {
+                    key: "actions",
+                    label: t("common.actions"),
+                    align: "right",
+                    render: (p) => (
+                      <div className={styles.actionsRow}>
+                        <button
+                          type="button"
+                          className={styles.actionBtn}
+                          onClick={() => openEditPrice(p)}
+                          title={t("common.edit")}
+                          aria-label={t("common.edit")}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.actionBtn} ${styles.danger}`}
+                          onClick={() => setDeletingPrice(p)}
+                          title={t("common.delete")}
+                          aria-label={t("common.delete")}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ),
+                  },
+                ]}
+              />
             )}
           </div>
         </div>

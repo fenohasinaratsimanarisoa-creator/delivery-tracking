@@ -86,7 +86,7 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-md, 8px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
   max-height: 320px;
   overflow: auto;
 }
@@ -164,7 +164,7 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-md, 8px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
   font-size: 0.8rem;
   color: var(--color-text-tertiary);
   text-align: center;

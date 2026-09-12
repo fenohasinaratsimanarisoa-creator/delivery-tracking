@@ -83,12 +83,12 @@
   padding: 0 4px;
   border-radius: 999px;
   background: var(--color-red);
-  color: #fff;
+  color: var(--color-bg);
   font-size: 0.625rem;
   font-weight: 700;
   line-height: 17px;
   text-align: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-md);
   animation: dt-badge-pop 0.25s ease;
 }
 
@@ -140,7 +140,7 @@
   position: fixed;
   inset: 0;
   z-index: 1200;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--color-overlay);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;

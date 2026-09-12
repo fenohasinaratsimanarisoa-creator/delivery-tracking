@@ -4,15 +4,19 @@ import { useQuery } from '@tanstack/react-query';
 import { Download, FileText, Loader2 } from 'lucide-react';
 import api from '../../services/api/client';
 import { formatDate } from '../../services/i18n/formatDate';
+import DataTable from '../../components/DataTable';
+import Badge, { type BadgeVariant } from '../../components/Badge';
 import type { Invoice, CompanyUsage } from '../../types';
 import styles from './FacturationPage.module.css';
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: 'var(--color-text-tertiary)',
-  open: 'var(--color-accent)',
-  paid: 'var(--color-teal)',
-  uncollectible: 'var(--color-red)',
-  void: '#6b7280',
+// Une seule table statut → variante pour toute la page (voir aussi
+// services/deliveryStatus.ts pour le même principe côté livraisons).
+const STATUS_VARIANT: Record<string, BadgeVariant> = {
+  draft: 'neutral',
+  open: 'blue',
+  paid: 'teal',
+  uncollectible: 'red',
+  void: 'neutral',
 };
 
 export default function FacturationPage() {
@@ -115,80 +119,56 @@ export default function FacturationPage() {
           </p>
         </div>
       ) : (
-        <div className={styles.tableContainer}>
-          <table className={styles.table}>
-            <thead>
-              <tr className={styles.tableHeadRow}>
-                {[t('billing.invoices.table.invoice'), t('billing.invoices.table.date'), t('billing.invoices.table.amount'), t('billing.invoices.table.status'), ''].map((l) => (
-                  <th key={l} className={`${styles.tableHeadCell} ${l === '' ? styles.tableHeadCellRight : styles.tableHeadCellLeft}`}>
-                    {l}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map((inv) => (
-                <tr key={inv.id} className={styles.tableRow}>
-                  <td className={styles.tableCell}>
-                    <span className={styles.tableCellMono}>
-                      {inv.invoiceNumber}
-                    </span>
-                  </td>
-                  <td className={`${styles.tableCell} ${styles.tableCellSecondary}`}>
-                    {formatDate(inv.createdAt)}
-                  </td>
-                  <td className={`${styles.tableCell} ${styles.tableCellBold}`}>
-                    {(inv.amount / 100).toFixed(2)} {inv.currency}
-                  </td>
-                  <td className={styles.tableCell}>
-                    <span className={styles.statusBadge} style={{
-                      background: `${STATUS_COLORS[inv.status] || '#6b7280'}20`,
-                      color: STATUS_COLORS[inv.status] || '#6b7280',
-                    }}>
-                      {STATUS_LABELS[inv.status] || inv.status}
-                    </span>
-                  </td>
-                  <td className={styles.tableCell} style={{ textAlign: 'right' }}>
-                    <button
-                      onClick={() => handleDownload(inv.id)}
-                      title={t('billing.invoices.download')}
-                      className={styles.downloadBtn}
-                    >
-                      <Download size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {meta.totalPages > 1 && (
-            <div className={styles.pagination}>
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-                className={styles.pageBtn}
-              >
-                ←
-              </button>
-              {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map((p) => (
+        <DataTable
+          keyExtractor={(inv: Invoice) => inv.id}
+          total={meta.total}
+          page={page}
+          limit={meta.limit}
+          onPageChange={setPage}
+          columns={[
+            {
+              key: 'invoiceNumber',
+              label: t('billing.invoices.table.invoice'),
+              render: (inv) => <span className={styles.tableCellMono}>{inv.invoiceNumber}</span>,
+            },
+            {
+              key: 'createdAt',
+              label: t('billing.invoices.table.date'),
+              render: (inv) => <span className={styles.tableCellSecondary}>{formatDate(inv.createdAt)}</span>,
+            },
+            {
+              key: 'amount',
+              label: t('billing.invoices.table.amount'),
+              align: 'right',
+              render: (inv) => <span className={styles.tableCellBold}>{(inv.amount / 100).toFixed(2)} {inv.currency}</span>,
+            },
+            {
+              key: 'status',
+              label: t('billing.invoices.table.status'),
+              render: (inv) => (
+                <Badge variant={STATUS_VARIANT[inv.status] || 'neutral'} size="sm">
+                  {STATUS_LABELS[inv.status] || inv.status}
+                </Badge>
+              ),
+            },
+            {
+              key: 'download',
+              label: t('common.actions'),
+              align: 'right',
+              render: (inv) => (
                 <button
-                  key={p}
-                  onClick={() => setPage(p)}
-                  className={`${styles.pageBtn} ${p === page ? styles.pageBtnActive : ''}`}
+                  onClick={() => handleDownload(inv.id)}
+                  title={t('billing.invoices.download')}
+                  aria-label={t('billing.invoices.download')}
+                  className={styles.downloadBtn}
                 >
-                  {p}
+                  <Download size={16} />
                 </button>
-              ))}
-              <button
-                disabled={page >= meta.totalPages}
-                onClick={() => setPage(page + 1)}
-                className={styles.pageBtn}
-              >
-                →
-              </button>
-            </div>
-          )}
-        </div>
+              ),
+            },
+          ]}
+          data={invoices}
+        />
       )}
     </div>
   );

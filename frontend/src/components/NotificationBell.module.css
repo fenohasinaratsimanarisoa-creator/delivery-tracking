@@ -41,7 +41,7 @@
   top: -4px;
   right: -4px;
   background: var(--color-red);
-  color: #fff;
+  color: var(--color-bg);
   border-radius: var(--radius-full);
   padding: 1px var(--space-xs);
   font-size: 0.58rem;
@@ -121,7 +121,7 @@
 
 .unreadChip {
   background: var(--color-red);
-  color: #fff;
+  color: var(--color-bg);
   font-family: var(--font-mono);
   font-size: 0.62rem;
   font-weight: 700;
