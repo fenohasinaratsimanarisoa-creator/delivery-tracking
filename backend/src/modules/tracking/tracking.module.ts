@@ -9,6 +9,7 @@ import { TrackingService } from './tracking.service';
 import { GeofenceService } from './geofence.service';
 import { DeliveryProximityService } from './delivery-proximity.service';
 import { TraccarBridgeService } from './traccar-bridge.service';
+import { GpsRetentionService } from './gps-retention.service';
 import { TrackingController } from './tracking.controller';
 import { GeofenceController } from './geofence.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -45,6 +46,7 @@ import { RoutingModule } from '../routing/routing.module';
     GeofenceService,
     DeliveryProximityService,
     TraccarBridgeService,
+    GpsRetentionService,
     WsJwtGuard,
     WsAuthService,
     ApiKeyOrJwtGuard,
