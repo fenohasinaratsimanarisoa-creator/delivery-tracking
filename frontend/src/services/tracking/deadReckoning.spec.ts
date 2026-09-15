@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { predictPosition, maxDeadReckonTime } from './deadReckoning';
+import { predictPosition, maxDeadReckonTime, resolveDeadReckonedPosition } from './deadReckoning';
 
 // =============================================================================
 // FIDÉLITÉ DU TRAJET (Partie 2, point 1) — dead reckoning = AFFICHAGE UNIQUEMENT.
@@ -54,6 +54,33 @@ describe('deadReckoning — contrat "affichage uniquement"', () => {
     // Vitesse modérée (moto ~18 km/h = 5 m/s) : horizon de l'ordre de 12 s.
     expect(maxDeadReckonTime(5)).toBeGreaterThan(5000);
     expect(maxDeadReckonTime(5)).toBeLessThanOrEqual(15_000);
+  });
+
+  it('resolveDeadReckonedPosition : sous la fenêtre, extrapole comme predictPosition', () => {
+    const state = { lat: 0, lng: 0, speed: 10, heading: 90, timestamp: 1000 };
+    const resolved = resolveDeadReckonedPosition(state, 2000, 15_000);
+    expect(resolved.extrapolated).toBe(true);
+    expect(resolved).toEqual({
+      ...predictPosition({ ...state, timestamp: 0 }, 2000),
+      extrapolated: true,
+    });
+  });
+
+  it('resolveDeadReckonedPosition : fenêtre DÉPASSÉE → dernier point RÉEL, jamais le point extrapolé le plus lointain', () => {
+    // Régression : un véhicule roulant plein est à 16 m/s (~58 km/h) qui perd le
+    // signal juste après un fix ne doit PAS rester affiché ~240 m plus à l'est
+    // (16 m/s × 15 s, l'horizon max de dead reckoning) — il doit revenir à son
+    // dernier point RÉEL dès que la fenêtre expire, avant même le badge
+    // « signal perdu » (60 s).
+    const state = { lat: -18.863147, lng: 47.563958, speed: 16, heading: 90, timestamp: 1000 };
+    const maxDrMs = maxDeadReckonTime(state.speed);
+    const resolved = resolveDeadReckonedPosition(state, maxDrMs + 1, maxDrMs);
+    expect(resolved).toEqual({ lat: state.lat, lng: state.lng, extrapolated: false });
+
+    // Longtemps après (minutes de coupure) : toujours le dernier point réel,
+    // jamais une trajectoire inventée sur la durée.
+    const muchLater = resolveDeadReckonedPosition(state, 5 * 60_000, maxDrMs);
+    expect(muchLater).toEqual({ lat: state.lat, lng: state.lng, extrapolated: false });
   });
 
   it('GARDE ANTI-RÉGRESSION : seul RealTimeMap (affichage) importe deadReckoning — aucun chemin d\'envoi', () => {

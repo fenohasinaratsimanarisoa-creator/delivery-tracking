@@ -11,7 +11,7 @@ import { getSocket, PositionUpdate } from '../../services/socket/socket';
 import { formatDate, formatTime } from '../../services/i18n/formatDate';
 import { useDevicePerformance } from '../../hooks/useDevicePerformance';
 import { getDirections, formatDistance } from '../../services/routing/routingService';
-import { predictPosition, maxDeadReckonTime } from '../../services/tracking/deadReckoning';
+import { resolveDeadReckonedPosition, maxDeadReckonTime } from '../../services/tracking/deadReckoning';
 import { computeAnimationDuration, FALLBACK_ANIMATION_MS } from './animationTiming';
 
 import MapLayerSwitcher from '../../components/MapLayerSwitcher';
@@ -315,21 +315,21 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
       // Fenêtre d'extrapolation mesurée à partir de la FIN de l'animation : à
       // l'instant du relais, drElapsed ≈ 0 → predictPosition renvoie le dernier
       // point réel (le marqueur y est déjà, pas de saut), puis l'écart grandit.
-      const drElapsed = elapsed - animMs;
-      if (drElapsed > maxDrMs) return; // Stop predicting beyond limit
-
       const state = lastStateRef.current;
       if (!state || !isMovingSpeed(state.speed)) return;
 
-      const predicted = predictPosition(
-        { ...state, timestamp: 0 },
-        drElapsed,
-      );
-
-      marker.setLatLng([predicted.lat, predicted.lng]);
-      // Le point prédit devient la base de la prochaine animation : continuité
+      const drElapsed = elapsed - animMs;
+      const resolved = resolveDeadReckonedPosition({ ...state, timestamp: 0 }, drElapsed, maxDrMs);
+      marker.setLatLng([resolved.lat, resolved.lng]);
+      // Le point retenu devient la base de la prochaine animation : continuité
       // visuelle entre dead reckoning et interpolation (pas de saut en arrière).
-      fromRef.current = { lat: predicted.lat, lng: predicted.lng };
+      fromRef.current = { lat: resolved.lat, lng: resolved.lng };
+      if (!resolved.extrapolated) {
+        // Fenêtre dépassée et marqueur déjà replacé sur le dernier fix RÉEL
+        // (resolved.extrapolated === false) : plus rien à extrapoler tant
+        // qu'aucun nouveau fix n'arrive — arrêter cet intervalle.
+        clearInterval(interval);
+      }
     }, 200);
 
     return () => clearInterval(interval);

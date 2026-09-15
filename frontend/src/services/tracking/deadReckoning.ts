@@ -43,3 +43,33 @@ export function maxDeadReckonTime(speed: number): number {
   // crée un écart visible à combler), borné à MAX_DEAD_RECKON_MS.
   return Math.min(MAX_DEAD_RECKON_MS, Math.max(1000, speed * 2000 + 2000));
 }
+
+export interface DeadReckonedPosition {
+  lat: number;
+  lng: number;
+  /** false une fois la fenêtre d'extrapolation dépassée : `lat`/`lng` sont alors le dernier fix RÉEL, pas une position inventée. */
+  extrapolated: boolean;
+}
+
+/**
+ * Position à afficher pendant l'attente d'un nouveau fix, `drElapsedMs` après
+ * la fin de la dernière animation. Sous `maxDrMs` : position extrapolée
+ * (cap/vitesse du dernier fix). Au-delà : TOUJOURS le dernier point RÉEL —
+ * jamais le point extrapolé le plus lointain laissé en place. Un appelant qui
+ * ignorerait `extrapolated` et arrêtait simplement d'appeler cette fonction au
+ * lieu d'utiliser son dernier résultat laisserait le marqueur figé à une
+ * position fictive, avancée d'au plus `maxDrMs` le long du dernier cap/vitesse
+ * connu — c'est le bug qu'un appelant doit éviter en repositionnant
+ * explicitement sur ce résultat quand `extrapolated` devient `false`.
+ */
+export function resolveDeadReckonedPosition(
+  state: DeadReckoningState,
+  drElapsedMs: number,
+  maxDrMs: number,
+): DeadReckonedPosition {
+  if (drElapsedMs > maxDrMs) {
+    return { lat: state.lat, lng: state.lng, extrapolated: false };
+  }
+  const predicted = predictPosition({ ...state, timestamp: 0 }, drElapsedMs);
+  return { ...predicted, extrapolated: true };
+}
