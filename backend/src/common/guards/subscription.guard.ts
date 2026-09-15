@@ -1,8 +1,11 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
+import * as jwt from 'jsonwebtoken';
 import { PrismaService } from '../prisma/prisma.service';
 import { SKIP_SUBSCRIPTION_CHECK_KEY } from '../decorators/skip-subscription-check.decorator';
 import { ManualPaymentRequiredException } from '../exceptions/manual-payment-required.exception';
+import type { JwtPayload } from '../../modules/auth/interfaces/jwt-payload.interface';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PAIEMENT MANUEL 2026-09-15 — garde GLOBALE (3e APP_GUARD après ThrottlerGuard
@@ -11,16 +14,26 @@ import { ManualPaymentRequiredException } from '../exceptions/manual-payment-req
 // Reflector, indépendante de BILLING_ENABLED (nouveau système parallèle, pas le
 // Stripe/MVola dormant derrière usage.guard.ts, qu'on ne touche pas).
 //
-// JwtAuthGuard N'EST PAS globale dans ce projet (chaque contrôleur l'applique
-// lui-même) — cette garde tourne donc parfois AVANT que request.user existe :
-// elle ne doit jamais bloquer une requête que l'authentification va de toute
-// façon rejeter plus loin, elle se contente de laisser passer dans ce cas.
+// BUG CORRIGÉ EN TESTANT EN PROD (2026-09-15) : une garde GLOBALE (APP_GUARD)
+// s'exécute AVANT tout `@UseGuards(JwtAuthGuard, ...)` posé au niveau d'un
+// contrôleur — JwtAuthGuard n'est PAS globale dans ce projet (chaque
+// contrôleur l'applique lui-même, voir sa propre doc). Une première version
+// lisait `request.user` ici : toujours vide à ce stade de l'exécution, donc
+// cette garde ne bloquait RIEN, jamais, pour aucune route (silencieusement
+// inerte — confirmé par un essai forcé expiré qui continuait à tout charger).
+// Fix : décoder le JWT nous-mêmes depuis l'en-tête Authorization, même idiome
+// que DeviceTrackingAuthGuard (qui a le même besoin, pour la même raison).
+// jsonwebtoken en direct plutôt que JwtService (@nestjs/jwt) : JwtModule est
+// enregistré dans AuthModule, pas globalement — l'injecter ici demanderait de
+// l'importer aussi dans AppModule pour rien, jsonwebtoken suffit et est déjà
+// une dépendance directe utilisée ailleurs (auth.service.ts).
 // ─────────────────────────────────────────────────────────────────────────────
 @Injectable()
 export class SubscriptionGuard implements CanActivate {
   constructor(
     private prisma: PrismaService,
     private reflector: Reflector,
+    private configService: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -31,12 +44,32 @@ export class SubscriptionGuard implements CanActivate {
     if (skip) return true;
 
     const request = context.switchToHttp().getRequest();
-    const user = request.user;
-    // Pas d'utilisateur, admin plateforme (pas de companyId), ou requête non-HTTP :
-    // rien à vérifier ici, laisser passer (JwtAuthGuard/SuperAdminGuard tranchent).
-    if (!user || user.type !== 'user' || !user.companyId) return true;
+    const authHeader: string | undefined = request.headers?.authorization;
+    if (!authHeader?.startsWith('Bearer ')) return true;
 
-    const sub = await this.prisma.subscription.findUnique({ where: { companyId: user.companyId } });
+    // Échec de décodage/vérification → on laisse simplement passer : cette
+    // garde n'authentifie jamais personne, elle ajoute seulement une
+    // restriction PAR-DESSUS une authentification déjà valide. JwtAuthGuard,
+    // plus loin dans le pipeline, reste seul responsable de rejeter un token
+    // invalide/expiré.
+    let payload: JwtPayload;
+    try {
+      payload = jwt.verify(
+        authHeader.slice(7).trim(),
+        this.configService.get<string>('JWT_ACCESS_SECRET')!,
+        {
+          algorithms: ['HS256'],
+        },
+      ) as JwtPayload;
+    } catch {
+      return true;
+    }
+
+    // Admin plateforme (pas de companyId, ressource hors tenant) : rien à vérifier.
+    if (payload.type === 'platform_admin' || !payload.companyId) return true;
+    const companyId = payload.companyId;
+
+    const sub = await this.prisma.subscription.findUnique({ where: { companyId } });
 
     // Aucune ligne Subscription du tout : contrairement à usage.guard.ts (qui
     // retombe sur le plan gratuit — un manque de quota n'est pas grave), cette
