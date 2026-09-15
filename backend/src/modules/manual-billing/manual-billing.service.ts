@@ -20,10 +20,19 @@ export class ManualBillingService {
 
   constructor(private prisma: PrismaService) {}
 
-  /** Statut d'essai/abonnement affiché au client (bandeau + paywall). */
+  /**
+   * Statut d'essai/abonnement affiché au client (bandeau + paywall). Inclut le
+   * forfait courant (`currentPlan`) pour que la page paywall puisse afficher
+   * "vous êtes sur X" plutôt que de ne montrer que les 3 forfaits sans contexte
+   * — utile aussi bien en blocage (essai expiré) qu'en changement volontaire
+   * de forfait par un client déjà actif.
+   */
   async getStatus(companyId: string) {
-    const sub = await this.prisma.subscription.findUnique({ where: { companyId } });
-    if (!sub) return { status: null, trialEndsAt: null, daysRemaining: null };
+    const sub = await this.prisma.subscription.findUnique({
+      where: { companyId },
+      include: { plan: true },
+    });
+    if (!sub) return { status: null, trialEndsAt: null, daysRemaining: null, currentPlan: null };
 
     const now = Date.now();
     const referenceEnd = sub.status === 'trialing' ? sub.trialEndsAt : sub.currentPeriodEnd;
@@ -31,7 +40,12 @@ export class ManualBillingService {
       ? Math.max(0, Math.ceil((referenceEnd.getTime() - now) / 86_400_000))
       : null;
 
-    return { status: sub.status, trialEndsAt: sub.trialEndsAt, daysRemaining };
+    return {
+      status: sub.status,
+      trialEndsAt: sub.trialEndsAt,
+      daysRemaining,
+      currentPlan: { id: sub.plan.id, tier: sub.plan.tier, name: sub.plan.name },
+    };
   }
 
   async getPlans() {

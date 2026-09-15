@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { setLanguage, getLanguage } from '../services/i18n/i18n';
 import { formatDateTime } from '../services/i18n/formatDate';
 import { useAuth } from '../hooks/AuthContext';
@@ -7,7 +8,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   User, Shield, BellRing, Globe, Check, Smartphone, KeyRound, LogOut,
   RefreshCw, Lock, Package, Fuel, Clock, Wrench, Mail, Laptop, Cookie,
-  Eye, EyeOff, Copy, CheckCheck, Server, CircleOff,
+  Eye, EyeOff, Copy, CheckCheck, Server, CircleOff, CreditCard,
 } from 'lucide-react';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
@@ -15,6 +16,7 @@ import api from '../services/api/client';
 import { useToast } from '../components/Toast';
 import AppearanceSection from '../features/settings/sections/AppearanceSection';
 import SmsFallbackSettings from '../features/tracking/SmsFallbackSettings';
+import type { ManualBillingStatus } from '../types';
 import styles from './SettingsPage.module.css';
 
 type ApiError = { response?: { data?: { message?: string } } };
@@ -156,6 +158,7 @@ const tabs = [
   { key: 'profile', icon: User, labelKey: 'settings.profile', descKey: 'settings.profileDesc' },
   { key: 'security', icon: Shield, labelKey: 'settings.security', descKey: 'settings.securityDesc' },
   { key: 'notifications', icon: BellRing, labelKey: 'settings.notifications', descKey: 'settings.notificationsDesc' },
+  { key: 'billing', icon: CreditCard, labelKey: 'settings.billing', descKey: 'settings.billingDesc' },
   { key: 'language', icon: Globe, labelKey: 'settings.language', descKey: 'settings.languageDesc' },
 ] as const;
 
@@ -212,6 +215,7 @@ export default function SettingsPage() {
         )}
         {activeTab === 'security' && <SecuritySection t={t} toast={toast} key="security" />}
         {activeTab === 'notifications' && <NotificationsSection t={t} toast={toast} key="notifications" />}
+        {activeTab === 'billing' && <BillingSection t={t} key="billing" />}
         {activeTab === 'language' && <LanguageSection t={t} key="language" />}
       </div>
     </div>
@@ -521,6 +525,41 @@ function NotificationsSection({ t, toast }: {
             icon={notifIcons[key]}
             label={t(`settingsNotifications.preferences.${key}`)} />
         ))}
+      </div>
+    </section>
+  );
+}
+
+function BillingSection({ t }: { t: (key: string, opts?: Record<string, unknown>) => string }) {
+  const { data: status } = useQuery({
+    queryKey: ['manual-billing-status'],
+    queryFn: () => api.get<ManualBillingStatus>('/manual-billing/status').then((r) => r.data),
+  });
+
+  return (
+    <section className={styles.card}>
+      <div className={styles.cardHeader}>
+        <span className={styles.cardIcon}><CreditCard size={18} /></span>
+        <div>
+          <h2 className={styles.cardTitle}>{t('settings.billing')}</h2>
+          <p className={styles.cardDesc}>{t('settings.billingDesc')}</p>
+        </div>
+      </div>
+      <div className={styles.sectionGap}>
+        <p>
+          {t('settings.billingCurrentPlan')} : <strong>{status?.currentPlan?.name ?? '—'}</strong>
+        </p>
+        {status?.status === 'trialing' && status.daysRemaining !== null && (
+          <Badge variant="accent">{t('settings.billingTrialing', { days: status.daysRemaining })}</Badge>
+        )}
+        {status?.status && status.status !== 'active' && status.status !== 'trialing' && (
+          <Badge variant="danger">{t('settings.billingBlocked')}</Badge>
+        )}
+        <div>
+          <Link to="/paywall">
+            <Button variant="primary">{t('settings.billingChangePlan')}</Button>
+          </Link>
+        </div>
       </div>
     </section>
   );

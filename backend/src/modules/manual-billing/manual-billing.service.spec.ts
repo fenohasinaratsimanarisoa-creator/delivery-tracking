@@ -54,20 +54,23 @@ describe('ManualBillingService', () => {
         status: null,
         trialEndsAt: null,
         daysRemaining: null,
+        currentPlan: null,
       });
     });
 
-    it("calcule daysRemaining sur trialEndsAt pendant l'essai", async () => {
+    it("calcule daysRemaining sur trialEndsAt pendant l'essai et inclut le forfait courant", async () => {
       const trialEndsAt = new Date(Date.now() + 3 * 86_400_000);
       mockPrisma.subscription.findUnique.mockResolvedValue({
         status: 'trialing',
         trialEndsAt,
         currentPeriodEnd: trialEndsAt,
+        plan: { id: 'plan-enterprise', tier: 'enterprise', name: 'Business' },
       });
       const result = await service.getStatus('c1');
       expect(result.status).toBe('trialing');
       expect(result.daysRemaining).toBeGreaterThanOrEqual(2);
       expect(result.daysRemaining).toBeLessThanOrEqual(3);
+      expect(result.currentPlan).toEqual({ id: 'plan-enterprise', tier: 'enterprise', name: 'Business' });
     });
   });
 

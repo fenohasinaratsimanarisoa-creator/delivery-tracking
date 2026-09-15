@@ -224,6 +224,7 @@ export interface ManualBillingStatus {
   status: 'trialing' | 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | null;
   trialEndsAt: string | null;
   daysRemaining: number | null;
+  currentPlan: { id: string; tier: string; name: string } | null;
 }
 
 export interface PlatformPaymentMethod {

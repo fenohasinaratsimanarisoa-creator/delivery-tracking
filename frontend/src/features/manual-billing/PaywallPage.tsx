@@ -10,7 +10,7 @@ import Input from '../../components/Input';
 import Badge from '../../components/Badge';
 import { formatAriary } from '../../services/formatAriary';
 import { formatDate } from '../../services/i18n/formatDate';
-import type { BillingPlan, PlatformPaymentMethod, PaymentProof } from '../../types';
+import type { BillingPlan, PlatformPaymentMethod, PaymentProof, ManualBillingStatus } from '../../types';
 import styles from './PaywallPage.module.css';
 
 const PLAN_ICONS: Record<string, React.ReactNode> = {
@@ -36,6 +36,18 @@ export default function PaywallPage() {
   const [reference, setReference] = useState('');
   const [code, setCode] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: status } = useQuery({
+    queryKey: ['manual-billing-status'],
+    queryFn: () => api.get<ManualBillingStatus>('/manual-billing/status').then((r) => r.data),
+  });
+  // Bloqué (essai/abonnement expiré, ou aucune Subscription) vs changement
+  // volontaire d'un client déjà actif/en essai — même page, titre/sous-titre
+  // différents pour ne pas dire "votre essai est terminé" à quelqu'un qui
+  // vient juste changer de forfait depuis les Paramètres.
+  const isBlocked = status
+    ? status.status === null || (status.status !== 'active' && status.status !== 'trialing')
+    : false;
 
   const { data: plans } = useQuery({
     queryKey: ['manual-billing-plans'],
@@ -115,8 +127,8 @@ export default function PaywallPage() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1 className={styles.title}>{t('paywall.title')}</h1>
-        <p className={styles.subtitle}>{t('paywall.subtitle')}</p>
+        <h1 className={styles.title}>{t(isBlocked ? 'paywall.title' : 'paywall.titleUpgrade')}</h1>
+        <p className={styles.subtitle}>{t(isBlocked ? 'paywall.subtitle' : 'paywall.subtitleUpgrade')}</p>
       </div>
 
       <div className={styles.planGrid}>
@@ -128,6 +140,9 @@ export default function PaywallPage() {
             className={`${styles.planCard} ${selectedPlanId === plan.id ? styles.planCardSelected : ''}`}
             disabled={!isAdmin}
           >
+            {status?.currentPlan?.id === plan.id && (
+              <Badge variant="accent">{t('paywall.currentPlanLabel', { name: plan.name })}</Badge>
+            )}
             <div className={styles.planIcon}>{PLAN_ICONS[plan.tier] || <Package size={26} />}</div>
             <h3 className={styles.planName}>{plan.name}</h3>
             <p className={styles.planPrice}>
