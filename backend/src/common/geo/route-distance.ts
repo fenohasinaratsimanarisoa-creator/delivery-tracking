@@ -1,5 +1,36 @@
 import { collapseStationaryWindows, computeFilteredDistance } from './geo.utils';
-import { matchRadiuses, MATCH_MIN_CONFIDENCE, MATCH_MIN_FIXES } from './live-map-match';
+import { matchRadiuses, MATCH_MIN_FIXES } from './live-map-match';
+
+/**
+ * Confiance OSRM minimale pour retenir la distance d'un morceau ACCROCHÉE
+ * ROUTE (audit sous-comptage carburant, volet confiance, 2026-09-15 bis).
+ *
+ * Ce module réutilisait jusqu'ici `MATCH_MIN_CONFIDENCE` (0,5) de
+ * `live-map-match.ts` — un seuil calibré pour l'AFFICHAGE TEMPS RÉEL du
+ * marqueur : une confiance faible y signale qu'OSRM a pu accrocher le point
+ * sur la MAUVAISE rue parallèle, ce qui est visible et gênant sur la carte.
+ * C'est un besoin différent de celui-ci (distance CUMULÉE d'un morceau) : la
+ * confiance d'OSRM mesure l'ambiguïté du CHOIX de route entre plusieurs
+ * candidates plausibles, pas la fiabilité de la LONGUEUR totale — deux rues
+ * parallèles sur le même tronçon ont une longueur quasi identique. Vérifié
+ * sur la trace réelle du 14/09 (976 fixes, odomètre moto 42 km) : les
+ * morceaux à confiance 0,13 à 0,30 (rejetés par le seuil 0,5, donc retombés
+ * sur le calcul brut) avaient tous une distance accrochée cohérente avec les
+ * morceaux à haute confiance (+15 à +20 % par rapport à la corde brute — le
+ * déficit normal de coupe d'angle d'une trace point-à-point), jamais une
+ * valeur aberrante. Réutiliser le seuil d'affichage ici rejetait ces morceaux
+ * à tort et retombait sur `computeFilteredDistance`, qui SOUS-compte
+ * structurellement (jamais plus que la somme des cordes) : sur cette
+ * journée, ce seul seuil coûtait ~1,4 km des ~3,6 km d'écart avec l'odomètre
+ * (38,4 km calculés au lieu de ~39,8 km possibles).
+ *
+ * Seuil bas mais non nul : garde-fou minimal contre une confiance quasi
+ * nulle (dégénérée) sans re-rejeter les cas réels observés. Le filet
+ * anti-anomalie de plus haut niveau (déplacement net vs distance cumulée,
+ * voir `isStationaryNoise` dans fuel-consumption.service.ts) reste la
+ * protection contre un accrochage réellement aberrant.
+ */
+export const ROUTE_MATCH_MIN_CONFIDENCE = 0.05;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DISTANCE ACCROCHÉE ROUTE POUR LE RAPPORT CARBURANT (audit sous-comptage
@@ -97,7 +128,7 @@ export async function computeRouteMatchedDistance(
         matched = null;
       }
       total +=
-        matched && matched.confidence >= MATCH_MIN_CONFIDENCE
+        matched && matched.confidence >= ROUTE_MATCH_MIN_CONFIDENCE
           ? matched.distance
           : computeFilteredDistance(chunk);
     } else {

@@ -41,16 +41,32 @@ describe('computeRouteMatchedDistance', () => {
     expect(got).toBeCloseTo(expected, 1);
   });
 
-  it('retombe sur computeFilteredDistance quand la confiance OSRM est insuffisante', async () => {
+  it('retombe sur computeFilteredDistance quand la confiance OSRM est quasi nulle (dégénérée)', async () => {
     const positions = straightLine(20, 3);
     const matchFn: MatchDistanceFn = jest
       .fn()
-      .mockResolvedValue({ distance: 999999, confidence: 0.1 });
+      .mockResolvedValue({ distance: 999999, confidence: 0.01 });
     const got = await computeRouteMatchedDistance(positions, matchFn);
     const expected = computeFilteredDistance(positions);
     expect(got).toBeCloseTo(expected, 1);
-    // La distance aberrante à confiance 0.1 ne doit JAMAIS être retenue.
+    // La distance aberrante à confiance quasi nulle ne doit JAMAIS être retenue.
     expect(got).toBeLessThan(1000);
+  });
+
+  // AUDIT SOUS-COMPTAGE CARBURANT 2026-09-15 BIS — trace réelle du 14/09 (moto,
+  // odomètre 42 km) : plusieurs morceaux à confiance 0,13-0,30 étaient rejetés
+  // par l'ancien seuil (0,5, repris à tort de live-map-match — calibré pour
+  // l'affichage temps réel, pas la distance cumulée) alors qu'OSRM y renvoyait
+  // une distance cohérente (unique matching, dans la fourchette +15-20 % de la
+  // corde brute déjà observée sur les morceaux à haute confiance). Ce seul
+  // seuil coûtait ~1,4 km de sous-comptage ce jour-là.
+  it('retient désormais la distance OSRM à confiance modérée (0,13 à 0,30) — cas réel du 14/09', async () => {
+    const positions = straightLine(20, 3); // ~57 m de corde brute
+    const matchFn: MatchDistanceFn = jest
+      .fn()
+      .mockResolvedValue({ distance: 3345, confidence: 0.128 }); // chunk réel i=869
+    const got = await computeRouteMatchedDistance(positions, matchFn);
+    expect(got).toBeCloseTo(3345, 0);
   });
 
   it('retombe sur computeFilteredDistance quand matchFn lève une exception (panne réseau OSRM)', async () => {
