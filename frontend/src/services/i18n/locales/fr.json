@@ -1204,6 +1204,7 @@
     "uploadProof": "Capture d'écran du paiement",
     "submitProof": "Envoyer la preuve de paiement",
     "missingFields": "Sélectionnez un forfait, un moyen de paiement, une référence et une capture d'écran",
+    "retryHint": "Une erreur temporaire est survenue — veuillez réessayer.",
     "proofSubmitted": "Preuve envoyée — en attente de vérification",
     "pendingReview": "Votre preuve de paiement est en cours de vérification. Vous recevrez un code d'activation dès qu'elle sera validée.",
     "rejected": "Rejetée",

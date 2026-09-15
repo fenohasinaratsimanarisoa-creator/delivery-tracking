@@ -89,7 +89,12 @@ export default function PaywallPage() {
       if (fileInputRef.current) fileInputRef.current.value = '';
     },
     onError: (err: { response?: { data?: { message?: string } } }) => {
-      toast(err?.response?.data?.message || t('common.error'), 'error');
+      // Sans err.response (échec réseau, ou 401/403 transitoire déjà retenté en
+      // vain par les intercepteurs d'api/client.ts — jeton CSRF/session qui vient
+      // de tourner sous une double soumission concurrente), aucun message serveur
+      // n'est disponible : le message générique invite explicitement à réessayer
+      // plutôt que de laisser un "Erreur" sec sans piste d'action.
+      toast(err?.response?.data?.message || t('paywall.retryHint'), 'error');
     },
   });
 
@@ -102,12 +107,19 @@ export default function PaywallPage() {
       window.location.href = '/';
     },
     onError: (err: { response?: { data?: { message?: string } } }) => {
-      toast(err?.response?.data?.message || t('common.error'), 'error');
+      toast(err?.response?.data?.message || t('paywall.retryHint'), 'error');
     },
   });
 
   const handleSubmitProof = (e: React.FormEvent) => {
     e.preventDefault();
+    // Garde anti double-soumission : au-delà de `disabled={isPending}` sur le
+    // bouton (qui ne prend effet qu'au re-render suivant), un second événement
+    // submit tiré avant ce re-render (double-clic, Entrée + clic quasi
+    // simultanés) déclencherait un 2e appel réseau concurrent — c'est
+    // exactement ce qui a fait échouer une preuve en prod (403 CSRF puis 401
+    // sur le retry, jeton/cookie désynchronisés entre les deux requêtes).
+    if (submitMutation.isPending) return;
     if (!selectedPlanId || !selectedMethodId || !reference.trim() || !fileInputRef.current?.files?.[0]) {
       toast(t('paywall.missingFields'), 'error');
       return;
@@ -117,6 +129,7 @@ export default function PaywallPage() {
 
   const handleRedeem = (e: React.FormEvent) => {
     e.preventDefault();
+    if (redeemMutation.isPending) return;
     if (!code.trim()) return;
     redeemMutation.mutate();
   };

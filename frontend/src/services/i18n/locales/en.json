@@ -1204,6 +1204,7 @@
     "uploadProof": "Payment screenshot",
     "submitProof": "Submit payment proof",
     "missingFields": "Select a plan, a payment method, a reference and a screenshot",
+    "retryHint": "A temporary error occurred — please try again.",
     "proofSubmitted": "Proof submitted — pending review",
     "pendingReview": "Your payment proof is being reviewed. You'll receive an activation code once it's approved.",
     "rejected": "Rejected",
