@@ -46,12 +46,29 @@ export type MatchDistanceFn = (
 
 /** Points par appel OSRM /match — sous la limite pratique OSRM et le plafond DTO (1000). */
 export const MATCH_CHUNK_SIZE = 80;
-/** Plafond d'appels OSRM par (véhicule, jour) — borne le pire cas (trace très dense/longue). */
+/** Plafond d'appels OSRM par défaut — borne le pire cas (trace très dense/longue). */
 export const MAX_MATCH_CHUNKS = 80;
+
+/**
+ * Budget PARTAGEABLE entre plusieurs appels de computeRouteMatchedDistance
+ * (audit sous-comptage carburant 2026-09-15, extension scanVehicleTrack).
+ * scanVehicleTrack() pagine une fenêtre pouvant courir sur plusieurs SEMAINES
+ * (fenêtre entre deux pleins, jusqu'à 30 j de repli pour le tout premier
+ * plein d'un véhicule) — sans budget PARTAGÉ entre pages, chaque page de
+ * 20 000 positions relancerait son propre plafond de MAX_MATCH_CHUNKS appels
+ * OSRM, multipliant le total par le nombre de pages. Créer UN SEUL objet
+ * `{ remaining: MAX_MATCH_CHUNKS }` avant la boucle de pagination et le
+ * passer à chaque appel borne le total RÉEL d'appels OSRM pour tout le scan,
+ * quel que soit le nombre de pages.
+ */
+export interface MatchBudget {
+  remaining: number;
+}
 
 export async function computeRouteMatchedDistance(
   positions: RouteDistanceFix[],
   matchFn: MatchDistanceFn,
+  budget: MatchBudget = { remaining: MAX_MATCH_CHUNKS },
 ): Promise<number> {
   const withTimestamps = positions.filter(
     (p): p is RouteDistanceFix & { timestamp: Date } => p.timestamp instanceof Date,
@@ -63,14 +80,13 @@ export async function computeRouteMatchedDistance(
   const collapsed = collapseStationaryWindows(sorted);
 
   let total = 0;
-  let chunksUsed = 0;
   let i = 0;
   while (i < collapsed.length - 1) {
     const end = Math.min(i + MATCH_CHUNK_SIZE, collapsed.length);
     const chunk = collapsed.slice(i, end);
 
-    if (chunk.length >= MATCH_MIN_FIXES && chunksUsed < MAX_MATCH_CHUNKS) {
-      chunksUsed++;
+    if (chunk.length >= MATCH_MIN_FIXES && budget.remaining > 0) {
+      budget.remaining--;
       let matched: MatchDistanceResult | null = null;
       try {
         matched = await matchFn(

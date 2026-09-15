@@ -1,6 +1,7 @@
 import {
   computeRouteMatchedDistance,
   MATCH_CHUNK_SIZE,
+  type MatchBudget,
   type MatchDistanceFn,
   type RouteDistanceFix,
 } from './route-distance';
@@ -146,5 +147,40 @@ describe('computeRouteMatchedDistance', () => {
       .mockResolvedValue({ distance: naive, confidence: 0.9 });
     const got = await computeRouteMatchedDistance(positions, matchFn);
     expect(got).toBeCloseTo(naive, 0);
+  });
+
+  // AUDIT SOUS-COMPTAGE CARBURANT 2026-09-15 — extension scanVehicleTrack
+  // (crossCheckFuelLogWithGps) : le budget OSRM doit être PARTAGEABLE entre
+  // plusieurs appels successifs (une page = un appel), pour borner le total
+  // réel d'appels OSRM sur toute une fenêtre paginée, pas seulement par page.
+  describe('MatchBudget partagé entre plusieurs appels (pagination scanVehicleTrack)', () => {
+    it('épuise le budget PARTAGÉ à travers plusieurs appels successifs', async () => {
+      const budget: MatchBudget = { remaining: 2 };
+      const matchFn: MatchDistanceFn = jest
+        .fn()
+        .mockResolvedValue({ distance: 100, confidence: 0.9 });
+
+      // 1er appel : 2 morceaux (utilise tout le budget de 2).
+      const positions1 = straightLine(MATCH_CHUNK_SIZE + 10, 3);
+      await computeRouteMatchedDistance(positions1, matchFn, budget);
+      expect(matchFn).toHaveBeenCalledTimes(2);
+      expect(budget.remaining).toBe(0);
+
+      // 2e appel (page suivante) : budget épuisé → repli intégral sur
+      // computeFilteredDistance, AUCUN appel OSRM supplémentaire.
+      const positions2 = straightLine(MATCH_CHUNK_SIZE + 10, 3);
+      const before = (matchFn as jest.Mock).mock.calls.length;
+      await computeRouteMatchedDistance(positions2, matchFn, budget);
+      expect((matchFn as jest.Mock).mock.calls.length).toBe(before);
+    });
+
+    it('sans budget explicite (appelant unique, ex. rapport journalier) : comportement inchangé', async () => {
+      const positions = straightLine(MATCH_CHUNK_SIZE * 2 + 10, 3);
+      const matchFn: MatchDistanceFn = jest
+        .fn()
+        .mockResolvedValue({ distance: 100, confidence: 0.9 });
+      await computeRouteMatchedDistance(positions, matchFn);
+      expect(matchFn).toHaveBeenCalledTimes(3);
+    });
   });
 });

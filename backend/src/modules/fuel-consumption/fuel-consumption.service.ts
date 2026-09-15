@@ -29,7 +29,11 @@ import {
   haversineDistance,
   isStationaryNoise,
 } from '../../common/geo/geo.utils';
-import { computeRouteMatchedDistance } from '../../common/geo/route-distance';
+import {
+  computeRouteMatchedDistance,
+  MAX_MATCH_CHUNKS,
+  type MatchBudget,
+} from '../../common/geo/route-distance';
 import { hasFuelAnomaly, withDerivedAnomaly } from '../../common/fuel/fuel-anomaly.utils';
 
 // Valeurs initiales (seed) utilisées UNIQUEMENT tant que la company n'a pas configuré
@@ -1753,6 +1757,12 @@ export class FuelConsumptionService {
   }> {
     const PAGE_SIZE = 20_000;
     const toleranceMs = FUEL_COVERAGE_GAP_TOLERANCE_S * 1000;
+    // Budget OSRM PARTAGÉ entre toutes les pages de ce scan (voir MatchBudget,
+    // route-distance.ts) : cette fenêtre peut courir sur plusieurs semaines
+    // (jusqu'à 30 j de repli pour le tout premier plein d'un véhicule), donc
+    // plusieurs pages de 20 000 positions — sans budget partagé, chaque page
+    // relancerait son propre plafond d'appels OSRM.
+    const matchBudget: MatchBudget = { remaining: MAX_MATCH_CHUNKS };
 
     let distanceMeters = 0;
     let coveredMs = 0;
@@ -1825,7 +1835,21 @@ export class FuelConsumptionService {
         coveredMs += Math.min(b.getTime() - a.getTime(), toleranceMs);
       }
 
-      distanceMeters += computeFilteredDistance(withCarry);
+      // CHANTIER OSRM (audit sous-comptage carburant 2026-09-15) : même
+      // accrochage route que le rapport journalier (upsertDailyReportForVehicleGroup),
+      // appliqué ici à la vérification GPS d'un plein saisi manuellement — la
+      // corde brute entre fixes sous-estime systématiquement la distance
+      // réelle sur route, faussant le ratio manuel/GPS dans les deux sens
+      // (un plein honnête peut sembler suspect si le GPS est sous-compté).
+      distanceMeters +=
+        this.routeMatchingEnabled && this.routingService
+          ? await computeRouteMatchedDistance(
+              withCarry,
+              (coordinates, radiuses) =>
+                this.routingService!.matchRouteDistance({ coordinates, radiuses }),
+              matchBudget,
+            )
+          : computeFilteredDistance(withCarry);
 
       carry = page[page.length - 1];
       if (page.length < PAGE_SIZE) break;

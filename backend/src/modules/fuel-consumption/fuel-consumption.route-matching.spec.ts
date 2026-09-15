@@ -19,7 +19,7 @@ const mockQueue = { add: jest.fn().mockResolvedValue(undefined) };
 
 const mockPrisma = {
   vehicle: { findFirst: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
-  fuelLog: { findMany: jest.fn() },
+  fuelLog: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
   fuelPriceHistory: { findFirst: jest.fn() },
   companyFuelSettings: { findUnique: jest.fn() },
   dailyFuelReport: { upsert: jest.fn() },
@@ -132,6 +132,48 @@ describe('FuelConsumptionService — intégration OSRM (audit sous-comptage carb
     expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(1);
     const payload = mockPrisma.dailyFuelReport.upsert.mock.calls[0][0] as any;
     expect(payload.create.gpsDataQuality).toBe(GpsDataQuality.sufficient);
+  });
+});
+
+// CHANTIER OSRM — EXTENSION scanVehicleTrack (audit sous-comptage carburant
+// 2026-09-15) : crossCheckFuelLogWithGps() (vérification GPS d'un plein saisi
+// manuellement) utilise scanVehicleTrack(), qui appelle désormais
+// computeRouteMatchedDistance() avec un budget OSRM PARTAGÉ entre pages.
+describe('FuelConsumptionService — crossCheckFuelLogWithGps utilise aussi l’accrochage OSRM (audit 2026-09-15)', () => {
+  const FUEL_LOG = {
+    id: 'fuel-log-1',
+    vehicleId: 'vehicle-1',
+    kilometers: 0.5,
+    fillDate: new Date('2026-09-14T12:00:00.000Z'),
+    vehicle: { licensePlate: 'TRK-001' },
+  };
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    mockConfigService.get.mockImplementation((_key: string, def?: unknown) => def);
+    mockPrisma.fuelLog.findFirst.mockResolvedValue({
+      fillDate: new Date('2026-09-14T08:00:00.000Z'),
+    });
+    mockPrisma.gpsPosition.findMany.mockResolvedValue(TIMESTAMPED_POSITIONS);
+    mockPrisma.companyFuelSettings.findUnique.mockResolvedValue(null);
+  });
+
+  it('scanVehicleTrack() appelle RoutingService.matchRouteDistance quand disponible', async () => {
+    const matchRouteDistance = jest.fn().mockResolvedValue({ distance: 500, confidence: 0.95 });
+    const routingService = { matchRouteDistance } as unknown as RoutingService;
+    const service = buildService(routingService);
+
+    await (service as any).crossCheckFuelLogWithGps(FUEL_LOG, 'company-1');
+
+    expect(matchRouteDistance).toHaveBeenCalled();
+  });
+
+  it('sans RoutingService : repli sur computeFilteredDistance, comportement inchangé', async () => {
+    const service = buildService(undefined);
+
+    await expect(
+      (service as any).crossCheckFuelLogWithGps(FUEL_LOG, 'company-1'),
+    ).resolves.not.toThrow();
   });
 });
 
