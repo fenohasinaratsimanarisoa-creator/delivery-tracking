@@ -501,6 +501,55 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       expect(Math.abs(confirmedBroadcast.displayLatitude - glitchLat)).toBeLessThan(0.0001);
     });
 
+    // AUDIT ÉCART ~250 M 2026-09-15 — le filet ci-dessus est gated sur isStoppedFix(),
+    // qui vétoyait `motion` avant `speed` : un fix `motion:true`/`speed:0` (motion
+    // fantôme connue de ce GT06, cf. audit VITESSE FANTÔME) passait alors comme
+    // « en mouvement » et contournait à la fois l'ancre ET ce filet. Cas réel
+    // production : le fix isolé s'est présenté avec `motion:true`, `speed:0`.
+    it("saut isolé avec motion:true fantôme (speed:0) : le filet s'applique quand même", async () => {
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
+      const bridge = makeBridge() as any;
+      const now = Date.now();
+
+      for (const [i, dLat] of [0.0, 0.00002, -0.00001].entries()) {
+        await bridge.handlePosition(
+          baseTraccarPos({
+            speed: 0,
+            accuracy: 8,
+            attributes: { sat: 12, motion: false },
+            latitude: DELIVERY_LAT + dLat,
+            longitude: DELIVERY_LNG,
+            fixTime: new Date(now - (3 - i) * 10_000).toISOString(),
+            deviceTime: new Date(now - (3 - i) * 10_000).toISOString(),
+          }),
+        );
+      }
+
+      const glitchLat = DELIVERY_LAT + 0.0022; // ≈ 245 m au nord (échelle de l'incident réel)
+      await bridge.handlePosition(
+        baseTraccarPos({
+          speed: 0,
+          accuracy: 55,
+          attributes: { sat: 6, motion: true }, // motion fantôme : device dit "mouvement", speed=0
+          latitude: glitchLat,
+          longitude: DELIVERY_LNG,
+          fixTime: new Date(now + 100 * 60_000).toISOString(),
+          deviceTime: new Date(now + 100 * 60_000).toISOString(),
+        }),
+      );
+
+      const calls = mockGateway.broadcastToCompany.mock.calls.filter(
+        (c: any[]) => c[1] === 'positionUpdate',
+      );
+      const glitchBroadcast = calls[calls.length - 1][2] as {
+        latitude: number;
+        displayLatitude: number;
+      };
+      expect(glitchBroadcast.latitude).toBeCloseTo(glitchLat, 6);
+      expect(Math.abs(glitchBroadcast.displayLatitude - DELIVERY_LAT)).toBeLessThan(0.00005);
+      expect(glitchBroadcast.displayLatitude).not.toBeCloseTo(glitchLat, 3);
+    });
+
     it('map-matching : véhicule EN MOUVEMENT → displayLat/Lng = point accroché à la route (OSRM)', async () => {
       mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
       // OSRM renvoie un point accroché à ~15 m à l'est du DERNIER fix (i=4), confiance 0,9.

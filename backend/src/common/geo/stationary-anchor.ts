@@ -44,31 +44,42 @@ export const ANCHOR_ACCURACY_FLOOR_M = 5;
 
 const accOf = (f: AnchorFix): number => (f.accuracy != null && f.accuracy > 0 ? f.accuracy : 50);
 
-/** true si le fix indique un véhicule à l'arrêt. */
+/**
+ * true si le fix indique un véhicule à l'arrêt.
+ *
+ * `speed` (résolue par resolveGroundSpeed — audit VITESSE FANTÔME 2026-09-09,
+ * source unique aux 4 chemins d'ingestion) est prioritaire sur `motion` : ce
+ * GT06 rapporte régulièrement `motion:true` alors que le véhicule est garé
+ * (703 fixes fantômes / 830 sur 24 h lors de cet audit), un signal déjà connu
+ * comme non fiable. `motion` ne sert donc de repère qu'en dernier recours,
+ * quand `speed` est inconnue (jamais résolue par aucun chemin d'ingestion).
+ * Régression corrigée le 2026-09-15 (audit écart ~250 m) : un fix `motion:true`
+ * + `speed:0` était classé « en mouvement », désactivant à la fois l'ancre à
+ * l'arrêt ET le filet anti-saut isolé (lastDisplayedPosition côté
+ * TraccarBridgeService, tous deux gated sur isStoppedFix) — un unique fix
+ * défaillant à sat=6 devenait alors la position affichée, ~250 m de la
+ * réalité, jusqu'au fix suivant (potentiellement jamais, si le traceur perd
+ * ensuite le signal).
+ */
 export function isStoppedFix(f: AnchorFix): boolean {
+  if (f.speed != null) return f.speed < STATIONARY_SPEED_MS;
   if (f.motion === true) return false;
   if (f.motion === false) return true;
-  return f.speed == null || f.speed < STATIONARY_SPEED_MS;
+  return true;
 }
 
 /**
- * Position à AFFICHER pour un véhicule à l'arrêt, ou `null` si :
- *  - le véhicule est en mouvement (dernier fix) → utiliser la position brute / map-matchée ;
- *  - pas assez de fixes fiables dans la série d'arrêt courante.
- *
- * @param fixes historique récent (ordre quelconque), le plus récent fait foi.
+ * Tente d'ancrer la série d'arrêt CONTIGUË se terminant à `sorted[endIndex]` :
+ * remonte tant que le fix reste « à l'arrêt », proche, et dans la fenêtre de
+ * temps. Le premier fix en mouvement / lointain / trop vieux stoppe la
+ * remontée (l'arrêt courant a commencé après lui). `null` si ce fix n'est pas
+ * à l'arrêt ou si la série qui en résulte est trop courte/dispersée.
  */
-export function computeAnchoredPosition(
-  fixes: AnchorFix[],
+function tryAnchorEndingAt(
+  sorted: AnchorFix[],
+  endIndex: number,
 ): { latitude: number; longitude: number } | null {
-  if (!Array.isArray(fixes) || fixes.length < ANCHOR_MIN_FIXES) return null;
-
-  const sorted = [...fixes]
-    .filter((f) => Number.isFinite(f.latitude) && Number.isFinite(f.longitude))
-    .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-  if (sorted.length < ANCHOR_MIN_FIXES) return null;
-
-  const newest = sorted[sorted.length - 1];
+  const newest = sorted[endIndex];
   if (!isStoppedFix(newest)) return null;
 
   const initialRadius = Math.max(
@@ -76,12 +87,8 @@ export function computeAnchoredPosition(
     ANCHOR_INITIAL_RADIUS_ACC_MULT * accOf(newest),
   );
 
-  // Série CONTIGUË de fixes à l'arrêt qui précède le fix courant : on remonte tant
-  // que le fix reste « à l'arrêt », proche, et dans la fenêtre de temps. Le premier
-  // fix en mouvement / lointain / trop vieux STOPPE la remontée (l'arrêt courant a
-  // commencé après lui).
   const run: AnchorFix[] = [newest];
-  for (let i = sorted.length - 2; i >= 0; i--) {
+  for (let i = endIndex - 1; i >= 0; i--) {
     const f = sorted[i];
     if (newest.timestamp.getTime() - f.timestamp.getTime() > ANCHOR_WINDOW_MS) break;
     if (!isStoppedFix(f)) break;
@@ -118,4 +125,42 @@ export function computeAnchoredPosition(
   if (!(wSum > 0)) return null;
 
   return { latitude: latSum / wSum, longitude: lngSum / wSum };
+}
+
+/**
+ * Position à AFFICHER pour un véhicule à l'arrêt, ou `null` si :
+ *  - le véhicule est en mouvement (dernier fix) → utiliser la position brute / map-matchée ;
+ *  - pas assez de fixes fiables, nulle part dans l'historique, pour ancrer quoi que ce soit.
+ *
+ * AUDIT ÉCART ~250 M 2026-09-15 : le dernier fix peut être un OUTLIER isolé
+ * (ex. motion fantôme à sat=6 après un long silence) — ni corroboré par un
+ * voisin proche/récent (pas de série), ni par une route à accrocher (point
+ * isolé). Plutôt que de retomber directement sur sa position BRUTE (jusqu'à
+ * ~250 m de la réalité, potentiellement affiché indéfiniment si le traceur ne
+ * renvoie plus jamais rien), on cherche la série d'arrêt valide la plus
+ * RÉCENTE dans tout l'historique fourni : si le tout dernier fix forme déjà
+ * une série normalement (cas courant), on la retourne directement ; sinon on
+ * recule fix par fix jusqu'à en trouver une. Seul un dernier fix EN MOUVEMENT
+ * échappe à cette recherche (on veut alors la position brute / map-matchée,
+ * jamais une ancre d'arrêt passée).
+ *
+ * @param fixes historique récent (ordre quelconque), le plus récent fait foi.
+ */
+export function computeAnchoredPosition(
+  fixes: AnchorFix[],
+): { latitude: number; longitude: number } | null {
+  if (!Array.isArray(fixes) || fixes.length < ANCHOR_MIN_FIXES) return null;
+
+  const sorted = [...fixes]
+    .filter((f) => Number.isFinite(f.latitude) && Number.isFinite(f.longitude))
+    .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  if (sorted.length < ANCHOR_MIN_FIXES) return null;
+
+  if (!isStoppedFix(sorted[sorted.length - 1])) return null;
+
+  for (let endIndex = sorted.length - 1; endIndex >= ANCHOR_MIN_FIXES - 1; endIndex--) {
+    const anchor = tryAnchorEndingAt(sorted, endIndex);
+    if (anchor) return anchor;
+  }
+  return null;
 }
