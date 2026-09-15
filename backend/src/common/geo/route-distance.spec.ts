@@ -6,6 +6,7 @@ import {
   type RouteDistanceFix,
 } from './route-distance';
 import { haversineDistance, computeFilteredDistance } from './geo.utils';
+import { MATCH_MIN_FIXES } from './live-map-match';
 
 const T0 = new Date('2026-09-15T06:00:00.000Z').getTime();
 const at = (i: number) => new Date(T0 + i * 4000);
@@ -117,6 +118,63 @@ describe('computeRouteMatchedDistance', () => {
     // 30 points devient 1 seul point représentatif.
     expect(seenPointCount).toBeLessThan(positions.length);
     expect(seenPointCount).toBeLessThanOrEqual(11);
+  });
+
+  // AUDIT SOUS-COMPTAGE CARBURANT 2026-09-15 — cas réel terrain (« chunk 5 »,
+  // trajet du 14/09) : un arrêt long (~1h40) avec seulement 2-3 pings épars
+  // (>> MATCH_LEG_GAP_S d'écart entre eux) suivi d'une vraie conduite dense se
+  // retrouvait mélangé dans le MÊME morceau OSRM de taille fixe — l'énorme
+  // saut temporel interne faisait échouer le matching, et la conduite qui
+  // suivait retombait sur computeFilteredDistance au lieu d'être accrochée
+  // route. Vérifie que l'arrêt épars devient sa PROPRE frontière, isolant la
+  // conduite dans un morceau propre envoyé à OSRM.
+  it('isole un arrêt long à pings épars (> MATCH_LEG_GAP_S) de la conduite dense qui suit', async () => {
+    const stopPing1 = { latitude: 0, longitude: 0, accuracy: 8, speed: 0, timestamp: at(0) };
+    const stopPing2 = {
+      latitude: 0.00001,
+      longitude: 0,
+      accuracy: 8,
+      speed: 0,
+      timestamp: new Date(at(0).getTime() + 79 * 60_000), // 79 min plus tard
+    };
+    const stopPing3 = {
+      latitude: 0.00002,
+      longitude: 0,
+      accuracy: 8,
+      speed: 0,
+      timestamp: new Date(at(0).getTime() + 89 * 60_000), // + 10 min
+    };
+    const driveStart = new Date(at(0).getTime() + 95 * 60_000);
+    const drive = Array.from({ length: 20 }, (_, i) => ({
+      latitude: 0.00002 + (20 * (i + 1)) / 111320,
+      longitude: 0,
+      accuracy: 8,
+      speed: 8,
+      timestamp: new Date(driveStart.getTime() + i * 4000), // dense, 4s d'écart
+    }));
+    const positions = [stopPing1, stopPing2, stopPing3, ...drive];
+
+    const seenChunks: number[][] = [];
+    const matchFn: MatchDistanceFn = jest
+      .fn()
+      .mockImplementation(async (coords: [number, number][]) => {
+        seenChunks.push(coords.map((c) => c[0]));
+        return { distance: 400, confidence: 0.9 };
+      });
+    await computeRouteMatchedDistance(positions, matchFn);
+
+    // Aucun morceau envoyé à OSRM ne doit mélanger un point de l'arrêt épars
+    // (latitudes ~0) avec un point de la conduite (latitudes > 0.0001).
+    for (const chunkLats of seenChunks) {
+      const hasStopPoint = chunkLats.some((lat) => lat < 0.00005);
+      const hasDrivePoint = chunkLats.some((lat) => lat > 0.0001);
+      expect(hasStopPoint && hasDrivePoint).toBe(false);
+    }
+    // La conduite dense (20 points bien échantillonnés) doit avoir été
+    // proposée à OSRM dans un morceau dédié.
+    const driveChunk = seenChunks.find((lats) => lats.some((lat) => lat > 0.0001));
+    expect(driveChunk).toBeDefined();
+    expect(driveChunk!.length).toBeGreaterThanOrEqual(MATCH_MIN_FIXES);
   });
 
   it('repli intégral sur computeFilteredDistance si les timestamps sont absents (jamais de crash)', async () => {
