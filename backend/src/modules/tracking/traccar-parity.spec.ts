@@ -425,6 +425,82 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       expect(Math.abs(last.displayLatitude - DELIVERY_LAT)).toBeLessThan(0.00005);
     });
 
+    // AUDIT ÉCART ~1 KM 2026-09-15 — filet de sécurité contre un fix isolé non
+    // corroboré (voir lastDisplayedPosition dans traccar-bridge.service.ts).
+    it("saut isolé de ~1 km après une longue coupure : la position affichée ne saute PAS tant que le nouveau point n'est pas corroboré", async () => {
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
+      const bridge = makeBridge() as any;
+      const now = Date.now();
+
+      // 1) Ancre stable sur DELIVERY_LAT/LNG (3 fixes à l'arrêt, comme le test précédent).
+      for (const [i, dLat] of [0.0, 0.00002, -0.00001].entries()) {
+        await bridge.handlePosition(
+          baseTraccarPos({
+            speed: 0,
+            accuracy: 8,
+            attributes: { sat: 12, motion: false },
+            latitude: DELIVERY_LAT + dLat,
+            longitude: DELIVERY_LNG,
+            fixTime: new Date(now - (3 - i) * 10_000).toISOString(),
+            deviceTime: new Date(now - (3 - i) * 10_000).toISOString(),
+          }),
+        );
+      }
+
+      // 2) Après 10 min de silence (traceur GT06 endormi), UN fix isolé à ~1 km,
+      // toujours « à l'arrêt » (motion:false) — trop loin des 3 fixes précédents
+      // pour former un run d'ancre (> ANCHOR_INITIAL_RADIUS_MIN_M), et aucune route
+      // à accrocher (mapMatchingEnabled mais motion:false → pas de tentative OSRM
+      // ici puisque l'ancre est retentée avant, et le filet s'applique en dernier
+      // recours). L'ancien code affichait ce fix BRUT (saut de ~1 km) ; le filet de
+      // sécurité doit conserver l'ancienne position affichée.
+      const glitchLat = DELIVERY_LAT + 0.009; // ≈ 1002 m au nord
+      await bridge.handlePosition(
+        baseTraccarPos({
+          speed: 0,
+          accuracy: 10,
+          attributes: { sat: 8, motion: false },
+          latitude: glitchLat,
+          longitude: DELIVERY_LNG,
+          fixTime: new Date(now + 10 * 60_000).toISOString(),
+          deviceTime: new Date(now + 10 * 60_000).toISOString(),
+        }),
+      );
+
+      const calls = mockGateway.broadcastToCompany.mock.calls.filter(
+        (c: any[]) => c[1] === 'positionUpdate',
+      );
+      const glitchBroadcast = calls[calls.length - 1][2] as {
+        latitude: number;
+        displayLatitude: number;
+      };
+      // lat brute = le fix isolé (jamais perdu, stockage/litige intacts).
+      expect(glitchBroadcast.latitude).toBeCloseTo(glitchLat, 6);
+      // displayLatitude = ANCIENNE position affichée, PAS le fix isolé à 1 km.
+      expect(Math.abs(glitchBroadcast.displayLatitude - DELIVERY_LAT)).toBeLessThan(0.00005);
+      expect(glitchBroadcast.displayLatitude).not.toBeCloseTo(glitchLat, 3);
+
+      // 3) Un 2e fix CORROBORE la nouvelle zone (proche du fix isolé) : l'ancre se
+      // recale désormais sur la nouvelle position — plus de saut instantané, mais
+      // pas de blocage permanent non plus dès qu'un vrai déplacement est confirmé.
+      await bridge.handlePosition(
+        baseTraccarPos({
+          speed: 0,
+          accuracy: 8,
+          attributes: { sat: 12, motion: false },
+          latitude: glitchLat + 0.00002,
+          longitude: DELIVERY_LNG,
+          fixTime: new Date(now + 10 * 60_000 + 15_000).toISOString(),
+          deviceTime: new Date(now + 10 * 60_000 + 15_000).toISOString(),
+        }),
+      );
+      const calls2 = mockGateway.broadcastToCompany.mock.calls.filter(
+        (c: any[]) => c[1] === 'positionUpdate',
+      );
+      const confirmedBroadcast = calls2[calls2.length - 1][2] as { displayLatitude: number };
+      expect(Math.abs(confirmedBroadcast.displayLatitude - glitchLat)).toBeLessThan(0.0001);
+    });
+
     it('map-matching : véhicule EN MOUVEMENT → displayLat/Lng = point accroché à la route (OSRM)', async () => {
       mockPrisma.gpsPosition.findFirst.mockResolvedValue(null);
       // OSRM renvoie un point accroché à ~15 m à l'est du DERNIER fix (i=4), confiance 0,9.

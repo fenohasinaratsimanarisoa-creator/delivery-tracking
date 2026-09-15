@@ -50,8 +50,13 @@ interface TraccarPosition {
 // UERE pour récepteur GPS grand public : ~5m (combinaison erreurs satellite + atmosphère + récepteur)
 // HDOP * UERE = accuracy estimée ; on prend la plus prudente (max) entre accuracy du device et HDOP dérivé
 import { computeConfidence, computeCombinedAccuracy } from '../../common/geo/gps-quality';
-import { resolveGroundSpeed } from '../../common/geo/geo.utils';
-import { computeAnchoredPosition, type AnchorFix } from '../../common/geo/stationary-anchor';
+import { resolveGroundSpeed, haversineDistance } from '../../common/geo/geo.utils';
+import {
+  computeAnchoredPosition,
+  isStoppedFix,
+  ANCHOR_INITIAL_RADIUS_MIN_M,
+  type AnchorFix,
+} from '../../common/geo/stationary-anchor';
 import {
   selectMatchWindow,
   matchRadiuses,
@@ -201,6 +206,38 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
    */
   private readonly anchorBuffers = new Map<string, AnchorFix[]>();
   private static readonly ANCHOR_BUFFER_SIZE = 20;
+
+  /**
+   * AUDIT ÉCART ~1 KM 2026-09-15 : dernière position AFFICHÉE (ancre / accrochage
+   * route / brute) par véhicule — sert de filet de sécurité contre un fix ISOLÉ et
+   * NON CORROBORÉ pendant un arrêt.
+   *
+   * `evaluateTeleportation` (teleportation.utils.ts) ne borne que la VITESSE
+   * implicite (distance / Δt). Ce GT06 étant déclenché sur mouvement, il peut
+   * rester silencieux des minutes voire des heures ; passé ~18 s de silence, un
+   * saut de 1 km implique déjà une vitesse < 200 km/h et n'est donc JAMAIS
+   * suspecté. Sans historique récent pour ancrer (le fix isolé est trop loin des
+   * fixes précédents pour former un « run » d'au moins 2, voir
+   * ANCHOR_INITIAL_RADIUS_MIN_M) ET sans route à accrocher (OSRM), l'ancienne
+   * logique retombait alors directement sur la position BRUTE — un unique fix
+   * défaillant (multitrajet, réveil du traceur) devenait la position affichée,
+   * jusqu'à ~1 km de la réalité.
+   *
+   * Filet ajouté : si le véhicule se déclare À L'ARRÊT (isStoppedFix) et que le
+   * fix brut est à plus de ANCHOR_INITIAL_RADIUS_MIN_M de la dernière position
+   * AFFICHÉE (pas la brute) sans qu'aucun ancrage/accrochage ne le confirme, on
+   * CONSERVE l'ancienne position affichée au lieu de sauter sur le fix isolé. Dès
+   * qu'un 2e fix corrobore la nouvelle zone (même logique d'ancre, désormais un
+   * run de 2), l'affichage se recale normalement — au pire un cycle de fix de
+   * retard, jamais un saut instantané non confirmé. Un véhicule qui roule
+   * réellement n'est pas affecté : ses fixes « en mouvement » mettent à jour
+   * cette référence en continu (brut ou accroché route), donc l'arrivée à un
+   * nouvel arrêt est déjà proche de la référence.
+   */
+  private readonly lastDisplayedPosition = new Map<
+    string,
+    { latitude: number; longitude: number }
+  >();
 
   /** Nombre minimal de satellites pour accepter un fix (audit PRÉCISION GPS 2026-09-09). */
   private minSatellites = 4;
@@ -1741,16 +1778,17 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         // la position brute (véhicule en mouvement). Le stockage gps_positions reste
         // 100 % brut — displayLat/Lng sont purement additifs au broadcast.
         const motionAttr = (pos.attributes as Record<string, unknown> | undefined)?.motion;
+        const currentFix: AnchorFix = {
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          accuracy: updateDto.accuracy,
+          speed: updateDto.speed,
+          motion: typeof motionAttr === 'boolean' ? motionAttr : null,
+          timestamp,
+        };
         if (!position.suspect) {
           const buf = this.anchorBuffers.get(vehicleMapping.id) ?? [];
-          buf.push({
-            latitude: pos.latitude,
-            longitude: pos.longitude,
-            accuracy: updateDto.accuracy,
-            speed: updateDto.speed,
-            motion: typeof motionAttr === 'boolean' ? motionAttr : null,
-            timestamp,
-          });
+          buf.push(currentFix);
           while (buf.length > TraccarBridgeService.ANCHOR_BUFFER_SIZE) buf.shift();
           this.anchorBuffers.set(vehicleMapping.id, buf);
         }
@@ -1790,6 +1828,33 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               this.matchInFlight.delete(vehicleMapping.id);
             }
           }
+        }
+
+        // FILET DE SÉCURITÉ — SAUT ISOLÉ NON CORROBORÉ (audit écart ~1 km 2026-09-15,
+        // voir le commentaire sur lastDisplayedPosition). Ni l'ancre ni l'accrochage
+        // route n'ont pu confirmer ce fix : s'il prétend être à l'arrêt mais atterrit
+        // loin de la dernière position AFFICHÉE, on ne l'affiche pas tel quel — on
+        // garde l'ancienne position jusqu'à corroboration par un fix suivant.
+        if (!display && !position.suspect && isStoppedFix(currentFix)) {
+          const lastDisplayed = this.lastDisplayedPosition.get(vehicleMapping.id);
+          if (
+            lastDisplayed &&
+            haversineDistance(
+              pos.latitude,
+              pos.longitude,
+              lastDisplayed.latitude,
+              lastDisplayed.longitude,
+            ) > ANCHOR_INITIAL_RADIUS_MIN_M
+          ) {
+            display = lastDisplayed;
+          }
+        }
+        if (display) this.lastDisplayedPosition.set(vehicleMapping.id, display);
+        else if (!position.suspect) {
+          this.lastDisplayedPosition.set(vehicleMapping.id, {
+            latitude: pos.latitude,
+            longitude: pos.longitude,
+          });
         }
 
         const broadcast = {
