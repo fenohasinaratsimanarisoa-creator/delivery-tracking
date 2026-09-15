@@ -1,33 +1,23 @@
 import axios from 'axios';
 import { getAdminToken, setAdminToken } from '../auth/adminTokenStore';
 import { getApiBaseUrl } from './config';
+import { fetchCsrfToken as fetchAdminCsrfToken, getCsrfHeaders } from './csrf';
 
-let csrfToken: string | null = null;
-let csrfHmac: string | null = null;
-
-// Le CsrfGuard est un APP_GUARD global : toute mutation (POST/PATCH/DELETE) exige
-// le cookie csrf-token + les headers X-CSRF-Token/X-CSRF-HMAC. Le client admin
-// doit donc les récupérer comme le client principal (api/client.ts), sinon toute
-// action du dashboard (impersonate, toggle tenant, création d'admin) — ET le
-// refresh de session ci-dessous — échoue avec 'Missing CSRF token'.
-// IMPORTANT : le token doit être fetché via le préfixe /api (getApiBaseUrl()),
-// sinon la requête part vers le frontend (nginx ne proxy que /api/) et reçoit le
-// HTML du SPA → le token reste null et le CSRF échoue en production.
-export async function fetchAdminCsrfToken(): Promise<void> {
-  try {
-    const res = await axios.get(`${getApiBaseUrl()}/auth/csrf-token`, { withCredentials: true });
-    csrfToken = res.data.csrfToken;
-    csrfHmac = res.data.csrfHmac;
-  } catch {
-    // Non fatal : une 403 CSRF déclenchera un retry après nouveau fetch.
-  }
-}
+// BUG CORRIGÉ (2026-09-16) : ce module maintenait AUPARAVANT sa PROPRE copie
+// privée (csrfToken/csrfHmac) totalement indépendante de celle du client
+// principal (api/client.ts), alors que les deux tirent le MÊME cookie
+// `csrf-token` sur le MÊME domaine via le MÊME endpoint GET /auth/csrf-token.
+// Conséquence concrète en prod : le compte Super-Admin est le même utilisateur
+// que l'admin de sa propre société (ovatech) — dès qu'il utilisait /admin dans
+// le même navigateur que son espace normal, chaque rafraîchissement CSRF d'un
+// côté faisait tourner le cookie SANS mettre à jour la copie JS de l'autre
+// côté, cassant TOUTES les mutations de ce côté-là de façon quasi permanente
+// ("Une erreur temporaire est survenue" en boucle sur la soumission de preuve
+// de paiement). Fix : une seule source de vérité CSRF (services/api/csrf.ts,
+// déjà protégée par un verrou de déduplication) partagée par les deux clients.
 
 function csrfHeaders(): Record<string, string> {
-  const h: Record<string, string> = {};
-  if (csrfToken) h['X-CSRF-Token'] = csrfToken;
-  if (csrfHmac) h['X-CSRF-HMAC'] = csrfHmac;
-  return h;
+  return getCsrfHeaders();
 }
 
 // ── VERROU DE DÉDUPLICATION DU REFRESH ADMIN ──────────────────────────────────
