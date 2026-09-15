@@ -168,6 +168,7 @@ model Company {
   gpsPositions       GpsPosition[]
   dailyFuelReports   DailyFuelReport[]
   vehicleAssignments VehicleAssignmentHistory[]
+  paymentProofs      PaymentProof[]
 
   @@map("companies")
 }
@@ -281,6 +282,7 @@ model User {
   sessions              UserSession[]
   auditLogs             AuditLog[]
   sentInvitations       Invitation[]     @relation("SentInvitations")
+  paymentProofsSubmitted PaymentProof[]
 
   @@index([companyId])
   @@map("users")
@@ -797,6 +799,7 @@ enum BillingProvider {
   stripe
   mvola
   orange_money
+  manual
 }
 
 enum InvoiceStatus {
@@ -830,6 +833,7 @@ model BillingPlan {
   updatedAt             DateTime @updatedAt @map("updated_at")
 
   subscriptions Subscription[]
+  paymentProofs PaymentProof[]
 
   @@map("billing_plans")
 }
@@ -881,6 +885,81 @@ model Invoice {
   @@index([subscriptionId])
   @@index([status])
   @@map("invoices")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAIEMENT MANUEL (essai 14 jours + Simple/Pro/Business, Mobile Money hors app,
+// 2026-09-15). Module parallèle au système Stripe/MVola automatique ci-dessus
+// (resté dormant derrière BILLING_ENABLED=false) : réutilise BillingPlan et
+// Subscription telles quelles, sans y ajouter de champ. `Subscription.trialEndsAt`
+// (déjà existant, jusqu'ici jamais lu/écrit) devient la source de vérité de
+// l'essai. Voir common/guards/subscription.guard.ts pour l'application.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PlatformPaymentMethod {
+  id          String          @id @default(uuid()) @db.Uuid
+  provider    BillingProvider
+  phoneNumber String          @map("phone_number")
+  holderName  String          @map("holder_name")
+  isActive    Boolean         @default(true) @map("is_active")
+  sortOrder   Int             @default(0) @map("sort_order")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  paymentProofs PaymentProof[]
+
+  @@map("platform_payment_methods")
+}
+
+enum PaymentProofStatus {
+  pending
+  approved
+  rejected
+}
+
+model PaymentProof {
+  id            String      @id @default(uuid()) @db.Uuid
+  companyId     String      @map("company_id") @db.Uuid
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  submittedById String      @map("submitted_by_id") @db.Uuid
+  submittedBy   User        @relation(fields: [submittedById], references: [id])
+  claimedPlanId String      @map("claimed_plan_id") @db.Uuid
+  claimedPlan   BillingPlan @relation(fields: [claimedPlanId], references: [id])
+  // Ariary, unités entières — instantané de BillingPlan.price au moment de la
+  // soumission (le prix affiché au client ne doit jamais bouger rétroactivement
+  // si le tarif du plan change ensuite).
+  claimedAmount   Int                   @map("claimed_amount")
+  paymentMethodId String                @map("payment_method_id") @db.Uuid
+  paymentMethod   PlatformPaymentMethod @relation(fields: [paymentMethodId], references: [id])
+
+  // Référence de transaction / nom de l'expéditeur (texte libre fourni par le client).
+  reference String
+  // Capture d'écran Mobile Money — stockée en base (même idiome qu'Invoice.pdfData),
+  // pas de S3/disque : volume faible, évite d'introduire une nouvelle dépendance.
+  proofImage     Bytes  @map("proof_image")
+  proofImageMime String @map("proof_image_mime")
+
+  status          PaymentProofStatus @default(pending)
+  reviewedById    String?            @map("reviewed_by_id") @db.Uuid
+  reviewedBy      PlatformAdmin?     @relation(fields: [reviewedById], references: [id])
+  reviewedAt      DateTime?          @map("reviewed_at")
+  rejectionReason String?            @map("rejection_reason")
+
+  // Code d'activation : même idiome que ApiKey (prefix en clair pour l'affichage
+  // admin + hash pour la vérification), format court prononçable au téléphone —
+  // contrairement au jeton brut 64-hex des invitations. Le code complet n'est
+  // JAMAIS repersisté en clair, seulement retourné une fois à l'approbation.
+  activationCodeHash   String?   @unique @map("activation_code_hash")
+  activationCodePrefix String?   @map("activation_code_prefix")
+  activationExpiresAt  DateTime? @map("activation_expires_at")
+  redeemedAt           DateTime? @map("redeemed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@index([status])
+  @@map("payment_proofs")
 }
 
 model UsageRecord {
@@ -983,7 +1062,8 @@ model PlatformAdmin {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  auditLogs PlatformAuditLog[]
+  auditLogs            PlatformAuditLog[]
+  paymentProofsReviewed PaymentProof[]
 
   @@map("platform_admins")
 }
