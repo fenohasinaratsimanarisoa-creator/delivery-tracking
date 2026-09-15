@@ -402,6 +402,31 @@ export function computeFilteredDistance(
 ): number {
   positions = collapseStationaryWindows(positions);
   let totalDistance = 0;
+
+  // AUDIT SOUS-COMPTAGE CARBURANT 2026-09-15 — RÈGLE FENÊTRE (4) ci-dessous.
+  // `runStart`/`runPending` accumulent les segments individuellement sous le
+  // seuil de bruit (règle 3) : un traceur qui échantillonne toutes les
+  // quelques secondes en circulation lente (embouteillage, 2-3 km/h) produit
+  // une SUITE de micro-segments dont AUCUN, pris isolément, ne dépasse le
+  // bruit combiné à ~20-40 m d'accuracy — alors que leur déplacement NET
+  // (début de fenêtre → fix courant) le dépasse largement. La règle (3) seule
+  // les rejetait tous, sous-comptant un trajet réel lent (cas terrain :
+  // odomètre 42 km, rapport GPS 33 km — écart concentré sur les segments
+  // sous le seuil). Fenêtre bornée à STATIONARY_MAX_SAMPLE_GAP_S (60 s,
+  // cohérent avec collapseStationaryWindows) pour ne jamais transformer une
+  // dérive stationnaire de longue durée en faux déplacement — un point
+  // réellement immobile ne dépasse pas son propre bruit combiné même après
+  // des heures (voir test « zone dense sans vitesse » / audit terrain
+  // 2026-08-28), donc ce plafond ne fait que borner le risque, il ne change
+  // rien pour un point vraiment garé.
+  let runStart: (typeof positions)[number] | null = null;
+  let runPending = 0;
+
+  const resetRun = () => {
+    runStart = null;
+    runPending = 0;
+  };
+
   for (let i = 1; i < positions.length; i++) {
     const p1 = positions[i - 1];
     const p2 = positions[i];
@@ -412,6 +437,7 @@ export function computeFilteredDistance(
 
     // (1) Les DEUX fixes trop imprécis : segment = bruit, jamais compté.
     if (a1 > GPS_UNUSABLE_ACCURACY_M && a2 > GPS_UNUSABLE_ACCURACY_M) {
+      resetRun();
       continue;
     }
 
@@ -433,6 +459,7 @@ export function computeFilteredDistance(
       const maxSpeed = Math.max(p1.speed ?? 0, p2.speed ?? 0);
       totalDistance +=
         dtSec != null ? Math.min(segDist, maxSpeed * dtSec * SPEED_DISTANCE_CAP_MULT) : segDist;
+      resetRun();
       continue;
     }
 
@@ -442,6 +469,56 @@ export function computeFilteredDistance(
     const noiseGate = combinedGpsNoiseGate(a1, a2);
     if (segDist >= noiseGate) {
       totalDistance += segDist;
+      resetRun();
+      continue;
+    }
+
+    // (4) RÈGLE FENÊTRE — voir commentaire ci-dessus. Segment sous le bruit
+    // pairwise : pas encore rejeté, on regarde le NET depuis le début de la
+    // fenêtre courante. GARDE-FOU (audit terrain 2026-08-28, verrou
+    // gps-fuel-reliability.spec.ts « Scénario 4 ») : sans AUCUN signal fiable
+    // (ni vitesse, ni bonne précision), une suite de sauts à accuracy dégradée
+    // est indistinguable du bruit — c'est exactement le mécanisme qui avait
+    // produit 87 km pour un trajet réel de 40 km. Cette règle ne s'applique
+    // donc QUE si AU MOINS UN des deux signaux suivants corrobore un
+    // déplacement réel :
+    //  - vitesse positive non nulle sur au moins une extrémité (> STATIONARY_SPEED_MS,
+    //    déjà la barre de resolveGroundSpeed), même sous le seuil de pleine
+    //    confiance (MOVEMENT_SPEED_THRESHOLD_MS / SPEED_TRUST_MAX_ACCURACY_M) ;
+    //  - LES DEUX fixes ont une précision fiable (≤ MOVEMENT_TRUST_MAX_ACCURACY_M,
+    //    30 m — même barre que isAccuracyTrustworthy ailleurs dans ce fichier) :
+    //    à cette précision, un déplacement net soutenu n'est plus la dérive de
+    //    biais satellite ambigüe qui justifiait le verrou à 30-70 m (cas réel
+    //    audité : traceur à 8 m d'accuracy quasi constante, vitesse ramenée à 0
+    //    par resolveGroundSpeed sur la quasi-totalité des segments d'un trajet
+    //    lent en circulation dense — 736/976 fixes de la journée à vitesse
+    //    résolue nulle malgré une accuracy de 8 m — sous-comptant ~9 km sur
+    //    42 km réels). Dans les deux cas, le déplacement NET sert de
+    //    CORROBORATION, jamais de preuve unique — voir la borne temporelle
+    //    ci-dessous. Sans timestamp, pas de fenêtre bornée possible → repli
+    //    strict sur la règle (3) (comportement inchangé).
+    const hasWeakSpeedSignal =
+      (p1.speed != null && p1.speed > STATIONARY_SPEED_MS) ||
+      (p2.speed != null && p2.speed > STATIONARY_SPEED_MS);
+    const bothAccurate = a1 <= MOVEMENT_TRUST_MAX_ACCURACY_M && a2 <= MOVEMENT_TRUST_MAX_ACCURACY_M;
+    if (dtSec == null || !(hasWeakSpeedSignal || bothAccurate)) continue;
+    if (
+      !runStart ||
+      !(runStart.timestamp instanceof Date) ||
+      (p2.timestamp!.getTime() - runStart.timestamp.getTime()) / 1000 > STATIONARY_MAX_SAMPLE_GAP_S
+    ) {
+      runStart = p1;
+      runPending = 0;
+    }
+    runPending += segDist;
+    const rs = runStart as NonNullable<typeof runStart>;
+    const netDist = haversineDistance(rs.latitude, rs.longitude, p2.latitude, p2.longitude);
+    const ra = rs.accuracy != null && rs.accuracy > 0 ? rs.accuracy : GPS_ACCURACY_FALLBACK_M;
+    const netGate = combinedGpsNoiseGate(ra, a2);
+    if (netDist >= netGate) {
+      totalDistance += runPending;
+      runStart = p2;
+      runPending = 0;
     }
   }
   return totalDistance;

@@ -103,6 +103,72 @@ describe('computeFilteredDistance v3 — bruit GPS non compte comme distance (au
 });
 
 // =============================================================================
+// AUDIT SOUS-COMPTAGE CARBURANT 2026-09-15 — RÈGLE FENÊTRE (4).
+//
+// Cas réel : traceur GT06 à accuracy QUASI CONSTANTE 8 m (excellent signal),
+// circulation lente/dense (Antananarivo) où chaque segment individuel ne
+// dépasse que quelques mètres en quelques secondes — sous le bruit combiné à
+// 8 m (~16 m) ET sous MOVEMENT_SPEED_THRESHOLD_MS, donc resolveGroundSpeed
+// ramène la vitesse RÉSOLUE à 0 sur la quasi-totalité des fixes (736/976 sur
+// la journée auditée). La règle SEUIL (3) seule rejette alors CHAQUE segment,
+// alors que le déplacement NET sur une fenêtre de quelques dizaines de
+// secondes est sans ambiguïté à 8 m de précision. Rapport carburant réel :
+// odomètre 42 km, GPS calculé 33,48 km avant ce correctif.
+// =============================================================================
+describe('computeFilteredDistance — règle fenêtre (4) : déplacement net à bonne précision, vitesse résolue à 0 (audit 2026-09-15)', () => {
+  const T0 = new Date('2026-09-15T06:00:00.000Z').getTime();
+  const at = (i: number) => new Date(T0 + i * 4000); // fixes toutes les 4 s
+
+  it('compte un trajet lent réel (accuracy 8 m constante, vitesse résolue à 0 partout) au lieu de le ramener à 0', () => {
+    // 60 fixes, avance régulière de 3 m par pas (=> ~45 m par fenêtre de 15
+    // fixes/60 s) — sous le bruit pairwise (~16 m) segment par segment, mais
+    // net largement au-dessus sur quelques fixes. speed=0 partout (comme
+    // resolveGroundSpeed le ferait pour ce même mouvement lent).
+    const positions = Array.from({ length: 60 }, (_, i) => ({
+      latitude: (3 * i) / 111320,
+      longitude: 0,
+      accuracy: 8,
+      speed: 0,
+      timestamp: at(i),
+    }));
+    const totalNetM = 3 * 59; // ~177 m parcourus au total
+    const km = computeFilteredDistance(positions) / 1000;
+    expect(km).toBeGreaterThan((totalNetM * 0.5) / 1000);
+    expect(km).toBeLessThan((totalNetM * 1.3) / 1000);
+  });
+
+  it("N'invente PAS de distance sur une dérive stationnaire à bonne précision (accuracy 8 m, oscillation bornée sans progression nette)", () => {
+    // Un point réellement garé, accuracy excellente : la dérive GPS oscille
+    // mais ne progresse pas — le filet (4) ne doit jamais transformer ce
+    // bruit borné en trajet, même à 8 m d'accuracy.
+    const positions = Array.from({ length: 60 }, (_, i) => ({
+      latitude: (Math.sin(i * 0.7) * 4) / 111320, // oscille dans ±4 m, aucune dérive nette
+      longitude: 0,
+      accuracy: 8,
+      speed: 0,
+      timestamp: at(i),
+    }));
+    const km = computeFilteredDistance(positions) / 1000;
+    expect(km).toBeLessThan(0.05);
+  });
+
+  it('respecte toujours le verrou accuracy dégradée SANS vitesse (30-70 m) — la règle (4) ne se déclenche que via bothAccurate OU vitesse faible', () => {
+    // Même construction que le trajet lent ci-dessus mais à accuracy 45 m et
+    // speed=undefined : ni bothAccurate (45 > 30) ni vitesse faible ne
+    // s'appliquent → repli sur la règle (3), donc ~0 (politique inchangée).
+    const positions = Array.from({ length: 60 }, (_, i) => ({
+      latitude: (3 * i) / 111320,
+      longitude: 0,
+      accuracy: 45,
+      speed: undefined,
+      timestamp: at(i),
+    }));
+    const km = computeFilteredDistance(positions) / 1000;
+    expect(km).toBeLessThan(0.3);
+  });
+});
+
+// =============================================================================
 // RÉGRESSION COUVERTE ICI (audit terrain 2026-08-27, complément) : même après le
 // garde-fou d'accuracy ci-dessus, la sommation pairwise accumule encore de la
 // dérive GPS sur de longues périodes stationnaires (chaque micro-segment reste
