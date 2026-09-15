@@ -53,10 +53,7 @@ const TrackingHealthPage = lazy(() => import('./pages/TrackingHealthPage'));
 const NotificationsPage = lazy(() => import('./features/notifications/NotificationsPage'));
 const DeliveryDetailPage = lazy(() => import('./pages/DeliveryDetailPage'));
 const DeliveryProofsPage = lazy(() => import('./pages/DeliveryProofsPage'));
-const PlansPage = lazy(() => import('./features/billing/PlansPage'));
 const PaywallPage = lazy(() => import('./features/manual-billing/PaywallPage'));
-const FacturationPage = lazy(() => import('./features/billing/FacturationPage'));
-const SuccessPage = lazy(() => import('./features/billing/SuccessPage'));
 
 function PageErrorBoundary({ children }: { children: React.ReactNode }) {
   return <ErrorBoundary>{children}</ErrorBoundary>;
@@ -271,23 +268,6 @@ export default function App() {
                     <SuspenseWrapper><SettingsPage /></SuspenseWrapper>
                   </ProtectedRoute>
                 } />
-                {/* Billing (abonnements Stripe / Mobile Money) */}
-                <Route path="/billing" element={
-                  <ProtectedRoute roles={['admin']}>
-                    <SuspenseWrapper><PlansPage /></SuspenseWrapper>
-                  </ProtectedRoute>
-                } />
-                <Route path="/billing/invoices" element={
-                  <ProtectedRoute roles={['admin']}>
-                    <SuspenseWrapper><FacturationPage /></SuspenseWrapper>
-                  </ProtectedRoute>
-                } />
-                <Route path="/billing/success" element={
-                  <ProtectedRoute roles={['admin']}>
-                    <SuspenseWrapper><SuccessPage /></SuspenseWrapper>
-                  </ProtectedRoute>
-                } />
-
                 {/* Client routes */}
                 <Route path="/my-orders" element={
                   <ProtectedRoute roles={['client']}>
