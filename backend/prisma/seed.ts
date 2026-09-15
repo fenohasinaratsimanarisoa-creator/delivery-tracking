@@ -175,9 +175,15 @@ async function seedPaymentMethods() {
 }
 
 async function main() {
-  await seedPlatformAdmin();
+  // Paiement manuel 2026-09-15 : plans/moyens de paiement d'abord — idempotents,
+  // sans prérequis. seedPlatformAdmin() en dernier : il fait un process.exit(1)
+  // dur si SEED_ADMIN_EMAIL est absent (comportement voulu pour un tout premier
+  // bootstrap), ce qui ne doit PAS empêcher un simple `npm run prisma:seed` de
+  // routine (sans cette variable en prod, l'admin existant n'a pas besoin d'être
+  // retouché) de rafraîchir les plans/moyens de paiement.
   await seedBillingPlans();
   await seedPaymentMethods();
+  await seedPlatformAdmin();
 }
 
 main()
