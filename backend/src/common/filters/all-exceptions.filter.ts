@@ -42,6 +42,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | object = 'Internal server error';
+    // Discriminant machine-readable optionnel (ex. 'SUBSCRIPTION_REQUIRED') porté
+    // par certaines exceptions custom — voir ManualPaymentRequiredException.
+    // Volontairement PAS `error` : ce nom est déjà pris par le corps par défaut
+    // de HttpException (`error: 'Bad Request'`, etc.) et le propager aurait
+    // changé la forme de TOUTES les réponses d'erreur de l'app.
+    let code: string | undefined;
 
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       const mapping = PRISMA_CODE_MAP[exception.code];
@@ -72,6 +78,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = res;
       } else if (typeof res === 'object' && res !== null) {
         message = (res as Record<string, unknown>).message || res;
+        const resCode = (res as Record<string, unknown>).code;
+        if (typeof resCode === 'string') code = resCode;
       }
     }
 
@@ -109,6 +117,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: request.url,
       message,
+      ...(code ? { code } : {}),
       ...(status >= 500 && request.requestId ? { requestId: request.requestId } : {}),
     });
   }

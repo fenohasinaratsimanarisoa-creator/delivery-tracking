@@ -79,7 +79,7 @@ api.interceptors.response.use(
     // Redirection dure (comme le 401 ci-dessous) plutôt qu'un state React : on
     // veut un remontage complet de l'app sur l'écran de paiement, quelle que
     // soit la page/route en cours au moment de la coupure.
-    if (status === 402 && error.response?.data?.error === 'SUBSCRIPTION_REQUIRED') {
+    if (status === 402 && error.response?.data?.code === 'SUBSCRIPTION_REQUIRED') {
       if (window.location.pathname !== '/paywall') {
         window.location.href = '/paywall';
       }
