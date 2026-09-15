@@ -284,11 +284,26 @@ export class TrackingGateway
           ? computeConfidence(dto.accuracy, position.suspect, speed, dto.heading)
           : computeConfidence(undefined, position.suspect, speed, dto.heading);
 
+      // ANCRE À L'ARRÊT (audit écart ~1 km 2026-09-15) : le pont Traccar et le
+      // bootstrap REST (getLivePositions) l'appliquaient déjà — cette diffusion
+      // temps réel du chemin téléphone diffusait le fix BRUT (accuracy tolérée
+      // jusqu'à 1000 m par le DTO), d'où un marqueur qui pouvait sauter de ~1 km
+      // à l'arrêt dès qu'un fix réseau (cell/WiFi) de mauvaise qualité arrivait.
+      // `displayLatitude/Longitude` : purement additif, cohérent avec vehicleMap.ts
+      // (fallback sur latitude/longitude brutes si null). Le stockage DB (dto,
+      // position) reste inchangé.
+      const display = await this.trackingService.getDisplayPosition(dto.vehicleId, {
+        speed,
+        suspect: position.suspect,
+      });
+
       const broadcast = {
         driverId: driver.id,
         driverName: `${user.firstName} ${user.lastName}`,
         latitude: dto.latitude,
         longitude: dto.longitude,
+        displayLatitude: display?.latitude ?? dto.latitude,
+        displayLongitude: display?.longitude ?? dto.longitude,
         speed: speed,
         heading: dto.heading,
         altitude: dto.altitude,
@@ -386,24 +401,51 @@ export class TrackingGateway
         return;
       }
 
+      // ANCRE À L'ARRÊT (audit écart ~1 km 2026-09-15, voir handlePosition) :
+      // seul le DERNIER fix de chaque véhicule dans ce lot représente la position
+      // COURANTE du marqueur — les fixes plus anciens du lot restent bruts
+      // (trace/breadcrumbs, pas la position affichée « maintenant »). On ne
+      // recalcule donc l'ancre que pour ce dernier fix par véhicule.
+      const lastByVehicle = new Map<string, GpsPosition>();
+      for (const pos of saved) {
+        const current = lastByVehicle.get(pos.vehicleId);
+        if (!current || pos.timestamp > current.timestamp) lastByVehicle.set(pos.vehicleId, pos);
+      }
+      const displayByVehicle = new Map<string, { latitude: number; longitude: number }>();
+      await Promise.all(
+        Array.from(lastByVehicle.entries()).map(async ([vehicleId, pos]) => {
+          const display = await this.trackingService.getDisplayPosition(vehicleId, {
+            speed: pos.speed,
+            suspect: pos.suspect,
+          });
+          if (display) displayByVehicle.set(vehicleId, display);
+        }),
+      );
+
       // Only broadcast positions that were actually saved
-      const broadcasts = saved.map((pos: GpsPosition) => ({
-        driverId,
-        driverName: `${user.firstName} ${user.lastName}`,
-        latitude: pos.latitude,
-        longitude: pos.longitude,
-        speed: pos.speed,
-        heading: pos.heading,
-        altitude: pos.altitude,
-        accuracy: pos.accuracy,
-        suspect: pos.suspect,
-        confidence: pos.accuracy
-          ? computeConfidence(pos.accuracy, pos.suspect ?? false, pos.speed ?? undefined)
-          : computeConfidence(undefined, pos.suspect ?? false, pos.speed ?? undefined),
-        timestamp: pos.timestamp instanceof Date ? pos.timestamp.toISOString() : pos.timestamp,
-        deliveryId: pos.deliveryId ?? undefined,
-        vehicleId: pos.vehicleId,
-      }));
+      const broadcasts = saved.map((pos: GpsPosition) => {
+        const isLastForVehicle = lastByVehicle.get(pos.vehicleId) === pos;
+        const display = isLastForVehicle ? displayByVehicle.get(pos.vehicleId) : undefined;
+        return {
+          driverId,
+          driverName: `${user.firstName} ${user.lastName}`,
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          displayLatitude: display?.latitude ?? pos.latitude,
+          displayLongitude: display?.longitude ?? pos.longitude,
+          speed: pos.speed,
+          heading: pos.heading,
+          altitude: pos.altitude,
+          accuracy: pos.accuracy,
+          suspect: pos.suspect,
+          confidence: pos.accuracy
+            ? computeConfidence(pos.accuracy, pos.suspect ?? false, pos.speed ?? undefined)
+            : computeConfidence(undefined, pos.suspect ?? false, pos.speed ?? undefined),
+          timestamp: pos.timestamp instanceof Date ? pos.timestamp.toISOString() : pos.timestamp,
+          deliveryId: pos.deliveryId ?? undefined,
+          vehicleId: pos.vehicleId,
+        };
+      });
 
       const rooms = new Set<string>();
       for (const pos of saved) {

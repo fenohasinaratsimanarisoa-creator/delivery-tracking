@@ -2479,50 +2479,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     const stoppedVehicleIds = positions
       .filter((p) => !p.suspect && (p.speed == null || p.speed < 0.5))
       .map((p) => p.vehicle_id);
-    const anchorByVehicle = new Map<string, { latitude: number; longitude: number }>();
-    if (stoppedVehicleIds.length > 0) {
-      // Fenêtre large (48 h) : computeAnchoredPosition se limite elle-même à la
-      // série d'arrêt CONTIGUË qui précède le dernier fix (ANCHOR_WINDOW_MS). La
-      // fenêtre large sert juste à couvrir un traceur muet depuis longtemps (moto
-      // garée, GT06 motion-triggered) — sinon aucune ancre au bootstrap.
-      const recent =
-        (await this.prisma.gpsPosition.findMany({
-          where: {
-            vehicleId: { in: stoppedVehicleIds },
-            suspect: false,
-            timestamp: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
-          },
-          orderBy: { timestamp: 'desc' },
-          take: 400,
-          select: {
-            vehicleId: true,
-            latitude: true,
-            longitude: true,
-            accuracy: true,
-            speed: true,
-            timestamp: true,
-            attributes: true,
-          },
-        })) ?? [];
-      const byVehicle = new Map<string, AnchorFix[]>();
-      for (const r of recent) {
-        const motionRaw = (r.attributes as Record<string, unknown> | null)?.motion;
-        const list = byVehicle.get(r.vehicleId) ?? [];
-        list.push({
-          latitude: r.latitude,
-          longitude: r.longitude,
-          accuracy: r.accuracy,
-          speed: r.speed,
-          motion: typeof motionRaw === 'boolean' ? motionRaw : null,
-          timestamp: r.timestamp,
-        });
-        byVehicle.set(r.vehicleId, list);
-      }
-      for (const [vehicleId, list] of byVehicle) {
-        const anchor = computeAnchoredPosition(list);
-        if (anchor) anchorByVehicle.set(vehicleId, anchor);
-      }
-    }
+    const anchorByVehicle = await this.computeAnchorByVehicle(stoppedVehicleIds);
 
     return positions.map((p) => {
       const anchor = anchorByVehicle.get(p.vehicle_id);
@@ -2546,6 +2503,88 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         minutesAgo: Number(p.minutes_ago),
       };
     });
+  }
+
+  /**
+   * Calcule l'ANCRE À L'ARRÊT (centroïde pondéré 1/accuracy² de la série contiguë
+   * de fixes à l'arrêt, voir stationary-anchor.ts) pour chaque véhicule de
+   * `vehicleIds`. Factorisé hors de getLivePositions() pour être réutilisable par
+   * les diffusions temps réel (WebSocket) — voir getDisplayPosition().
+   */
+  private async computeAnchorByVehicle(
+    vehicleIds: string[],
+  ): Promise<Map<string, { latitude: number; longitude: number }>> {
+    const anchorByVehicle = new Map<string, { latitude: number; longitude: number }>();
+    if (vehicleIds.length === 0) return anchorByVehicle;
+
+    // Fenêtre large (48 h) : computeAnchoredPosition se limite elle-même à la
+    // série d'arrêt CONTIGUË qui précède le dernier fix (ANCHOR_WINDOW_MS). La
+    // fenêtre large sert juste à couvrir un traceur muet depuis longtemps (moto
+    // garée, GT06 motion-triggered) — sinon aucune ancre au bootstrap.
+    const recent =
+      (await this.prisma.gpsPosition.findMany({
+        where: {
+          vehicleId: { in: vehicleIds },
+          suspect: false,
+          timestamp: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+        },
+        orderBy: { timestamp: 'desc' },
+        take: 400,
+        select: {
+          vehicleId: true,
+          latitude: true,
+          longitude: true,
+          accuracy: true,
+          speed: true,
+          timestamp: true,
+          attributes: true,
+        },
+      })) ?? [];
+    const byVehicle = new Map<string, AnchorFix[]>();
+    for (const r of recent) {
+      const motionRaw = (r.attributes as Record<string, unknown> | null)?.motion;
+      const list = byVehicle.get(r.vehicleId) ?? [];
+      list.push({
+        latitude: r.latitude,
+        longitude: r.longitude,
+        accuracy: r.accuracy,
+        speed: r.speed,
+        motion: typeof motionRaw === 'boolean' ? motionRaw : null,
+        timestamp: r.timestamp,
+      });
+      byVehicle.set(r.vehicleId, list);
+    }
+    for (const [vehicleId, list] of byVehicle) {
+      const anchor = computeAnchoredPosition(list);
+      if (anchor) anchorByVehicle.set(vehicleId, anchor);
+    }
+    return anchorByVehicle;
+  }
+
+  /**
+   * Position À AFFICHER pour un véhicule après l'enregistrement d'un nouveau fix
+   * (chemin téléphone — WebSocket `updatePosition`/`batchPosition`).
+   *
+   * AUDIT ÉCART ~1 KM 2026-09-15 : le pont Traccar (traceur physique) et le
+   * bootstrap REST (getLivePositions) appliquaient déjà l'ancre à l'arrêt, mais
+   * PAS la diffusion temps réel du chemin téléphone (tracking.gateway.ts) — elle
+   * envoyait `dto.latitude/longitude` BRUTS. Le DTO tolère une accuracy jusqu'à
+   * 1000 m (UpdatePositionDto) ; un fix réseau (cell/WiFi, fréquent en zone à
+   * antennes/points WiFi épars) à l'arrêt pouvait donc faire SAUTER le marqueur
+   * de jusqu'à ~1 km dès la prochaine position reçue, alors que le chargement de
+   * page (bootstrap) montrait la position ancrée correcte juste avant. Retourne
+   * `null` si le véhicule est en mouvement, suspect, ou si l'historique récent
+   * ne permet pas d'ancrer (→ l'appelant garde alors le brut, comportement
+   * identique à avant ce correctif).
+   */
+  async getDisplayPosition(
+    vehicleId: string,
+    latest: { speed: number | null | undefined; suspect: boolean },
+  ): Promise<{ latitude: number; longitude: number } | null> {
+    if (latest.suspect) return null;
+    if (latest.speed != null && latest.speed >= 0.5) return null;
+    const anchorByVehicle = await this.computeAnchorByVehicle([vehicleId]);
+    return anchorByVehicle.get(vehicleId) ?? null;
   }
 
   async findNearestVehicle(lat: number, lng: number, companyId: string) {

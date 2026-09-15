@@ -64,6 +64,10 @@ describe('TrackingGateway — ACK WebSocket réel (Test D)', () => {
     }),
     saveBatch: jest.fn().mockResolvedValue([]),
     getDeliveryInfo: jest.fn(),
+    // Ancre à l'arrêt (audit écart ~1 km 2026-09-15) : null = pas d'ancre
+    // disponible, la diffusion retombe sur les coordonnées brutes — comportement
+    // identique à avant ce correctif pour ce test.
+    getDisplayPosition: jest.fn().mockResolvedValue(null),
   };
 
   // Réplique EXACTEMENT TrackingService.validateAndSaveBatch (rate limit →

@@ -65,6 +65,7 @@ interface TrackingServiceMock {
   verifyDriverAssignment: jest.Mock;
   getLastPosition: jest.Mock;
   savePosition: jest.Mock;
+  getDisplayPosition: jest.Mock;
 }
 
 const mockSocket = () => {
@@ -95,6 +96,7 @@ describe('TrackingGateway — cross-tenant security', () => {
       verifyDriverAssignment: jest.fn(),
       getLastPosition: jest.fn().mockResolvedValue(null),
       savePosition: jest.fn().mockResolvedValue({ id: 'pos-1', suspect: false }),
+      getDisplayPosition: jest.fn().mockResolvedValue(null),
     };
     deliveryProximityService = { snoozeProximity: jest.fn() };
 
