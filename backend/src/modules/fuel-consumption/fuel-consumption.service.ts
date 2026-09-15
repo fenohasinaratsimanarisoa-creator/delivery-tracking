@@ -17,6 +17,7 @@ import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { acquireCronLock } from '../../common/scheduling/cron-lock';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
+import { RoutingService } from '../routing/routing.service';
 import { CreateFuelLogDto } from './dto/create-fuel-log.dto';
 import { UpdateFuelLogDto } from './dto/update-fuel-log.dto';
 import { FuelFilterDto } from './dto/fuel-filter.dto';
@@ -28,6 +29,7 @@ import {
   haversineDistance,
   isStationaryNoise,
 } from '../../common/geo/geo.utils';
+import { computeRouteMatchedDistance } from '../../common/geo/route-distance';
 import { hasFuelAnomaly, withDerivedAnomaly } from '../../common/fuel/fuel-anomaly.utils';
 
 // Valeurs initiales (seed) utilisées UNIQUEMENT tant que la company n'a pas configuré
@@ -74,6 +76,7 @@ const MAX_POSITIONS_PER_DAILY_REPORT = 60_000;
 export class FuelConsumptionService {
   private readonly logger = new Logger(FuelConsumptionService.name);
   private readonly fallbackThresholdPercent: number;
+  private readonly routeMatchingEnabled: boolean;
 
   constructor(
     private prisma: PrismaService,
@@ -82,6 +85,7 @@ export class FuelConsumptionService {
     @Optional() @InjectQueue('fuel-analysis') private fuelAnalysisQueue: Queue,
     private trackingGateway: TrackingGateway,
     @Optional() @Inject(REDIS_CLIENT) private readonly redis: Redis | null = null,
+    @Optional() private readonly routingService: RoutingService | null = null,
   ) {
     // B9 : défaut 15 ALIGNÉ sur le schéma (companyFuelSettings.anomalyThreshold @default(15))
     // et sur le processor (fuel-analysis.processor.ts). Avant : 20 ici, 15 en base → verdicts
@@ -90,6 +94,11 @@ export class FuelConsumptionService {
       'FUEL_ANOMALY_THRESHOLD_PERCENT',
       15,
     );
+    // Chantier OSRM (audit sous-comptage carburant 2026-09-15) — voir
+    // upsertDailyReportForVehicleGroup(). Activé par défaut ; coupe-circuit
+    // opérationnel si le cron nocturne surcharge OSRM ou dégrade des rapports.
+    this.routeMatchingEnabled =
+      this.configService.get<string>('FUEL_REPORT_MAP_MATCHING_ENABLED', 'true') !== 'false';
   }
 
   private async getCompanyThreshold(companyId: string): Promise<number> {
@@ -1524,7 +1533,22 @@ export class FuelConsumptionService {
       // les segments courts d'une circulation lente en ville ne sont plus effacés.
       // Un téléphone à l'arrêt (accuracy 10-50m) dérive de plusieurs mètres : le seuil
       // pondéré (max 7,5m) filtre toujours cette dérive quand la vitesse ≈ 0.
-      const totalDistance = computeFilteredDistance(positions);
+      //
+      // CHANTIER OSRM (audit sous-comptage carburant 2026-09-15) : même
+      // parfaitement filtrée, la somme des CORDES entre fixes reste plus
+      // courte que la route réelle (virages entre deux points). Quand le
+      // routage est disponible, computeRouteMatchedDistance() accroche la
+      // trace au réseau routier par morceaux (OSRM /match) et ne retombe sur
+      // computeFilteredDistance que morceau par morceau, si l'accrochage
+      // échoue ou n'est pas assez confiant — jamais pire que l'ancien calcul,
+      // potentiellement plus proche de la distance réelle. Coupe-circuit
+      // FUEL_REPORT_MAP_MATCHING_ENABLED=false pour revenir au calcul brut.
+      const totalDistance =
+        this.routeMatchingEnabled && this.routingService
+          ? await computeRouteMatchedDistance(positions, (coordinates, radiuses) =>
+              this.routingService!.matchRouteDistance({ coordinates, radiuses }),
+            )
+          : computeFilteredDistance(positions);
       const computedKm = Math.round((totalDistance / 1000) * 100) / 100;
       // Données GPS exploitables uniquement si un déplacement est mesurable (>= 0.1 km).
       if (computedKm >= 0.1) {

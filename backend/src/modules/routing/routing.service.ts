@@ -236,4 +236,58 @@ export class RoutingService {
       snappedTail: null,
     };
   }
+
+  /**
+   * Distance de trajet (mètres) accrochée au réseau routier réel, pour un
+   * SEGMENT de trace GPS continu (audit sous-comptage carburant 2026-09-15 —
+   * voir common/geo/route-distance.ts, qui appelle ceci par morceaux sur une
+   * journée entière). Contrairement à `matchToRoad` (map-matching TEMPS RÉEL,
+   * qui ne garde que le point accroché du dernier fix), on a ici besoin de la
+   * distance CUMULÉE du meilleur matching OSRM.
+   *
+   * Politique volontairement STRICTE (jamais de reconstruction partielle) :
+   * `null` dès que le morceau se scinde en plusieurs matchings OSRM (trace
+   * discontinue) ou qu'un tracepoint n'a pas pu être accroché — l'appelant
+   * retombe alors sur computeFilteredDistance pour tout le morceau plutôt que
+   * de risquer un double-comptage ou un trou aux limites d'un sous-matching.
+   * Ne compte QUE si l'unique matching couvre l'intégralité des points fournis
+   * avec une confiance suffisante.
+   */
+  async matchRouteDistance(
+    dto: MatchRequestDto,
+  ): Promise<{ distance: number; confidence: number } | null> {
+    const coords = dto.coordinates.map((c) => `${c[1]},${c[0]}`).join(';');
+    const radiuses = dto.radiuses?.join(';') || '';
+    const profile = dto.profile || 'driving';
+    let url = `${this.osrmBaseUrl}/match/v1/${profile}/${coords}?overview=false&geometries=geojson&steps=false`;
+    if (radiuses) url += `&radiuses=${radiuses}`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), dto.timeoutMs ?? 15000);
+    let response: Response;
+    try {
+      response = await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!response.ok) {
+      throw new Error(`OSRM match HTTP ${response.status}: ${await response.text()}`);
+    }
+
+    const data = (await response.json()) as {
+      code: string;
+      matchings: Array<{ confidence: number; distance: number }>;
+      tracepoints: Array<{ location: [number, number]; waypoint_index: number } | null>;
+    };
+
+    if (data.code !== 'Ok' || !data.matchings?.length) return null;
+    // Trace scindée en plusieurs matchings OSRM (gap non pontable) ou point non
+    // accroché : reconstruction fiable impossible sans risquer un double-compte
+    // ou un trou — l'appelant retombe sur computeFilteredDistance pour ce morceau.
+    if (data.matchings.length !== 1) return null;
+    if ((data.tracepoints ?? []).some((tp) => tp === null)) return null;
+
+    const best = data.matchings[0];
+    return { distance: best.distance, confidence: best.confidence };
+  }
 }
