@@ -2104,52 +2104,59 @@
     "pricing": {
       "eyebrow": "Tarifs",
       "title": "Une offre qui grandit avec votre flotte",
-      "subtitle": "Tarifs indicatifs — grille définitive communiquée à la sortie de la phase pilote.",
+      "subtitle": "14 jours d'essai gratuit avec accès complet, sans carte bancaire. Paiement ensuite par Mobile Money.",
       "tiers": [
         {
-          "name": "Starter",
-          "price": "Sur devis",
-          "period": "",
+          "name": "Simple",
+          "price": "35 000 Ar",
+          "period": "/mois",
           "desc": "Pour les petites équipes qui démarrent le suivi de leur flotte.",
           "features": [
-            "Jusqu'à 5 véhicules",
-            "Dispatching temps réel",
-            "Suivi GPS de base",
+            "Jusqu'à 3 véhicules",
+            "Suivi GPS temps réel",
+            "Livraisons et preuves de livraison",
+            "Rapport GPS carburant basique",
+            "Alertes basiques (excès de vitesse, hors ligne)",
             "Support par email"
           ],
-          "cta": "Nous contacter",
+          "cta": "Créer mon compte",
           "highlighted": false
         },
         {
-          "name": "Business",
-          "price": "Sur devis",
-          "period": "",
-          "desc": "Pour les flottes en croissance qui ont besoin de fiabilité et d'anti-fraude.",
+          "name": "Pro",
+          "price": "90 000 Ar",
+          "period": "/mois",
+          "desc": "Pour les flottes en croissance qui ont besoin de rapports carburant complets.",
           "features": [
-            "Véhicules illimités",
-            "Anti-fraude GPS",
-            "Rapports carburant",
-            "Support prioritaire"
+            "Jusqu'à 10 véhicules",
+            "Tout Simple",
+            "Synthèse carburant complète (jour/semaine/mois/an)",
+            "Prix carburant et coûts estimés",
+            "Alertes avancées (retard, écart de position, anomalie)",
+            "Rapports et exports PDF/Excel",
+            "Support email prioritaire"
           ],
-          "cta": "Nous contacter",
+          "cta": "Créer mon compte",
           "highlighted": true
         },
         {
-          "name": "Enterprise",
-          "price": "Sur devis",
-          "period": "",
-          "desc": "Pour les groupes multi-sites avec des besoins d'intégration spécifiques.",
+          "name": "Business",
+          "price": "200 000 Ar",
+          "period": "/mois",
+          "desc": "Pour les flottes qui ont besoin d'utilisateurs illimités et d'un accompagnement dédié.",
           "features": [
-            "Multi-entités",
-            "SLA dédié",
-            "Intégrations sur mesure",
-            "Accompagnement dédié"
+            "Jusqu'à 30 véhicules",
+            "Tout Pro",
+            "Export comptable",
+            "Seuils d'alerte personnalisés",
+            "Utilisateurs illimités",
+            "Support prioritaire et accompagnement"
           ],
-          "cta": "Nous contacter",
+          "cta": "Créer mon compte",
           "highlighted": false
         }
       ],
-      "note": "Actuellement en phase pilote gratuite — voir les conditions."
+      "note": "Essai de 14 jours avec accès complet niveau Business. Paiement par Mobile Money (Orange Money), preuve envoyée depuis l'application."
     },
     "cta": {
       "title": "Prêt à voir votre flotte autrement ?",

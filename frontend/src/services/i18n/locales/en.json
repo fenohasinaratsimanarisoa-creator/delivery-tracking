@@ -2104,52 +2104,59 @@
     "pricing": {
       "eyebrow": "Pricing",
       "title": "A plan that grows with your fleet",
-      "subtitle": "Indicative pricing — final grid communicated at the end of the pilot phase.",
+      "subtitle": "14-day free trial with full access, no credit card required. Paid by Mobile Money afterwards.",
       "tiers": [
         {
-          "name": "Starter",
-          "price": "Contact us",
-          "period": "",
+          "name": "Simple",
+          "price": "35,000 Ar",
+          "period": "/mo",
           "desc": "For small teams starting to track their fleet.",
           "features": [
-            "Up to 5 vehicles",
-            "Real-time dispatching",
-            "Basic GPS tracking",
+            "Up to 3 vehicles",
+            "Real-time GPS tracking",
+            "Deliveries and proof of delivery",
+            "Basic fuel/GPS report",
+            "Basic alerts (speeding, offline)",
             "Email support"
           ],
-          "cta": "Contact us",
+          "cta": "Create my account",
           "highlighted": false
         },
         {
-          "name": "Business",
-          "price": "Contact us",
-          "period": "",
-          "desc": "For growing fleets that need reliability and anti-fraud.",
+          "name": "Pro",
+          "price": "90,000 Ar",
+          "period": "/mo",
+          "desc": "For growing fleets that need full fuel reporting.",
           "features": [
-            "Unlimited vehicles",
-            "GPS anti-fraud",
-            "Fuel reports",
-            "Priority support"
+            "Up to 10 vehicles",
+            "Everything in Simple",
+            "Full fuel summary (day/week/month/year)",
+            "Fuel price and estimated costs",
+            "Advanced alerts (delay, position drift, anomaly)",
+            "PDF/Excel reports and exports",
+            "Priority email support"
           ],
-          "cta": "Contact us",
+          "cta": "Create my account",
           "highlighted": true
         },
         {
-          "name": "Enterprise",
-          "price": "Contact us",
-          "period": "",
-          "desc": "For multi-site groups with specific integration needs.",
+          "name": "Business",
+          "price": "200,000 Ar",
+          "period": "/mo",
+          "desc": "For fleets that need unlimited users and dedicated support.",
           "features": [
-            "Multi-entity",
-            "Dedicated SLA",
-            "Custom integrations",
-            "Dedicated onboarding"
+            "Up to 30 vehicles",
+            "Everything in Pro",
+            "Accounting export",
+            "Custom alert thresholds",
+            "Unlimited users",
+            "Priority support and onboarding"
           ],
-          "cta": "Contact us",
+          "cta": "Create my account",
           "highlighted": false
         }
       ],
-      "note": "Currently in a free pilot phase — see terms."
+      "note": "14-day trial with full Business-level access. Paid by Mobile Money (Orange Money), proof submitted from the app."
     },
     "cta": {
       "title": "Ready to see your fleet differently?",
