@@ -60,6 +60,40 @@ export const FALLBACK_DRIVER_NAME = 'Véhicule sans chauffeur assigné';
 
 export const OFFLINE_TIMEOUT_MIN = 15;
 
+const EARTH_RADIUS_M = 6371000;
+
+function haversineDistanceM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// AUDIT ÉCART ~250 M 2026-09-15 : le popup/la fiche véhicule affichaient la
+// position BRUTE (rawLat/rawLng) comme SEUL chiffre de coordonnées, sans dire
+// que ce n'est pas forcément là où le marqueur est dessiné (ancre à l'arrêt /
+// accrochage route). Un utilisateur qui compare voit un marqueur à un endroit
+// et un chiffre à un autre, à ~250 m, sans explication — lu comme un bug même
+// quand le marqueur, lui, est correct. Sous ce seuil, l'écart brut↔affiché est
+// du bruit GPS normal (ne vaut pas la peine de doubler l'affichage) ; au-delà,
+// il est assez significatif pour justifier une ligne séparée, clairement
+// étiquetée « brute », en plus de la position affichée.
+export const RAW_POSITION_DIVERGENCE_M = 20;
+
+/** true si la position brute diverge assez de la position affichée pour valoir une ligne séparée. */
+export function rawPositionDiverges(
+  lat: number | undefined,
+  lng: number | undefined,
+  rawLat: number | undefined,
+  rawLng: number | undefined,
+): boolean {
+  if (lat == null || lng == null || rawLat == null || rawLng == null) return false;
+  return haversineDistanceM(lat, lng, rawLat, rawLng) > RAW_POSITION_DIVERGENCE_M;
+}
+
 // Sous cette vitesse (m/s ≈ 1,8 km/h), jamais un déplacement de véhicule — c'est du
 // bruit GPS. Miroir de STATIONARY_SPEED_MS côté backend (common/geo/geo.utils.ts).
 // Le backend ramène désormais ces valeurs à 0 à l'ingestion (audit VITESSE FANTÔME

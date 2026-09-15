@@ -146,7 +146,7 @@ interface SearchResult {
 }
 
 import type { VehicleData } from './vehicleMap';
-import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, effectiveStatus, liveSpeedLabel, isMovingSpeed, signalLostSinceMs, type FollowReference } from './vehicleMap';
+import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, effectiveStatus, liveSpeedLabel, isMovingSpeed, signalLostSinceMs, rawPositionDiverges, type FollowReference } from './vehicleMap';
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -347,11 +347,23 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
     nameRow.textContent = vehicle.name;
     container.appendChild(nameRow);
 
+    // Position AFFICHÉE (celle du marqueur lui-même — ancre à l'arrêt / accrochage
+    // route côté serveur, sinon brute) : c'est elle qui doit apparaître en premier
+    // et correspondre à ce que l'œil voit sur la carte. Voir rawPositionDiverges.
     const coords = document.createElement('div');
     coords.className = 'dt-popup__time';
     coords.style.fontFamily = 'var(--font-mono)';
-    coords.textContent = `${(vehicle.rawLat ?? vehicle.lat ?? 0).toFixed(6)}, ${(vehicle.rawLng ?? vehicle.lng ?? 0).toFixed(6)}`;
+    coords.textContent = `${(vehicle.lat ?? 0).toFixed(6)}, ${(vehicle.lng ?? 0).toFixed(6)}`;
     container.appendChild(coords);
+
+    if (rawPositionDiverges(vehicle.lat, vehicle.lng, vehicle.rawLat, vehicle.rawLng)) {
+      const rawCoords = document.createElement('div');
+      rawCoords.className = 'dt-popup__time';
+      rawCoords.style.fontFamily = 'var(--font-mono)';
+      rawCoords.style.opacity = '0.7';
+      rawCoords.textContent = `Brute (litige) · ${(vehicle.rawLat ?? 0).toFixed(6)}, ${(vehicle.rawLng ?? 0).toFixed(6)}`;
+      container.appendChild(rawCoords);
+    }
 
     const detail = document.createElement('div');
     detail.className = 'dt-popup__meta';
@@ -1080,7 +1092,14 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
               {selectedDriver.heading != null && (
                 <DetailRow label={t('map.panel.heading')} value={`${selectedDriver.heading.toFixed(0)}°`} />
               )}
-              <DetailRow label={t('map.panel.coordinates')} value={`${(selectedDriver.rawLat ?? selectedDriver.lat ?? 0).toFixed(5)}, ${(selectedDriver.rawLng ?? selectedDriver.lng ?? 0).toFixed(5)}`} mono />
+              <DetailRow label={t('map.panel.coordinates')} value={`${(selectedDriver.lat ?? 0).toFixed(5)}, ${(selectedDriver.lng ?? 0).toFixed(5)}`} mono />
+              {rawPositionDiverges(selectedDriver.lat, selectedDriver.lng, selectedDriver.rawLat, selectedDriver.rawLng) && (
+                <DetailRow
+                  label={t('map.panel.rawCoordinates')}
+                  value={`${(selectedDriver.rawLat ?? 0).toFixed(5)}, ${(selectedDriver.rawLng ?? 0).toFixed(5)}`}
+                  mono
+                />
+              )}
               {selectedDriver.accuracy != null && (
                 <DetailRow label={t('map.panel.gpsAccuracy')} value={`±${Math.round(selectedDriver.accuracy)} m`} />
               )}

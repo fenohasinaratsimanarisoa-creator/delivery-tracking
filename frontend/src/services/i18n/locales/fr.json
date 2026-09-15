@@ -641,6 +641,7 @@
       "speed": "Vitesse",
       "heading": "Cap",
       "coordinates": "Position GPS",
+      "rawCoordinates": "Position brute (litige)",
       "gpsAccuracy": "Précision GPS",
       "confidence": "Fiabilité du fix",
       "lastPosition": "Dernière position",

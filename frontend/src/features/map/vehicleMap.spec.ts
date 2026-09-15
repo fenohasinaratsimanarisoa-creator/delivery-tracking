@@ -12,6 +12,8 @@ import {
   SIGNAL_LOST_MS,
   signalLostSinceMs,
   FALLBACK_DRIVER_NAME,
+  rawPositionDiverges,
+  RAW_POSITION_DIVERGENCE_M,
   type PositionUpdateInput,
   type VehicleData,
 } from './vehicleMap';
@@ -288,5 +290,32 @@ describe('displayLatitude/displayLongitude — position affichée vs coordonnée
     ]).get('v1')!;
     expect(v.lat).toBe(-18.8632);
     expect(v.rawLat).toBe(-18.8635);
+  });
+});
+
+// AUDIT ÉCART ~250 M 2026-09-15 — popup/fiche véhicule affichaient rawLat/rawLng
+// comme SEUL chiffre de coordonnées, contredisant silencieusement l'endroit où le
+// marqueur (positionné sur lat/lng affichés) est réellement dessiné sur la carte.
+describe('rawPositionDiverges', () => {
+  it('false quand brut et affiché coïncident (cas normal, sans ancre)', () => {
+    expect(rawPositionDiverges(-18.8632, 47.5639, -18.8632, 47.5639)).toBe(false);
+  });
+
+  it('false pour un petit écart (bruit GPS normal, pas la peine de doubler l\'affichage)', () => {
+    // ~5 m d'écart.
+    expect(rawPositionDiverges(-18.8632, 47.5639, -18.86324, 47.5639)).toBe(false);
+  });
+
+  it('true pour un écart significatif (ancre qui a recalé un fix isolé, cas réel ~250 m)', () => {
+    expect(rawPositionDiverges(-18.863191, 47.563928, -18.862825, 47.566219)).toBe(true);
+  });
+
+  it('false si une coordonnée manque (rien à comparer)', () => {
+    expect(rawPositionDiverges(undefined, 47.5639, -18.8632, 47.5639)).toBe(false);
+    expect(rawPositionDiverges(-18.8632, 47.5639, undefined, undefined)).toBe(false);
+  });
+
+  it('RAW_POSITION_DIVERGENCE_M documente le seuil (20 m)', () => {
+    expect(RAW_POSITION_DIVERGENCE_M).toBe(20);
   });
 });
