@@ -37,6 +37,7 @@ import { CsrfGuard, getDevFallbackSecret } from '../../common/guards/csrf.guard'
 import { Public } from '../../common/decorators/public.decorator';
 import { SkipCsrf } from '../../common/decorators/skip-csrf.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { SkipSubscriptionCheck } from '../../common/decorators/skip-subscription-check.decorator';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
@@ -223,6 +224,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @SkipSubscriptionCheck()
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(
@@ -258,6 +260,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @SkipSubscriptionCheck()
   @Get('sessions')
   async getSessions(@CurrentUser('id') userId: string, @Req() req: Request) {
     // Passe par le service : le select n'expose jamais refreshTokenHash (avant,
@@ -268,6 +271,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @SkipSubscriptionCheck()
   @Delete('sessions/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async revokeSession(
@@ -290,6 +294,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @SkipSubscriptionCheck()
   @Post('sessions/revoke-all')
   @HttpCode(HttpStatus.NO_CONTENT)
   async revokeAllSessions(

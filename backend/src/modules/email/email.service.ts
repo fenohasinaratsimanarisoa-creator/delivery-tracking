@@ -281,6 +281,35 @@ export class EmailService {
     );
   }
 
+  // Paiement manuel 2026-09-15 : le code d'activation lui-même n'est JAMAIS
+  // envoyé par email (communiqué à l'oral/SMS par l'admin après vérification
+  // manuelle) — cet email confirme seulement que la preuve a été validée.
+  async sendPaymentProofApproved(
+    email: string,
+    firstName: string,
+    planName: string,
+    lang: Language = 'fr',
+  ): Promise<void> {
+    await this.send(
+      email,
+      t('email.paymentProof.approvedSubject', lang),
+      t('email.paymentProof.approvedBody', lang, { firstName, planName }),
+    );
+  }
+
+  async sendPaymentProofRejected(
+    email: string,
+    firstName: string,
+    reason: string,
+    lang: Language = 'fr',
+  ): Promise<void> {
+    await this.send(
+      email,
+      t('email.paymentProof.rejectedSubject', lang),
+      t('email.paymentProof.rejectedBody', lang, { firstName, reason }),
+    );
+  }
+
   async send(to: string, subject: string, html: string): Promise<void> {
     if (this.resend) {
       try {

@@ -1183,6 +1183,30 @@
     "pickup": "Enlèvement : {{address}}",
     "dropoff": "Livraison : {{address}}"
   },
+  "paywall": {
+    "title": "Choisissez votre forfait",
+    "subtitle": "Votre période d'essai est terminée — souscrivez à un forfait pour continuer à utiliser LogiTrack",
+    "perMonth": "mois",
+    "contactAdmin": "Contactez l'administrateur de votre société pour réactiver l'accès.",
+    "paymentInstructions": "1. Envoyer le paiement",
+    "paymentInstructionsDesc": "Choisissez un forfait ci-dessus, puis envoyez le montant correspondant via l'un de ces numéros Mobile Money.",
+    "reference": "Référence de la transaction",
+    "referencePlaceholder": "Numéro de transaction ou nom de l'expéditeur",
+    "uploadProof": "Capture d'écran du paiement",
+    "submitProof": "Envoyer la preuve de paiement",
+    "missingFields": "Sélectionnez un forfait, un moyen de paiement, une référence et une capture d'écran",
+    "proofSubmitted": "Preuve envoyée — en attente de vérification",
+    "pendingReview": "Votre preuve de paiement est en cours de vérification. Vous recevrez un code d'activation dès qu'elle sera validée.",
+    "rejected": "Rejetée",
+    "approved": "Approuvée",
+    "approvedDesc": "Votre paiement a été validé. Le code d'activation vous a été communiqué séparément.",
+    "haveCode": "2. Vous avez déjà un code ?",
+    "haveCodeDesc": "Saisissez le code d'activation reçu de votre administrateur DeliveryTrack pour réactiver l'accès immédiatement.",
+    "codeLabel": "Code d'activation",
+    "redeem": "Activer",
+    "redeemSuccess": "Accès réactivé !",
+    "lastSubmitted": "Dernière preuve envoyée le {{date}}"
+  },
   "billing": {
     "plans": {
       "title": "Plans & Abonnement",
@@ -1323,6 +1347,7 @@
         "tenants": "Tenants",
         "audit": "Audit",
         "admins": "Admins",
+        "payments": "Paiements",
         "logout": "Quitter"
       },
       "stats": {
@@ -1395,6 +1420,37 @@
         "isActiveYes": "Oui",
         "isActiveNo": "Non"
       },
+      "paymentsTab": {
+        "proofsTitle": "Preuves de paiement ({{count}})",
+        "status": {
+          "pending": "En attente",
+          "approved": "Approuvées",
+          "rejected": "Rejetées"
+        },
+        "company": "Société",
+        "plan": "Forfait",
+        "amount": "Montant",
+        "reference": "Référence",
+        "proof": "Preuve",
+        "viewImage": "Voir l'image",
+        "date": "Date",
+        "actions": "Actions",
+        "approve": "Approuver",
+        "reject": "Rejeter",
+        "methodsTitle": "Moyens de paiement",
+        "addMethod": "Ajouter un numéro",
+        "provider": "Opérateur",
+        "phoneNumber": "Numéro",
+        "holderName": "Titulaire",
+        "activate": "Activer",
+        "deactivate": "Désactiver",
+        "approvedTitle": "Preuve approuvée",
+        "approvedWarning": "Ce code ne sera plus jamais affiché — communiquez-le au client par téléphone/SMS maintenant, puis copiez-le si besoin.",
+        "copyCode": "Copier le code",
+        "copied": "Code copié",
+        "rejectTitle": "Rejeter la preuve",
+        "rejectReason": "Motif du rejet"
+      },
       "createAdmin": {
         "title": "Nouvel administrateur",
         "firstName": "Prénom",
@@ -1447,6 +1503,11 @@
       "vehicleUsage": "{{used}}/{{limit}} véhicules",
       "userUsage": "{{used}}/{{limit}} utilisateurs",
       "upgrade": "Passer à un forfait supérieur"
+    },
+    "trialBanner": {
+      "daysRemaining_one": "Votre essai gratuit se termine dans {{count}} jour",
+      "daysRemaining_other": "Votre essai gratuit se termine dans {{count}} jours",
+      "subscribe": "Choisir un forfait"
     },
     "cookieConsent": {
       "message": "Nous utilisons des cookies essentiels au fonctionnement du service et, sous réserve de votre consentement, des cookies d'analyse pour améliorer notre plateforme. Consultez notre <privacyLink>politique de confidentialité</privacyLink> et notre <cookiesLink>politique de cookies</cookiesLink>.",

@@ -1,0 +1,216 @@
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-lg);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: var(--space-xl);
+}
+
+.title {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 var(--space-xs);
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--text-md);
+}
+
+.planGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.planCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+  transition: border-color 0.15s ease;
+}
+
+.planCard:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.planCard:not(:disabled):hover {
+  border-color: var(--color-accent);
+}
+
+.planCardSelected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-muted);
+}
+
+.planIcon {
+  color: var(--color-accent);
+}
+
+.planName {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.planPrice {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-accent);
+  margin: 0;
+}
+
+.planInterval {
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--color-text-tertiary);
+}
+
+.planFeatures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.planFeatureRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.planFeatureIcon {
+  color: var(--color-teal, var(--color-accent));
+  flex-shrink: 0;
+}
+
+.contactAdminNotice {
+  text-align: center;
+  padding: var(--space-lg);
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+}
+
+.sectionsRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-lg);
+}
+
+.card {
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.cardTitle {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 var(--space-xs);
+}
+
+.cardText {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-md);
+}
+
+.methodList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.methodItem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+}
+
+.methodItemSelected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-muted);
+}
+
+.methodProvider {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.methodPhone {
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  color: var(--color-accent);
+}
+
+.methodHolder {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.fileLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.fileInput {
+  font-size: var(--text-sm);
+}
+
+.pendingNotice,
+.rejectedNotice,
+.approvedNotice {
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.lastSubmitted {
+  text-align: center;
+  margin-top: var(--space-lg);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}

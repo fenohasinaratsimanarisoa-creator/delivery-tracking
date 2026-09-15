@@ -30,6 +30,7 @@ const mockTx = {
     deleteMany: jest.fn(),
   },
   invitation: { update: jest.fn() },
+  subscription: { create: jest.fn() },
 };
 
 const mockPrisma = {
@@ -43,6 +44,13 @@ const mockPrisma = {
   company: {
     create: jest.fn(),
     findFirst: jest.fn(),
+  },
+  // Défaut résolu (survit à clearAllMocks(), écrasable via mockResolvedValueOnce
+  // par test) : register() lit ce plan pour démarrer l'essai 14 jours — même
+  // raison que userSession.create ci-dessous, sans ce défaut TOUT test qui
+  // appelle register() planterait sur `.findUnique is not a function`.
+  billingPlan: {
+    findUnique: jest.fn().mockResolvedValue({ id: 'plan-enterprise', tier: 'enterprise' }),
   },
   userSession: {
     // Défaut résolu (survit à clearAllMocks(), écrasable via mockResolvedValueOnce
@@ -208,6 +216,80 @@ describe('AuthService', () => {
 
       await expect(service.register(dto)).rejects.toThrow(ConflictException);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    // Paiement manuel 2026-09-15 : essai 14 jours démarré à l'inscription,
+    // niveau Business (plan 'enterprise') pour un accès complet pendant l'essai.
+    it("démarre un essai 14 jours (trialing, plan Business) à l'inscription", async () => {
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_password');
+      mockTx.company.create.mockResolvedValueOnce({ id: 'comp-1' });
+      mockTx.user.create.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'test@test.com',
+        role: 'admin',
+        companyId: 'comp-1',
+      });
+      mockEmailService.sendWelcome.mockResolvedValueOnce(undefined);
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ firstName: 'John', lastName: 'Doe' })
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          email: 'test@test.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          role: 'admin',
+          companyId: 'comp-1',
+        });
+      mockJwtService.sign.mockReturnValueOnce('access_token').mockReturnValueOnce('refresh_token');
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_refresh');
+
+      const before = Date.now();
+      await service.register(dto);
+      const after = Date.now();
+
+      expect(mockPrisma.billingPlan.findUnique).toHaveBeenCalledWith({
+        where: { tier: 'enterprise' },
+      });
+      expect(mockTx.subscription.create).toHaveBeenCalledTimes(1);
+      const call = mockTx.subscription.create.mock.calls[0][0].data;
+      expect(call.companyId).toBe('comp-1');
+      expect(call.planId).toBe('plan-enterprise');
+      expect(call.status).toBe('trialing');
+      expect(call.provider).toBe('manual');
+      expect(call.trialEndsAt).toEqual(call.currentPeriodEnd);
+      const trialMs = call.trialEndsAt.getTime() - call.currentPeriodStart.getTime();
+      expect(trialMs).toBeGreaterThanOrEqual(14 * 24 * 60 * 60 * 1000 - 1000);
+      expect(trialMs).toBeLessThanOrEqual(14 * 24 * 60 * 60 * 1000 + (after - before) + 1000);
+    });
+
+    it("réussit l'inscription SANS créer d'abonnement si le plan Business est introuvable (seed pas lancé)", async () => {
+      mockPrisma.billingPlan.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_password');
+      mockTx.company.create.mockResolvedValueOnce({ id: 'comp-1' });
+      mockTx.user.create.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'test@test.com',
+        role: 'admin',
+        companyId: 'comp-1',
+      });
+      mockEmailService.sendWelcome.mockResolvedValueOnce(undefined);
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce({ firstName: 'John', lastName: 'Doe' })
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          email: 'test@test.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          role: 'admin',
+          companyId: 'comp-1',
+        });
+      mockJwtService.sign.mockReturnValueOnce('access_token').mockReturnValueOnce('refresh_token');
+      (bcrypt.hash as jest.Mock).mockResolvedValueOnce('hashed_refresh');
+
+      await expect(service.register(dto)).resolves.toBeDefined();
+      expect(mockTx.subscription.create).not.toHaveBeenCalled();
     });
 
     it('propage ip/user-agent à la UserSession créée (audit 2026-08-25 N.5)', async () => {

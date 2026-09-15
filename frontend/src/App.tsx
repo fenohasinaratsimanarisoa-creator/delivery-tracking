@@ -10,6 +10,7 @@ import BottomNav from './components/BottomNav';
 import ProtectedRoute from './components/ProtectedRoute';
 import CookieConsentBanner from './components/CookieConsentBanner';
 import MobileAppBanner from './components/MobileAppBanner';
+import TrialBanner from './features/manual-billing/components/TrialBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useDataUpdates } from './hooks/useDataUpdates';
 import { useKeyboardHandling } from './hooks/useKeyboardHandling';
@@ -53,6 +54,7 @@ const NotificationsPage = lazy(() => import('./features/notifications/Notificati
 const DeliveryDetailPage = lazy(() => import('./pages/DeliveryDetailPage'));
 const DeliveryProofsPage = lazy(() => import('./pages/DeliveryProofsPage'));
 const PlansPage = lazy(() => import('./features/billing/PlansPage'));
+const PaywallPage = lazy(() => import('./features/manual-billing/PaywallPage'));
 const FacturationPage = lazy(() => import('./features/billing/FacturationPage'));
 const SuccessPage = lazy(() => import('./features/billing/SuccessPage'));
 
@@ -135,6 +137,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       <BottomNav />
       <div className={styles.appLayoutContent}>
         <MobileAppBanner />
+        <TrialBanner />
         <div className={styles.appLayoutMain}>
           {children}
         </div>
@@ -164,6 +167,15 @@ export default function App() {
               <Route path="/cookies" element={<SuspenseWrapper><CookiesPage /></SuspenseWrapper>} />
               <Route path="/tracking/:token" element={<SuspenseWrapper><PublicTrackingPage /></SuspenseWrapper>} />
               <Route path="/403" element={<SuspenseWrapper><AccessDeniedPage /></SuspenseWrapper>} />
+              {/* Paiement manuel : essai expiré / abonnement non actif — plein écran,
+                  volontairement HORS SharedAppLayout (pas de sidebar), accessible à
+                  tout rôle authentifié (n'importe quel utilisateur bloqué doit pouvoir
+                  y accéder, pas seulement l'admin qui a payé). */}
+              <Route path="/paywall" element={
+                <ProtectedRoute>
+                  <SuspenseWrapper><PaywallPage /></SuspenseWrapper>
+                </ProtectedRoute>
+              } />
 
               {/* Layout partagé (Sidebar/AppLayout montés UNE fois, cf. SharedAppLayout
                   ci-dessus) pour toutes les pages admin/dispatcher/client — chaque route

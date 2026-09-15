@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { CsrfGuard } from './common/guards/csrf.guard';
+import { SubscriptionGuard } from './common/guards/subscription.guard';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
@@ -29,6 +30,7 @@ import { SessionsModule } from './modules/sessions/sessions.module';
 import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { DigestModule } from './modules/digest/digest.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { ManualBillingModule } from './modules/manual-billing/manual-billing.module';
 import { PlatformAdminModule } from './modules/platform-admin/platform-admin.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
@@ -141,6 +143,7 @@ import { TenantModule } from './common/tenant/tenant.module';
     AuditLogModule,
     DigestModule,
     BillingModule,
+    ManualBillingModule,
     PlatformAdminModule,
     ApiKeysModule,
     WebhooksModule,
@@ -152,10 +155,17 @@ import { TenantModule } from './common/tenant/tenant.module';
   ],
   providers: [
     // Rate limiting is disabled in tests: e2e suites burst past the per-route
-    // limits (e.g. reset-password allows 5 req/min).
+    // limits (e.g. reset-password allows 5 req/min). SubscriptionGuard (paiement
+    // manuel, 2026-09-15) is disabled the same way : la quasi-totalité des
+    // fixtures e2e/unit existantes créent une société sans jamais lui donner de
+    // ligne Subscription (concept introduit après elles) — les activer en test
+    // bloquerait ces suites en 402 sans rapport avec ce qu'elles vérifient.
     ...(process.env.NODE_ENV === 'test'
       ? [{ provide: APP_GUARD, useValue: { canActivate: () => true } }]
-      : [{ provide: APP_GUARD, useClass: ThrottlerGuard }]),
+      : [
+          { provide: APP_GUARD, useClass: ThrottlerGuard },
+          { provide: APP_GUARD, useClass: SubscriptionGuard },
+        ]),
     {
       provide: APP_GUARD,
       useClass: CsrfGuard,

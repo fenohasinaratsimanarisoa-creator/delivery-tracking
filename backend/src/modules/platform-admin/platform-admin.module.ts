@@ -4,8 +4,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 import { PlatformAdminController } from './platform-admin.controller';
 import { PlatformAdminService } from './platform-admin.service';
+import { PaymentProofsController } from './payment-proofs.controller';
+import { PaymentProofsService } from './payment-proofs.service';
+import { PaymentMethodsController } from './payment-methods.controller';
+import { PaymentMethodsService } from './payment-methods.service';
 import { TotpService } from '../auth/totp.service';
 import { TrackingModule } from '../tracking/tracking.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -23,9 +28,10 @@ import { TrackingModule } from '../tracking/tracking.module';
       }),
     }),
     TrackingModule,
+    EmailModule,
   ],
-  controllers: [PlatformAdminController],
-  providers: [PlatformAdminService, TotpService],
+  controllers: [PlatformAdminController, PaymentProofsController, PaymentMethodsController],
+  providers: [PlatformAdminService, TotpService, PaymentProofsService, PaymentMethodsService],
   exports: [PlatformAdminService],
 })
 export class PlatformAdminModule {}

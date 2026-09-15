@@ -153,6 +153,22 @@ const translations: Record<string, Record<Language, string>> = {
     fr: '<p>Bonjour {firstName},</p><p>Votre abonnement a été suspendu pour impayé.</p><p>Certaines fonctionnalités sont désactivées. Régularisez votre situation depuis votre espace facturation.</p><p><a href="{url}">Accéder à la facturation</a></p>',
     en: '<p>Hello {firstName},</p><p>Your subscription has been suspended for non-payment.</p><p>Some features are disabled. Please regularize your situation from your billing area.</p><p><a href="{url}">View billing</a></p>',
   },
+  'email.paymentProof.approvedSubject': {
+    fr: 'Paiement validé — code d’activation DeliveryTrack',
+    en: 'Payment approved — DeliveryTrack activation code',
+  },
+  'email.paymentProof.approvedBody': {
+    fr: '<p>Bonjour {firstName},</p><p>Votre preuve de paiement pour le forfait <strong>{planName}</strong> a été validée.</p><p>Votre code d’activation vous sera communiqué séparément par votre contact DeliveryTrack. Saisissez-le sur l’écran de paiement pour réactiver votre accès.</p>',
+    en: '<p>Hello {firstName},</p><p>Your payment proof for the <strong>{planName}</strong> plan has been approved.</p><p>Your activation code will be sent to you separately by your DeliveryTrack contact. Enter it on the payment screen to restore access.</p>',
+  },
+  'email.paymentProof.rejectedSubject': {
+    fr: 'Preuve de paiement refusée — DeliveryTrack',
+    en: 'Payment proof rejected — DeliveryTrack',
+  },
+  'email.paymentProof.rejectedBody': {
+    fr: '<p>Bonjour {firstName},</p><p>Votre preuve de paiement n’a pas pu être validée.</p><p><strong>Motif :</strong> {reason}</p><p>Vous pouvez soumettre une nouvelle preuve depuis l’écran de paiement.</p>',
+    en: '<p>Hello {firstName},</p><p>Your payment proof could not be approved.</p><p><strong>Reason:</strong> {reason}</p><p>You can submit a new proof from the payment screen.</p>',
+  },
   'pdf.invoice.title': {
     fr: 'FACTURE',
     en: 'INVOICE',

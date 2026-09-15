@@ -219,6 +219,41 @@ export interface CompanyUsage {
   plan: { name: string; tier: string };
 }
 
+// Paiement manuel (essai 14 jours + preuve de paiement, 2026-09-15).
+export interface ManualBillingStatus {
+  status: 'trialing' | 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | null;
+  trialEndsAt: string | null;
+  daysRemaining: number | null;
+}
+
+export interface PlatformPaymentMethod {
+  id: string;
+  provider: 'mvola' | 'orange_money';
+  phoneNumber: string;
+  holderName: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export type PaymentProofStatus = 'pending' | 'approved' | 'rejected';
+
+export interface PaymentProof {
+  id: string;
+  companyId: string;
+  claimedPlanId: string;
+  claimedAmount: number;
+  paymentMethodId: string;
+  reference: string;
+  status: PaymentProofStatus;
+  rejectionReason?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+  claimedPlan?: BillingPlan;
+  paymentMethod?: PlatformPaymentMethod;
+  company?: { id: string; name: string; email?: string | null };
+  submittedBy?: { id: string; firstName: string; lastName: string; email: string };
+}
+
 export interface Kpis {
   deliveriesToday: number;
   totalDeliveries: number;

@@ -21,6 +21,7 @@ const TENANT_SCOPED_MODELS = new Set([
   'Invoice',
   'Subscription',
   'UsageRecord',
+  'PaymentProof',
 ]);
 
 export async function tenantScopeMiddleware(

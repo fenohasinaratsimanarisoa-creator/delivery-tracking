@@ -1183,6 +1183,30 @@
     "pickup": "Pickup: {{address}}",
     "dropoff": "Delivery: {{address}}"
   },
+  "paywall": {
+    "title": "Choose your plan",
+    "subtitle": "Your trial period has ended — subscribe to a plan to keep using LogiTrack",
+    "perMonth": "month",
+    "contactAdmin": "Contact your company's administrator to restore access.",
+    "paymentInstructions": "1. Send payment",
+    "paymentInstructionsDesc": "Pick a plan above, then send the matching amount to one of these Mobile Money numbers.",
+    "reference": "Transaction reference",
+    "referencePlaceholder": "Transaction number or sender name",
+    "uploadProof": "Payment screenshot",
+    "submitProof": "Submit payment proof",
+    "missingFields": "Select a plan, a payment method, a reference and a screenshot",
+    "proofSubmitted": "Proof submitted — pending review",
+    "pendingReview": "Your payment proof is being reviewed. You'll receive an activation code once it's approved.",
+    "rejected": "Rejected",
+    "approved": "Approved",
+    "approvedDesc": "Your payment has been approved. The activation code was sent to you separately.",
+    "haveCode": "2. Already have a code?",
+    "haveCodeDesc": "Enter the activation code you received from your DeliveryTrack administrator to restore access immediately.",
+    "codeLabel": "Activation code",
+    "redeem": "Activate",
+    "redeemSuccess": "Access restored!",
+    "lastSubmitted": "Last proof submitted on {{date}}"
+  },
   "billing": {
     "plans": {
       "title": "Plans & Subscription",
@@ -1323,6 +1347,7 @@
         "tenants": "Tenants",
         "audit": "Audit",
         "admins": "Admins",
+        "payments": "Payments",
         "logout": "Exit"
       },
       "stats": {
@@ -1395,6 +1420,37 @@
         "isActiveYes": "Yes",
         "isActiveNo": "No"
       },
+      "paymentsTab": {
+        "proofsTitle": "Payment proofs ({{count}})",
+        "status": {
+          "pending": "Pending",
+          "approved": "Approved",
+          "rejected": "Rejected"
+        },
+        "company": "Company",
+        "plan": "Plan",
+        "amount": "Amount",
+        "reference": "Reference",
+        "proof": "Proof",
+        "viewImage": "View image",
+        "date": "Date",
+        "actions": "Actions",
+        "approve": "Approve",
+        "reject": "Reject",
+        "methodsTitle": "Payment methods",
+        "addMethod": "Add a number",
+        "provider": "Provider",
+        "phoneNumber": "Phone number",
+        "holderName": "Holder",
+        "activate": "Activate",
+        "deactivate": "Deactivate",
+        "approvedTitle": "Proof approved",
+        "approvedWarning": "This code will never be shown again — communicate it to the client by phone/SMS now, then copy it if needed.",
+        "copyCode": "Copy code",
+        "copied": "Code copied",
+        "rejectTitle": "Reject proof",
+        "rejectReason": "Rejection reason"
+      },
       "createAdmin": {
         "title": "New administrator",
         "firstName": "First name",
@@ -1447,6 +1503,11 @@
       "vehicleUsage": "{{used}}/{{limit}} vehicles",
       "userUsage": "{{used}}/{{limit}} users",
       "upgrade": "Upgrade plan"
+    },
+    "trialBanner": {
+      "daysRemaining_one": "Your free trial ends in {{count}} day",
+      "daysRemaining_other": "Your free trial ends in {{count}} days",
+      "subscribe": "Choose a plan"
     },
     "cookieConsent": {
       "message": "We use essential cookies for the service to function and, subject to your consent, analytics cookies to improve our platform. See our <privacyLink>privacy policy</privacyLink> and <cookiesLink>cookie policy</cookiesLink>.",

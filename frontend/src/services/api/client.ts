@@ -75,6 +75,17 @@ api.interceptors.response.use(
       }
     }
 
+    // ── Paiement manuel : essai/abonnement expiré (402) ──
+    // Redirection dure (comme le 401 ci-dessous) plutôt qu'un state React : on
+    // veut un remontage complet de l'app sur l'écran de paiement, quelle que
+    // soit la page/route en cours au moment de la coupure.
+    if (status === 402 && error.response?.data?.error === 'SUBSCRIPTION_REQUIRED') {
+      if (window.location.pathname !== '/paywall') {
+        window.location.href = '/paywall';
+      }
+      return Promise.reject(error);
+    }
+
     if (error.response?.status !== 401 || error.config._retry) {
       if (status === 429) error.userMessage = i18n.t('api.error.rateLimit');
       else if (status >= 500) error.userMessage = i18n.t('api.error.server');

@@ -272,6 +272,20 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
+    // Paiement manuel 2026-09-15 : essai gratuit de 14 jours à niveau Business
+    // (le plan 'enterprise' — accès complet, pour montrer toute la valeur du
+    // produit avant que le client ne choisisse un forfait). Lu HORS transaction
+    // (BillingPlan est une ressource statique/seedée, pas besoin d'isolation
+    // transactionnelle avec la création de la société).
+    const trialPlan = await this.prisma.billingPlan.findUnique({ where: { tier: 'enterprise' } });
+    if (!trialPlan) {
+      this.logger.error(
+        "Aucun BillingPlan 'enterprise' trouvé — impossible de démarrer l'essai " +
+          '(le seed a-t-il été lancé ?). Inscription poursuivie sans abonnement : ' +
+          'SubscriptionGuard bloquera cette société tant que le seed ne sera pas fait.',
+      );
+    }
+
     const result = await this.prisma.$transaction(async (tx) => {
       const company = await tx.company.create({
         data: { name: dto.companyName },
@@ -288,6 +302,22 @@ export class AuthService {
           companyId: company.id,
         },
       });
+
+      if (trialPlan) {
+        const now = new Date();
+        const trialEndsAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+        await tx.subscription.create({
+          data: {
+            companyId: company.id,
+            planId: trialPlan.id,
+            status: 'trialing',
+            provider: 'manual',
+            currentPeriodStart: now,
+            currentPeriodEnd: trialEndsAt,
+            trialEndsAt,
+          },
+        });
+      }
 
       return { user, company };
     });
@@ -711,6 +741,21 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
 
+    // Paiement manuel 2026-09-15 : même essai 14 jours que register() — mais
+    // UNIQUEMENT quand une NOUVELLE société est créée (branche else ci-dessous).
+    // Rejoindre une société existante via invitation ne doit jamais créer un 2e
+    // abonnement pour une société qui en a déjà un (contrainte @unique sur
+    // Subscription.companyId de toute façon).
+    const trialPlan = pendingInvitation
+      ? null
+      : await this.prisma.billingPlan.findUnique({ where: { tier: 'enterprise' } });
+    if (!pendingInvitation && !trialPlan) {
+      this.logger.error(
+        "Aucun BillingPlan 'enterprise' trouvé — impossible de démarrer l'essai " +
+          '(le seed a-t-il été lancé ?) pour cette inscription Google.',
+      );
+    }
+
     // Création atomique : company (si pas d'invitation) + user + acceptation de
     // l'invitation dans UNE transaction. Avant, des awaits séparés laissaient une
     // Company orpheline si le user.create échouait juste après.
@@ -726,6 +771,22 @@ export class AuthService {
           data: { name: `${firstName} ${lastName}`, email },
         });
         companyId = company.id;
+
+        if (trialPlan) {
+          const now = new Date();
+          const trialEndsAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+          await tx.subscription.create({
+            data: {
+              companyId,
+              planId: trialPlan.id,
+              status: 'trialing',
+              provider: 'manual',
+              currentPeriodStart: now,
+              currentPeriodEnd: trialEndsAt,
+              trialEndsAt,
+            },
+          });
+        }
       }
 
       const u = await tx.user.create({

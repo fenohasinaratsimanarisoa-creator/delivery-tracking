@@ -18,6 +18,7 @@ import Modal from '../../components/Modal';
 import Input from '../../components/Input';
 import { useToast } from '../../components/Toast';
 import adminApi, { refreshAdminSession } from '../../services/api/adminClient';
+import { formatAriary } from '../../services/formatAriary';
 import { getAdminToken, setAdminToken } from '../../services/auth/adminTokenStore';
 import styles from './AdminDashboard.module.css';
 
@@ -71,6 +72,28 @@ interface Admin {
   totpEnabled: boolean;
   isActive: boolean;
   createdAt: string;
+}
+
+// Paiement manuel (2026-09-15) : preuves soumises par les sociétés + numéros
+// Mobile Money affichés côté client — voir ManualBillingModule côté backend.
+interface PaymentProofRow {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reference: string;
+  claimedAmount: number;
+  createdAt: string;
+  company: { id: string; name: string; email: string | null };
+  claimedPlan: { name: string; price: number; currency: string };
+  paymentMethod: { provider: string; phoneNumber: string; holderName: string };
+  submittedBy: { firstName: string; lastName: string; email: string };
+}
+
+interface PaymentMethodRow {
+  id: string;
+  provider: 'mvola' | 'orange_money';
+  phoneNumber: string;
+  holderName: string;
+  isActive: boolean;
 }
 
 interface AuditLog {
@@ -132,7 +155,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [tab, setTab] = useState<'dashboard' | 'tenants' | 'audit' | 'admins'>('dashboard');
+  const [tab, setTab] = useState<'dashboard' | 'tenants' | 'audit' | 'admins' | 'payments'>('dashboard');
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [auditLogs, setAuditLogs] = useState<{ data: AuditLog[]; total: number; page: number; totalPages: number } | null>(null);
@@ -143,6 +166,18 @@ export default function AdminDashboard() {
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [createForm, setCreateForm] = useState({ email: '', password: '', firstName: '', lastName: '' });
+  const [paymentProofs, setPaymentProofs] = useState<PaymentProofRow[]>([]);
+  const [proofStatusFilter, setProofStatusFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodRow[]>([]);
+  const [approveResult, setApproveResult] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<PaymentProofRow | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [showAddMethod, setShowAddMethod] = useState(false);
+  const [methodForm, setMethodForm] = useState<{ provider: 'mvola' | 'orange_money'; phoneNumber: string; holderName: string }>({
+    provider: 'orange_money',
+    phoneNumber: '',
+    holderName: '',
+  });
 
   // 'checking' : au (re)chargement de page, l'access token en mémoire est perdu
   // (adminTokenStore n'est pas persisté). On tente d'abord une rotation
@@ -168,7 +203,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (authState === 'authed') loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authState, tab]);
+  }, [authState, tab, proofStatusFilter]);
 
   const loadData = async () => {
     setLoading(true);
@@ -189,6 +224,13 @@ export default function AdminDashboard() {
       } else if (tab === 'admins') {
         const a = await adminApi.get('/admins').then(r => r.data);
         setAdmins(a);
+      } else if (tab === 'payments') {
+        const [proofs, methods] = await Promise.all([
+          adminApi.get(`/payment-proofs?status=${proofStatusFilter}&limit=50`).then(r => r.data),
+          adminApi.get('/payment-methods').then(r => r.data),
+        ]);
+        setPaymentProofs(proofs.items);
+        setPaymentMethods(methods);
       }
     } catch (err: unknown) {
       if ((err as { response?: { status?: number } })?.response?.status === 401) {
@@ -232,6 +274,59 @@ export default function AdminDashboard() {
       setCreateForm({ email: '', password: '', firstName: '', lastName: '' });
       const a = await adminApi.get('/admins').then(r => r.data);
       setAdmins(a);
+    } catch (err: unknown) {
+      toast(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('common.error'), 'error');
+    }
+  };
+
+  const reloadPayments = async () => {
+    const [proofs, methods] = await Promise.all([
+      adminApi.get(`/payment-proofs?status=${proofStatusFilter}&limit=50`).then(r => r.data),
+      adminApi.get('/payment-methods').then(r => r.data),
+    ]);
+    setPaymentProofs(proofs.items);
+    setPaymentMethods(methods);
+  };
+
+  const handleApproveProof = async (proof: PaymentProofRow) => {
+    try {
+      const result = await adminApi.post(`/payment-proofs/${proof.id}/approve`).then(r => r.data);
+      setApproveResult(result);
+      await reloadPayments();
+    } catch (err: unknown) {
+      toast(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('common.error'), 'error');
+    }
+  };
+
+  const handleRejectProof = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectTarget) return;
+    try {
+      await adminApi.post(`/payment-proofs/${rejectTarget.id}/reject`, { reason: rejectReason });
+      setRejectTarget(null);
+      setRejectReason('');
+      await reloadPayments();
+    } catch (err: unknown) {
+      toast(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('common.error'), 'error');
+    }
+  };
+
+  const handleAddPaymentMethod = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await adminApi.post('/payment-methods', methodForm);
+      setShowAddMethod(false);
+      setMethodForm({ provider: 'orange_money', phoneNumber: '', holderName: '' });
+      await reloadPayments();
+    } catch (err: unknown) {
+      toast(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('common.error'), 'error');
+    }
+  };
+
+  const toggleMethodActive = async (method: PaymentMethodRow) => {
+    try {
+      await adminApi.patch(`/payment-methods/${method.id}`, { isActive: !method.isActive });
+      await reloadPayments();
     } catch (err: unknown) {
       toast(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) || t('common.error'), 'error');
     }
@@ -319,6 +414,10 @@ export default function AdminDashboard() {
           <button onClick={() => setTab('admins')} className={`${styles.tabBtn} ${tab === 'admins' ? styles.tabBtnActive : ''}`}>
             <Users size={14} className={styles.tabBtnIcon} />
             {t('admin.dashboard.tabs.admins')}
+          </button>
+          <button onClick={() => setTab('payments')} className={`${styles.tabBtn} ${tab === 'payments' ? styles.tabBtnActive : ''}`}>
+            <CreditCard size={14} className={styles.tabBtnIcon} />
+            {t('admin.dashboard.tabs.payments')}
           </button>
           <Button variant="danger" size="sm" icon={<LogOut size={14} />} onClick={handleLogout}>
             {t('admin.dashboard.tabs.logout')}
@@ -677,6 +776,258 @@ export default function AdminDashboard() {
                 </Button>
                 <Button type="submit" variant="primary">
                   {t('admin.dashboard.createAdmin.create')}
+                </Button>
+              </div>
+            </form>
+          </Modal>
+        </div>
+      )}
+
+      {!loading && tab === 'payments' && (
+        <div>
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionCardHeader}>
+              <h3 className={styles.sectionTitle}>
+                {t('admin.dashboard.paymentsTab.proofsTitle', { count: paymentProofs.length })}
+              </h3>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(['pending', 'approved', 'rejected'] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setProofStatusFilter(s)}
+                    className={`${styles.tabBtn} ${proofStatusFilter === s ? styles.tabBtnActive : ''}`}
+                  >
+                    {t(`admin.dashboard.paymentsTab.status.${s}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <DataTable
+              keyExtractor={(p: PaymentProofRow) => p.id}
+              total={paymentProofs.length}
+              page={1}
+              limit={Math.max(paymentProofs.length, 1)}
+              onPageChange={() => {}}
+              data={paymentProofs}
+              columns={[
+                {
+                  key: 'company',
+                  label: t('admin.dashboard.paymentsTab.company'),
+                  render: (p) => (
+                    <div>
+                      <span className={styles.cellPrimary}>{p.company.name}</span>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                        {p.submittedBy.firstName} {p.submittedBy.lastName}
+                      </div>
+                    </div>
+                  ),
+                },
+                { key: 'plan', label: t('admin.dashboard.paymentsTab.plan'), render: (p) => p.claimedPlan.name },
+                {
+                  key: 'amount',
+                  label: t('admin.dashboard.paymentsTab.amount'),
+                  align: 'right',
+                  render: (p) => formatAriary(p.claimedAmount),
+                },
+                { key: 'reference', label: t('admin.dashboard.paymentsTab.reference') },
+                {
+                  key: 'proof',
+                  label: t('admin.dashboard.paymentsTab.proof'),
+                  render: (p) => (
+                    <a
+                      href={`${adminApi.defaults.baseURL}/payment-proofs/${p.id}/image`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => {
+                        // L'image exige le JWT admin (Authorization header) — un
+                        // <a href> nu ne l'envoie pas. On récupère en blob et on
+                        // ouvre un object URL à la place.
+                        e.preventDefault();
+                        adminApi
+                          .get(`/payment-proofs/${p.id}/image`, { responseType: 'blob' })
+                          .then((res) => {
+                            const url = URL.createObjectURL(res.data);
+                            window.open(url, '_blank');
+                          })
+                          .catch(() => toast(t('common.error'), 'error'));
+                      }}
+                    >
+                      {t('admin.dashboard.paymentsTab.viewImage')}
+                    </a>
+                  ),
+                },
+                { key: 'createdAt', label: t('admin.dashboard.paymentsTab.date'), render: (p) => formatDateTime(p.createdAt) },
+                ...(proofStatusFilter === 'pending'
+                  ? [{
+                      key: 'actions',
+                      label: t('admin.dashboard.paymentsTab.actions'),
+                      align: 'right' as const,
+                      render: (p: PaymentProofRow) => (
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                          <Button size="sm" variant="primary" onClick={() => handleApproveProof(p)}>
+                            {t('admin.dashboard.paymentsTab.approve')}
+                          </Button>
+                          <Button size="sm" variant="danger" onClick={() => setRejectTarget(p)}>
+                            {t('admin.dashboard.paymentsTab.reject')}
+                          </Button>
+                        </div>
+                      ),
+                    }]
+                  : []),
+              ]}
+            />
+          </div>
+
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionCardHeader}>
+              <h3 className={styles.sectionTitle}>
+                {t('admin.dashboard.paymentsTab.methodsTitle')}
+              </h3>
+              <Button variant="primary" size="sm" onClick={() => setShowAddMethod(true)}>
+                {t('admin.dashboard.paymentsTab.addMethod')}
+              </Button>
+            </div>
+            <DataTable
+              keyExtractor={(m: PaymentMethodRow) => m.id}
+              total={paymentMethods.length}
+              page={1}
+              limit={Math.max(paymentMethods.length, 1)}
+              onPageChange={() => {}}
+              data={paymentMethods}
+              columns={[
+                { key: 'provider', label: t('admin.dashboard.paymentsTab.provider') },
+                { key: 'phoneNumber', label: t('admin.dashboard.paymentsTab.phoneNumber') },
+                { key: 'holderName', label: t('admin.dashboard.paymentsTab.holderName') },
+                {
+                  key: 'active',
+                  label: t('admin.dashboard.adminsTab.active'),
+                  align: 'center',
+                  render: (m) => (
+                    <Badge variant={m.isActive ? 'success' : 'danger'} size="sm">
+                      {m.isActive ? t('admin.dashboard.adminsTab.isActiveYes') : t('admin.dashboard.adminsTab.isActiveNo')}
+                    </Badge>
+                  ),
+                },
+                {
+                  key: 'toggle',
+                  label: '',
+                  align: 'right',
+                  render: (m) => (
+                    <Button size="sm" variant="ghost" onClick={() => toggleMethodActive(m)}>
+                      {m.isActive
+                        ? t('admin.dashboard.paymentsTab.deactivate')
+                        : t('admin.dashboard.paymentsTab.activate')}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          </div>
+
+          {/* Code généré à l'approbation — affiché UNE fois, jamais repersisté en clair. */}
+          <Modal
+            open={!!approveResult}
+            onClose={() => setApproveResult(null)}
+            title={t('admin.dashboard.paymentsTab.approvedTitle')}
+          >
+            {approveResult && (
+              <div className={styles.formFields}>
+                <p>{t('admin.dashboard.paymentsTab.approvedWarning')}</p>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'var(--text-xl)',
+                    fontWeight: 700,
+                    textAlign: 'center',
+                    padding: '16px',
+                    background: 'var(--color-surface-secondary)',
+                    borderRadius: 'var(--radius-md)',
+                    letterSpacing: '2px',
+                  }}
+                >
+                  {approveResult.code}
+                </div>
+                <Button
+                  variant="primary"
+                  fullWidth
+                  onClick={() => {
+                    navigator.clipboard?.writeText(approveResult.code).catch(() => {});
+                    toast(t('admin.dashboard.paymentsTab.copied'), 'success');
+                  }}
+                >
+                  {t('admin.dashboard.paymentsTab.copyCode')}
+                </Button>
+              </div>
+            )}
+          </Modal>
+
+          <Modal
+            open={!!rejectTarget}
+            onClose={() => { setRejectTarget(null); setRejectReason(''); }}
+            title={t('admin.dashboard.paymentsTab.rejectTitle')}
+          >
+            <form onSubmit={handleRejectProof}>
+              <div className={styles.formFields}>
+                <Input
+                  label={t('admin.dashboard.paymentsTab.rejectReason')}
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  required
+                  minLength={3}
+                  fullWidth
+                />
+              </div>
+              <div className={styles.formActions}>
+                <Button type="button" variant="ghost" onClick={() => { setRejectTarget(null); setRejectReason(''); }}>
+                  {t('admin.dashboard.createAdmin.cancel')}
+                </Button>
+                <Button type="submit" variant="danger">
+                  {t('admin.dashboard.paymentsTab.reject')}
+                </Button>
+              </div>
+            </form>
+          </Modal>
+
+          <Modal
+            open={showAddMethod}
+            onClose={() => setShowAddMethod(false)}
+            title={t('admin.dashboard.paymentsTab.addMethod')}
+          >
+            <form onSubmit={handleAddPaymentMethod}>
+              <div className={styles.formFields}>
+                <label className={styles.formLabel} htmlFor="method-provider">
+                  {t('admin.dashboard.paymentsTab.provider')}
+                </label>
+                <select
+                  id="method-provider"
+                  value={methodForm.provider}
+                  onChange={(e) => setMethodForm({ ...methodForm, provider: e.target.value as 'mvola' | 'orange_money' })}
+                  className={styles.selectInput}
+                >
+                  <option value="orange_money">Orange Money</option>
+                  <option value="mvola">Mvola</option>
+                </select>
+                <Input
+                  label={t('admin.dashboard.paymentsTab.phoneNumber')}
+                  value={methodForm.phoneNumber}
+                  onChange={(e) => setMethodForm({ ...methodForm, phoneNumber: e.target.value })}
+                  required
+                  fullWidth
+                />
+                <Input
+                  label={t('admin.dashboard.paymentsTab.holderName')}
+                  value={methodForm.holderName}
+                  onChange={(e) => setMethodForm({ ...methodForm, holderName: e.target.value })}
+                  required
+                  fullWidth
+                />
+              </div>
+              <div className={styles.formActions}>
+                <Button type="button" variant="ghost" onClick={() => setShowAddMethod(false)}>
+                  {t('admin.dashboard.createAdmin.cancel')}
+                </Button>
+                <Button type="submit" variant="primary">
+                  {t('admin.dashboard.paymentsTab.addMethod')}
                 </Button>
               </div>
             </form>
