@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { ConfigService } from '@nestjs/config';
 import { GpsDataQuality } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -54,7 +55,7 @@ const TIMESTAMPED_POSITIONS = Array.from({ length: 10 }, (_, i) => ({
 }));
 
 function buildService(
-  routingService: RoutingService | null,
+  routingService: RoutingService | undefined,
   configOverrides: Record<string, unknown> = {},
 ) {
   return new FuelConsumptionService(
@@ -111,7 +112,7 @@ describe('FuelConsumptionService — intégration OSRM (audit sous-comptage carb
   });
 
   it('sans RoutingService injecté (Optional, non câblé) : repli intégral, aucun crash', async () => {
-    const service = buildService(null);
+    const service = buildService(undefined);
 
     await service.generateDailyReportForSingleDriver('company-1', 'driver-1', TARGET_DATE);
 
@@ -131,5 +132,28 @@ describe('FuelConsumptionService — intégration OSRM (audit sous-comptage carb
     expect(mockPrisma.dailyFuelReport.upsert).toHaveBeenCalledTimes(1);
     const payload = mockPrisma.dailyFuelReport.upsert.mock.calls[0][0] as any;
     expect(payload.create.gpsDataQuality).toBe(GpsDataQuality.sufficient);
+  });
+});
+
+// AUDIT DI 2026-09-15 : le paramètre routingService avait initialement un
+// type union AVEC valeur par défaut (`RoutingService | null = null`), ce qui
+// fait perdre à TypeScript le type reflété dans `design:paramtypes` (émis
+// comme `Object`) — Nest ne pouvait alors plus résoudre le provider par type
+// et retombait silencieusement sur `undefined`, MÊME avec RoutingModule
+// importé. Les tests ci-dessus construisent le service à la main
+// (`new FuelConsumptionService(...)`) et ne passent donc jamais par le
+// conteneur Nest réel — ils ne pouvaient pas détecter ce bug (constaté en
+// prod : le rapport carburant retombait toujours sur computeFilteredDistance
+// malgré FUEL_REPORT_MAP_MATCHING_ENABLED=true). Ce test verrouille
+// directement la métadonnée de réflexion dont Nest a besoin pour l'injection
+// automatique par type.
+describe('FuelConsumptionService — métadonnée de réflexion DI (audit 2026-09-15)', () => {
+  it('le paramètre routingService du constructeur reflète bien le type RoutingService (pas Object)', () => {
+    const paramTypes = Reflect.getMetadata('design:paramtypes', FuelConsumptionService) as
+      unknown[] | undefined;
+    expect(paramTypes).toBeDefined();
+    const routingServiceParamType = paramTypes![paramTypes!.length - 1];
+    expect(routingServiceParamType).toBe(RoutingService);
+    expect((routingServiceParamType as { name: string }).name).not.toBe('Object');
   });
 });

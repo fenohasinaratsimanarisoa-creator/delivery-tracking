@@ -85,7 +85,15 @@ export class FuelConsumptionService {
     @Optional() @InjectQueue('fuel-analysis') private fuelAnalysisQueue: Queue,
     private trackingGateway: TrackingGateway,
     @Optional() @Inject(REDIS_CLIENT) private readonly redis: Redis | null = null,
-    @Optional() private readonly routingService: RoutingService | null = null,
+    // PAS de valeur par défaut (`= null`) ICI : combinée à un type union
+    // (`RoutingService | null`), elle fait perdre à TypeScript le type reflété
+    // dans `design:paramtypes` (émis comme `Object`) — Nest ne peut alors plus
+    // résoudre le provider par type et retombe silencieusement sur `undefined`
+    // même quand RoutingModule est bien importé (bug constaté en prod : le
+    // rapport carburant retombait toujours sur computeFilteredDistance malgré
+    // FUEL_REPORT_MAP_MATCHING_ENABLED=true). `?` seul (sans `=`) préserve la
+    // métadonnée de type — même motif que TraccarBridgeService.routingService.
+    @Optional() private readonly routingService?: RoutingService,
   ) {
     // B9 : défaut 15 ALIGNÉ sur le schéma (companyFuelSettings.anomalyThreshold @default(15))
     // et sur le processor (fuel-analysis.processor.ts). Avant : 20 ici, 15 en base → verdicts
