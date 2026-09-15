@@ -1352,6 +1352,14 @@
     "dashboard": {
       "title": "Super Admin",
       "subtitle": "Platform management",
+      "backToApp": "Back to app",
+      "sectionSubtitle": {
+        "overview": "Key metrics and platform growth",
+        "tenants": "Manage client companies and their subscriptions",
+        "audit": "History of administrative actions",
+        "admins": "Accounts with access to this panel",
+        "payments": "Review payment proofs and manage Mobile Money numbers"
+      },
       "tabs": {
         "overview": "Overview",
         "tenants": "Tenants",

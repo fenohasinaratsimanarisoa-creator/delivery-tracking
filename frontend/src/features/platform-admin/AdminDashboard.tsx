@@ -9,7 +9,7 @@ import {
 import {
   Shield, Building2, Package, CreditCard,
   TrendingUp, TrendingDown, Activity, LogOut, Search, X,
-  Eye, EyeOff, DollarSign, UserPlus, Users,
+  Eye, EyeOff, DollarSign, UserPlus, Users, ArrowLeft, ImageIcon,
 } from 'lucide-react';
 import Button from '../../components/Button';
 import DataTable from '../../components/DataTable';
@@ -105,22 +105,43 @@ interface AuditLog {
   metadata: { impersonatedAs?: string };
 }
 
-function StatCard({ icon: Icon, label, value, sub, color }: {
+// Initiales pour l'avatar d'une entreprise/personne (2 lettres max) — même
+// idiome visuel que les chips d'avatar déjà utilisés ailleurs dans l'app.
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function Avatar({ name }: { name: string }) {
+  return <div className={styles.avatar}>{initials(name)}</div>;
+}
+
+function StatCard({ icon: Icon, label, value, sub, color, trend }: {
   icon: React.ElementType; label: string; value: string | number;
-  sub?: string; color: string;
+  sub?: string; color: string; trend?: { value: number; positive: boolean };
 }) {
   return (
     <div className={styles.statCard}>
       <div className={styles.statCardHeader}>
-        <div className={styles.statCardIconBox} style={{ background: `${color}15`, color }}>
-          <Icon size={18} />
+        <div className={styles.statCardHeaderLeft}>
+          <div className={styles.statCardIconBox} style={{ background: `${color}15`, color }}>
+            <Icon size={18} />
+          </div>
+          <span className={styles.statCardLabel}>
+            {label}
+          </span>
         </div>
-        <span className={styles.statCardLabel}>
-          {label}
-        </span>
+        {trend && (
+          <span className={`${styles.statCardTrend} ${trend.positive ? styles.statCardTrendUp : styles.statCardTrendDown}`}>
+            {trend.positive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+            {trend.value}%
+          </span>
+        )}
       </div>
       <div className={styles.statCardValue}>
-        {typeof value === 'number' && label.includes('MRR') ? `${value} €` : value}
+        {value}
       </div>
       {sub && (
         <div className={styles.statCardSub}>
@@ -151,11 +172,21 @@ function ImpersonationBanner({ user, onStop }: { user: { email: string; name: st
   );
 }
 
+type Tab = 'dashboard' | 'tenants' | 'audit' | 'admins' | 'payments';
+
+const NAV_ITEMS: { key: Tab; icon: React.ElementType; labelKey: string }[] = [
+  { key: 'dashboard', icon: Activity, labelKey: 'admin.dashboard.tabs.overview' },
+  { key: 'tenants', icon: Building2, labelKey: 'admin.dashboard.tabs.tenants' },
+  { key: 'audit', icon: EyeOff, labelKey: 'admin.dashboard.tabs.audit' },
+  { key: 'admins', icon: Users, labelKey: 'admin.dashboard.tabs.admins' },
+  { key: 'payments', icon: CreditCard, labelKey: 'admin.dashboard.tabs.payments' },
+];
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [tab, setTab] = useState<'dashboard' | 'tenants' | 'audit' | 'admins' | 'payments'>('dashboard');
+  const [tab, setTab] = useState<Tab>('dashboard');
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [auditLogs, setAuditLogs] = useState<{ data: AuditLog[]; total: number; page: number; totalPages: number } | null>(null);
@@ -381,49 +412,63 @@ export default function AdminDashboard() {
     );
   }
 
+  const activeNavItem = NAV_ITEMS.find((item) => item.key === tab) ?? NAV_ITEMS[0];
+  const sectionSubtitleKey = {
+    dashboard: 'overview', tenants: 'tenants', audit: 'audit', admins: 'admins', payments: 'payments',
+  }[tab];
+
   return (
-    <div className={styles.container}>
-      {/* Header */}
-      <div className={styles.headerRow}>
-        <div className={styles.headerLeft}>
-          <div className={styles.headerIconBox}>
-            <Shield size={22} />
+    <div className={styles.layout}>
+      <aside className={styles.sidebar}>
+        <div className={styles.sidebarBrand}>
+          <div className={styles.sidebarBrandIcon}>
+            <Shield size={18} />
           </div>
-          <div>
-            <h1 className={styles.headerTitle}>
-              {t('admin.dashboard.title')}
-            </h1>
-            <p className={styles.headerSubtitle}>
-              {t('admin.dashboard.subtitle')}
-            </p>
+          <div className={styles.sidebarBrandText}>
+            <span className={styles.sidebarBrandTitle}>{t('admin.dashboard.title')}</span>
+            <span className={styles.sidebarBrandSub}>{t('admin.dashboard.subtitle')}</span>
           </div>
         </div>
-        <div className={styles.headerActions}>
-          <button onClick={() => setTab('dashboard')} className={`${styles.tabBtn} ${tab === 'dashboard' ? styles.tabBtnActive : ''}`}>
-            <Activity size={14} className={styles.tabBtnIcon} />
-            {t('admin.dashboard.tabs.overview')}
+        <nav className={styles.sidebarNav}>
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = tab === item.key;
+            return (
+              <button
+                key={item.key}
+                onClick={() => setTab(item.key)}
+                className={`${styles.sidebarNavItem} ${active ? styles.sidebarNavItemActive : ''}`}
+              >
+                <span className={styles.sidebarNavIcon}><Icon size={17} /></span>
+                <span>{t(item.labelKey)}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className={styles.sidebarFooter}>
+          <a href="/dashboard" className={styles.sidebarBackLink}>
+            <ArrowLeft size={14} />
+            <span>{t('admin.dashboard.backToApp')}</span>
+          </a>
+          <button className={styles.sidebarLogoutBtn} onClick={handleLogout}>
+            <LogOut size={14} />
+            <span>{t('admin.dashboard.tabs.logout')}</span>
           </button>
-          <button onClick={() => setTab('tenants')} className={`${styles.tabBtn} ${tab === 'tenants' ? styles.tabBtnActive : ''}`}>
-            <Building2 size={14} className={styles.tabBtnIcon} />
-            {t('admin.dashboard.tabs.tenants')}
-          </button>
-          <button onClick={() => setTab('audit')} className={`${styles.tabBtn} ${tab === 'audit' ? styles.tabBtnActive : ''}`}>
-            <EyeOff size={14} className={styles.tabBtnIcon} />
-            {t('admin.dashboard.tabs.audit')}
-          </button>
-          <button onClick={() => setTab('admins')} className={`${styles.tabBtn} ${tab === 'admins' ? styles.tabBtnActive : ''}`}>
-            <Users size={14} className={styles.tabBtnIcon} />
-            {t('admin.dashboard.tabs.admins')}
-          </button>
-          <button onClick={() => setTab('payments')} className={`${styles.tabBtn} ${tab === 'payments' ? styles.tabBtnActive : ''}`}>
-            <CreditCard size={14} className={styles.tabBtnIcon} />
-            {t('admin.dashboard.tabs.payments')}
-          </button>
-          <Button variant="danger" size="sm" icon={<LogOut size={14} />} onClick={handleLogout}>
-            {t('admin.dashboard.tabs.logout')}
-          </Button>
         </div>
-      </div>
+      </aside>
+
+      <main className={styles.main}>
+        {/* En-tête de section, dynamique selon l'onglet actif */}
+        <div className={styles.pageHeader}>
+          <div className={styles.pageHeaderIcon}>
+            <activeNavItem.icon size={22} />
+          </div>
+          <div className={styles.pageHeaderText}>
+            <span className={styles.kicker}>{t('admin.dashboard.subtitle')}</span>
+            <h1 className={styles.pageTitle}>{t(activeNavItem.labelKey)}</h1>
+            <p className={styles.pageSubtitle}>{t(`admin.dashboard.sectionSubtitle.${sectionSubtitleKey}`)}</p>
+          </div>
+        </div>
 
       {loading && (
         <div className={styles.loadingState}>
@@ -444,8 +489,8 @@ export default function AdminDashboard() {
         <>
           {/* Stats Grid */}
           <div className={styles.statsGrid}>
-            <StatCard icon={DollarSign} label="MRR" value={metrics.mrr} sub={t('admin.dashboard.stats.mrrSub')} color="var(--color-teal)" />
-            <StatCard icon={CreditCard} label={t('admin.dashboard.stats.monthlyRevenue')} value={metrics.monthlyRevenue} sub={t('admin.dashboard.stats.paidInvoicesSub')} color="var(--color-accent)" />
+            <StatCard icon={DollarSign} label="MRR" value={formatAriary(metrics.mrr)} sub={t('admin.dashboard.stats.mrrSub')} color="var(--color-teal)" />
+            <StatCard icon={CreditCard} label={t('admin.dashboard.stats.monthlyRevenue')} value={formatAriary(metrics.monthlyRevenue)} sub={t('admin.dashboard.stats.paidInvoicesSub')} color="var(--color-accent)" />
             <StatCard icon={Building2} label={t('admin.dashboard.stats.activeTenants')} value={metrics.activeCompanies} sub={t('admin.dashboard.stats.newTenantsSub', { count: metrics.newCompaniesThisMonth })} color="var(--color-blue)" />
             <StatCard icon={Package} label={t('admin.dashboard.stats.deliveries')} value={metrics.totalDeliveries} sub={t('admin.dashboard.stats.thisMonth')} color="var(--color-orange)" />
             <StatCard icon={Activity} label={t('admin.dashboard.stats.activeSubscriptions')} value={metrics.activeSubscriptions} color="var(--color-purple)" />
@@ -512,7 +557,12 @@ export default function AdminDashboard() {
                 {
                   key: 'name',
                   label: t('admin.dashboard.companyTable.company'),
-                  render: (c) => <span className={styles.cellPrimary}>{c.name}</span>,
+                  render: (c) => (
+                    <div className={styles.cellWithAvatar}>
+                      <Avatar name={c.name} />
+                      <span className={styles.cellPrimary}>{c.name}</span>
+                    </div>
+                  ),
                 },
                 {
                   key: 'plan',
@@ -560,7 +610,12 @@ export default function AdminDashboard() {
               {
                 key: 'name',
                 label: t('admin.dashboard.companyTable.company'),
-                render: (tenant) => <span className={styles.cellPrimary}>{tenant.name}</span>,
+                render: (tenant) => (
+                  <div className={styles.cellWithAvatar}>
+                    <Avatar name={tenant.name} />
+                    <span className={styles.cellPrimary}>{tenant.name}</span>
+                  </div>
+                ),
               },
               {
                 key: 'contact',
@@ -698,7 +753,12 @@ export default function AdminDashboard() {
                 {
                   key: 'name',
                   label: t('admin.dashboard.adminsTab.name'),
-                  render: (a) => <span className={styles.cellPrimary}>{a.firstName} {a.lastName}</span>,
+                  render: (a) => (
+                    <div className={styles.cellWithAvatar}>
+                      <Avatar name={`${a.firstName} ${a.lastName}`} />
+                      <span className={styles.cellPrimary}>{a.firstName} {a.lastName}</span>
+                    </div>
+                  ),
                 },
                 { key: 'email', label: t('admin.dashboard.adminsTab.email') },
                 {
@@ -814,10 +874,11 @@ export default function AdminDashboard() {
                   key: 'company',
                   label: t('admin.dashboard.paymentsTab.company'),
                   render: (p) => (
-                    <div>
-                      <span className={styles.cellPrimary}>{p.company.name}</span>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                        {p.submittedBy.firstName} {p.submittedBy.lastName}
+                    <div className={styles.cellWithAvatar}>
+                      <Avatar name={p.company.name} />
+                      <div className={styles.cellStacked}>
+                        <span className={styles.cellPrimary}>{p.company.name}</span>
+                        <span className={styles.cellStackedSub}>{p.submittedBy.firstName} {p.submittedBy.lastName}</span>
                       </div>
                     </div>
                   ),
@@ -834,15 +895,16 @@ export default function AdminDashboard() {
                   key: 'proof',
                   label: t('admin.dashboard.paymentsTab.proof'),
                   render: (p) => (
-                    <a
-                      href={`${adminApi.defaults.baseURL}/payment-proofs/${p.id}/image`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => {
+                    <button
+                      type="button"
+                      className={styles.iconBtn}
+                      style={{ color: 'var(--color-accent)' }}
+                      title={t('admin.dashboard.paymentsTab.viewImage')}
+                      aria-label={t('admin.dashboard.paymentsTab.viewImage')}
+                      onClick={() => {
                         // L'image exige le JWT admin (Authorization header) — un
                         // <a href> nu ne l'envoie pas. On récupère en blob et on
                         // ouvre un object URL à la place.
-                        e.preventDefault();
                         adminApi
                           .get(`/payment-proofs/${p.id}/image`, { responseType: 'blob' })
                           .then((res) => {
@@ -852,8 +914,8 @@ export default function AdminDashboard() {
                           .catch(() => toast(t('common.error'), 'error'));
                       }}
                     >
-                      {t('admin.dashboard.paymentsTab.viewImage')}
-                    </a>
+                      <ImageIcon size={14} />
+                    </button>
                   ),
                 },
                 { key: 'createdAt', label: t('admin.dashboard.paymentsTab.date'), render: (p) => formatDateTime(p.createdAt) },
@@ -933,18 +995,7 @@ export default function AdminDashboard() {
             {approveResult && (
               <div className={styles.formFields}>
                 <p>{t('admin.dashboard.paymentsTab.approvedWarning')}</p>
-                <div
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 'var(--text-xl)',
-                    fontWeight: 700,
-                    textAlign: 'center',
-                    padding: '16px',
-                    background: 'var(--color-surface-secondary)',
-                    borderRadius: 'var(--radius-md)',
-                    letterSpacing: '2px',
-                  }}
-                >
+                <div className={styles.codeDisplay}>
                   {approveResult.code}
                 </div>
                 <Button
@@ -1034,6 +1085,7 @@ export default function AdminDashboard() {
           </Modal>
         </div>
       )}
+      </main>
     </div>
   );
 }

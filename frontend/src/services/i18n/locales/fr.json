@@ -1352,6 +1352,14 @@
     "dashboard": {
       "title": "Super Admin",
       "subtitle": "Pilotage de la plateforme",
+      "backToApp": "Retour à l'application",
+      "sectionSubtitle": {
+        "overview": "Indicateurs clés et croissance de la plateforme",
+        "tenants": "Gérer les sociétés clientes et leurs abonnements",
+        "audit": "Historique des actions administratives",
+        "admins": "Comptes ayant accès à ce panneau",
+        "payments": "Vérifier les preuves de paiement et gérer les numéros Mobile Money"
+      },
       "tabs": {
         "overview": "Vue d'ensemble",
         "tenants": "Tenants",
