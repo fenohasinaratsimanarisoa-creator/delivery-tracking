@@ -32,7 +32,7 @@ describe('isStoppedFix', () => {
     expect(isStoppedFix({ ...fix(0, 0, 10, 0), motion: false, speed: 5 })).toBe(false);
   });
 
-  it('vitesse inconnue → repli sur motion, puis « à l\'arrêt » par défaut', () => {
+  it("vitesse inconnue → repli sur motion, puis « à l'arrêt » par défaut", () => {
     expect(isStoppedFix({ ...fix(0, 0, 10, 0), motion: false, speed: null })).toBe(true);
     expect(isStoppedFix({ ...fix(0, 0, 10, 0), motion: true, speed: null })).toBe(false);
     expect(isStoppedFix({ ...fix(0, 0, 10, 0), motion: null, speed: 0.2 })).toBe(true);
