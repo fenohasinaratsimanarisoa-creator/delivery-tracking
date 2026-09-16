@@ -224,9 +224,9 @@ export class WebhooksService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-DeliveryTrack-Signature-256': signature,
-          'X-DeliveryTrack-Event': event,
-          'User-Agent': 'DeliveryTrack-Webhook/1.0',
+          'X-LogiTrack-Signature-256': signature,
+          'X-LogiTrack-Event': event,
+          'User-Agent': 'LogiTrack-Webhook/1.0',
         },
         body,
         signal: controller.signal,

@@ -246,8 +246,8 @@ const translations: Record<string, Record<Language, string>> = {
     en: 'Antananarivo 101 — Madagascar — VAT not applicable, art. 259',
   },
   'pdf.invoice.footer': {
-    fr: 'DeliveryTrack — LogiTrack Solutions',
-    en: 'DeliveryTrack — LogiTrack Solutions',
+    fr: 'LogiTrack',
+    en: 'LogiTrack',
   },
   'pdf.invoice.thanks': {
     fr: 'Merci de votre confiance.',

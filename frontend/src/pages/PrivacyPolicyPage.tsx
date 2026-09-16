@@ -14,9 +14,9 @@ export default function PrivacyPolicyPage() {
 
         <h2 className={styles.h2}>{t('privacy.section1.title')}</h2>
         <p className={styles.p}>
-          <strong>DeliveryTrack SARL</strong><br />
+          <strong>LogiTrack SARL</strong><br />
           Email : privacy@deliverytrack.app<br />
-          Représentant légal : le gérant de DeliveryTrack SARL<br /><br />
+          Représentant légal : le gérant de LogiTrack SARL<br /><br />
           Conformément au Règlement Général sur la Protection des Données (RGPD — Règlement UE 2016/679)
           et à la loi malgache n°2014-038 sur la protection des données à caractère personnel.
         </p>
@@ -128,7 +128,7 @@ export default function PrivacyPolicyPage() {
         <p className={styles.p}>
           Pour toute question relative à la protection des données :<br />
           Email : <strong>privacy@deliverytrack.app</strong><br />
-          Adresse : DeliveryTrack SARL, Tananarive, Madagascar
+          Adresse : LogiTrack SARL, Tananarive, Madagascar
         </p>
       </div>
     </>

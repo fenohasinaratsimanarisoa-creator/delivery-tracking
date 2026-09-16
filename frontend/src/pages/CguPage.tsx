@@ -23,13 +23,13 @@ export default function CguPage() {
           <h2 className={styles.heading}>{t('cgu.section1.title')}</h2>
           <p className={styles.paragraph}>
             Les présentes Conditions Générales d'Utilisation (ci-après « CGU ») régissent l'accès et l'utilisation
-            de la plateforme DeliveryTrack (ci-après « la Plateforme »), éditée par la société DeliveryTrack SARL.
+            de la plateforme LogiTrack (ci-après « la Plateforme »), éditée par la société LogiTrack SARL.
           </p>
           <p className={styles.alert}>
-            <strong>Phase Pilote Gratuite :</strong> DeliveryTrack est actuellement en phase pilote gratuite.
+            <strong>Phase Pilote Gratuite :</strong> LogiTrack est actuellement en phase pilote gratuite.
             Aucun paiement n'est exigé. Les fonctionnalités sont fournies gratuitement pendant une durée déterminée
-            par DeliveryTrack. À l'issue de cette phase, vous serez informé(e) des conditions de continuation
-            du service. DeliveryTrack se réserve le droit de modifier, suspendre ou arrêter la phase pilote
+            par LogiTrack. À l'issue de cette phase, vous serez informé(e) des conditions de continuation
+            du service. LogiTrack se réserve le droit de modifier, suspendre ou arrêter la phase pilote
             à tout moment sans préavis.
           </p>
           <p className={styles.paragraph}>
@@ -61,7 +61,7 @@ export default function CguPage() {
             L'utilisateur s'engage à fournir des informations exactes et à les maintenir à jour.
           </p>
           <p className={styles.paragraph}>
-            3.2. DeliveryTrack se réserve le droit de suspendre ou résilier tout compte en cas de violation
+            3.2. LogiTrack se réserve le droit de suspendre ou résilier tout compte en cas de violation
             des présentes CGU ou d'utilisation frauduleuse de la Plateforme.
           </p>
           <p className={styles.paragraph}>
@@ -72,7 +72,7 @@ export default function CguPage() {
         <div className={styles.section}>
           <h2 className={styles.heading}>{t('cgu.section4.title')}</h2>
           <p className={styles.paragraph}>
-            DeliveryTrack propose une solution de gestion et de suivi de livraisons comprenant notamment :
+            LogiTrack propose une solution de gestion et de suivi de livraisons comprenant notamment :
           </p>
           <ul className={styles.list}>
             <li>Suivi GPS en temps réel des livreurs et véhicules</li>
@@ -107,7 +107,7 @@ export default function CguPage() {
         <div className={styles.section}>
           <h2 className={styles.heading}>{t('cgu.section6.title')}</h2>
           <p className={styles.paragraph}>
-           6.1. DeliveryTrack s'engage à protéger les données personnelles de ses utilisateurs conformément
+           6.1. LogiTrack s'engage à protéger les données personnelles de ses utilisateurs conformément
                à sa <Link to="/privacy" className={styles.privacyLink}>{t('cgu.privacyPolicy')}</Link>.
           </p>
           <p className={styles.paragraph}>
@@ -120,7 +120,7 @@ export default function CguPage() {
           </p>
           <p className={styles.paragraph}>
             6.4. Les données sont hébergées sur des serveurs sécurisés situés dans l'Union Européenne.
-            DeliveryTrack met en œuvre des mesures techniques et organisationnelles appropriées pour garantir
+            LogiTrack met en œuvre des mesures techniques et organisationnelles appropriées pour garantir
             la sécurité et la confidentialité des données.
           </p>
         </div>
@@ -129,7 +129,7 @@ export default function CguPage() {
           <h2 className={styles.heading}>{t('cgu.section7.title')}</h2>
           <p className={styles.paragraph}>
             L'ensemble des éléments composant la Plateforme (design, code source, marques, logos) est
-            la propriété exclusive de DeliveryTrack SARL. Toute reproduction ou utilisation sans autorisation
+            la propriété exclusive de LogiTrack SARL. Toute reproduction ou utilisation sans autorisation
             est interdite.
           </p>
         </div>
@@ -137,15 +137,15 @@ export default function CguPage() {
         <div className={styles.section}>
           <h2 className={styles.heading}>{t('cgu.section8.title')}</h2>
           <p className={styles.paragraph}>
-            8.1. DeliveryTrack met en œuvre les moyens raisonnables pour assurer un fonctionnement continu
+            8.1. LogiTrack met en œuvre les moyens raisonnables pour assurer un fonctionnement continu
             de la Plateforme, sans garantie absolue de disponibilité.
           </p>
           <p className={styles.paragraph}>
-            8.2. DeliveryTrack ne saurait être tenu responsable des dommages indirects résultant de
+            8.2. LogiTrack ne saurait être tenu responsable des dommages indirects résultant de
             l'utilisation ou de l'impossibilité d'utiliser la Plateforme.
           </p>
           <p className={styles.paragraph}>
-            8.3. Les données de localisation GPS sont fournies à titre indicatif. DeliveryTrack ne garantit pas
+            8.3. Les données de localisation GPS sont fournies à titre indicatif. LogiTrack ne garantit pas
             l'exactitude en temps réel des positions et ne peut être tenu responsable des décisions prises
             sur la base de ces informations.
           </p>
@@ -158,7 +158,7 @@ export default function CguPage() {
             n'est appliquée pendant cette période.
           </p>
           <p className={styles.paragraph}>
-            9.2. DeliveryTrack ne garantit pas la disponibilité continue du service pendant la phase pilote.
+            9.2. LogiTrack ne garantit pas la disponibilité continue du service pendant la phase pilote.
             Des interruptions, mises à jour ou modifications des fonctionnalités peuvent survenir sans préavis.
           </p>
           <p className={styles.paragraph}>
@@ -168,7 +168,7 @@ export default function CguPage() {
           </p>
           <p className={styles.paragraph}>
             9.4. Pendant la phase pilote, le nombre d'utilisateurs, de véhicules et de livraisons peut être
-            limité. DeliveryTrack se réserve le droit d'ajuster ces limites à tout moment.
+            limité. LogiTrack se réserve le droit d'ajuster ces limites à tout moment.
           </p>
         </div>
 
@@ -195,7 +195,7 @@ export default function CguPage() {
             Pour toute question relative aux présentes CGU, vous pouvez nous contacter à l'adresse suivante :
           </p>
           <p className={styles.paragraph}>
-            DeliveryTrack SARL<br />
+            LogiTrack SARL<br />
             Email : support@deliverytrack.app<br />
           </p>
         </div>
