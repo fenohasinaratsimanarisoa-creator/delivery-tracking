@@ -14,7 +14,7 @@ const mockRedis = {
 };
 
 const mockPrisma = {
-  vehicle: { findMany: jest.fn(), findFirst: jest.fn() },
+  vehicle: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn() },
   delivery: { findFirst: jest.fn() },
   gpsPosition: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn() },
 };
@@ -23,6 +23,7 @@ const mockTrackingService = {
   savePosition: jest.fn(),
   getLastPosition: jest.fn(),
   getCompanySettings: jest.fn(),
+  getRecentFixesByVehicle: jest.fn().mockResolvedValue(new Map()),
 };
 
 const mockGateway = {
@@ -400,6 +401,63 @@ describe('TraccarBridgeService — Leader Election', () => {
       const service = createService(null);
       await service.onModuleInit();
       expect((service as any).isLeader).toBe(false);
+    });
+  });
+
+  // AUDIT ÉCART POSITION HORS LIGNE 2026-09-16 (suite) : anchorBuffers/
+  // lastDisplayedPosition sont en mémoire par process — vidés à chaque
+  // redémarrage. warmStartAnchorState() (appelé depuis onModuleInit) les
+  // réamorce depuis la DB pour qu'un onglet déjà ouvert (diffusion WS pure,
+  // sans rechargement de page) reste protégé dès le premier fix live reçu
+  // après un redémarrage, au lieu d'attendre l'accumulation de plusieurs fixes.
+  describe("réamorçage de l'ancre au démarrage (warmStartAnchorState)", () => {
+    const VEHICLE_ID = '00000000-0000-4000-0000-0000000000v9';
+
+    it('remplit anchorBuffers et lastDisplayedPosition depuis la DB pour les véhicules à traceur physique', async () => {
+      mockPrisma.vehicle.findMany.mockResolvedValueOnce([{ id: VEHICLE_ID }]);
+      const now = new Date();
+      const fixes = [
+        {
+          latitude: -18.8631,
+          longitude: 47.5639,
+          accuracy: 5,
+          speed: 0,
+          motion: false,
+          timestamp: new Date(now.getTime() - 60_000),
+        },
+        {
+          latitude: -18.8631,
+          longitude: 47.564,
+          accuracy: 5,
+          speed: 0,
+          motion: false,
+          timestamp: now,
+        },
+      ];
+      mockTrackingService.getRecentFixesByVehicle.mockResolvedValueOnce(
+        new Map([[VEHICLE_ID, fixes]]),
+      );
+
+      const service = createService(null);
+      await service.onModuleInit();
+
+      expect(mockPrisma.vehicle.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ traccarDeviceId: { not: null } }),
+        }),
+      );
+      expect((service as any).anchorBuffers.get(VEHICLE_ID)).toEqual(fixes);
+      const lastDisplayed = (service as any).lastDisplayedPosition.get(VEHICLE_ID);
+      expect(lastDisplayed.latitude).toBeCloseTo(-18.8631, 4);
+      expect(lastDisplayed.longitude).toBeCloseTo(47.56395, 4);
+    });
+
+    it('ne bloque pas le démarrage si la DB échoue (buffers vides, comme avant ce correctif)', async () => {
+      mockPrisma.vehicle.findMany.mockRejectedValueOnce(new Error('db down'));
+
+      const service = createService(null);
+      await expect(service.onModuleInit()).resolves.toBeUndefined();
+      expect((service as any).anchorBuffers.size).toBe(0);
     });
   });
 });

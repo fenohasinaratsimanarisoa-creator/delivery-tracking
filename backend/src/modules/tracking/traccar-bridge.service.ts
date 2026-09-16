@@ -340,6 +340,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
+    await this.warmStartAnchorState();
+
     this.startSilentDeviceCheck();
     this.startHealthCheck();
     this.startNeverConnectedCheck();
@@ -353,6 +355,56 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         'Traccar bridge: Redis not available — running without leader election (single instance mode)',
       );
       await this.connect();
+    }
+  }
+
+  /**
+   * Réamorce `anchorBuffers`/`lastDisplayedPosition` depuis la base au
+   * démarrage (AUDIT ÉCART POSITION HORS LIGNE 2026-09-16, suite de l'audit du
+   * même jour). Ces deux Maps sont en mémoire PAR PROCESS — vidées à chaque
+   * redémarrage (déploiement, crash, OOM) — et se reconstruisaient jusqu'ici
+   * « en quelques fixes » au fil des positions live reçues ensuite. Compromis
+   * déjà acceptable pour un onglet qui RECHARGE la page (le bootstrap REST
+   * `/tracking/live` recalcule toujours l'ancre depuis la DB), mais un onglet
+   * DÉJÀ OUVERT qui ne reçoit que les diffusions WebSocket restait, lui, sans
+   * filet (ni ancre à l'arrêt, ni anti-saut isolé) jusqu'à l'arrivée d'assez
+   * de nouveaux fixes — une fenêtre de plusieurs minutes, voire plus pour un
+   * traceur motion-triggered peu bavard à l'arrêt.
+   *
+   * Lecture SEULE, ne bloque jamais durablement le démarrage : une erreur ici
+   * se contente de logger et laisse les buffers vides — comportement
+   * strictement identique à avant ce correctif, jamais pire.
+   */
+  private async warmStartAnchorState(): Promise<void> {
+    try {
+      const vehicles = await this.prisma.vehicle.findMany({
+        where: { traccarDeviceId: { not: null }, deletedAt: null, isActive: true },
+        select: { id: true },
+      });
+      if (vehicles.length === 0) return;
+
+      const fixesByVehicle = await this.trackingService.getRecentFixesByVehicle(
+        vehicles.map((v) => v.id),
+      );
+      let seeded = 0;
+      for (const [vehicleId, fixes] of fixesByVehicle) {
+        if (fixes.length === 0) continue;
+        this.anchorBuffers.set(vehicleId, fixes.slice(-TraccarBridgeService.ANCHOR_BUFFER_SIZE));
+        const anchor = computeAnchoredPosition(fixes);
+        const newest = fixes[fixes.length - 1];
+        this.lastDisplayedPosition.set(
+          vehicleId,
+          anchor ?? { latitude: newest.latitude, longitude: newest.longitude },
+        );
+        seeded++;
+      }
+      this.logger.log(
+        `Traccar bridge: état d'ancrage réamorcé depuis la base au démarrage (${seeded}/${vehicles.length} véhicules avec historique récent)`,
+      );
+    } catch (err: any) {
+      this.logger.error(
+        `Traccar bridge: échec du réamorçage de l'état d'ancrage au démarrage (buffers vides, comme avant ce correctif) — ${err?.message ?? err}`,
+      );
     }
   }
 

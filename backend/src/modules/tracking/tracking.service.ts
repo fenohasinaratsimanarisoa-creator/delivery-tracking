@@ -2512,10 +2512,12 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
   private static readonly PER_VEHICLE_ANCHOR_FIXES = 40;
 
   /**
-   * Calcule l'ANCRE À L'ARRÊT (centroïde pondéré 1/accuracy² de la série contiguë
-   * de fixes à l'arrêt, voir stationary-anchor.ts) pour chaque véhicule de
-   * `vehicleIds`. Factorisé hors de getLivePositions() pour être réutilisable par
-   * les diffusions temps réel (WebSocket) — voir getDisplayPosition().
+   * Historique récent (fixes BRUTS, non suspects, ≤ 48 h) PAR véhicule, triés du
+   * plus ancien au plus récent — matière première de l'ancre à l'arrêt
+   * (`computeAnchoredPosition`, voir `computeAnchorByVehicle`) et, depuis l'audit
+   * du 2026-09-16, du RÉAMORÇAGE au démarrage du pont Traccar (voir
+   * `TraccarBridgeService.warmStartAnchorState`) : les deux consommateurs ont
+   * besoin des fixes bruts, pas seulement de l'ancre déjà résolue.
    *
    * AUDIT ÉCART POSITION HORS LIGNE 2026-09-16 : l'ancienne requête faisait un
    * SEUL `findMany(take: 400)` PARTAGÉ entre TOUS les véhicules de `vehicleIds`
@@ -2529,11 +2531,9 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
    * jusqu'à `PER_VEHICLE_ANCHOR_FIXES` fixes récents, quel que soit le nombre
    * total de véhicules à l'arrêt.
    */
-  private async computeAnchorByVehicle(
-    vehicleIds: string[],
-  ): Promise<Map<string, { latitude: number; longitude: number }>> {
-    const anchorByVehicle = new Map<string, { latitude: number; longitude: number }>();
-    if (vehicleIds.length === 0) return anchorByVehicle;
+  async getRecentFixesByVehicle(vehicleIds: string[]): Promise<Map<string, AnchorFix[]>> {
+    const byVehicle = new Map<string, AnchorFix[]>();
+    if (vehicleIds.length === 0) return byVehicle;
 
     // Fenêtre large (48 h) : computeAnchoredPosition se limite elle-même à la
     // série d'arrêt CONTIGUË qui précède le dernier fix (ANCHOR_WINDOW_MS). La
@@ -2563,7 +2563,6 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       ) ranked
       WHERE rn <= ${TrackingService.PER_VEHICLE_ANCHOR_FIXES}
     `) ?? [];
-    const byVehicle = new Map<string, AnchorFix[]>();
     for (const r of recent) {
       const motionRaw = (r.attributes as Record<string, unknown> | null)?.motion;
       const list = byVehicle.get(r.vehicle_id) ?? [];
@@ -2577,6 +2576,25 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       });
       byVehicle.set(r.vehicle_id, list);
     }
+    // Ordre garanti (le SQL ci-dessus n'a pas de ORDER BY final) : du plus ancien
+    // au plus récent, comme le buffer FIFO `anchorBuffers` du pont Traccar.
+    for (const list of byVehicle.values()) {
+      list.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    }
+    return byVehicle;
+  }
+
+  /**
+   * Calcule l'ANCRE À L'ARRÊT (centroïde pondéré 1/accuracy² de la série contiguë
+   * de fixes à l'arrêt, voir stationary-anchor.ts) pour chaque véhicule de
+   * `vehicleIds`. Factorisé hors de getLivePositions() pour être réutilisable par
+   * les diffusions temps réel (WebSocket) — voir getDisplayPosition().
+   */
+  private async computeAnchorByVehicle(
+    vehicleIds: string[],
+  ): Promise<Map<string, { latitude: number; longitude: number }>> {
+    const anchorByVehicle = new Map<string, { latitude: number; longitude: number }>();
+    const byVehicle = await this.getRecentFixesByVehicle(vehicleIds);
     for (const [vehicleId, list] of byVehicle) {
       const anchor = computeAnchoredPosition(list);
       if (anchor) anchorByVehicle.set(vehicleId, anchor);
