@@ -164,14 +164,14 @@ async function seedPaymentMethods() {
   }
   await prisma.platformPaymentMethod.create({
     data: {
-      provider: 'orange_money',
+      provider: 'mvola',
       phoneNumber,
       holderName: 'FENOHASINA',
       isActive: true,
       sortOrder: 0,
     },
   });
-  console.log(`[seed] Moyen de paiement créé : ${phoneNumber} (Orange Money, FENOHASINA)`);
+  console.log(`[seed] Moyen de paiement créé : ${phoneNumber} (MVola, FENOHASINA)`);
 }
 
 async function main() {
