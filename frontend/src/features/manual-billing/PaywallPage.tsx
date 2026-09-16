@@ -24,6 +24,10 @@ const PROVIDER_LABEL: Record<string, string> = {
   orange_money: 'Orange Money',
 };
 
+const PROVIDER_LOGO: Record<string, string> = {
+  mvola: '/payment-icons/mvola.png',
+};
+
 export default function PaywallPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -191,7 +195,18 @@ export default function PaywallPage() {
                   onClick={() => setSelectedMethodId(m.id)}
                   className={`${styles.methodItem} ${selectedMethodId === m.id ? styles.methodItemSelected : ''}`}
                 >
-                  <span className={styles.methodProvider}>{PROVIDER_LABEL[m.provider] || m.provider}</span>
+                  <span className={styles.methodProviderRow}>
+                    {PROVIDER_LOGO[m.provider] && (
+                      <img
+                        src={PROVIDER_LOGO[m.provider]}
+                        alt=""
+                        width={20}
+                        height={20}
+                        className={styles.methodProviderLogo}
+                      />
+                    )}
+                    <span className={styles.methodProvider}>{PROVIDER_LABEL[m.provider] || m.provider}</span>
+                  </span>
                   <span className={styles.methodPhone}>{m.phoneNumber}</span>
                   <span className={styles.methodHolder}>{m.holderName}</span>
                 </button>
