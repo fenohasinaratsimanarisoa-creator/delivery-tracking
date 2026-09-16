@@ -134,7 +134,7 @@
       "swCacheWarning": "Une ancienne version de l'application semble être restée en cache sur cet appareil.",
       "swCacheHint": "Si le problème persiste après un nouvel essai, ferme complètement le navigateur (tous les onglets) et rouvre-le.",
       "swCacheResetButton": "Réinitialiser l'application",
-      "brand": "LogiTrack",
+      "brand": "Pistio",
       "secure": "Plateforme sécurisée",
       "uptime": "99.9% disponibilité",
       "features": {
@@ -1191,7 +1191,7 @@
   },
   "paywall": {
     "title": "Choisissez votre forfait",
-    "subtitle": "Votre période d'essai est terminée — souscrivez à un forfait pour continuer à utiliser LogiTrack",
+    "subtitle": "Votre période d'essai est terminée — souscrivez à un forfait pour continuer à utiliser Pistio",
     "titleUpgrade": "Changer de forfait",
     "subtitleUpgrade": "Passez à un forfait supérieur ou inférieur à tout moment.",
     "currentPlanLabel": "Forfait actuel : {{name}}",
@@ -1211,7 +1211,7 @@
     "approved": "Approuvée",
     "approvedDesc": "Votre paiement a été validé. Le code d'activation vous a été communiqué séparément.",
     "haveCode": "2. Vous avez déjà un code ?",
-    "haveCodeDesc": "Saisissez le code d'activation reçu de votre administrateur LogiTrack pour réactiver l'accès immédiatement.",
+    "haveCodeDesc": "Saisissez le code d'activation reçu de votre administrateur Pistio pour réactiver l'accès immédiatement.",
     "codeLabel": "Code d'activation",
     "redeem": "Activer",
     "redeemSuccess": "Accès réactivé !",
@@ -1554,7 +1554,7 @@
     }
   },
   "onboarding": {
-    "welcome": "Bienvenue sur LogiTrack",
+    "welcome": "Bienvenue sur Pistio",
     "completed": "Configuration terminée",
     "progress": "{{done}}/{{total}} étapes",
     "steps": {
@@ -2092,7 +2092,7 @@
     "hero": {
       "eyebrow": "Tracking de flotte nouvelle génération",
       "title": "Livrez avec précision. Prouvez-le en temps réel.",
-      "subtitle": "LogiTrack donne à votre entreprise de livraison un dispatching en direct, une détection anti-fraude GPS et un suivi carburant — dans un seul tableau de bord, pensé pour Madagascar et l'Afrique.",
+      "subtitle": "Pistio donne à votre entreprise de livraison un dispatching en direct, une détection anti-fraude GPS et un suivi carburant — dans un seul tableau de bord, pensé pour Madagascar et l'Afrique.",
       "ctaPrimary": "Essayer gratuitement",
       "ctaSecondary": "Se connecter",
       "trustNote": "Aucune carte bancaire requise — 14 jours d'essai gratuit."
@@ -2195,7 +2195,7 @@
         "privacy": "Confidentialité",
         "cookies": "Cookies"
       },
-      "copyright": "© {{year}} LogiTrack. Tous droits réservés."
+      "copyright": "© {{year}} Pistio. Tous droits réservés."
     }
   },
   "vehicleTrip": {

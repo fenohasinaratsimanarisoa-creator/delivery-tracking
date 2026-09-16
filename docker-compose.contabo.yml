@@ -177,7 +177,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-}
-      TOTP_ISSUER: LogiTrack
+      TOTP_ISSUER: Pistio
       FUEL_ANOMALY_THRESHOLD_PERCENT: 20
       # Sans ça, MobileMoneyService.validateSandbox() refuse de démarrer en
       # NODE_ENV=production (voir backend/src/modules/billing/mobile-money.service.ts).

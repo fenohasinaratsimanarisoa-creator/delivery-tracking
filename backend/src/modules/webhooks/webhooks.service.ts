@@ -142,7 +142,7 @@ export class WebhooksService {
     const payload = {
       event: 'test.ping',
       timestamp: new Date().toISOString(),
-      data: { message: 'This is a test webhook from LogiTrack' },
+      data: { message: 'This is a test webhook from Pistio' },
     };
 
     return this.deliver(webhook.id, 'test.ping', payload);
@@ -224,9 +224,9 @@ export class WebhooksService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-LogiTrack-Signature-256': signature,
-          'X-LogiTrack-Event': event,
-          'User-Agent': 'LogiTrack-Webhook/1.0',
+          'X-Pistio-Signature-256': signature,
+          'X-Pistio-Event': event,
+          'User-Agent': 'Pistio-Webhook/1.0',
         },
         body,
         signal: controller.signal,

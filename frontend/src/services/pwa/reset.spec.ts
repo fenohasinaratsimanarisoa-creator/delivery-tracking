@@ -40,7 +40,7 @@ beforeEach(() => {
     { unregister: mockUnregister.mockResolvedValue(true) },
     { unregister: mockUnregister.mockResolvedValue(true) },
   ]);
-  mockCacheKeys.mockResolvedValue(['logitrack-v3', 'logitrack-v4']);
+  mockCacheKeys.mockResolvedValue(['pistio-v3', 'pistio-v4']);
   mockCacheDelete.mockResolvedValue(true);
 });
 
@@ -54,8 +54,8 @@ describe('resetServiceWorkerAndReload', () => {
   it('purge tous les caches', async () => {
     await resetServiceWorkerAndReload();
     expect(mockCacheKeys).toHaveBeenCalledTimes(1);
-    expect(mockCacheDelete).toHaveBeenCalledWith('logitrack-v3');
-    expect(mockCacheDelete).toHaveBeenCalledWith('logitrack-v4');
+    expect(mockCacheDelete).toHaveBeenCalledWith('pistio-v3');
+    expect(mockCacheDelete).toHaveBeenCalledWith('pistio-v4');
   });
 
   it('pose dt_chunk_reload dans sessionStorage avec un horodatage', async () => {

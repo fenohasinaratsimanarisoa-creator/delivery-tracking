@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import styles from './CookiesPage.module.css';
 
 export default function CookiesPage() {
-  useEffect(() => { document.title = 'Politique de cookies — LogiTrack'; }, []);
+  useEffect(() => { document.title = 'Politique de cookies — Pistio'; }, []);
 
   return (
     <>

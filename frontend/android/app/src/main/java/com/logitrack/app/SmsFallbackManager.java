@@ -33,9 +33,11 @@ import java.util.Locale;
  *
  * Format du SMS (voir SmsRelayPositionDto côté backend, GatewaySmsReceiver
  * côté parsing) : "LT1:<lat>,<lng>,<accuracy>,<epochSec>" — préfixe LT1
- * (LogiTrack v1) pour que la passerelle reconnaisse sans ambiguïté un SMS de
- * ce protocole parmi tout le reste du trafic SMS qu'elle reçoit, et pour
- * permettre une évolution de format (LT2…) sans casser la compatibilité.
+ * (identifiant de version du protocole, INCHANGÉ au rebranding LogiTrack→Pistio
+ * pour ne pas casser une passerelle SMS déjà configurée pour le reconnaître)
+ * pour que la passerelle reconnaisse sans ambiguïté un SMS de ce protocole
+ * parmi tout le reste du trafic SMS qu'elle reçoit, et pour permettre une
+ * évolution de format (LT2…) sans casser la compatibilité.
  */
 final class SmsFallbackManager {
 

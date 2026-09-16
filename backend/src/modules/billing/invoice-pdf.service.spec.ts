@@ -196,7 +196,7 @@ describe('InvoicePdfService', () => {
       const result = await service.generateInvoice('inv-1');
 
       const pdfText = extractPdfText(result);
-      expect(pdfText).toContain('LogiTrack Solutions');
+      expect(pdfText).toContain('Pistio Solutions');
       expect(pdfText).toContain('NIF');
       expect(pdfText).toContain('TVA intracommunautaire');
     });

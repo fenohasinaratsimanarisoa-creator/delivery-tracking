@@ -2,7 +2,7 @@
 
 ## Pourquoi c'est nécessaire
 
-L'app LogiTrack transmet la position GPS en continu au dispatcher. Pour continuer à
+L'app Pistio transmet la position GPS en continu au dispatcher. Pour continuer à
 fonctionner **écran verrouillé / app en arrière-plan**, l'app démarre un *foreground
 service* Android de type `location` (`LocationForegroundService.java`).
 
@@ -26,7 +26,7 @@ Deux couches indépendantes peuvent interrompre cette transmission :
 Depuis l'app, la bannière « Optimisation batterie active » ouvre l'écran système
 `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` :
 
-- **Paramètres → Applications → LogiTrack → Batterie → Sans restriction** (AOSP/Android pur).
+- **Paramètres → Applications → Pistio → Batterie → Sans restriction** (AOSP/Android pur).
 
 L'état `batteryOptimizationIgnored` est exposé par le plugin `BackgroundLocation`
 (`getBatteryOptimizationStatus`) et relu par l'app au démarrage du tracking et à chaque
@@ -42,13 +42,13 @@ Deux réglages sont requis, dans cet ordre :
 
 **a. Autostart (démarrage automatique)**
 
-`Paramètres → Applications → Gérer les applications → LogiTrack → Autostart → Activer`
+`Paramètres → Applications → Gérer les applications → Pistio → Autostart → Activer`
 
 > Sans Autostart, MIUI tue le process dès l'écran verrouillé, foreground service ou pas.
 
 **b. Batterie → Sans restriction**
 
-`Paramètres → Applications → Gérer les applications → LogiTrack → Réglage de la batterie → Sans restriction`
+`Paramètres → Applications → Gérer les applications → Pistio → Réglage de la batterie → Sans restriction`
 
 Si l'app n'apparaît pas dans « Gérer les applications », chercher via
 `Paramètres → Applications → Gérer les applications → (icône loupe)`.
@@ -60,24 +60,24 @@ Si l'app n'apparaît pas dans « Gérer les applications », chercher via
 
 ### Samsung (One UI)
 
-`Paramètres → Applications → LogiTrack → Batterie → Autoriser en arrière-plan` (et
+`Paramètres → Applications → Pistio → Batterie → Autoriser en arrière-plan` (et
 désactiver « Mettre en veille »). Pas d'Autostart nécessaire.
 
 ### Oppo / Realme / OnePlus (ColorOS/realme UI)
 
-- `Paramètres → Applications → LogiTrack → Utilisation de la batterie → Autoriser en arrière-plan`
-- `Paramètres → Applications → LogiTrack → Autoriser l'activité en arrière-plan` (ColorOS 12+)
-- `Paramètres → Batterie → Autostart` (Oppo) → activer LogiTrack.
+- `Paramètres → Applications → Pistio → Utilisation de la batterie → Autoriser en arrière-plan`
+- `Paramètres → Applications → Pistio → Autoriser l'activité en arrière-plan` (ColorOS 12+)
+- `Paramètres → Batterie → Autostart` (Oppo) → activer Pistio.
 
 ### Huawei (EMUI / HarmonyOS)
 
-- `Paramètres → Batterie → Optimisation de la batterie → Applications → LogiTrack → Ne pas optimiser`
-- `Paramètres → Applications → LogiTrack → Batterie → Autoriser l'app à démarrer automatiquement et en arrière-plan`.
+- `Paramètres → Batterie → Optimisation de la batterie → Applications → Pistio → Ne pas optimiser`
+- `Paramètres → Applications → Pistio → Batterie → Autoriser l'app à démarrer automatiquement et en arrière-plan`.
 
 ### Vivo (Funtouch / OriginOS)
 
-- `Paramètres → Applications → Gérer les applications → LogiTrack → Autorisation → (tout activer)`
-- `Paramètres → Batterie → Applications en arrière-plan → Autoriser LogiTrack`.
+- `Paramètres → Applications → Gérer les applications → Pistio → Autorisation → (tout activer)`
+- `Paramètres → Batterie → Applications en arrière-plan → Autoriser Pistio`.
 
 ---
 

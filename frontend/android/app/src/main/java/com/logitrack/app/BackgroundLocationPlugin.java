@@ -750,7 +750,7 @@ public class BackgroundLocationPlugin extends Plugin {
      *  - Surcouches agressives (MIUI/HyperOS, EMUI, ColorOS, Vivo, OnePlus…) : cet écran « dédié »
      *    n'existe pas ou ne permet pas d'accorder réellement l'exemption (l'utilisateur revient
      *    sans changement → la bannière reste → il reclique → impression de boucle). On ouvre la
-     *    page de détails de l'app (Paramètres → Applications → LogiTrack → Batterie → Sans
+     *    page de détails de l'app (Paramètres → Applications → Pistio → Batterie → Sans
      *    restriction), présente sur TOUTES les surcouches et contenant le réglage réel.
      */
     @PluginMethod

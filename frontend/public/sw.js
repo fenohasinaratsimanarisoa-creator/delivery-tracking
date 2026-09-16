@@ -1,11 +1,11 @@
-/* LogiTrack service worker — offline PWA
+/* Pistio service worker — offline PWA
    - App-shell : « network-first » (toujours recharger les nouvelles versions au connecté)
    - Assets statiques hashed : stale-while-revalidate
    - Cache versionné + purge automatique des vieilles versions
    - Auto-guérison : ping de version à l'activate pour débloquer les clients coincés
      sur un ancien SW (unregister forcé via SW_FORCE_RESET)
 */
-const VERSION = 'logitrack-v5'; // À bump à chaque déploiement
+const VERSION = 'pistio-v5'; // À bump à chaque déploiement
 const APP_SHELL = '/';
 const CACHE_URLS = [APP_SHELL, '/manifest.json', '/icons/icon.svg'];
 

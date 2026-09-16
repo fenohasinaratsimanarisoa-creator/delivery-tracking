@@ -27,42 +27,42 @@ const OEM_NAMES: Record<string, string> = {
 // doit faire EN PLUS de l'exemption Android standard. Texte court, actionnable.
 const OEM_STEPS: Record<string, string[]> = {
   xiaomi: [
-    "Ouvrir Paramètres → Applications → Gérer les applications → LogiTrack",
+    "Ouvrir Paramètres → Applications → Gérer les applications → Pistio",
     "Activer « Démarrage automatique » (Autostart) — sans lui, MIUI tue l'app même écran verrouillé",
     "Batterie → « Sans restriction »",
   ],
   huawei: [
-    "Ouvrir Paramètres → Applications → LogiTrack",
+    "Ouvrir Paramètres → Applications → Pistio",
     "Batterie → « Autoriser l'app à démarrer automatiquement et en arrière-plan »",
-    "Paramètres → Batterie → Optimisation de la batterie → LogiTrack → « Ne pas optimiser »",
+    "Paramètres → Batterie → Optimisation de la batterie → Pistio → « Ne pas optimiser »",
   ],
   honor: [
-    "Ouvrir Paramètres → Applications → LogiTrack",
+    "Ouvrir Paramètres → Applications → Pistio",
     "Batterie → autoriser l'activité en arrière-plan",
-    "Désactiver l'optimisation batterie pour LogiTrack",
+    "Désactiver l'optimisation batterie pour Pistio",
   ],
   oppo: [
-    "Ouvrir Paramètres → Applications → LogiTrack",
+    "Ouvrir Paramètres → Applications → Pistio",
     "« Autoriser l'activité en arrière-plan » (ColorOS 12+)",
     "Utilisation de la batterie → « Autoriser en arrière-plan »",
   ],
   vivo: [
-    "Ouvrir Paramètres → Applications → Gérer les applications → LogiTrack",
+    "Ouvrir Paramètres → Applications → Gérer les applications → Pistio",
     "Autorisation → tout activer",
-    "Paramètres → Batterie → Applications en arrière-plan → autoriser LogiTrack",
+    "Paramètres → Batterie → Applications en arrière-plan → autoriser Pistio",
   ],
   oneplus: [
-    "Ouvrir Paramètres → Applications → LogiTrack",
+    "Ouvrir Paramètres → Applications → Pistio",
     "« Autoriser l'activité en arrière-plan »",
     "Utilisation de la batterie → « Autoriser en arrière-plan »",
   ],
   realme: [
-    "Ouvrir Paramètres → Applications → LogiTrack",
+    "Ouvrir Paramètres → Applications → Pistio",
     "« Autoriser l'activité en arrière-plan »",
-    "Paramètres → Batterie → « Autostart » → activer LogiTrack",
+    "Paramètres → Batterie → « Autostart » → activer Pistio",
   ],
   samsung: [
-    "Ouvrir Paramètres → Applications → LogiTrack → Batterie",
+    "Ouvrir Paramètres → Applications → Pistio → Batterie",
     "Activer « Autoriser en arrière-plan » et désactiver « Mettre en veille »",
   ],
 };

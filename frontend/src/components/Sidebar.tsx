@@ -57,11 +57,11 @@ export default function Sidebar() {
         {!collapsed && (
           <span className={styles.logoExpanded}>
             <img src="/logo-icon.png" alt="" width={24} height={24} className={styles.logoImg} />
-            LogiTrack
+            Pistio
           </span>
         )}
         {collapsed && (
-          <img src="/logo-icon.png" alt="LogiTrack" width={28} height={28} className={styles.logoImg} />
+          <img src="/logo-icon.png" alt="Pistio" width={28} height={28} className={styles.logoImg} />
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}

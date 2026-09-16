@@ -13,7 +13,7 @@ interface GeocodingResult {
 export type { GeocodingResult };
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
-const USER_AGENT = 'LogiTrack/1.0 (logistics)';
+const USER_AGENT = 'Pistio/1.0 (logistics)';
 const CACHE_TTL_SEC = 86400; // 24h
 // Bbox Madagascar au format Nominatim <lon1>,<lat1>,<lon2>,<lat2>. Le pays est
 // ENTIÈREMENT dans l'hémisphère sud (lat -11.9 à -25.6) : le « 11 » positif

@@ -417,7 +417,7 @@ jobs:
           # affiche seulement « Application non installée », sans expliquer
           # pourquoi. C'est arrivé en vrai : les chauffeurs avaient un APK de DEBUG
           # (CN=Android Debug, versionCode 1) et l'APK de la CI est signé avec la
-          # clé de release LogiTrack. La bannière de mise à jour renvoyait donc
+          # clé de release Pistio. La bannière de mise à jour renvoyait donc
           # vers un fichier qui ne pouvait PAS s'installer.
           # En publiant cette empreinte, l'app compare la signature installée à
           # celle de la release et affiche la bonne consigne (désinstaller d'abord,

@@ -78,9 +78,9 @@ export class WebhookRetryProcessor extends WorkerHost {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-LogiTrack-Signature-256': signature,
-          'X-LogiTrack-Event': delivery.event,
-          'User-Agent': 'LogiTrack-Webhook/1.0',
+          'X-Pistio-Signature-256': signature,
+          'X-Pistio-Event': delivery.event,
+          'User-Agent': 'Pistio-Webhook/1.0',
         },
         body,
         signal: controller.signal,

@@ -159,8 +159,8 @@ async function bootstrap() {
 
   if (process.env.NODE_ENV === 'staging') {
     const config = new DocumentBuilder()
-      .setTitle('LogiTrack API')
-      .setDescription('B2B integration API for LogiTrack — fleet & delivery management platform')
+      .setTitle('Pistio API')
+      .setDescription('B2B integration API for Pistio — fleet & delivery management platform')
       .setVersion('1.0')
       .addBearerAuth()
       .addApiKey(

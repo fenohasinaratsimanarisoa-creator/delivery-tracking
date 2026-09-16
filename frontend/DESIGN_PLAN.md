@@ -1,4 +1,4 @@
-# DeliveryTrack (LogiTrack) — Système de design actuel
+# DeliveryTrack (Pistio) — Système de design actuel
 
 Ce document décrit le système de design **réellement en place**. Une version
 précédente de ce fichier décrivait une direction "ambre + radar pulse" qui a

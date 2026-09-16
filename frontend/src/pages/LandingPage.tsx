@@ -35,7 +35,7 @@ export default function LandingPage() {
         <div className={styles.navInner}>
           <span className={styles.logo}>
             <img src="/logo-icon.png" alt="" width={30} height={30} className={styles.logoMark} />
-            LogiTrack
+            Pistio
           </span>
           <nav className={styles.navLinks}>
             <a href="#features">{t('landing.nav.features')}</a>
@@ -138,7 +138,7 @@ export default function LandingPage() {
           <div className={styles.footerBrand}>
             <span className={styles.logo}>
               <img src="/logo-icon.png" alt="" width={30} height={30} className={styles.logoMark} />
-              LogiTrack
+              Pistio
             </span>
             <p className={styles.footerTagline}>{t('landing.footer.tagline')}</p>
           </div>

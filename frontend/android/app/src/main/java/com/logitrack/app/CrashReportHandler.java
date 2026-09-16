@@ -19,7 +19,7 @@ import java.util.Locale;
  */
 public final class CrashReportHandler implements Thread.UncaughtExceptionHandler {
 
-    private static final String TAG = "LogiTrackCrash";
+    private static final String TAG = "PistioCrash";
     private static final String CRASH_PREFIX = "crash_";
 
     private final Thread.UncaughtExceptionHandler defaultHandler;

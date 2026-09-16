@@ -23,10 +23,10 @@ export default function CguPage() {
           <h2 className={styles.heading}>{t('cgu.section1.title')}</h2>
           <p className={styles.paragraph}>
             Les présentes Conditions Générales d'Utilisation (ci-après « CGU ») régissent l'accès et l'utilisation
-            de la plateforme LogiTrack (ci-après « la Plateforme »), éditée par la société LogiTrack SARL.
+            de la plateforme Pistio (ci-après « la Plateforme »), éditée par la société Pistio SARL.
           </p>
           <p className={styles.alert}>
-            <strong>Essai gratuit :</strong> LogiTrack propose un essai gratuit de 14 jours à la création
+            <strong>Essai gratuit :</strong> Pistio propose un essai gratuit de 14 jours à la création
             du compte, avec accès complet aux fonctionnalités du forfait Business, sans carte bancaire ni
             engagement. À l'issue de cette période, l'accès à la Plateforme est soumis à la souscription
             d'un forfait payant, décrit à l'article 9 des présentes CGU.
@@ -60,7 +60,7 @@ export default function CguPage() {
             L'utilisateur s'engage à fournir des informations exactes et à les maintenir à jour.
           </p>
           <p className={styles.paragraph}>
-            3.2. LogiTrack se réserve le droit de suspendre ou résilier tout compte en cas de violation
+            3.2. Pistio se réserve le droit de suspendre ou résilier tout compte en cas de violation
             des présentes CGU ou d'utilisation frauduleuse de la Plateforme.
           </p>
           <p className={styles.paragraph}>
@@ -71,7 +71,7 @@ export default function CguPage() {
         <div className={styles.section}>
           <h2 className={styles.heading}>{t('cgu.section4.title')}</h2>
           <p className={styles.paragraph}>
-            LogiTrack propose une solution de gestion et de suivi de livraisons comprenant notamment :
+            Pistio propose une solution de gestion et de suivi de livraisons comprenant notamment :
           </p>
           <ul className={styles.list}>
             <li>Suivi GPS en temps réel des livreurs et véhicules</li>
@@ -107,7 +107,7 @@ export default function CguPage() {
         <div className={styles.section}>
           <h2 className={styles.heading}>{t('cgu.section6.title')}</h2>
           <p className={styles.paragraph}>
-           6.1. LogiTrack s'engage à protéger les données personnelles de ses utilisateurs conformément
+           6.1. Pistio s'engage à protéger les données personnelles de ses utilisateurs conformément
                à sa <Link to="/privacy" className={styles.privacyLink}>{t('cgu.privacyPolicy')}</Link>.
           </p>
           <p className={styles.paragraph}>
@@ -120,7 +120,7 @@ export default function CguPage() {
           </p>
           <p className={styles.paragraph}>
             6.4. Les données sont hébergées sur des serveurs sécurisés situés dans l'Union Européenne.
-            LogiTrack met en œuvre des mesures techniques et organisationnelles appropriées pour garantir
+            Pistio met en œuvre des mesures techniques et organisationnelles appropriées pour garantir
             la sécurité et la confidentialité des données.
           </p>
         </div>
@@ -129,7 +129,7 @@ export default function CguPage() {
           <h2 className={styles.heading}>{t('cgu.section7.title')}</h2>
           <p className={styles.paragraph}>
             L'ensemble des éléments composant la Plateforme (design, code source, marques, logos) est
-            la propriété exclusive de LogiTrack SARL. Toute reproduction ou utilisation sans autorisation
+            la propriété exclusive de Pistio SARL. Toute reproduction ou utilisation sans autorisation
             est interdite.
           </p>
         </div>
@@ -137,15 +137,15 @@ export default function CguPage() {
         <div className={styles.section}>
           <h2 className={styles.heading}>{t('cgu.section8.title')}</h2>
           <p className={styles.paragraph}>
-            8.1. LogiTrack met en œuvre les moyens raisonnables pour assurer un fonctionnement continu
+            8.1. Pistio met en œuvre les moyens raisonnables pour assurer un fonctionnement continu
             de la Plateforme, sans garantie absolue de disponibilité.
           </p>
           <p className={styles.paragraph}>
-            8.2. LogiTrack ne saurait être tenu responsable des dommages indirects résultant de
+            8.2. Pistio ne saurait être tenu responsable des dommages indirects résultant de
             l'utilisation ou de l'impossibilité d'utiliser la Plateforme.
           </p>
           <p className={styles.paragraph}>
-            8.3. Les données de localisation GPS sont fournies à titre indicatif. LogiTrack ne garantit pas
+            8.3. Les données de localisation GPS sont fournies à titre indicatif. Pistio ne garantit pas
             l'exactitude en temps réel des positions et ne peut être tenu responsable des décisions prises
             sur la base de ces informations.
           </p>
@@ -169,7 +169,7 @@ export default function CguPage() {
             directement depuis l'application.
           </p>
           <p className={styles.paragraph}>
-            9.4. Chaque preuve de paiement est vérifiée manuellement par LogiTrack. Une fois validée, un code
+            9.4. Chaque preuve de paiement est vérifiée manuellement par Pistio. Une fois validée, un code
             d'activation est communiqué à l'utilisateur pour réactiver ou renouveler l'accès à la Plateforme.
           </p>
           <p className={styles.paragraph}>
@@ -178,7 +178,7 @@ export default function CguPage() {
             validation d'un nouveau paiement.
           </p>
           <p className={styles.paragraph}>
-            9.6. LogiTrack se réserve le droit de modifier ses tarifs à tout moment. Les utilisateurs déjà
+            9.6. Pistio se réserve le droit de modifier ses tarifs à tout moment. Les utilisateurs déjà
             abonnés en seront informés avec un préavis raisonnable avant toute application à leur forfait en cours.
           </p>
         </div>
@@ -206,7 +206,7 @@ export default function CguPage() {
             Pour toute question relative aux présentes CGU, vous pouvez nous contacter à l'adresse suivante :
           </p>
           <p className={styles.paragraph}>
-            LogiTrack SARL<br />
+            Pistio SARL<br />
             Email : support@deliverytrack.app<br />
           </p>
         </div>

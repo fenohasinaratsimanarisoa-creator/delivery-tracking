@@ -31,7 +31,7 @@ import android.util.Log;
  */
 public class BootReceiver extends BroadcastReceiver {
 
-    private static final String TAG = "LogiTrackBoot";
+    private static final String TAG = "PistioBoot";
 
     @Override
     public void onReceive(Context context, Intent intent) {
