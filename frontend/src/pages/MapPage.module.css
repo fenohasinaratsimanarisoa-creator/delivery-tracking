@@ -324,4 +324,19 @@
   .legend {
     bottom: calc(72px + env(safe-area-inset-bottom, 0px) + var(--space-lg));
   }
+
+  /* Même réservation pour le sélecteur de fond de carte (MapLayerSwitcher,
+     bas-gauche) : la variable CSS traverse la frontière de module jusqu'à
+     .pageWrap → RealTimeMap → MapLayerSwitcher.module.css sans prop
+     drilling. Sans ça, il retombe sur son offset par défaut (12px) et se
+     retrouve sous BottomNav, comme la légende avant ce correctif.
+     +44px supplémentaires (hauteur approx. de .legend + petit espace) : sur
+     mobile .legend s'étire quasi bord à bord (left/right: space-lg), donc à
+     la MÊME hauteur que le sélecteur ils se chevauchraient horizontalement.
+     Empilés verticalement à la place — plus jamais de collision. */
+  .pageWrap {
+    --map-controls-bottom-safe: calc(
+      72px + env(safe-area-inset-bottom, 0px) + var(--space-lg) + 44px
+    );
+  }
 }

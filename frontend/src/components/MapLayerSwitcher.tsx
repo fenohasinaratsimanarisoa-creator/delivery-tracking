@@ -1,7 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMap } from 'react-leaflet';
+import { useTranslation } from 'react-i18next';
 import L from 'leaflet';
-import { TILE_PROVIDERS, tileLayerProps, isSatelliteHDAvailable } from '../features/map/tileProviders';
+import { Layers, Check } from 'lucide-react';
+import {
+  TILE_PROVIDERS,
+  tileLayerProps,
+  isSatelliteHDAvailable,
+  type TileProviderConfig,
+} from '../features/map/tileProviders';
+import styles from './MapLayerSwitcher.module.css';
 
 const STORAGE_KEY = 'dt_map_layer';
 
@@ -26,38 +34,33 @@ const SWITCHER_LAYERS = [
   TILE_PROVIDERS.planLight,
 ];
 
+// AUDIT DESIGN MOBILE 2026-09-16 : ce composant utilisait le contrôle natif
+// Leaflet (`L.control.layers`, `collapsed: false`) — un widget non stylé,
+// TOUJOURS déployé, positionné par Leaflet lui-même (bottomleft) sans
+// coordination avec les autres overlays de la carte (légende de statut,
+// barre de recherche). Sur mobile, ce gros bloc blanc permanent se
+// superposait à la légende de statut (les deux ancrés près du bas de
+// l'écran) — capture utilisateur à l'appui. Remplacé par un vrai contrôle
+// React repliable (bouton pilule → popover), cohérent avec le reste du
+// design de la carte, qui ne prend de la place que lorsqu'on l'ouvre.
 export default function MapLayerSwitcher() {
   const map = useMap();
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [activeKey, setActiveKey] = useState<string>(() => getSavedLayer());
+  const containerRef = useRef<HTMLDivElement>(null);
+  const layersRef = useRef<{ provider: TileProviderConfig; tile: L.TileLayer }[]>([]);
+  const activeTileRef = useRef<L.TileLayer | null>(null);
 
   useEffect(() => {
+    const layers = SWITCHER_LAYERS.map((p) => ({ provider: p, tile: L.tileLayer(p.url, tileLayerProps(p)) }));
+    layersRef.current = layers;
+
     const saved = getSavedLayer();
-
-    const layers = SWITCHER_LAYERS.map((p) => {
-      const tile = L.tileLayer(p.url, tileLayerProps(p));
-      return { provider: p, tile };
-    });
-
-    const baseLayers: Record<string, L.TileLayer> = {};
-    for (const { provider, tile } of layers) {
-      baseLayers[provider.name] = tile;
-    }
-
-    let activeKey = layers.find((l) => l.provider.key === saved)?.provider.key ?? layers[0].provider.key;
-    let active = layers.find((l) => l.provider.key === activeKey)!.tile;
-    active.addTo(map);
-
-    const control = L.control.layers(baseLayers, {}, {
-      position: 'bottomleft',
-      collapsed: false,
-    }).addTo(map);
-
-    map.on('baselayerchange', (e: { name: string }) => {
-      const provider = layers.find((l) => l.provider.name === e.name)?.provider;
-      if (provider) {
-        activeKey = provider.key;
-        saveLayer(provider.key);
-      }
-    });
+    const initial = layers.find((l) => l.provider.key === saved) ?? layers[0];
+    initial.tile.addTo(map);
+    activeTileRef.current = initial.tile;
+    setActiveKey(initial.provider.key);
 
     // Détection de la tuile d'erreur (« Map data not yet available » / HTTP 403-404) :
     // certains fournisseurs (ex. OSM) bloquent les User-Agent non standards. On bascule
@@ -65,44 +68,99 @@ export default function MapLayerSwitcher() {
     let fallbackApplied = false;
     const applyFallback = () => {
       if (fallbackApplied) return;
-      const activeProvider = layers.find((l) => l.provider.key === activeKey)?.provider;
-      if (!activeProvider || activeProvider.key === 'plan') return;
+      const current = layersRef.current.find((l) => l.tile === activeTileRef.current);
+      if (!current || current.provider.key === 'plan') return;
       fallbackApplied = true;
-      const plan = layers.find((l) => l.provider.key === 'plan')!;
-      if (active !== plan.tile) {
-        map.removeLayer(active);
+      const plan = layersRef.current.find((l) => l.provider.key === 'plan')!;
+      if (activeTileRef.current && activeTileRef.current !== plan.tile) {
+        map.removeLayer(activeTileRef.current);
         plan.tile.addTo(map);
-        active = plan.tile;
+        activeTileRef.current = plan.tile;
+        setActiveKey('plan');
+        saveLayer('plan');
         console.warn('[map] tuiles bloquées (rate-limit) — bascule sur le repli CARTO');
       }
     };
 
     let tileErrorCount = 0;
     let errorTimer: ReturnType<typeof setTimeout> | null = null;
-    const onTileError = (e: L.LeafletEvent) => {
-      const tile = (e as { tile?: HTMLImageElement }).tile as HTMLImageElement | undefined;
-      if (!tile) return;
+    const onTileError = () => {
       tileErrorCount++;
       if (errorTimer) clearTimeout(errorTimer);
       // Plusieurs échecs de tuiles en peu de temps = blocage du fournisseur courant.
       errorTimer = setTimeout(() => {
-        if (tileErrorCount >= 3) {
-          applyFallback();
-        }
+        if (tileErrorCount >= 3) applyFallback();
         tileErrorCount = 0;
       }, 4000);
     };
     map.on('tileerror', onTileError);
 
     return () => {
-      control.remove();
       map.off('tileerror', onTileError);
       if (errorTimer) clearTimeout(errorTimer);
-      map.eachLayer((layer) => {
-        if (layer instanceof L.TileLayer) map.removeLayer(layer);
+      layers.forEach(({ tile }) => {
+        if (map.hasLayer(tile)) map.removeLayer(tile);
       });
     };
   }, [map]);
 
-  return null;
+  // Ferme au clic/tap extérieur — comportement standard d'un menu popover.
+  useEffect(() => {
+    if (!open) return;
+    const onOutside = (e: Event) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onOutside);
+    document.addEventListener('touchstart', onOutside);
+    return () => {
+      document.removeEventListener('mousedown', onOutside);
+      document.removeEventListener('touchstart', onOutside);
+    };
+  }, [open]);
+
+  const selectLayer = (key: string) => {
+    setOpen(false);
+    if (key === activeKey) return;
+    const target = layersRef.current.find((l) => l.provider.key === key);
+    if (!target) return;
+    if (activeTileRef.current) map.removeLayer(activeTileRef.current);
+    target.tile.addTo(map);
+    activeTileRef.current = target.tile;
+    setActiveKey(key);
+    saveLayer(key);
+  };
+
+  const activeProvider = SWITCHER_LAYERS.find((p) => p.key === activeKey) ?? SWITCHER_LAYERS[0];
+
+  return (
+    <div ref={containerRef} className={styles.wrap}>
+      {open && (
+        <div className={styles.panel} role="menu">
+          {SWITCHER_LAYERS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              role="menuitemradio"
+              aria-checked={p.key === activeKey}
+              className={`${styles.option} ${p.key === activeKey ? styles.optionActive : ''}`}
+              onClick={() => selectLayer(p.key)}
+            >
+              <span>{p.name}</span>
+              {p.key === activeKey && <Check size={14} className={styles.optionCheck} />}
+            </button>
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        className={styles.toggle}
+        onClick={() => setOpen((o) => !o)}
+        aria-label={t('map.layersAria')}
+        aria-expanded={open}
+      >
+        <Layers size={15} />
+        <span className={styles.toggleLabel}>{activeProvider.name}</span>
+      </button>
+    </div>
+  );
 }

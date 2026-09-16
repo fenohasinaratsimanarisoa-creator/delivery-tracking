@@ -1,0 +1,85 @@
+/* Position par défaut : bas-gauche de la carte, petit décalage fixe. Sur
+   MapPage (carte plein écran, BottomNav superposée en bas sur mobile),
+   --map-controls-bottom-safe est redéfinie plus haut dans l'arbre DOM
+   (MapPage.module.css, .pageWrap) pour réserver la même zone que la légende
+   de statut — la variable CSS traverse les frontières de module sans prop
+   drilling. Ailleurs (mini-carte dashboard, TripReplayPage, VehicleTripPage),
+   elle reste indéfinie et retombe sur 12px. */
+.wrap {
+  position: absolute;
+  left: 12px;
+  bottom: var(--map-controls-bottom-safe, 12px);
+  z-index: 1000;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  max-width: 46vw;
+}
+
+.toggle:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.toggleLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Popover : s'ouvre VERS LE HAUT (le bouton est ancré en bas) — jamais vers
+   le bas où il sortirait de l'écran ou recouvrirait la légende de statut. */
+.panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 160px;
+  padding: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.option:hover {
+  background: var(--color-surface-hover);
+}
+
+.optionActive {
+  color: var(--color-accent);
+  font-weight: var(--weight-semibold);
+}
+
+.optionCheck {
+  flex-shrink: 0;
+}
