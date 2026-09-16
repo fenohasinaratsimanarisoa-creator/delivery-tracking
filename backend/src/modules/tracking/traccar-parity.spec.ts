@@ -677,6 +677,38 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
       expect(call).toBeDefined();
       expect(call.data.speed).toBe(0);
     });
+
+    it("AUDIT ÉCART HORS LIGNE 2026-09-16 — dérive la vitesse d'un GT06 sans accuracy device (accuracy=0) mais bon signal satellite, au lieu de retomber sur le repli 50 m", async () => {
+      // Régression : le seuil de bruit utilisait `undefined` (→ 50 m combiné) dès
+      // que `pos.accuracy` du device était absente/0, MÊME quand `accuracyFromSatellites`
+      // donnait une estimation bien plus fine (sat=15 → 8 m → seuil ~16 m). Un GT06 à
+      // bon signal qui roule vraiment (~22 m/5 s, sous 50 m mais au-dessus de 16 m)
+      // restait donc classé « à l'arrêt » en continu pendant un trajet réel.
+      mockPrisma.gpsPosition.findFirst.mockResolvedValue({
+        latitude: DELIVERY_LAT,
+        longitude: DELIVERY_LNG,
+        timestamp: new Date(Date.now() - 5_000),
+        speed: 0,
+        accuracy: 8, // déjà sat-dérivée par computeCombinedAccuracy au fix précédent
+        suspect: false,
+      });
+
+      await (makeBridge() as any).handlePosition(
+        baseTraccarPos({
+          speed: 0, // ce traceur ne remonte jamais de vitesse Doppler exploitable
+          accuracy: 0, // device ne remonte PAS l'accuracy (cas réel GT06)
+          attributes: { sat: 15, motion: true },
+          latitude: DELIVERY_LAT + 0.0002, // ~22 m de déplacement réel
+          longitude: DELIVERY_LNG,
+          fixTime: new Date().toISOString(),
+          deviceTime: new Date().toISOString(),
+        }),
+      );
+
+      const call = mockPrisma.gpsPosition.create.mock.calls.at(-1)?.[0];
+      expect(call).toBeDefined();
+      expect(call.data.speed).toBeGreaterThan(0.5);
+    });
   });
 
   // ─── 4.5 Sauvegarde en base identique ────────────────────────────────

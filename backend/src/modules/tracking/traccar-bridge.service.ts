@@ -1337,9 +1337,11 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               // sous-comptage de distance après une coupure Traccar) — mais UNIQUEMENT si
               // le déplacement dépasse le bruit combiné et que Δt est plausible ; ramène
               // à 0 une vitesse rapportée alors que le véhicule est immobile (audit
-              // VITESSE FANTÔME 2026-09-09, R2 confirmé en prod). Voir handlePosition
-              // pour le traitement de l'accuracy non renseignée par le device.
-              const deviceReportsAccuracy = pos.accuracy != null && pos.accuracy > 0;
+              // VITESSE FANTÔME 2026-09-09, R2 confirmé en prod). ACCURACY : on utilise
+              // directement `accuracy`/`lastBackfillPos.accuracy` (déjà la meilleure
+              // estimation disponible via `computeCombinedAccuracy`, sat-dérivée quand le
+              // device ne la fournit pas) au lieu d'un repli `undefined` — voir handlePosition
+              // (AUDIT ÉCART HORS LIGNE 2026-09-16) pour le détail de la régression corrigée.
               const speedMs = resolveGroundSpeed({
                 reportedSpeedMs: (pos.speed || 0) * 0.514444,
                 previous: lastBackfillPos
@@ -1347,14 +1349,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                       latitude: lastBackfillPos.latitude,
                       longitude: lastBackfillPos.longitude,
                       timestamp: lastBackfillPos.timestamp,
-                      accuracy: deviceReportsAccuracy ? lastBackfillPos.accuracy : undefined,
+                      accuracy: lastBackfillPos.accuracy,
                     }
                   : null,
                 current: {
                   latitude: pos.latitude,
                   longitude: pos.longitude,
                   timestamp,
-                  accuracy: deviceReportsAccuracy ? accuracy : undefined,
+                  accuracy,
                 },
                 currentTimestampIsServerFallback: timestampFromServerClock,
               }).speedMs;
@@ -1655,15 +1657,24 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         // quand la position ne confirme AUCUN déplacement au-delà du bruit combiné.
         // `lastDb` chargé INCONDITIONNELLEMENT (avant : seulement si `pos.speed <= 0`).
         //
-        // ACCURACY : ce traceur renvoie toujours `accuracy = 0` (champ non renseigné,
-        // pas une mesure). `computeCombinedAccuracy` le remonte à 50 m pour le score de
-        // confiance — mais l'utiliser tel quel pour le seuil de bruit le gonfle à 100 m
-        // et écraserait de vrais trajets lents. Quand le device NE RENSEIGNE PAS
-        // l'accuracy, on passe `undefined` à resolveGroundSpeed → seuil = 2 ×
-        // GPS_ACCURACY_FALLBACK_M (50 m), assez pour absorber la dérive à l'arrêt sans
-        // masquer un déplacement franc. `derivedAccuracy` reste stocké pour la confiance.
+        // ACCURACY (AUDIT ÉCART HORS LIGNE 2026-09-16, corrige une régression
+        // silencieuse) : ce traceur renvoie toujours `accuracy = 0` (champ non
+        // renseigné). Le code passait ALORS `undefined` à resolveGroundSpeed
+        // (→ seuil de bruit figé à 2×GPS_ACCURACY_FALLBACK_M = 50 m), sous prétexte
+        // que `computeCombinedAccuracy` retombait sur un défaut plat de 50 m —
+        // vrai avant l'introduction d'`accuracyFromSatellites()` (même audit
+        // 2026-09-09), FAUX depuis : `derivedAccuracy` reflète maintenant le
+        // NOMBRE DE SATELLITES (8 m à 15 sat, 12 m à 10 sat, …), bien plus fin.
+        // Conséquence vécue en prod : un vrai déplacement de ~20 m/5 s (GT06 à bon
+        // signal) restait sous le seuil de bruit gonflé à 50 m → vitesse à 0 en
+        // continu pendant un trajet réel → `isStoppedFix` classait le véhicule « à
+        // l'arrêt » alors qu'il roulait → l'ancre à l'arrêt lissait/retardait la
+        // position affichée de plusieurs centaines de mètres derrière la réalité.
+        // `derivedAccuracy` (et l'accuracy stockée sur la position précédente) sont
+        // déjà la meilleure estimation disponible quelle que soit sa source
+        // (device, HDOP, ou satellites) — les utiliser directement, sans repli sur
+        // `undefined`.
         const lastDb = await this.trackingService.getLastPosition(vehicleMapping.id);
-        const deviceReportsAccuracy = pos.accuracy != null && pos.accuracy > 0;
         const speedMs = resolveGroundSpeed({
           reportedSpeedMs: (pos.speed || 0) * 0.514444,
           previous: lastDb
@@ -1671,14 +1682,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                 latitude: lastDb.latitude,
                 longitude: lastDb.longitude,
                 timestamp: lastDb.timestamp,
-                accuracy: deviceReportsAccuracy ? lastDb.accuracy : undefined,
+                accuracy: lastDb.accuracy,
               }
             : null,
           current: {
             latitude: pos.latitude,
             longitude: pos.longitude,
             timestamp,
-            accuracy: deviceReportsAccuracy ? derivedAccuracy : undefined,
+            accuracy: derivedAccuracy,
           },
           currentTimestampIsServerFallback: timestampFromServerClock,
         }).speedMs;
