@@ -1268,42 +1268,59 @@ describe('DeliveriesService - State Machine', () => {
     // On vérifie donc le parsing PDF réel dans un VRAI process Node (celui utilisé en
     // production), via le script `__fixtures__/parse-pdf-cli.ts`, plutôt qu'en appelant
     // parsePdfImportRows()/importDeliveriesFile() directement depuis ce test.
-    it('parses the real-world "livraison_exemple.pdf" fixture into 26 rows', () => {
-      const cliPath = path.join(__dirname, '__fixtures__/parse-pdf-cli.ts');
-      const pdfPath = path.join(__dirname, '../../../../livraison_exemple.pdf');
-      const stdout = execFileSync('npx', ['ts-node', '--transpile-only', cliPath, pdfPath], {
-        cwd: path.join(__dirname, '../../..'),
-        encoding: 'utf-8',
-        timeout: 30000,
-      });
-      const rows = JSON.parse(stdout);
+    //
+    // FIXTURE VOLONTAIREMENT NON COMMITÉE (audit CI 2026-09-16) : ce PDF est un VRAI
+    // export de livraisons — numéros de téléphone, noms et adresses de vrais clients
+    // (dont un contact au sein de la gendarmerie nationale). Le committer dans git
+    // exposerait des données personnelles réelles de façon permanente dans
+    // l'historique. Le test se désactive proprement (it.skip) si le fichier est
+    // absent — CI et tout autre clone du repo passent sans lui ; il reste exécutable
+    // en local pour quiconque a le fichier sur sa machine.
+    const REAL_FIXTURE_PATH = path.join(__dirname, '../../../../livraison_exemple.pdf');
+    const hasRealFixture = fs.existsSync(REAL_FIXTURE_PATH);
+    (hasRealFixture ? it : it.skip)(
+      'parses the real-world "livraison_exemple.pdf" fixture into 26 rows',
+      () => {
+        const cliPath = path.join(__dirname, '__fixtures__/parse-pdf-cli.ts');
+        const stdout = execFileSync(
+          'npx',
+          ['ts-node', '--transpile-only', cliPath, REAL_FIXTURE_PATH],
+          {
+            cwd: path.join(__dirname, '../../..'),
+            encoding: 'utf-8',
+            timeout: 30000,
+          },
+        );
+        const rows = JSON.parse(stdout);
 
-      expect(rows).toHaveLength(26);
-      expect(rows[0]).toEqual(
-        expect.objectContaining({
-          orderRef: '260909-02965',
-          lieu: 'ANTANINARENINA',
-          adresse: 'Poste de police',
-          telephone: '034 07 505 13',
-          montant: '25 000',
-          prix: '25000',
-          produits: '1 Montre Tomi Luckyfox pour femme',
-          observation: '2026-09-11',
-        }),
-      );
-      // Ligne payée en MVOLA (mobile money) : le "montant" (COD à collecter) n'est pas
-      // un nombre — parseAmount() le convertira en `undefined` côté service.
-      const mvolaRow = rows.find((r: any) => r.orderRef === '260910-03009');
-      expect(mvolaRow.montant).toBe('MVOLA');
-      expect(mvolaRow.prix).toBe('145000');
+        expect(rows).toHaveLength(26);
+        expect(rows[0]).toEqual(
+          expect.objectContaining({
+            orderRef: '260909-02965',
+            lieu: 'ANTANINARENINA',
+            adresse: 'Poste de police',
+            telephone: '034 07 505 13',
+            montant: '25 000',
+            prix: '25000',
+            produits: '1 Montre Tomi Luckyfox pour femme',
+            observation: '2026-09-11',
+          }),
+        );
+        // Ligne payée en MVOLA (mobile money) : le "montant" (COD à collecter) n'est pas
+        // un nombre — parseAmount() le convertira en `undefined` côté service.
+        const mvolaRow = rows.find((r: any) => r.orderRef === '260910-03009');
+        expect(mvolaRow.montant).toBe('MVOLA');
+        expect(mvolaRow.prix).toBe('145000');
 
-      // Toutes les commandes doivent avoir un N° Commande et un Lieu (sinon la ligne
-      // serait rejetée en erreur par importDeliveriesFile).
-      for (const row of rows) {
-        expect(row.orderRef).toMatch(/^\d{6}-\d{5}$/);
-        expect(row.lieu).toBeTruthy();
-      }
-    }, 30000);
+        // Toutes les commandes doivent avoir un N° Commande et un Lieu (sinon la ligne
+        // serait rejetée en erreur par importDeliveriesFile).
+        for (const row of rows) {
+          expect(row.orderRef).toMatch(/^\d{6}-\d{5}$/);
+          expect(row.lieu).toBeTruthy();
+        }
+      },
+      30000,
+    );
 
     it('routes .pdf files to parsePdfImportRows and creates deliveries from its rows', async () => {
       (parsePdfImportRows as jest.Mock).mockResolvedValueOnce([
@@ -1359,8 +1376,11 @@ describe('DeliveriesService - State Machine', () => {
     it('rejects a non-.xlsx/.pdf filename with a clear error before hitting the parsers', async () => {
       // Le contrôleur filtre déjà l'extension, mais on vérifie que le fallback
       // .xlsx d'importDeliveriesFile échoue proprement sur un PDF mal renommé
-      // plutôt que d'essayer de le lire comme un classeur Excel.
-      const pdfBuffer = fs.readFileSync(path.join(__dirname, '../../../../livraison_exemple.pdf'));
+      // plutôt que d'essayer de le lire comme un classeur Excel. Peu importe le
+      // contenu PDF réel ici — seul compte le fait que ce ne soit pas un .xlsx
+      // (ZIP) valide, donc pas besoin de la fixture réelle (non commitée, voir
+      // le test « parses the real-world... » ci-dessus).
+      const pdfBuffer = Buffer.from('%PDF-fake');
 
       await expect(
         service.importDeliveriesFile('comp-1', pdfBuffer, 'test.xlsx', 'Entrepôt'),

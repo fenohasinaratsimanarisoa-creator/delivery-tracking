@@ -64,3 +64,9 @@ frontend/android/captures/
 # OSRM : extrait OSM téléchargé à la préparation (osrm/prepare.sh), jamais commité
 osrm/*.pbf
 osrm/*.osrm*
+
+# Fixture de test locale (deliveries.service.spec.ts, describe "importDeliveriesFile
+# (pdf)") — VRAI export de livraisons avec données personnelles réelles (téléphones,
+# noms, adresses). Jamais commitée (audit CI 2026-09-16) ; le test associé se
+# désactive proprement (it.skip) quand ce fichier est absent.
+/livraison_exemple.pdf
