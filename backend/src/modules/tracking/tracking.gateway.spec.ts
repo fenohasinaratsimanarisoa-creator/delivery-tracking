@@ -690,13 +690,23 @@ describe('TrackingGateway — cross-tenant security', () => {
       // 3000 positions : 1 invalide sur 15 (lat hors bornes 999). Chaque
       // valide a une latitude UNIQUE dérivée de son index — permet de vérifier
       // que l'ordre relatif est conservé par la validation parallèle.
+      //
+      // BUG CORRIGÉ (2026-09-16) : les timestamps étaient une date CALENDAIRE
+      // EN DUR (15 août 2026) — ce test « expirait » silencieusement dès que la
+      // date réelle dépassait la fenêtre de 30 j tolérée par IsPlausibleTimestamp
+      // (plausible-timestamp.ts, PAST_TOLERANCE_MS) : les 3000 positions
+      // devenaient TOUTES invalides d'un coup (trop vieilles), validatedCount
+      // tombait à 0, saveBatch n'était jamais appelé. Pas un flake — un test qui
+      // se périmait de façon certaine ~1 mois après son écriture. Ancré sur
+      // Date.now() : ne périme plus jamais.
+      const base = Date.now() - 3000 * 1000;
       const positions: Array<Record<string, unknown>> = [];
       for (let i = 0; i < 3000; i++) {
         if (i % 15 === 0) {
           positions.push({
             latitude: 999,
             longitude: 47.5,
-            timestamp: new Date(2026, 7, 15, 10, 0, i).toISOString(),
+            timestamp: new Date(base + i * 1000).toISOString(),
             vehicleId: UUID,
           });
         } else {
@@ -706,7 +716,7 @@ describe('TrackingGateway — cross-tenant security', () => {
             speed: 30,
             heading: 90,
             accuracy: 8,
-            timestamp: new Date(2026, 7, 15, 10, 0, i).toISOString(),
+            timestamp: new Date(base + i * 1000).toISOString(),
             vehicleId: UUID,
           });
         }

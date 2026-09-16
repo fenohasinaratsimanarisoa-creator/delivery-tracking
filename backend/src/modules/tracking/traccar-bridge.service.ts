@@ -401,9 +401,10 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       this.logger.log(
         `Traccar bridge: état d'ancrage réamorcé depuis la base au démarrage (${seeded}/${vehicles.length} véhicules avec historique récent)`,
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       this.logger.error(
-        `Traccar bridge: échec du réamorçage de l'état d'ancrage au démarrage (buffers vides, comme avant ce correctif) — ${err?.message ?? err}`,
+        `Traccar bridge: échec du réamorçage de l'état d'ancrage au démarrage (buffers vides, comme avant ce correctif) — ${message}`,
       );
     }
   }
