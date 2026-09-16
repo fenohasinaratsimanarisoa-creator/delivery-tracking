@@ -16,7 +16,7 @@ export default function CguPage() {
           {t('cgu.title')}
         </h1>
         <p className={styles.lastUpdated}>
-          {t('cgu.lastUpdated', { date: 'juillet 2026' })}
+          {t('cgu.lastUpdated', { date: 'septembre 2026' })}
         </p>
 
         <div className={styles.section}>
@@ -26,11 +26,10 @@ export default function CguPage() {
             de la plateforme LogiTrack (ci-après « la Plateforme »), éditée par la société LogiTrack SARL.
           </p>
           <p className={styles.alert}>
-            <strong>Phase Pilote Gratuite :</strong> LogiTrack est actuellement en phase pilote gratuite.
-            Aucun paiement n'est exigé. Les fonctionnalités sont fournies gratuitement pendant une durée déterminée
-            par LogiTrack. À l'issue de cette phase, vous serez informé(e) des conditions de continuation
-            du service. LogiTrack se réserve le droit de modifier, suspendre ou arrêter la phase pilote
-            à tout moment sans préavis.
+            <strong>Essai gratuit :</strong> LogiTrack propose un essai gratuit de 14 jours à la création
+            du compte, avec accès complet aux fonctionnalités du forfait Business, sans carte bancaire ni
+            engagement. À l'issue de cette période, l'accès à la Plateforme est soumis à la souscription
+            d'un forfait payant, décrit à l'article 9 des présentes CGU.
           </p>
           <p className={styles.paragraph}>
             En créant un compte et en utilisant la Plateforme, vous acceptez sans réserve les présentes CGU.
@@ -48,9 +47,9 @@ export default function CguPage() {
             véhicules et utilisateurs traitées via la Plateforme.
           </p>
           <p className={styles.paragraph}>
-            <strong>Phase pilote</strong> : période d'utilisation gratuite de la Plateforme pendant laquelle
-            les fonctionnalités sont fournies sans frais. Les conditions de la phase pilote sont décrites
-            à l'article 9 des présentes CGU.
+            <strong>Essai gratuit</strong> : période de 14 jours suivant la création du compte, durant
+            laquelle l'ensemble des fonctionnalités du forfait Business est accessible sans frais. Les
+            conditions applicables à l'issue de l'essai sont décrites à l'article 9 des présentes CGU.
           </p>
         </div>
 
@@ -83,7 +82,8 @@ export default function CguPage() {
             <li>Portail client de suivi de livraisons</li>
           </ul>
           <p className={styles.paragraph}>
-            Pendant la phase pilote, l'ensemble des fonctionnalités listées ci-dessus est accessible gratuitement.
+            Pendant l'essai gratuit de 14 jours, l'ensemble des fonctionnalités listées ci-dessus est
+            accessible sans frais, au niveau du forfait Business.
           </p>
         </div>
 
@@ -152,23 +152,34 @@ export default function CguPage() {
         </div>
 
         <div className={styles.section}>
-          <h2 className={styles.heading}>9. Phase pilote — Conditions spécifiques</h2>
+          <h2 className={styles.heading}>{t('cgu.section9.title')}</h2>
           <p className={styles.paragraph}>
-            9.1. La Plateforme est fournie gratuitement dans le cadre de la phase pilote. Aucune facturation
-            n'est appliquée pendant cette période.
+            9.1. Tout nouveau compte bénéficie d'un essai gratuit de 14 jours, avec accès complet aux
+            fonctionnalités du forfait Business, sans carte bancaire ni engagement.
           </p>
           <p className={styles.paragraph}>
-            9.2. LogiTrack ne garantit pas la disponibilité continue du service pendant la phase pilote.
-            Des interruptions, mises à jour ou modifications des fonctionnalités peuvent survenir sans préavis.
+            9.2. À l'issue de l'essai gratuit, l'accès à la Plateforme nécessite la souscription à l'un des
+            forfaits payants suivants (tarifs mensuels, en Ariary) : Simple (35 000 Ar), Pro (90 000 Ar) et
+            Business (200 000 Ar). Le détail des fonctionnalités incluses dans chaque forfait est présenté
+            sur la Plateforme.
           </p>
           <p className={styles.paragraph}>
-            9.3. Les données de géolocalisation et les informations de livraison traitées pendant la phase pilote
-            seront conservées conformément à la politique de confidentialité. En cas d'arrêt ou de transition
-            vers une version payante, vous serez informé(e) au moins 30 jours à l'avance.
+            9.3. Le paiement s'effectue par Mobile Money, auprès des numéros communiqués sur la Plateforme.
+            L'utilisateur doit soumettre une preuve de paiement (capture d'écran et référence de transaction)
+            directement depuis l'application.
           </p>
           <p className={styles.paragraph}>
-            9.4. Pendant la phase pilote, le nombre d'utilisateurs, de véhicules et de livraisons peut être
-            limité. LogiTrack se réserve le droit d'ajuster ces limites à tout moment.
+            9.4. Chaque preuve de paiement est vérifiée manuellement par LogiTrack. Une fois validée, un code
+            d'activation est communiqué à l'utilisateur pour réactiver ou renouveler l'accès à la Plateforme.
+          </p>
+          <p className={styles.paragraph}>
+            9.5. À défaut de paiement validé à l'issue de l'essai gratuit ou de la période payante en cours,
+            l'accès à la Plateforme est suspendu immédiatement et intégralement, jusqu'à réception et
+            validation d'un nouveau paiement.
+          </p>
+          <p className={styles.paragraph}>
+            9.6. LogiTrack se réserve le droit de modifier ses tarifs à tout moment. Les utilisateurs déjà
+            abonnés en seront informés avec un préavis raisonnable avant toute application à leur forfait en cours.
           </p>
         </div>
 

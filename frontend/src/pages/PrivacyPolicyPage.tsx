@@ -10,7 +10,7 @@ export default function PrivacyPolicyPage() {
     <>
       <div className={styles.container}>
         <h1 className={styles.h1}>{t('privacy.title')}</h1>
-        <p className={styles.updated}>{t('privacy.lastUpdated', { date: 'juillet 2026' })}</p>
+        <p className={styles.updated}>{t('privacy.lastUpdated', { date: 'septembre 2026' })}</p>
 
         <h2 className={styles.h2}>{t('privacy.section1.title')}</h2>
         <p className={styles.p}>
