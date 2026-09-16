@@ -2506,10 +2506,28 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Nombre de fixes récents gardés PAR VÉHICULE pour l'ancre à l'arrêt (miroir de
+   * `ANCHOR_BUFFER_SIZE` côté pont Traccar, avec marge pour la fenêtre 48 h).
+   */
+  private static readonly PER_VEHICLE_ANCHOR_FIXES = 40;
+
+  /**
    * Calcule l'ANCRE À L'ARRÊT (centroïde pondéré 1/accuracy² de la série contiguë
    * de fixes à l'arrêt, voir stationary-anchor.ts) pour chaque véhicule de
    * `vehicleIds`. Factorisé hors de getLivePositions() pour être réutilisable par
    * les diffusions temps réel (WebSocket) — voir getDisplayPosition().
+   *
+   * AUDIT ÉCART POSITION HORS LIGNE 2026-09-16 : l'ancienne requête faisait un
+   * SEUL `findMany(take: 400)` PARTAGÉ entre TOUS les véhicules de `vehicleIds`
+   * (potentiellement toute la flotte à l'arrêt). Sur une flotte de plusieurs
+   * dizaines de véhicules (100 traceurs visés, voir cd2365c), les 400 lignes
+   * étaient consommées par les véhicules les plus bavards, affamant les autres
+   * de fixes récents → `computeAnchoredPosition` reçoit une historique tronquée
+   * ou vide pour ces véhicules et retombe sur le dernier fix BRUT (potentiellement
+   * un outlier isolé), affichant une position erronée. Requête fenêtrée PAR
+   * véhicule (`ROW_NUMBER() PARTITION BY vehicle_id`) : chaque véhicule garde
+   * jusqu'à `PER_VEHICLE_ANCHOR_FIXES` fixes récents, quel que soit le nombre
+   * total de véhicules à l'arrêt.
    */
   private async computeAnchorByVehicle(
     vehicleIds: string[],
@@ -2522,28 +2540,33 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     // fenêtre large sert juste à couvrir un traceur muet depuis longtemps (moto
     // garée, GT06 motion-triggered) — sinon aucune ancre au bootstrap.
     const recent =
-      (await this.prisma.gpsPosition.findMany({
-        where: {
-          vehicleId: { in: vehicleIds },
-          suspect: false,
-          timestamp: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
-        },
-        orderBy: { timestamp: 'desc' },
-        take: 400,
-        select: {
-          vehicleId: true,
-          latitude: true,
-          longitude: true,
-          accuracy: true,
-          speed: true,
-          timestamp: true,
-          attributes: true,
-        },
-      })) ?? [];
+      (await this.prisma.$queryRaw<
+        Array<{
+          vehicle_id: string;
+          latitude: number;
+          longitude: number;
+          accuracy: number | null;
+          speed: number | null;
+          timestamp: Date;
+          attributes: unknown;
+        }>
+      >`
+      SELECT vehicle_id, latitude, longitude, accuracy, speed, timestamp, attributes
+      FROM (
+        SELECT gp.vehicle_id, gp.latitude, gp.longitude, gp.accuracy, gp.speed, gp.timestamp,
+               gp.attributes,
+               ROW_NUMBER() OVER (PARTITION BY gp.vehicle_id ORDER BY gp.timestamp DESC) AS rn
+        FROM gps_positions gp
+        WHERE gp.vehicle_id = ANY(${vehicleIds}::uuid[])
+          AND gp.suspect = false
+          AND gp.timestamp >= NOW() - INTERVAL '48 hours'
+      ) ranked
+      WHERE rn <= ${TrackingService.PER_VEHICLE_ANCHOR_FIXES}
+    `) ?? [];
     const byVehicle = new Map<string, AnchorFix[]>();
     for (const r of recent) {
       const motionRaw = (r.attributes as Record<string, unknown> | null)?.motion;
-      const list = byVehicle.get(r.vehicleId) ?? [];
+      const list = byVehicle.get(r.vehicle_id) ?? [];
       list.push({
         latitude: r.latitude,
         longitude: r.longitude,
@@ -2552,7 +2575,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         motion: typeof motionRaw === 'boolean' ? motionRaw : null,
         timestamp: r.timestamp,
       });
-      byVehicle.set(r.vehicleId, list);
+      byVehicle.set(r.vehicle_id, list);
     }
     for (const [vehicleId, list] of byVehicle) {
       const anchor = computeAnchoredPosition(list);

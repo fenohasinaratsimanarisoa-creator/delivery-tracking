@@ -2139,6 +2139,59 @@ describe('TrackingService', () => {
 
       expect(result).toHaveLength(0);
     });
+
+    it('anchors each stopped vehicle from its OWN windowed history, not a shared global limit (audit écart hors ligne 2026-09-16)', async () => {
+      const now = new Date();
+      const mainRows = [
+        {
+          driver_id: null,
+          driver_first_name: null,
+          driver_last_name: null,
+          latitude: -18.9999,
+          longitude: 47.9999,
+          speed: 0,
+          heading: null,
+          accuracy: 60,
+          suspect: false,
+          timestamp: now,
+          vehicle_id: 'vehicle-a',
+          delivery_id: null,
+          minutes_ago: 1,
+        },
+      ];
+      const anchorRows = [
+        {
+          vehicle_id: 'vehicle-a',
+          latitude: -18.8631,
+          longitude: 47.5639,
+          accuracy: 5,
+          speed: 0,
+          timestamp: new Date(now.getTime() - 60_000),
+          attributes: null,
+        },
+        {
+          vehicle_id: 'vehicle-a',
+          latitude: -18.8631,
+          longitude: 47.564,
+          accuracy: 5,
+          speed: 0,
+          timestamp: now,
+          attributes: null,
+        },
+      ];
+      mockPrisma.$queryRaw = jest
+        .fn()
+        .mockResolvedValueOnce(mainRows)
+        .mockResolvedValueOnce(anchorRows);
+
+      const result = await service.getLivePositions('company-a');
+
+      // Requête liste + requête ancre fenêtrée PAR véhicule (plus de findMany(take:400) partagé).
+      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(2);
+      expect(result[0].latitude).toBe(-18.9999); // brut inchangé
+      expect(result[0].displayLatitude).toBeCloseTo(-18.8631, 3);
+      expect(result[0].displayLongitude).toBeCloseTo(47.56395, 3);
+    });
   });
 
   describe('getVehicleTrip — trajet par véhicule + jour (audit PRÉCISION GPS 2026-09-09)', () => {
