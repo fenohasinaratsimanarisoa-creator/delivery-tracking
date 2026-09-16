@@ -157,6 +157,7 @@ export default function PaywallPage() {
             className={`${styles.planCard} ${selectedPlanId === plan.id ? styles.planCardSelected : ''}`}
             disabled={!isAdmin}
           >
+            {isAdmin && <span className={styles.planCardPicker} aria-hidden="true" />}
             {status?.currentPlan?.id === plan.id && (
               <Badge variant="accent">{t('paywall.currentPlanLabel', { name: plan.name })}</Badge>
             )}
