@@ -18,16 +18,16 @@ const translations: Record<string, Record<Language, string>> = {
     en: 'If you did not request this reset, please ignore this email.',
   },
   'email.passwordReset.subject': {
-    fr: 'Réinitialisation de mot de passe — DeliveryTrack',
-    en: 'Password Reset — DeliveryTrack',
+    fr: 'Réinitialisation de mot de passe — LogiTrack',
+    en: 'Password Reset — LogiTrack',
   },
   'email.invitation.heading': {
-    fr: 'Invitation à rejoindre DeliveryTrack',
-    en: 'Invitation to join DeliveryTrack',
+    fr: 'Invitation à rejoindre LogiTrack',
+    en: 'Invitation to join LogiTrack',
   },
   'email.invitation.body': {
-    fr: 'Vous avez été invité(e) à rejoindre DeliveryTrack en tant que <strong>{role}</strong>. Cliquez sur le lien ci-dessous pour créer votre compte.',
-    en: 'You have been invited to join DeliveryTrack as <strong>{role}</strong>. Click the link below to create your account.',
+    fr: 'Vous avez été invité(e) à rejoindre LogiTrack en tant que <strong>{role}</strong>. Cliquez sur le lien ci-dessous pour créer votre compte.',
+    en: 'You have been invited to join LogiTrack as <strong>{role}</strong>. Click the link below to create your account.',
   },
   'email.invitation.button': {
     fr: "Accepter l'invitation",
@@ -38,8 +38,8 @@ const translations: Record<string, Record<Language, string>> = {
     en: 'This link expires in 7 days.',
   },
   'email.invitation.subject': {
-    fr: 'Invitation — DeliveryTrack',
-    en: 'Invitation — DeliveryTrack',
+    fr: 'Invitation — LogiTrack',
+    en: 'Invitation — LogiTrack',
   },
   'email.digest.brand': {
     fr: 'LogiTrack',
@@ -98,8 +98,8 @@ const translations: Record<string, Record<Language, string>> = {
     en: 'Weekly report — LogiTrack ({weekRange})',
   },
   'email.welcome.heading': {
-    fr: 'Bienvenue sur DeliveryTrack',
-    en: 'Welcome to DeliveryTrack',
+    fr: 'Bienvenue sur LogiTrack',
+    en: 'Welcome to LogiTrack',
   },
   'email.welcome.body': {
     fr: 'Bonjour {firstName},<br/>Votre compte a été créé avec succès. Vous pouvez dès à présent vous connecter et gérer vos livraisons.',
@@ -110,60 +110,60 @@ const translations: Record<string, Record<Language, string>> = {
     en: 'Sign in',
   },
   'email.welcome.subject': {
-    fr: 'Bienvenue sur DeliveryTrack',
-    en: 'Welcome to DeliveryTrack',
+    fr: 'Bienvenue sur LogiTrack',
+    en: 'Welcome to LogiTrack',
   },
   'email.billing.activatedSubject': {
-    fr: 'Abonnement activé — DeliveryTrack',
-    en: 'Subscription activated — DeliveryTrack',
+    fr: 'Abonnement activé — LogiTrack',
+    en: 'Subscription activated — LogiTrack',
   },
   'email.billing.activatedBody': {
     fr: '<p>Bonjour {firstName},</p><p>Votre abonnement <strong>{planName}</strong> est maintenant actif.</p><p>Vous pouvez dès à présent utiliser toutes les fonctionnalités de votre forfait.</p><p><a href="{url}">Accéder à la facturation</a></p>',
     en: '<p>Hello {firstName},</p><p>Your <strong>{planName}</strong> subscription is now active.</p><p>You can now use all features of your plan.</p><p><a href="{url}">View billing</a></p>',
   },
   'email.billing.paymentFailedSubject': {
-    fr: 'Paiement échoué — DeliveryTrack',
-    en: 'Payment failed — DeliveryTrack',
+    fr: 'Paiement échoué — LogiTrack',
+    en: 'Payment failed — LogiTrack',
   },
   'email.billing.paymentFailedBody': {
     fr: '<p>Bonjour {firstName},</p><p>Le paiement de votre abonnement a échoué. Votre compte est désormais en statut "past_due".</p><p>Merci de mettre à jour vos informations de paiement pour éviter une suspension.</p><p><a href="{url}">Accéder à la facturation</a></p>',
     en: '<p>Hello {firstName},</p><p>Your subscription payment failed. Your account is now past due.</p><p>Please update your payment information to avoid suspension.</p><p><a href="{url}">View billing</a></p>',
   },
   'email.billing.canceledSubject': {
-    fr: 'Abonnement résilié — DeliveryTrack',
-    en: 'Subscription canceled — DeliveryTrack',
+    fr: 'Abonnement résilié — LogiTrack',
+    en: 'Subscription canceled — LogiTrack',
   },
   'email.billing.canceledBody': {
     fr: '<p>Bonjour {firstName},</p><p>Votre abonnement a été résilié. Vous pouvez souscrire à un nouveau forfait à tout moment.</p><p><a href="{url}">Voir les forfaits</a></p>',
     en: '<p>Hello {firstName},</p><p>Your subscription has been canceled. You can subscribe to a new plan at any time.</p><p><a href="{url}">View plans</a></p>',
   },
   'email.billing.expiredSubject': {
-    fr: 'Votre abonnement DeliveryTrack est arrivé à expiration',
-    en: 'Your DeliveryTrack subscription has expired',
+    fr: 'Votre abonnement LogiTrack est arrivé à expiration',
+    en: 'Your LogiTrack subscription has expired',
   },
   'email.billing.expiredBody': {
-    fr: '<p>Bonjour {firstName},</p><p>Votre abonnement a expiré le {date}.</p><p>Pour continuer à utiliser DeliveryTrack, merci de renouveler votre abonnement.</p><p><a href="{url}">Accéder à la facturation</a></p>',
-    en: '<p>Hello {firstName},</p><p>Your subscription expired on {date}.</p><p>To continue using DeliveryTrack, please renew your subscription.</p><p><a href="{url}">View billing</a></p>',
+    fr: '<p>Bonjour {firstName},</p><p>Votre abonnement a expiré le {date}.</p><p>Pour continuer à utiliser LogiTrack, merci de renouveler votre abonnement.</p><p><a href="{url}">Accéder à la facturation</a></p>',
+    en: '<p>Hello {firstName},</p><p>Your subscription expired on {date}.</p><p>To continue using LogiTrack, please renew your subscription.</p><p><a href="{url}">View billing</a></p>',
   },
   'email.billing.suspendedSubject': {
-    fr: 'Abonnement suspendu — DeliveryTrack',
-    en: 'Subscription suspended — DeliveryTrack',
+    fr: 'Abonnement suspendu — LogiTrack',
+    en: 'Subscription suspended — LogiTrack',
   },
   'email.billing.suspendedBody': {
     fr: '<p>Bonjour {firstName},</p><p>Votre abonnement a été suspendu pour impayé.</p><p>Certaines fonctionnalités sont désactivées. Régularisez votre situation depuis votre espace facturation.</p><p><a href="{url}">Accéder à la facturation</a></p>',
     en: '<p>Hello {firstName},</p><p>Your subscription has been suspended for non-payment.</p><p>Some features are disabled. Please regularize your situation from your billing area.</p><p><a href="{url}">View billing</a></p>',
   },
   'email.paymentProof.approvedSubject': {
-    fr: 'Paiement validé — code d’activation DeliveryTrack',
-    en: 'Payment approved — DeliveryTrack activation code',
+    fr: 'Paiement validé — code d’activation LogiTrack',
+    en: 'Payment approved — LogiTrack activation code',
   },
   'email.paymentProof.approvedBody': {
-    fr: '<p>Bonjour {firstName},</p><p>Votre preuve de paiement pour le forfait <strong>{planName}</strong> a été validée.</p><p>Votre code d’activation vous sera communiqué séparément par votre contact DeliveryTrack. Saisissez-le sur l’écran de paiement pour réactiver votre accès.</p>',
-    en: '<p>Hello {firstName},</p><p>Your payment proof for the <strong>{planName}</strong> plan has been approved.</p><p>Your activation code will be sent to you separately by your DeliveryTrack contact. Enter it on the payment screen to restore access.</p>',
+    fr: '<p>Bonjour {firstName},</p><p>Votre preuve de paiement pour le forfait <strong>{planName}</strong> a été validée.</p><p>Votre code d’activation vous sera communiqué séparément par votre contact LogiTrack. Saisissez-le sur l’écran de paiement pour réactiver votre accès.</p>',
+    en: '<p>Hello {firstName},</p><p>Your payment proof for the <strong>{planName}</strong> plan has been approved.</p><p>Your activation code will be sent to you separately by your LogiTrack contact. Enter it on the payment screen to restore access.</p>',
   },
   'email.paymentProof.rejectedSubject': {
-    fr: 'Preuve de paiement refusée — DeliveryTrack',
-    en: 'Payment proof rejected — DeliveryTrack',
+    fr: 'Preuve de paiement refusée — LogiTrack',
+    en: 'Payment proof rejected — LogiTrack',
   },
   'email.paymentProof.rejectedBody': {
     fr: '<p>Bonjour {firstName},</p><p>Votre preuve de paiement n’a pas pu être validée.</p><p><strong>Motif :</strong> {reason}</p><p>Vous pouvez soumettre une nouvelle preuve depuis l’écran de paiement.</p>',

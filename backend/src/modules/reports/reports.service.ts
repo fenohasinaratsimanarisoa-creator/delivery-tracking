@@ -278,7 +278,7 @@ export class ReportsService {
       y -= size + 4;
     };
 
-    page.drawText('DeliveryTrack - Rapport', {
+    page.drawText('LogiTrack - Rapport', {
       x: 50,
       y,
       size: 18,

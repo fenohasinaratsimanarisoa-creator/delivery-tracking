@@ -18,7 +18,7 @@ export default function LoginLayout({ children, visualPanel }: Props) {
           {children}
         </div>
         <div className={styles.footerMark}>
-          © {new Date().getFullYear()} DeliveryTrack — Made with precision
+          © {new Date().getFullYear()} LogiTrack — Made with precision
         </div>
       </div>
       <div className={styles.visualPanel}>

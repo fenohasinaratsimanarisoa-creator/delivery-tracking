@@ -70,7 +70,11 @@ describe('ManualBillingService', () => {
       expect(result.status).toBe('trialing');
       expect(result.daysRemaining).toBeGreaterThanOrEqual(2);
       expect(result.daysRemaining).toBeLessThanOrEqual(3);
-      expect(result.currentPlan).toEqual({ id: 'plan-enterprise', tier: 'enterprise', name: 'Business' });
+      expect(result.currentPlan).toEqual({
+        id: 'plan-enterprise',
+        tier: 'enterprise',
+        name: 'Business',
+      });
     });
   });
 

@@ -142,7 +142,7 @@ export class WebhooksService {
     const payload = {
       event: 'test.ping',
       timestamp: new Date().toISOString(),
-      data: { message: 'This is a test webhook from DeliveryTrack' },
+      data: { message: 'This is a test webhook from LogiTrack' },
     };
 
     return this.deliver(webhook.id, 'test.ping', payload);

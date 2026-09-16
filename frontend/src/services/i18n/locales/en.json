@@ -134,7 +134,7 @@
       "swCacheWarning": "An old version of the application may be cached on this device.",
       "swCacheHint": "If the problem persists after retrying, close the browser completely (all tabs) and reopen it.",
       "swCacheResetButton": "Reset the application",
-      "brand": "DeliveryTrack",
+      "brand": "LogiTrack",
       "secure": "Secure platform",
       "uptime": "99.9% uptime",
       "features": {
@@ -1211,7 +1211,7 @@
     "approved": "Approved",
     "approvedDesc": "Your payment has been approved. The activation code was sent to you separately.",
     "haveCode": "2. Already have a code?",
-    "haveCodeDesc": "Enter the activation code you received from your DeliveryTrack administrator to restore access immediately.",
+    "haveCodeDesc": "Enter the activation code you received from your LogiTrack administrator to restore access immediately.",
     "codeLabel": "Activation code",
     "redeem": "Activate",
     "redeemSuccess": "Access restored!",
@@ -2092,7 +2092,7 @@
     "hero": {
       "eyebrow": "Next-generation fleet tracking",
       "title": "Deliver with precision. Prove it in real time.",
-      "subtitle": "DeliveryTrack gives your delivery business live dispatching, GPS anti-fraud detection and fuel tracking — in a single dashboard, built for Madagascar and Africa.",
+      "subtitle": "LogiTrack gives your delivery business live dispatching, GPS anti-fraud detection and fuel tracking — in a single dashboard, built for Madagascar and Africa.",
       "ctaPrimary": "Get started free",
       "ctaSecondary": "Sign in",
       "trustNote": "No credit card required — 14-day free trial."
@@ -2195,7 +2195,7 @@
         "privacy": "Privacy",
         "cookies": "Cookies"
       },
-      "copyright": "© {{year}} DeliveryTrack. All rights reserved."
+      "copyright": "© {{year}} LogiTrack. All rights reserved."
     }
   },
   "vehicleTrip": {

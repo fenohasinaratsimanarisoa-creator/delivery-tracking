@@ -9,7 +9,7 @@ export class TotpService {
   private readonly issuer: string;
 
   constructor(private configService: ConfigService) {
-    this.issuer = this.configService.get<string>('TOTP_ISSUER', 'DeliveryTracking');
+    this.issuer = this.configService.get<string>('TOTP_ISSUER', 'LogiTrack');
   }
 
   async generateSecret(

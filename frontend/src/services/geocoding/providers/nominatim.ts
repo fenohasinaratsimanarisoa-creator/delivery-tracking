@@ -9,7 +9,7 @@ interface NominatimResult {
 }
 
 const BASE = 'https://nominatim.openstreetmap.org'
-const USER_AGENT = 'DeliveryTrack/1.0 (logistics)'
+const USER_AGENT = 'LogiTrack/1.0 (logistics)'
 
 const MG_VIEWBOX = '43,11,51,-26'
 const MG_BOUNDED = 1

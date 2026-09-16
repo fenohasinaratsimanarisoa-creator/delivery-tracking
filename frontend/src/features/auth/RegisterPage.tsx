@@ -85,8 +85,8 @@ export default function RegisterPage() {
       <div className={styles.wrapper}>
         <div className={styles.card}>
           <div className={styles.brand}>
-            <div className={styles.brandIcon}>DT</div>
-            <span className={styles.brandName}>DeliveryTrack</span>
+            <div className={styles.brandIcon}>LT</div>
+            <span className={styles.brandName}>LogiTrack</span>
           </div>
 
           <h1 className={styles.title}>{t('auth.register.title')}</h1>

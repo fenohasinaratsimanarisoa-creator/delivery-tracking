@@ -41,7 +41,7 @@ describe('EmailService', () => {
       expect(resend.emails.send).toHaveBeenCalledWith({
         from: 'noreply@test.com',
         to: email,
-        subject: 'Réinitialisation de mot de passe — DeliveryTrack',
+        subject: 'Réinitialisation de mot de passe — LogiTrack',
         html: expect.stringContaining('http://localhost:3000/reset-password?token=reset-token-123'),
       });
     });
@@ -73,7 +73,7 @@ describe('EmailService', () => {
       expect(resend.emails.send).toHaveBeenCalledWith({
         from: 'noreply@test.com',
         to: email,
-        subject: 'Invitation — DeliveryTrack',
+        subject: 'Invitation — LogiTrack',
         html: expect.stringContaining(role),
       });
     });
