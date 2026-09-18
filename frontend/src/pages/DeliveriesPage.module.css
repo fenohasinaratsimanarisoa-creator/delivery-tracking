@@ -298,6 +298,10 @@
   color: var(--color-text-secondary);
 }
 
+.tourSequenceEmpty {
+  color: var(--color-text-tertiary);
+}
+
 .clearSelectionBtn {
   margin-left: auto;
   padding: var(--space-sm) var(--space-sm);

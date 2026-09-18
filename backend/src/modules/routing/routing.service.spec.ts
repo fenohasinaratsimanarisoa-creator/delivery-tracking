@@ -244,4 +244,67 @@ describe('RoutingService', () => {
       expect(url).not.toContain('project-osrm.org');
     });
   });
+
+  describe('optimizeTrip', () => {
+    const dto = {
+      // 3 points fournis dans le désordre — OSRM (mocké) renvoie l'ordre optimal.
+      coordinates: [
+        [-18.91, 47.52],
+        [-18.95, 47.55],
+        [-18.87, 47.53],
+      ] as [number, number][],
+    };
+
+    const osrmTripResponse = {
+      code: 'Ok',
+      waypoints: [
+        { waypoint_index: 2 }, // point d'entrée 0 → 3e de la tournée
+        { waypoint_index: 0 }, // point d'entrée 1 → 1er de la tournée
+        { waypoint_index: 1 }, // point d'entrée 2 → 2e de la tournée
+      ],
+      trips: [
+        {
+          geometry: { coordinates: [[47.55, -18.95], [47.53, -18.87], [47.52, -18.91]] },
+          distance: 8000,
+          duration: 600,
+        },
+      ],
+    };
+
+    it("reconstruit l'ordre optimal (indices d'entrée) depuis waypoint_index d'OSRM", async () => {
+      mockFetchOnce(osrmTripResponse);
+
+      const result = await service.optimizeTrip(dto);
+
+      // waypoint_index triés : entrée 1 (pos 0) → entrée 2 (pos 1) → entrée 0 (pos 2)
+      expect(result.order).toEqual([1, 2, 0]);
+      expect(result.distance).toBe(8000);
+      expect(result.duration).toBe(600);
+      expect(result.provider).toBe('osrm');
+      expect(result.polyline[0]).toEqual([-18.95, 47.55]);
+    });
+
+    it('appelle le service /trip/ OSRM local avec roundtrip=false (pas de dépôt fixe)', async () => {
+      mockFetchOnce(osrmTripResponse);
+
+      await service.optimizeTrip(dto);
+
+      const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+      expect(url).toContain('localhost:5000/trip/v1/driving/');
+      expect(url).toContain('roundtrip=false');
+      expect(url).not.toContain('project-osrm.org');
+    });
+
+    it('renvoie 422 (pas de fallback) quand OSRM ne trouve aucune tournée', async () => {
+      mockFetchOnce({ code: 'NoRoute', waypoints: [], trips: [] });
+
+      await expect(service.optimizeTrip(dto)).rejects.toMatchObject({ status: 422 });
+    });
+
+    it('renvoie 503 sur une vraie panne OSRM (pas un 422)', async () => {
+      mockFetchOnce(null, false);
+
+      await expect(service.optimizeTrip(dto)).rejects.toMatchObject({ status: 503 });
+    });
+  });
 });

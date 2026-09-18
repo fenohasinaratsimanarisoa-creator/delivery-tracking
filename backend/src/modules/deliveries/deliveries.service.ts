@@ -14,6 +14,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { GeocodingService } from '../geocoding/geocoding.service';
+import { RoutingService } from '../routing/routing.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 import { UpdateDeliveryStatusDto } from './dto/update-delivery-status.dto';
@@ -53,6 +54,7 @@ export class DeliveriesService {
     private configService: ConfigService,
     private dataUpdateBus: DataUpdateBus,
     private geocoding: GeocodingService,
+    private routing: RoutingService,
     @Optional() @InjectQueue('fuel-analysis') private fuelAnalysisQueue?: Queue,
   ) {}
 
@@ -951,6 +953,90 @@ export class DeliveriesService {
       'DeliveriesService',
     );
     return result;
+  }
+
+  /**
+   * Optimisation de tournée multi-arrêts (mvpromax.md §1.1) : calcule l'ordre de
+   * passage qui minimise la distance totale sur les points de LIVRAISON (pas de
+   * ramassage — v1 traite le cas le plus courant, N livraisons déjà en cours à
+   * enchaîner dans le meilleur ordre, pas un problème pickup-and-delivery
+   * entrelacé) des livraisons sélectionnées, et persiste `tourSequence` (1-indexé)
+   * sur chacune. Méthode dédiée, SÉPARÉE de bulkAction() ci-dessus : contrairement
+   * aux 3 actions de bulkAction (indépendantes par ligne), celle-ci doit traiter
+   * l'ENSEMBLE des IDs ensemble (un seul appel OSRM sur tous les points) — la
+   * forcer dans la boucle par-ID de bulkAction aurait compliqué une fonction déjà
+   * utilisée et testée, pour un gain nul.
+   */
+  async optimizeTour(
+    companyId: string,
+    ids: string[],
+  ): Promise<{
+    order: { id: string; tourSequence: number }[];
+    distance: number;
+    duration: number;
+    skipped: { id: string; reason: string }[];
+  }> {
+    if (ids.length < 2) {
+      throw new BadRequestException(
+        'Au moins 2 livraisons sont nécessaires pour optimiser une tournée',
+      );
+    }
+
+    const deliveries = await this.prisma.delivery.findMany({
+      where: { id: { in: ids }, companyId, deletedAt: null },
+      select: { id: true, deliveryLat: true, deliveryLng: true },
+    });
+    const deliveryMap = new Map(deliveries.map((d) => [d.id, d]));
+
+    const skipped: { id: string; reason: string }[] = [];
+    const valid: { id: string; lat: number; lng: number }[] = [];
+    for (const id of ids) {
+      const delivery = deliveryMap.get(id);
+      if (!delivery) {
+        skipped.push({ id, reason: 'Delivery not found' });
+        continue;
+      }
+      if (delivery.deliveryLat == null || delivery.deliveryLng == null) {
+        skipped.push({ id, reason: 'No delivery coordinates' });
+        continue;
+      }
+      valid.push({ id, lat: delivery.deliveryLat, lng: delivery.deliveryLng });
+    }
+
+    if (valid.length < 2) {
+      throw new BadRequestException(
+        'Au moins 2 livraisons avec des coordonnées valides sont nécessaires pour optimiser une tournée',
+      );
+    }
+
+    const trip = await this.routing.optimizeTrip({
+      coordinates: valid.map((v) => [v.lat, v.lng]),
+    });
+
+    const orderedIds = trip.order.map((inputIndex) => valid[inputIndex].id);
+
+    // Transaction : soit toutes les livraisons reçoivent leur nouveau
+    // tourSequence, soit aucune — jamais un ordre partiel/incohérent en base
+    // si une mise à jour échoue en cours de route.
+    await this.prisma.$transaction(
+      orderedIds.map((id, position) =>
+        this.prisma.delivery.update({
+          where: { id },
+          data: { tourSequence: position + 1 },
+        }),
+      ),
+    );
+
+    this.logger.log(
+      `Tournée optimisée : ${orderedIds.length} livraisons, ${skipped.length} ignorées (company=${companyId}, distance=${Math.round(trip.distance)}m)`,
+    );
+
+    return {
+      order: orderedIds.map((id, position) => ({ id, tourSequence: position + 1 })),
+      distance: trip.distance,
+      duration: trip.duration,
+      skipped,
+    };
   }
 
   async importDeliveriesFile(

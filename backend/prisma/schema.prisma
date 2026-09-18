@@ -467,6 +467,11 @@ model Delivery {
   articlePrice            Int?           @map("article_price")
   productDescription      String?        @map("product_description")
   externalOrderRef        String?        @map("external_order_ref")
+  // Ordre de passage dans une tournée optimisée (mvpromax.md §1.1), 1-indexé.
+  // Nullable, jamais renseigné automatiquement ailleurs que par
+  // DeliveriesService.optimizeTour — une livraison sans tournée calculée
+  // garde tourSequence=null, comportement inchangé partout ailleurs.
+  tourSequence            Int?           @map("tour_sequence")
   deletedAt               DateTime?      @map("deleted_at")
   createdAt               DateTime       @default(now()) @map("created_at")
   updatedAt               DateTime       @updatedAt @map("updated_at")

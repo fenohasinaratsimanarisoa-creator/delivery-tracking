@@ -92,6 +92,9 @@ export interface Delivery {
   articlePrice?: number;
   productDescription?: string;
   externalOrderRef?: string;
+  // Ordre de passage dans une tournée optimisée (mvpromax.md §1.1), 1-indexé.
+  // Absent/null tant qu'aucune optimisation n'a été calculée pour cette livraison.
+  tourSequence?: number | null;
 }
 
 export interface Position {

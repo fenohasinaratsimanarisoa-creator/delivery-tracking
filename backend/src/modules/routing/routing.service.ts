@@ -6,6 +6,8 @@ import {
   RouteStep,
   MatchRequestDto,
   MatchResponse,
+  OptimizeTripDto,
+  OptimizeTripResponse,
 } from './dto/routing.dto';
 
 @Injectable()
@@ -149,6 +151,84 @@ export class RoutingService {
       duration: main.duration,
       steps: main.steps,
       alternatives: alternatives.length > 0 ? alternatives : undefined,
+      provider: 'osrm',
+    };
+  }
+
+  /**
+   * Optimisation de tournée multi-arrêts (mvpromax.md §1.1) : résout l'ORDRE de
+   * passage qui minimise la distance/durée totale sur les points fournis, via
+   * le service `/trip/` d'OSRM (résolution TSP approchée, déjà supporté par
+   * notre instance osrm-routed --algorithm mld, aucune config OSRM à changer).
+   *
+   * `source=any&destination=any&roundtrip=false` : pas de point de départ/
+   * arrivée imposé (pas de notion de dépôt fixe dans le schéma Delivery
+   * aujourd'hui) — OSRM choisit le meilleur chemin (pas un circuit fermé)
+   * parmi TOUS les points fournis. Même politique « aucun fallback externe »
+   * que getOsrmDirections/matchToRoad (conformité DPA — voir leurs commentaires).
+   */
+  async optimizeTrip(dto: OptimizeTripDto): Promise<OptimizeTripResponse> {
+    const profile = dto.profile || 'driving';
+    const coords = dto.coordinates.map((c) => `${c[1]},${c[0]}`).join(';');
+    const url = `${this.osrmBaseUrl}/trip/v1/${profile}/${coords}?roundtrip=false&source=any&destination=any&geometries=geojson&overview=full&steps=false`;
+
+    this.logger.debug(`OSRM trip request: ${url}`);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    let response: Response;
+    try {
+      response = await fetch(url, { signal: controller.signal });
+    } catch (err: any) {
+      this.logger.error(`Local OSRM trip failed: ${err.message}`);
+      throw new HttpException('Routing unavailable', HttpStatus.SERVICE_UNAVAILABLE);
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      this.logger.error(`Local OSRM trip failed: HTTP ${response.status}`);
+      throw new HttpException('Routing unavailable', HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    const data = (await response.json()) as {
+      code: string;
+      waypoints?: Array<{ waypoint_index: number }>;
+      trips?: Array<{
+        geometry: { coordinates: [number, number][] };
+        distance: number;
+        duration: number;
+      }>;
+    };
+
+    if (data.code !== 'Ok' || !data.trips?.length || !data.waypoints?.length) {
+      // Réponse OSRM valide mais sans tournée possible (points trop isolés du
+      // réseau routier, etc.) : pas une panne, 422 clair, aucun fallback.
+      throw new HttpException(
+        'Aucune tournée trouvée pour ces coordonnées',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    // `waypoints` est renvoyé dans l'ORDRE D'ENTRÉE ; waypoint_index donne la
+    // position de CE point dans la tournée optimisée. On reconstruit `order`
+    // (indices d'entrée triés par position optimale) à partir de ça.
+    const order = data.waypoints
+      .map((wp, inputIndex) => ({ inputIndex, position: wp.waypoint_index }))
+      .sort((a, b) => a.position - b.position)
+      .map((w) => w.inputIndex);
+
+    const trip = data.trips[0];
+    const polyline: [number, number][] = trip.geometry.coordinates.map(
+      (c) => [c[1], c[0]] as [number, number],
+    );
+
+    return {
+      order,
+      polyline,
+      distance: trip.distance,
+      duration: trip.duration,
       provider: 'osrm',
     };
   }

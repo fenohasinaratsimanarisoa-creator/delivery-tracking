@@ -282,7 +282,12 @@
       "successResult": "{{count}} delivery updated",
       "successResult_plural": "{{count}} deliveries updated",
       "partialResult": "{{succeeded}} succeeded, {{failed}} failed: {{reason}}",
-      "error": "Error performing bulk action"
+      "error": "Error performing bulk action",
+      "optimizeTour": "Optimize route",
+      "optimizeTourHint": "Computes the optimal visiting order for the selected deliveries",
+      "tourOptimized": "Route optimized: {{count}} deliveries, {{km}} km, ~{{min}} min",
+      "tourOptimizedPartial": "Route optimized: {{count}} deliveries ({{skipped}} skipped, no coordinates), {{km}} km, ~{{min}} min",
+      "tourOptimizeError": "Error optimizing the route"
     },
     "fields": {
       "title": "Title",
@@ -310,6 +315,7 @@
     },
     "table": {
       "title": "Title",
+      "tourSequence": "Route",
       "status": "Status",
       "deliveryAddress": "Delivery address",
       "driver": "Driver",

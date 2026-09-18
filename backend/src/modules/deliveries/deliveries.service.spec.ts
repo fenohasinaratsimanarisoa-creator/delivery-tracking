@@ -16,6 +16,7 @@ class MockPrismaClientKnownRequestError extends Error {
 }
 import * as ExcelJS from 'exceljs';
 import { GeocodingService } from '../geocoding/geocoding.service';
+import { RoutingService } from '../routing/routing.service';
 import { DeliveriesService } from './deliveries.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -61,6 +62,11 @@ describe('DeliveriesService - State Machine', () => {
     gpsPosition: {
       findFirst: jest.fn(),
     },
+    $transaction: jest.fn().mockImplementation((arg: any) => {
+      if (Array.isArray(arg)) return Promise.all(arg);
+      if (typeof arg === 'function') return arg(mockPrisma);
+      return Promise.resolve(arg);
+    }),
   };
 
   const mockNotifications = {
@@ -77,6 +83,10 @@ describe('DeliveriesService - State Machine', () => {
 
   const mockQueue = {
     add: jest.fn().mockResolvedValue({ id: 'job-1' }),
+  };
+
+  const mockRouting = {
+    optimizeTrip: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -104,6 +114,7 @@ describe('DeliveriesService - State Machine', () => {
           useValue: { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() },
         },
         { provide: GeocodingService, useValue: { search: jest.fn().mockResolvedValue([]) } },
+        { provide: RoutingService, useValue: mockRouting },
         { provide: getQueueToken('fuel-analysis'), useValue: mockQueue },
       ],
     }).compile();
@@ -811,6 +822,130 @@ describe('DeliveriesService - State Machine', () => {
     });
   });
 
+  describe('optimizeTour', () => {
+    it('rejette moins de 2 ids sans appeler OSRM ni la base', async () => {
+      await expect(service.optimizeTour('comp-1', ['only-one'])).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mockRouting.optimizeTrip).not.toHaveBeenCalled();
+      expect(mockPrisma.delivery.findMany).not.toHaveBeenCalled();
+    });
+
+    it('persiste tourSequence dans l\'ORDRE renvoyé par OSRM (pas l\'ordre d\'entrée)', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValueOnce([
+        { id: 'del-a', deliveryLat: -18.91, deliveryLng: 47.52 },
+        { id: 'del-b', deliveryLat: -18.95, deliveryLng: 47.55 },
+        { id: 'del-c', deliveryLat: -18.87, deliveryLng: 47.53 },
+      ]);
+      // OSRM réordonne : entrée 2 (del-c) en premier, puis entrée 0 (del-a), puis entrée 1 (del-b).
+      mockRouting.optimizeTrip.mockResolvedValueOnce({
+        order: [2, 0, 1],
+        distance: 9000,
+        duration: 700,
+        polyline: [],
+        provider: 'osrm',
+      });
+      mockPrisma.delivery.update.mockResolvedValue({});
+
+      const result = await service.optimizeTour('comp-1', ['del-a', 'del-b', 'del-c']);
+
+      expect(result.order).toEqual([
+        { id: 'del-c', tourSequence: 1 },
+        { id: 'del-a', tourSequence: 2 },
+        { id: 'del-b', tourSequence: 3 },
+      ]);
+      expect(result.distance).toBe(9000);
+      expect(result.skipped).toEqual([]);
+      expect(mockPrisma.delivery.update).toHaveBeenCalledWith({
+        where: { id: 'del-c' },
+        data: { tourSequence: 1 },
+      });
+      expect(mockPrisma.delivery.update).toHaveBeenCalledWith({
+        where: { id: 'del-a' },
+        data: { tourSequence: 2 },
+      });
+      expect(mockPrisma.delivery.update).toHaveBeenCalledWith({
+        where: { id: 'del-b' },
+        data: { tourSequence: 3 },
+      });
+      // Appel OSRM en une seule fois avec TOUTES les coordonnées (pas un appel par paire).
+      expect(mockRouting.optimizeTrip).toHaveBeenCalledTimes(1);
+      expect(mockRouting.optimizeTrip).toHaveBeenCalledWith({
+        coordinates: [
+          [-18.91, 47.52],
+          [-18.95, 47.55],
+          [-18.87, 47.53],
+        ],
+      });
+    });
+
+    it('ignore (skipped) les livraisons introuvables ou sans coordonnées, sans bloquer les autres', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValueOnce([
+        { id: 'del-a', deliveryLat: -18.91, deliveryLng: 47.52 },
+        { id: 'del-b', deliveryLat: null, deliveryLng: null },
+        { id: 'del-c', deliveryLat: -18.87, deliveryLng: 47.53 },
+      ]);
+      mockRouting.optimizeTrip.mockResolvedValueOnce({
+        order: [1, 0],
+        distance: 1000,
+        duration: 60,
+        polyline: [],
+        provider: 'osrm',
+      });
+      mockPrisma.delivery.update.mockResolvedValue({});
+
+      const result = await service.optimizeTour('comp-1', [
+        'del-a',
+        'del-b',
+        'del-c',
+        'del-missing',
+      ]);
+
+      expect(result.skipped).toEqual(
+        expect.arrayContaining([
+          { id: 'del-b', reason: 'No delivery coordinates' },
+          { id: 'del-missing', reason: 'Delivery not found' },
+        ]),
+      );
+      // del-a et del-c (les 2 seules valides) ont bien été envoyées à OSRM et
+      // ont reçu un tourSequence — le reste du lot ne bloque pas l'opération.
+      expect(mockRouting.optimizeTrip).toHaveBeenCalledWith({
+        coordinates: [
+          [-18.91, 47.52],
+          [-18.87, 47.53],
+        ],
+      });
+      expect(result.order).toHaveLength(2);
+    });
+
+    it('rejette explicitement quand moins de 2 livraisons ont des coordonnées valides', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValueOnce([
+        { id: 'del-a', deliveryLat: -18.91, deliveryLng: 47.52 },
+        { id: 'del-b', deliveryLat: null, deliveryLng: null },
+      ]);
+
+      await expect(
+        service.optimizeTour('comp-1', ['del-a', 'del-b', 'del-missing']),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockRouting.optimizeTrip).not.toHaveBeenCalled();
+    });
+
+    it("ne modifie JAMAIS le comportement de bulkAction (méthode indépendante)", async () => {
+      // Garde-fou explicite demandé : optimizeTour ne doit pas toucher au chemin
+      // bulkAction existant. On revérifie qu'un bulkAction 'delete' classique
+      // fonctionne toujours après l'ajout d'optimizeTour dans la même classe.
+      mockPrisma.delivery.findMany.mockResolvedValueOnce([
+        { id: 'del-x', status: 'pending', companyId: 'comp-1', deletedAt: null },
+      ]);
+      mockPrisma.delivery.update.mockResolvedValue({});
+
+      const result = await service.bulkAction('comp-1', { ids: ['del-x'], action: 'delete' });
+
+      expect(result.succeeded).toEqual(['del-x']);
+      expect(mockRouting.optimizeTrip).not.toHaveBeenCalled();
+    });
+  });
+
   describe('realtime fuel report recompute (delivered)', () => {
     const inProgressDelivery = {
       id: 'del-1',
@@ -1031,6 +1166,7 @@ describe('DeliveriesService - State Machine', () => {
             useValue: { emit: jest.fn(), emitUpdate: jest.fn(), on: jest.fn() },
           },
           { provide: GeocodingService, useValue: { search: jest.fn().mockResolvedValue([]) } },
+          { provide: RoutingService, useValue: mockRouting },
         ],
       }).compile();
       const svc = moduleNoQueue.get<DeliveriesService>(DeliveriesService);

@@ -7,6 +7,8 @@ import {
   DirectionsResponse,
   MatchRequestDto,
   MatchResponse,
+  OptimizeTripDto,
+  OptimizeTripResponse,
 } from './dto/routing.dto';
 
 @Controller('routing')
@@ -43,5 +45,10 @@ export class RoutingController {
   @Post('match')
   async matchToRoad(@Body() dto: MatchRequestDto): Promise<MatchResponse> {
     return this.routingService.matchToRoad(dto);
+  }
+
+  @Post('optimize-trip')
+  async optimizeTrip(@Body() dto: OptimizeTripDto): Promise<OptimizeTripResponse> {
+    return this.routingService.optimizeTrip(dto);
   }
 }

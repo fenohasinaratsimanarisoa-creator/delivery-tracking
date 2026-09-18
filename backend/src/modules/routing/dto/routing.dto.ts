@@ -101,6 +101,32 @@ export class MatchRequestDto {
   timeoutMs?: number;
 }
 
+// Optimisation de tournée multi-arrêts (résolution TSP via OSRM /trip/) —
+// mvpromax.md §1.1. Même convention que MatchRequestDto : coordonnées en
+// tuples [lat, lng], décorateurs class-validator obligatoires (ValidationPipe
+// global whitelist+forbidNonWhitelisted, cf. commentaire sur MatchRequestDto
+// ci-dessus — un champ non décoré fait rejeter TOUT le corps de la requête).
+export class OptimizeTripDto {
+  @IsArray()
+  @ArrayMinSize(2)
+  @ArrayMaxSize(25)
+  coordinates!: [number, number][];
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['driving', 'walking', 'cycling'])
+  profile?: 'driving' | 'walking' | 'cycling';
+}
+
+export interface OptimizeTripResponse {
+  /** Index dans `coordinates` (ordre d'entrée), réordonnés selon le passage optimal. */
+  order: number[];
+  polyline: [number, number][];
+  distance: number;
+  duration: number;
+  provider: string;
+}
+
 export interface MatchResponse {
   matchedPolyline: [number, number][];
   confidence: number;

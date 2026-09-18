@@ -303,6 +303,34 @@ export default function DeliveriesPage() {
     },
   });
 
+  // Optimisation de tournée (mvpromax.md §1.1) : mutation ET état de chargement
+  // SÉPARÉS de bulkMutation/bulkActionLoading — ce n'est pas une action "par
+  // ligne" comme delete/updateStatus/assignDriver, ne pas les mélanger.
+  const [optimizeTourLoading, setOptimizeTourLoading] = useState(false);
+  const optimizeTourMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      api.post('/deliveries/optimize-tour', { ids }).then((r) => r.data),
+    onSuccess: (report: { order: { id: string; tourSequence: number }[]; distance: number; duration: number; skipped: { id: string; reason: string }[] }) => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      setOptimizeTourLoading(false);
+      const km = (report.distance / 1000).toFixed(1);
+      const min = Math.round(report.duration / 60);
+      if (report.skipped.length > 0) {
+        toast(
+          t('deliveries.bulk.tourOptimizedPartial', { count: report.order.length, skipped: report.skipped.length, km, min }),
+          'error',
+        );
+      } else {
+        toast(t('deliveries.bulk.tourOptimized', { count: report.order.length, km, min }));
+      }
+      setSelectedIds(new Set());
+    },
+    onError: (err: ApiError) => {
+      setOptimizeTourLoading(false);
+      toast(err?.response?.data?.message || t('deliveries.bulk.tourOptimizeError'), 'error');
+    },
+  });
+
   const saveMutation = useMutation({
     mutationFn: (body: DeliveryFormValues) => {
       const payload: Record<string, unknown> = {
@@ -569,6 +597,19 @@ export default function DeliveriesPage() {
           >
             {t('deliveries.bulk.delete')}
           </button>
+          {selectedIds.size >= 2 && (
+            <button
+              onClick={() => {
+                setOptimizeTourLoading(true);
+                optimizeTourMutation.mutate([...selectedIds]);
+              }}
+              disabled={optimizeTourLoading}
+              className={styles.bulkActionSelect}
+              title={t('deliveries.bulk.optimizeTourHint')}
+            >
+              {optimizeTourLoading ? t('deliveries.bulk.loading') : t('deliveries.bulk.optimizeTour')}
+            </button>
+          )}
           {bulkActionLoading && <span className={styles.bulkLoadingText}>{t('deliveries.bulk.loading')}</span>}
           <button
             onClick={() => setSelectedIds(new Set())}
@@ -637,6 +678,17 @@ export default function DeliveriesPage() {
                 {
                   key: 'title', label: t('deliveries.table.title'), sortable: true,
                   render: (r: Delivery) => <TitleCell delivery={r} />,
+                },
+                {
+                  // Ordre de tournée optimisée (mvpromax.md §1.1) — colonne purement
+                  // additive : vide (—) tant qu'aucune optimisation n'a été lancée sur
+                  // cette livraison, aucun impact sur les livraisons jamais concernées.
+                  key: 'tourSequence', label: t('deliveries.table.tourSequence'),
+                  render: (r: Delivery) => r.tourSequence != null ? (
+                    <Badge variant="accent" size="sm">#{r.tourSequence}</Badge>
+                  ) : (
+                    <span className={styles.tourSequenceEmpty}>—</span>
+                  ),
                 },
                 {
                   key: 'status', label: t('deliveries.table.status'), sortable: true,

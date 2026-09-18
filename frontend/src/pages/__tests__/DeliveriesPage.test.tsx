@@ -190,6 +190,22 @@ describe('DeliveriesPage', () => {
     expect(screen.getByText('Créez votre première livraison')).toBeInTheDocument();
   });
 
+  it('affiche le bouton "Optimiser la tournée" seulement à partir de 2 livraisons sélectionnées', async () => {
+    mockUseMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Chargement...')).toBeNull();
+    });
+
+    expect(screen.queryByText('Optimiser la tournée')).not.toBeInTheDocument();
+
+    // "Tout sélectionner" (2 livraisons dans mockDeliveries) → ≥ 2 sélectionnées.
+    fireEvent.click(screen.getByLabelText('Tout sélectionner'));
+
+    expect(screen.getByText('Optimiser la tournée')).toBeInTheDocument();
+  });
+
   it('shows skeleton loading state initially', async () => {
     mockUseQuery.mockReturnValue({ data: null, isLoading: true });
     mockUseMutation.mockReturnValue({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false });

@@ -282,7 +282,12 @@
       "successResult": "{{count}} livraison mise à jour",
       "successResult_plural": "{{count}} livraisons mises à jour",
       "partialResult": "{{succeeded}} succès, {{failed}} échecs : {{reason}}",
-      "error": "Erreur lors de l'action groupée"
+      "error": "Erreur lors de l'action groupée",
+      "optimizeTour": "Optimiser la tournée",
+      "optimizeTourHint": "Calcule l'ordre de passage optimal parmi les livraisons sélectionnées",
+      "tourOptimized": "Tournée optimisée : {{count}} livraisons, {{km}} km, ~{{min}} min",
+      "tourOptimizedPartial": "Tournée optimisée : {{count}} livraisons ({{skipped}} ignorées, sans coordonnées), {{km}} km, ~{{min}} min",
+      "tourOptimizeError": "Erreur lors de l'optimisation de la tournée"
     },
     "fields": {
       "title": "Titre",
@@ -310,6 +315,7 @@
     },
     "table": {
       "title": "Titre",
+      "tourSequence": "Tournée",
       "status": "Statut",
       "deliveryAddress": "Adresse de livraison",
       "driver": "Chauffeur",
