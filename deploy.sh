@@ -32,14 +32,18 @@ fi
 
 echo ""
 echo "══════════════════════════════════════════════════════"
-echo " 2/6 — Pare-feu (ports 80, 443, 8080, 8082, 5055-5065)"
+echo " 2/6 — Pare-feu (ports 80, 443, 5055-5065)"
 echo "══════════════════════════════════════════════════════"
 # 5055-5065 = protocoles boîtiers GPS Traccar (GT06, Teltonika, H02, etc.) :
 # sans ces ports ouverts, l'interface admin Traccar fonctionne mais AUCUN
-# traceur GPS réel ne peut se connecter — la demande initiale (80/8080/8082)
-# n'incluait pas ces ports, ajoutés ici car indispensables au fonctionnement
-# réel de Traccar.
-PORTS="80 443 8080 8082 5055 5056 5057 5058 5059 5060 5061 5062 5063 5064 5065"
+# traceur GPS réel ne peut se connecter.
+# 8080 (backend) et 8082 (admin Traccar) volontairement ABSENTS depuis
+# be80181 (2026-08-29) : ces services sont liés à 127.0.0.1 uniquement dans
+# docker-compose.contabo.yml (jamais exposés au public, seul Caddy sert le
+# trafic externe sur 80/443) — les ouvrir au pare-feu n'aurait aucun effet
+# utile et contredirait ce durcissement si un service futur y écoutait un
+# jour sur toutes les interfaces par erreur.
+PORTS="80 443 5055 5056 5057 5058 5059 5060 5061 5062 5063 5064 5065"
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
   for port in $PORTS; do
     ufw allow "$port"/tcp
@@ -149,9 +153,10 @@ if [ "$FAIL" -eq 0 ]; then
   echo "✅ Déploiement terminé."
   echo "   App        : https://$SSLIP (HTTPS réel, Let's Encrypt automatique)"
   echo "   http://$IP redirige maintenant vers l'URL ci-dessus."
-  echo "   API directe: http://$IP:8080 (debug, hors HTTPS)"
-  echo "   Traccar    : http://$IP:8082 (identifiants par défaut admin/admin —"
-  echo "                CHANGEZ-LES dans traccar/traccar.xml si pas déjà fait)"
+  echo "   API/Traccar: non exposés publiquement (liés à 127.0.0.1) — depuis le VPS :"
+  echo "                curl http://localhost:8080/health · http://localhost:8082"
+  echo "   Traccar    : identifiants par défaut admin/admin — CHANGEZ-LES dans"
+  echo "                traccar/traccar.xml si pas déjà fait"
   echo ""
   echo "Prochaine étape si besoin : migrer les données depuis Render avec"
   echo "  scripts/migrate-from-render.sh"
