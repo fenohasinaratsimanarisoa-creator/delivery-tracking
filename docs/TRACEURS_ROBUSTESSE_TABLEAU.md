@@ -25,8 +25,8 @@
 
 | Modèle / famille | Protocole | Power/battery | Stockage local hors ligne | Fiabilité trajets critiques | Notes |
 |---|---|---|---|---|---|
-| **GT06 4G (le traceur acheté)** | GT06 (port 5055 / port Traccar Cloud) | ✅ **power** (tension véhicule) + **battery** (batterie interne) remontés sur les modèles 4G récents | ⚠️ Dépend du modèle : certains GT06 récents ont un stockage mémoire de rattrapage ; les anciens non | **Haut** (si power/battery confirmés sur le modèle exact) | Guide complet : `GT06_SETUP_GUIDE.md`. Vérifier la fiche exacte pour le stockage local. |
-| **Teltonika FMB0xx/1xx/9xx** | Teltonika (port 5056 / Traccar Cloud) | ✅ **power** (mV) + **battery** + **ignition** | ✅ **Oui** — stockage interne Codec 8 jusqu'à des milliers de messages (rattrapage intégré) | **Haut** | Le standard de référence pour la continuité. Protocole testé avec succès dans le repo. |
+| **GT06 4G (le traceur acheté)** | GT06 (port 5055, dev et prod) | ✅ **power** (tension véhicule) + **battery** (batterie interne) remontés sur les modèles 4G récents | ⚠️ Dépend du modèle : certains GT06 récents ont un stockage mémoire de rattrapage ; les anciens non | **Haut** (si power/battery confirmés sur le modèle exact) | Guide complet : `GT06_SETUP_GUIDE.md`. Vérifier la fiche exacte pour le stockage local. |
+| **Teltonika FMB0xx/1xx/9xx** | Teltonika (port 5056, dev et prod) | ✅ **power** (mV) + **battery** + **ignition** | ✅ **Oui** — stockage interne Codec 8 jusqu'à des milliers de messages (rattrapage intégré) | **Haut** | Le standard de référence pour la continuité. Protocole testé avec succès dans le repo. |
 | **JM-VL03 / GT03 / GL300 (Concox)** | GT06 | ✅ power/battery selon modèle | ⚠️ À vérifier (généralement non sur les entrées de gamme) | **Moyen** | Très bon rapport qualité/prix ; compter sur le backfill Traccar (24 h) côté serveur. |
 
 ---

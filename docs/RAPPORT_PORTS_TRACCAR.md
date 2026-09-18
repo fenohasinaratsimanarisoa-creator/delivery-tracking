@@ -1,7 +1,10 @@
 # RAPPORT PORTS TRACCAR — Alignement protocole ↔ exposition Docker
 
-> ⚠️ **Ce rapport documente les ports du docker-compose local (développement uniquement).**
-> En production, DelivTrack utilise **Traccar Cloud** (`server.traccar.org`) qui a ses propres ports. Voir la section "Traccar Cloud (production)" plus bas.
+> ℹ️ **Mise à jour 2026-09-18** : la production n'utilise plus Traccar Cloud
+> (`server.traccar.org`) depuis la migration vers un VPS Contabo auto-hébergé
+> (voir `TRACCAR_SETUP.md` et `DEPLOYMENT.md`). Les ports ci-dessous (issus de
+> `traccar/traccar.xml`) sont **les mêmes en dev local et en production** —
+> plus besoin de section séparée pour la prod.
 
 ## 1. Ports extraits de `traccar/traccar.xml`
 
@@ -28,9 +31,12 @@ Grep : `<entry key='.*port'>` → 11 protocoles GPS + web UI.
 
 12 ports exposés (8082 + 11 protocoles), chacun avec un commentaire indiquant le protocole.
 
-## 3. `docker-compose.prod.yml`
+## 3. `docker-compose.prod.yml` (historique — plateforme Render, désaffectée)
 
-Traccar n'y est pas défini — normal, Render ne supporte pas le TCP brut. En production, Traccar est hébergé sur un VPS séparé ou Traccar Cloud et le pont se fait via HTTP/WebSocket outbound.
+Traccar n'y était pas défini — Render ne supporte pas le TCP brut. Depuis la
+migration vers Contabo, Traccar tourne en conteneur auto-hébergé aux côtés du
+backend, avec les ports 5055-5065 exposés directement (voir
+`docker-compose.contabo.yml` et `DEPLOYMENT.md`).
 
 ## 4. Preuve `docker compose config`
 
@@ -103,27 +109,17 @@ Hôte : `localhost`, ports définis dans `traccar/traccar.xml` et `docker-compos
 | Xexun | 5064 | ✅ | ❌ (connexion OK) |
 | AST | 5065 | ✅ | ❌ (connexion OK) |
 
-### Traccar Cloud (production — server.traccar.org)
-Hôte : **45.55.84.20** (IP du serveur Traccar Cloud, confirmée par email de bienvenue).
+### Production (VPS Contabo, `169.58.237.88`)
+Même `traccar/traccar.xml` qu'en dev local (voir `docker-compose.contabo.yml`) —
+**les ports sont identiques** à la table de la section 1, aucune conversion à faire.
 
-Les ports ci-dessous sont les **ports par défaut de Traccar**, issus de la documentation officielle
-(https://www.traccar.org/protocols/). **Contrairement aux ports du docker-compose local (5055-5065),
-Traccar Cloud peut utiliser des ports différents** par protocole. Le port exact pour le protocole
-du traceur acheté doit être confirmé depuis l'interface web Traccar → Ajouter un device →
-la configuration affichée inclut le port.
-
-| Protocole | Port probable (Traccar Cloud) | IP |
+| Service | Port | Accès public |
 |---|---|---|
-| GT06 / Concox / JM-VL03 | **5023** | 45.55.84.20 |
-| Teltonika FMB / FM / TAVL / GH | **5027** | 45.55.84.20 |
-| H02 | **5013** | 45.55.84.20 |
-| TK103 / TK102 / Coban / ST-901 | **5002** | 45.55.84.20 |
-| Meitrack | **5020** | 45.55.84.20 |
+| Web UI / API REST Traccar | 8082 | ❌ Non — lié à `127.0.0.1` (voir `DEPLOYMENT.md`), consultable uniquement depuis le VPS |
+| GT06, Teltonika, H02, TK103, Meitrack, OsmAnd, Lézard, WristWatch, Navtelecom, Xexun, AST | 5055-5065 | ✅ Oui — nécessaire pour que les traceurs physiques se connectent |
 
-⚠️ **Ces ports ne sont pas garantis** — Traccar Cloud peut les avoir reconfigurés.
-**Action requise :** lors de l'achat d'un traceur, se connecter à `https://server.traccar.org`,
-aller dans **Configuration → Devices**, créer un device, et noter le port affiché dans les
-instructions de configuration du device.
+Aucune action de vérification de port requise à l'achat d'un traceur : le
+port est fixe et déjà documenté en section 1.
 
 Les 11 protocoles sont exposés et joignables en docker local. GT06 et Teltonika ont été testés
 avec une trame protocolaire réelle. Les 9 autres sont vérifiés par connexion TCP (le protocole
