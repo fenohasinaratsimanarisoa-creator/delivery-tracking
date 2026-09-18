@@ -1,3 +1,8 @@
+// DORMANT (conservé volontairement, pas mort) : même contexte que
+// features/billing/PlansPage.tsx (voir sa bannière) — remplacé par
+// features/manual-billing/components/TrialBanner.tsx, monté dans App.tsx.
+// Jamais importé nulle part, donc ne s'affiche jamais (le lien /billing
+// ci-dessous ne correspond d'ailleurs plus à aucune route).
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, X } from 'lucide-react';
 import { useState } from 'react';
