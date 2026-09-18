@@ -99,6 +99,9 @@ frontend/src/
 Documents de conception : `DECISION_ARCHITECTURE_GPS.md`,
 `GPS_UNIVERSAL_ARCHITECTURE.md`, `TRACCAR_SETUP.md`, `backend/INTEGRATION.md`
 (API B2B), `backend/OBSERVABILITY.md`, `backend/SECURITY_AUDIT.md`.
+Guides traceurs GPS physiques (achat, ports, robustesse par modèle) dans
+`docs/` : `TRACCAR_ACHAT_NOUVEAU_TRACEUR.md`, `RAPPORT_PORTS_TRACCAR.md`,
+`TRACEURS_ROBUSTESSE_TABLEAU.md`.
 Les rapports datés (audits, incidents, go-live) sont archivés dans `docs/archive/`.
 
 ---
