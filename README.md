@@ -97,8 +97,10 @@ frontend/src/
    sur ~20 modèles pour toute lecture/mutation, même si le scoping applicatif est oublié
 
 Documents de conception : `DECISION_ARCHITECTURE_GPS.md`,
-`GPS_UNIVERSAL_ARCHITECTURE.md`, `TRACCAR_SETUP.md`, `backend/INTEGRATION.md`
-(API B2B), `backend/OBSERVABILITY.md`, `backend/SECURITY_AUDIT.md`.
+`GPS_UNIVERSAL_ARCHITECTURE.md`, `TRACCAR_SETUP.md`. Docs internes
+volontairement hors dépôt (gitignorées, demandez-les à l'équipe si besoin) :
+`backend/INTEGRATION.md` (API B2B), `backend/OBSERVABILITY.md`,
+`backend/SECURITY_AUDIT.md`.
 Guides traceurs GPS physiques (achat, ports, robustesse par modèle) dans
 `docs/` : `TRACCAR_ACHAT_NOUVEAU_TRACEUR.md`, `RAPPORT_PORTS_TRACCAR.md`,
 `TRACEURS_ROBUSTESSE_TABLEAU.md`.
