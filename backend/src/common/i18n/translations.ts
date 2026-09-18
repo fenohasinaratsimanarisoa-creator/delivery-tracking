@@ -158,8 +158,8 @@ const translations: Record<string, Record<Language, string>> = {
     en: 'Payment approved — Pistio activation code',
   },
   'email.paymentProof.approvedBody': {
-    fr: '<p>Bonjour {firstName},</p><p>Votre preuve de paiement pour le forfait <strong>{planName}</strong> a été validée.</p><p>Votre code d’activation vous sera communiqué séparément par votre contact Pistio. Saisissez-le sur l’écran de paiement pour réactiver votre accès.</p>',
-    en: '<p>Hello {firstName},</p><p>Your payment proof for the <strong>{planName}</strong> plan has been approved.</p><p>Your activation code will be sent to you separately by your Pistio contact. Enter it on the payment screen to restore access.</p>',
+    fr: '<p>Bonjour {firstName},</p><p>Votre preuve de paiement pour le forfait <strong>{planName}</strong> a été validée.</p><p>Voici votre code d’activation :</p><p style="font-size:20px;font-weight:700;letter-spacing:2px;">{code}</p><p>Saisissez-le sur l’écran de paiement pour réactiver votre accès. Ce code est valable jusqu’au {expiresAt} et ne peut être utilisé qu’une seule fois.</p>',
+    en: '<p>Hello {firstName},</p><p>Your payment proof for the <strong>{planName}</strong> plan has been approved.</p><p>Here is your activation code:</p><p style="font-size:20px;font-weight:700;letter-spacing:2px;">{code}</p><p>Enter it on the payment screen to restore access. This code is valid until {expiresAt} and can only be used once.</p>',
   },
   'email.paymentProof.rejectedSubject': {
     fr: 'Preuve de paiement refusée — Pistio',

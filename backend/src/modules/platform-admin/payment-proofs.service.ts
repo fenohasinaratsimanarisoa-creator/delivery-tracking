@@ -74,19 +74,27 @@ export class PaymentProofsService {
     });
 
     if (proof.company.email) {
+      // Le code complet n'est JAMAIS repersisté en clair (seul son hash l'est) —
+      // cet email est donc le seul moyen automatique de le transmettre au client.
+      // Avant, il n'était renvoyé qu'à l'admin dans cette réponse HTTP, à charge
+      // pour lui de le retransmettre à l'oral/SMS — irritant et source d'erreur
+      // à chaque paiement, corrigé en l'envoyant directement au client.
       this.emailService
         .sendPaymentProofApproved(
           proof.company.email,
           proof.submittedBy.firstName,
           proof.claimedPlan.name,
+          code,
+          expiresAt,
         )
         .catch((err) => this.logger.error('sendPaymentProofApproved failed', err));
     }
 
     this.logger.log(`Preuve approuvée : proof=${id} company=${proof.companyId} admin=${adminId}`);
 
-    // Le code complet n'est JAMAIS repersisté en clair — c'est la SEULE fois
-    // qu'il est renvoyé. L'admin le communique ensuite à l'oral/SMS.
+    // Toujours renvoyé à l'admin aussi (affiché à l'écran) : filet de secours si
+    // l'envoi d'email échoue silencieusement (catch ci-dessus) ou que l'admin
+    // veut le communiquer plus vite par un autre canal (SMS/oral).
     return { code, expiresAt };
   }
 

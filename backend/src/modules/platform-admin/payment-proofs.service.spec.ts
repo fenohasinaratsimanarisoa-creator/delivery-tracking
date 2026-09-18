@@ -94,7 +94,13 @@ describe('PaymentProofsService', () => {
       const persistedData = mockPrisma.paymentProof.update.mock.calls[0][0].data;
       expect(persistedData.activationCodeHash).not.toBe(result.code);
       expect(JSON.stringify(persistedData)).not.toContain(result.code);
-      expect(mockEmailService.sendPaymentProofApproved).toHaveBeenCalledWith('x@y.com', 'A', 'Pro');
+      expect(mockEmailService.sendPaymentProofApproved).toHaveBeenCalledWith(
+        'x@y.com',
+        'A',
+        'Pro',
+        result.code,
+        expect.any(Date),
+      );
     });
 
     it("n'envoie pas d'email si la société n'a pas d'adresse", async () => {

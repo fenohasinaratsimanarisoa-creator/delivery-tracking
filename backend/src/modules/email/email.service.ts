@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { createHash } from 'crypto';
-import { t, type Language } from '../../common/i18n';
+import { t, formatLongDate, type Language } from '../../common/i18n';
 
 // Même convention que auth.controller.ts (échec de login) : jamais l'email en
 // clair dans les logs (PII), la liste `redact` de pino ne couvre pas ce champ
@@ -288,12 +288,19 @@ export class EmailService {
     email: string,
     firstName: string,
     planName: string,
+    code: string,
+    expiresAt: Date,
     lang: Language = 'fr',
   ): Promise<void> {
     await this.send(
       email,
       t('email.paymentProof.approvedSubject', lang),
-      t('email.paymentProof.approvedBody', lang, { firstName, planName }),
+      t('email.paymentProof.approvedBody', lang, {
+        firstName,
+        planName,
+        code,
+        expiresAt: formatLongDate(expiresAt, lang),
+      }),
     );
   }
 
