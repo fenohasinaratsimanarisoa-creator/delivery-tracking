@@ -96,17 +96,20 @@ volumes:
 
 ## 2. Configurer Traccar en production (Contabo, auto-hébergé)
 
+> ℹ️ **Depuis 2026-09-18**, plus besoin de passer par l'UI Traccar (tunnel SSH) pour
+> créer/lier un device : le formulaire véhicule de DelivTrack le fait automatiquement
+> à partir du seul IMEI (voir §4). Cette section reste utile pour comprendre ce qui
+> se passe en coulisses, ou pour du diagnostic manuel via l'UI Traccar.
+
 1. Ouvrez un tunnel SSH puis connectez-vous à l'interface admin :
    ```bash
    ssh -L 8082:localhost:8082 root@169.58.237.88
    # puis http://localhost:8082 dans le navigateur
    ```
-2. Créez un **device** avec l'IMEI du traceur physique (**Devices → Add**).
-   - **Host** : `169.58.237.88`
-   - **Port** : celui du protocole du traceur, **fixe**, listé dans `traccar/traccar.xml` (GT06=5055, Teltonika=5056, H02=5057, TK103=5058, Meitrack=5059, etc. — voir `RAPPORT_PORTS_TRACCAR.md`)
-   - Configurez le traceur physique avec ce host et ce port (par SMS/USB selon le modèle)
-3. Notez le `deviceId` Traccar (entier, généré à la création) — il servira pour `Vehicle.traccarDeviceId` dans DelivTrack
-4. Associez le device à un véhicule : `POST /tracking/vehicles/:vehicleId/link-traccar`
+2. Vous y retrouverez les devices créés automatiquement par DelivTrack (**Devices**) —
+   host `169.58.237.88`, port fixe du protocole du traceur (GT06=5055, Teltonika=5056,
+   H02=5057, TK103=5058, Meitrack=5059, etc. — voir `docs/RAPPORT_PORTS_TRACCAR.md`).
+   Configurez le traceur physique avec ce host et ce port (par SMS/USB selon le modèle).
 
 ---
 
@@ -126,6 +129,14 @@ Ces 3 variables sont déclarées dans `docker-compose.contabo.yml` pour les serv
 
 ## 4. Association véhicule ↔ device Traccar
 
+**Méthode recommandée (2026-09-18+)** — un seul champ, création ET liaison automatiques :
+interface web DelivTrack → Véhicules → créer/éditer → Source de position =
+« Traceur physique » → saisir l'**IMEI** du traceur → enregistrer. Le serveur crée le
+device Traccar (préfixé par l'entreprise) et le lie au véhicule dans le même appel —
+voir `backend/src/modules/vehicles/vehicles.service.ts` (`provisionTraccarDeviceFromImei`).
+
+Méthode manuelle (device déjà créé côté Traccar, ex. via §2, ou pour re-router un
+`traccarDeviceId` existant sans repasser par l'IMEI) — endpoint historique, toujours actif :
 ```bash
 POST /tracking/vehicles/:vehicleId/link-traccar
 Content-Type: application/json
@@ -134,14 +145,12 @@ Content-Type: application/json
 }
 ```
 
-Ou depuis l'interface web DelivTrack (admin → Véhicules → éditer → "ID device Traccar").
-
 ---
 
 ## 5. Vérifier le fonctionnement
 
 ```bash
-curl -H "Authorization: Bearer <token>" https://deliverytrack-api.onrender.com/tracking/traccar-devices
+curl -H "Authorization: Bearer <token>" https://169-58-237-88.sslip.io/api/tracking/traccar-devices
 ```
 
 Réponse attendue :
@@ -158,7 +167,7 @@ Réponse attendue :
 
 ```bash
 curl -H "Authorization: Bearer <token>" \
-  https://deliverytrack-api.onrender.com/tracking/traccar-devices/42/test
+  https://169-58-237-88.sslip.io/api/tracking/traccar-devices/42/test
 ```
 
 ### Dashboard admin
@@ -184,23 +193,16 @@ Le `traccar.xml` embarqué gère 11 protocoles (voir `RAPPORT_PORTS_TRACCAR.md`)
 1. Vérifiez que le protocole du traceur est déjà activé dans `traccar/traccar.xml`
    (GT06, Teltonika, H02, TK103, Meitrack, OsmAnd, Lézard, WristWatch, Navtelecom,
    Xexun, AST). Sinon, voir 6.2 pour ajouter le protocole (nécessite un redéploiement).
-2. Tunnel SSH puis `http://localhost:8082` → **Devices → Ajouter**.
-   - **Name** : nom du véhicule (libre).
-   - **Identifier (uniqueId)** : l'identifiant que le traceur ENVOIE — pour la quasi-totalité
-     des protocoles GSM c'est l'**IMEI** (15 chiffres) ; certains protocoles acceptent un
-     identifiant libre non-numérique.
-   - **Host/Port à donner au traceur** : `169.58.237.88` + le port **fixe** du protocole
-     (GT06=5055, Teltonika=5056, etc. — `traccar/traccar.xml`), jamais "fourni par une interface".
-3. Configurez le traceur physique avec ce Host/Port (via commande SMS, app du fabricant,
-   ou outil de configuration du modèle — **vérifiez la syntaxe SMS exacte dans le manuel
-   du modèle acheté**, elle varie beaucoup d'un clone à l'autre même au sein du protocole GT06).
-4. Vérifiez dans l'admin Traccar que le device passe **online** et reçoit des positions
-   (onglet du device). **Ne liez le device dans DelivTrack qu'ensuite** (étape 6).
-5. Notez le **deviceId numérique** (généré par Traccar à la création — indépendant du
-   protocole et de l'IMEI, donc stable quel que soit le modèle).
-6. Liez dans DelivTrack : UI admin → Véhicules → éditer → « ID device Traccar »,
-   ou `POST /tracking/vehicles/:vehicleId/link-traccar { "traccarDeviceId": "42" }`.
-7. Vérifiez la position live sur la carte temps réel.
+2. Créez/éditez le véhicule dans DelivTrack (Véhicules → Source de position = Traceur
+   physique → IMEI du traceur) — voir §4. Le device Traccar (identifiant = l'IMEI,
+   scopé à l'entreprise) est créé et lié automatiquement, host/port fixes déduits du
+   protocole (GT06=5055, Teltonika=5056, etc. — `traccar/traccar.xml`).
+3. Configurez le traceur physique avec `169.58.237.88` + ce port (via commande SMS, app
+   du fabricant, ou outil de configuration du modèle — **vérifiez la syntaxe SMS exacte
+   dans le manuel du modèle acheté**, elle varie beaucoup d'un clone à l'autre même au
+   sein du protocole GT06). **Faites cette étape APRÈS l'étape 2** : Traccar rejette les
+   positions d'un IMEI qu'il ne connaît pas encore.
+4. Vérifiez la position live sur la carte temps réel DelivTrack.
 
 > ⚠️ Les ports 5055-5065 sont les mêmes en dev et en prod ici (auto-hébergé) — ce
 > n'est QUE si vous migrez un jour vers un Traccar Cloud tiers que les ports

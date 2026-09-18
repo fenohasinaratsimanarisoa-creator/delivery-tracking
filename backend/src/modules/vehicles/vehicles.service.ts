@@ -33,11 +33,39 @@ export class VehiclesService {
 
   private validateTrackerConfig(dto: CreateVehicleDto | UpdateVehicleDto) {
     const posSource = dto.positionSource ?? 'phone';
-    if (posSource === 'physical_tracker' && !dto.traccarDeviceId) {
+    if (posSource === 'physical_tracker' && !dto.traccarDeviceId && !dto.imei) {
       throw new BadRequestException(
-        'traccarDeviceId is required when positionSource is physical_tracker',
+        'imei or traccarDeviceId is required when positionSource is physical_tracker',
       );
     }
+  }
+
+  // Provisioning automatique du device Traccar à partir du SEUL IMEI saisi par
+  // l'admin (demande produit : « entre l'IMEI, tout le reste est automatique »).
+  // Ne s'exécute QUE si `traccarDeviceId` n'est pas déjà fourni explicitement —
+  // une sélection manuelle d'un device existant (dropdown "available-traccar-
+  // devices", flux déjà en place) reste prioritaire et inchangée.
+  private async provisionTraccarDeviceFromImei(
+    imei: string,
+    vehicleLabel: string,
+  ): Promise<string> {
+    let device: { id: number };
+    try {
+      device = await this.createTraccarDevice(vehicleLabel, imei);
+    } catch (err) {
+      if (err instanceof BadRequestException) {
+        // Le message brut de Traccar est peu actionnable pour un non-technicien
+        // (ex. "Duplicate unique id") — reformulé pour pointer directement vers
+        // la cause la plus probable (IMEI déjà enregistré, saisi deux fois).
+        throw new BadRequestException(
+          `Impossible de créer le traceur pour l'IMEI ${imei} — vérifiez que ce numéro n'est pas déjà associé à un autre véhicule (détail Traccar : ${err.message})`,
+        );
+      }
+      throw err;
+    }
+    const traccarDeviceId = String(device.id);
+    await this.checkTraccarDeviceIdUniqueness(traccarDeviceId);
+    return traccarDeviceId;
   }
 
   private async checkTraccarDeviceIdUniqueness(traccarDeviceId: string, excludeId?: string) {
@@ -81,8 +109,15 @@ export class VehiclesService {
     }
 
     const data: any = { ...dto, companyId };
+    delete data.imei; // jamais une colonne de `vehicles` — voir provisionTraccarDeviceFromImei
     if (!dto.positionSource) {
       data.positionSource = 'phone';
+    }
+    if (dto.positionSource === 'physical_tracker' && !dto.traccarDeviceId && dto.imei) {
+      data.traccarDeviceId = await this.provisionTraccarDeviceFromImei(
+        dto.imei,
+        `${dto.brand} ${dto.model} — ${dto.licensePlate}`,
+      );
     }
 
     return this.prisma.vehicle
@@ -158,7 +193,7 @@ export class VehiclesService {
   }
 
   async update(companyId: string, id: string, dto: UpdateVehicleDto) {
-    await this.findOne(companyId, id);
+    const current = await this.findOne(companyId, id);
 
     if (dto.licensePlate) {
       const existing = await this.prisma.vehicle.findFirst({
@@ -175,6 +210,7 @@ export class VehiclesService {
     }
 
     const data: Record<string, unknown> = { ...dto };
+    delete data.imei; // jamais une colonne de `vehicles` — voir provisionTraccarDeviceFromImei
     // Bascule physical_tracker → phone : on LIBÈRE le traceur Traccar. Sans ça, le
     // véhicule garde un `traccarDeviceId` mort (positionSource=phone → ni le pont
     // ni le backfill ne le lisent) qui reste vu comme « déjà lié » par
@@ -183,6 +219,18 @@ export class VehiclesService {
     // validateTrackerConfig (physical EXIGE un device ⇒ phone n'en garde aucun).
     if (dto.positionSource === 'phone') {
       data.traccarDeviceId = null;
+    }
+
+    // Provisioning automatique par IMEI (voir create()) : couvre aussi le
+    // remplacement d'un traceur déjà lié (véhicule DÉJÀ en physical_tracker,
+    // seul un nouvel imei est envoyé sans toucher positionSource — cas réel :
+    // boîtier en panne, remplacé par un nouveau).
+    const effectivePositionSource = dto.positionSource ?? current.positionSource;
+    if (effectivePositionSource === 'physical_tracker' && !dto.traccarDeviceId && dto.imei) {
+      data.traccarDeviceId = await this.provisionTraccarDeviceFromImei(
+        dto.imei,
+        `${dto.brand ?? current.brand} ${dto.model ?? current.model} — ${dto.licensePlate ?? current.licensePlate}`,
+      );
     }
 
     return this.prisma.vehicle

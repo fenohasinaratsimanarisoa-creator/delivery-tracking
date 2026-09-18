@@ -468,7 +468,13 @@
       "fuelType": "Fuel type",
       "theoreticalConsumption": "Theoretical consumption (L/100km)",
       "positionSource": "Position source",
-      "traccarDeviceId": "Traccar device"
+      "traccarDeviceId": "Traccar device",
+      "imei": "GPS tracker IMEI"
+    },
+    "imeiPlaceholder": "e.g. 863295042345678",
+    "imeiHint": {
+      "new": "Enter the IMEI printed on the tracker — everything else (creation, linking) is automatic.",
+      "linked": "A tracker is already linked (Traccar ID: {{deviceId}}). Leave empty to keep it, or enter a new IMEI to replace it."
     },
     "fuelTypes": {
       "gasoline": "Gasoline",
@@ -515,7 +521,8 @@
     "count": "{{count}} vehicle in your fleet",
     "count_plural": "{{count}} vehicles in your fleet",
     "validation": {
-      "invalidYear": "Invalid year (e.g. 2024)"
+      "invalidYear": "Invalid year (e.g. 2024)",
+      "invalidImei": "Invalid IMEI (14 to 16 digits expected)"
     },
     "resultCount": "{{count}} result",
     "resultCount_plural": "{{count}} results",

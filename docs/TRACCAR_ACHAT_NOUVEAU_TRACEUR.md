@@ -90,9 +90,32 @@ Si le budget le permet, **Teltonika FMB** est la référence professionnelle (~6
    - Orange : `orangenet`
 5. Remettre la SIM dans le traceur
 
+> ℹ️ **Mise à jour 2026-09-18** : faites d'abord l'**Étape 1bis** ci-dessous (créer
+> le véhicule dans DelivTrack avec l'IMEI) **avant** de configurer le traceur par
+> SMS — Traccar rejette silencieusement les positions d'un IMEI qu'il ne connaît
+> pas encore (pas d'auto-enregistrement des devices inconnus).
+
+### Étape 1bis : Créer le véhicule dans DelivTrack (remplace les anciennes étapes 3 et 4)
+
+Il n'y a plus de device Traccar à créer à la main dans une interface séparée — le
+formulaire véhicule de DelivTrack fait tout automatiquement en une seule saisie :
+
+1. Se connecter à DelivTrack en tant qu'admin/dispatcher.
+2. **Véhicules → Nouveau véhicule** (ou éditer un véhicule existant).
+3. Section « Source GPS » → **Source de position = Traceur physique**.
+4. **IMEI du traceur GPS** → saisir l'IMEI noté sur la boîte du traceur (15 chiffres).
+5. Enregistrer.
+
+→ Le serveur crée le device Traccar (identifiant = l'IMEI, scopé à votre entreprise), le
+lie immédiatement à ce véhicule, et bascule `positionSource = physical_tracker`. Aucun accès
+à l'UI Traccar (ni tunnel SSH) n'est nécessaire pour cette étape.
+
+**Remplacer un traceur en panne** : éditer le véhicule, resaisir le nouvel IMEI dans le même
+champ — un nouvel IMEI crée et lie un nouveau device (l'ancien lien est remplacé).
+
 ### Étape 2 : Configurer le traceur
 
-Par SMS ou par câble USB (selon le modèle). Exemple pour un traceur GT06 :
+Par SMS ou par câble USB (selon le modèle), **après** l'Étape 1bis ci-dessus. Exemple pour un traceur GT06 :
 
 > ✅ **Correction 2026-09-05 (installation réelle effectuée)** : le port GT06
 > est bien **5055** en production aussi (pas "5023", cette ancienne mention était
@@ -138,27 +161,10 @@ SMS à XXXXX : reboot
 > ⚠️ La syntaxe exacte des commandes SMS dépend du modèle. Consultez le manuel du traceur.
 > Les traceurs GT06 utilisent généralement la syntaxe ci-dessus.
 
-### Étape 3 : Créer le device dans Traccar
+### Étapes 3 et 4 : supprimées (2026-09-18)
 
-1. Interface web Traccar :
-   - **Production (Contabo)** : `http://localhost:8082` via tunnel SSH —
-     `ssh -L 8082:localhost:8082 root@169.58.237.88` (pas exposée publiquement)
-   - **Dev local** : `http://localhost:8082` directement (docker-compose)
-2. Login avec les identifiants admin (`TRACCAR_USER`/`TRACCAR_PASSWORD` du `.env` du VPS en prod)
-3. Menu **Devices** → **Add**
-4. **Name** : nom du véhicule
-5. **Unique ID** : IMEI du traceur (15 chiffres, noté sur la boîte ou en appelant `#000#` par SMS)
-6. **Protocol** : laisser vide (auto-détection) ou sélectionner le protocole
-7. Sauvegarder
-
-### Étape 4 : Lier le traceur au véhicule dans DelivTrack
-
-1. Se connecter à DelivTrack en tant qu'admin
-2. Aller dans **Véhicules** → sélectionner le véhicule concerné
-3. Dans la section **Traceur physique**, cliquer **Sélectionner un device Traccar**
-4. Choisir le device dans la liste (les devices Traccar déjà liés sont masqués)
-5. Cliquer **Tester la connexion** pour vérifier que le traceur envoie des positions
-6. Sauvegarder
+Création du device + liaison au véhicule = déjà faites à l'**Étape 1bis**, avant la config SMS.
+Rien de plus à faire ici — passez directement à la vérification.
 
 ### Étape 5 : Vérifier le fonctionnement
 
@@ -209,14 +215,15 @@ monté dans le conteneur) — vérifiez que la ligne correspondante y est :
 > correctement décodé pour votre modèle précis — voir aussi le point 8 ci-dessous
 > sur les logs Traccar, qui ne remontent PAS grand-chose par défaut.
 
-### 5. Le device est-il créé dans Traccar avec le bon IMEI ?
-- Vérifier dans l'interface Traccar → Devices
-- L'**Unique ID** doit être l'IMEI du traceur (15 chiffres)
-- Si le traceur apparaît dans la liste mais avec statut "Offline" : c'est normal (il passe en ligne dès qu'il envoie une position)
-
-### 6. Le device est-il lié au bon véhicule dans DelivTrack ?
-- Aller dans DelivTrack → Véhicules → éditer le véhicule
-- Vérifier que `traccarDeviceId` correspond à l'ID du device Traccar
+### 5. Le véhicule a-t-il été créé avec le bon IMEI côté DelivTrack ?
+- Aller dans DelivTrack → Véhicules → éditer le véhicule concerné
+- Vérifier que la Source de position est bien **Traceur physique**
+- En cas de faute de frappe sur l'IMEI à la création (Étape 1bis) : resaisir l'IMEI exact dans
+  le champ IMEI et enregistrer — ça crée un nouveau device correctement lié, remplaçant l'ancien
+- Note technique (si accès SSH au VPS) : le device Traccar créé automatiquement est visible via
+  `GET {TRACCAR_URL}/api/devices` (identifiant interne = colonne `traccar_device_id` du véhicule
+  en base, PAS l'IMEI lui-même — Traccar préfixe l'IMEI par les 8 premiers caractères du
+  `companyId` pour l'isolation multi-entreprises)
 
 ### 7. Vérifier les logs Traccar
 ```bash

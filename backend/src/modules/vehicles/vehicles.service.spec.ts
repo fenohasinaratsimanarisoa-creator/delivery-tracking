@@ -234,6 +234,120 @@ describe('VehiclesService', () => {
   });
 
   // ----------------------------------------------------------------
+  // PROVISIONING AUTOMATIQUE PAR IMEI — l'admin ne saisit QUE l'IMEI, le
+  // device Traccar (création + liaison) est géré côté serveur.
+  // ----------------------------------------------------------------
+  describe('provisioning automatique par IMEI', () => {
+    const enableTraccar = () => {
+      (mockConfigService.get as jest.Mock).mockImplementation((key: string, def?: any) => {
+        if (key === 'TRACCAR_URL') return 'http://localhost:8082';
+        if (key === 'TRACCAR_USER') return 'admin';
+        if (key === 'TRACCAR_PASSWORD') return 'admin';
+        return def;
+      });
+    };
+
+    const mockCreateDeviceResponse = (device: { id: number; name: string; uniqueId: string }) => {
+      jest.spyOn(service as any, 'authenticateTraccar').mockResolvedValue('cookie=abc');
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => device,
+      } as Response);
+    };
+
+    it('crée le device Traccar depuis le seul IMEI et lie le véhicule automatiquement (create)', async () => {
+      enableTraccar();
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null); // plate check
+      mockCreateDeviceResponse({ id: 555, name: 'Toyota Hilux — TRK-001', uniqueId: '123456789012345' });
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null); // checkTraccarDeviceIdUniqueness('555')
+      mockPrisma.vehicle.create.mockResolvedValueOnce({
+        id: 'vehicle-1',
+        ...dto,
+        traccarDeviceId: '555',
+      });
+
+      await service.create('company-1', {
+        ...dto,
+        positionSource: 'physical_tracker',
+        imei: '123456789012345',
+      });
+
+      expect(mockPrisma.vehicle.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          positionSource: 'physical_tracker',
+          traccarDeviceId: '555',
+        }),
+      });
+      // `imei` n'est jamais une colonne de `vehicles` — jamais transmis à Prisma.
+      expect(mockPrisma.vehicle.create.mock.calls[0][0].data.imei).toBeUndefined();
+    });
+
+    it("une erreur Traccar à la création (ex. IMEI déjà enregistré) empêche la création du véhicule", async () => {
+      enableTraccar();
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null); // plate check
+      jest.spyOn(service as any, 'authenticateTraccar').mockResolvedValue('cookie=abc');
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: false,
+        text: async () => 'Duplicate unique id',
+      } as Response);
+
+      await expect(
+        service.create('company-1', {
+          ...dto,
+          positionSource: 'physical_tracker',
+          imei: '123456789012345',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.vehicle.create).not.toHaveBeenCalled();
+    });
+
+    it('remplace le traceur lié via un simple update {imei} sur un véhicule déjà en physical_tracker', async () => {
+      enableTraccar();
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce({
+        id: 'vehicle-1',
+        companyId: 'company-1',
+        positionSource: 'physical_tracker',
+        traccarDeviceId: '111',
+        brand: 'Toyota',
+        model: 'Hilux',
+        licensePlate: 'TRK-001',
+      }); // findOne
+      mockCreateDeviceResponse({ id: 999, name: 'Toyota Hilux — TRK-001', uniqueId: '999888777666555' });
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null); // checkTraccarDeviceIdUniqueness('999')
+      mockPrisma.vehicle.update.mockResolvedValueOnce({ id: 'vehicle-1', traccarDeviceId: '999' });
+
+      // positionSource n'est PAS renvoyé — le véhicule est DÉJÀ physical_tracker,
+      // seul un nouvel IMEI est fourni (boîtier remplacé).
+      await service.update('company-1', 'vehicle-1', { imei: '999888777666555' });
+
+      expect(mockPrisma.vehicle.update).toHaveBeenCalledWith({
+        where: { id: 'vehicle-1' },
+        data: { traccarDeviceId: '999' },
+      });
+    });
+
+    it("un traccarDeviceId fourni explicitement reste prioritaire sur l'imei (pas d'appel Traccar)", async () => {
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null); // plate check
+      mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null); // checkTraccarDeviceIdUniqueness('42')
+      mockPrisma.vehicle.create.mockResolvedValueOnce({ id: 'vehicle-1', traccarDeviceId: '42' });
+      const fetchSpy = jest.fn();
+      global.fetch = fetchSpy;
+
+      await service.create('company-1', {
+        ...dto,
+        positionSource: 'physical_tracker',
+        traccarDeviceId: '42',
+        imei: '123456789012345',
+      });
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(mockPrisma.vehicle.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ traccarDeviceId: '42' }),
+      });
+    });
+  });
+
+  // ----------------------------------------------------------------
   // DEVICES TRACCAR — isolement multi-entreprises : l'entreprise A ne doit
   // JAMAIS voir les devices de l'entreprise B (ni liés, ni non-liés).
   // ----------------------------------------------------------------

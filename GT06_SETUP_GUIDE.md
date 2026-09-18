@@ -11,28 +11,32 @@
 1. **SIM 4G** avec données GPRS **activées** et du solde.
 2. SIM **sans code PIN** (retirer le PIN avant insertion).
 3. **Insérer la SIM AVANT de mettre le traceur sous tension** (sinon SIM non reconnue).
-4. Noter l'**IMEI** (étiquette sur le traceur) — c'est lui qui identifie le device côté Traccar.
+4. Noter l'**IMEI** (étiquette sur le traceur, 15 chiffres) — c'est le SEUL identifiant à saisir
+   côté DelivTrack, tout le reste est automatique (voir §2).
 5. Installation : antennes intégrées, face avant vers le haut, **sans plaque métallique au-dessus**.
 
-## 2. Créer le device dans Traccar
+## 2. Créer le véhicule dans DelivTrack (seule étape manuelle côté logiciel)
 
-### 2a. Production — Traccar Cloud (`server.traccar.org`) — recommandé
-1. `https://server.traccar.org` → **Devices → Ajouter**.
-2. **Name** : ex. « Toyota Hilux — Flotte 1 ».
-3. **Identifier (uniqueId)** : **l'IMEI** du traceur (15 chiffres).
-4. L'UI affiche le **Host** et le **Port** à utiliser pour ce device (le port GT06 de Traccar Cloud
-   est fourni à l'écran — il diffère du 5055 local). **Notez le port.**
-5. Ne liez le device dans DelivTrack qu'après avoir reçu des positions (étape 4-5).
+Depuis la mise à jour 2026-09-18, il n'y a plus de device Traccar à créer à la main dans un
+panel séparé — le formulaire véhicule de DelivTrack fait tout automatiquement :
 
-### 2b. Auto-hébergé (VPS DigitalOcean / dev local)
-- Déjà prêt dans le repo : `traccar/traccar.xml` → `<entry key='gt06.port'>5055</entry>` ✓
-  et `docker-compose.yml` → `"5055:5055"` ✓.
-- **Ouvrir le port 5055** :
-  ```bash
-  sudo ufw allow 5055/tcp
-  ```
-  + panel DigitalOcean → **Networking → Firewall → Inbound Rules → Custom → TCP 5055 → Apply**.
-- Créer le device (même procédure : IMEI en uniqueId). Port = **5055**, Host = **IP publique du VPS**.
+1. **Véhicules → Nouveau véhicule** (ou éditer un véhicule existant).
+2. Section « Source GPS » → **Source de position = Traceur physique**.
+3. **IMEI du traceur GPS** → saisir l'IMEI noté à l'étape 1.
+4. Enregistrer.
+
+→ Le serveur crée le device Traccar (identifiant = l'IMEI, scopé à votre entreprise), le lie
+immédiatement à ce véhicule (`traccarDeviceId`), et bascule `positionSource = physical_tracker`.
+Rien d'autre à faire : dès que le traceur physique commence à émettre (§3), ses positions
+alimentent automatiquement la carte temps réel, la détection de téléportation, les alertes
+(vitesse/arrêt/retard/géofence) et le rapport carburant — mêmes traitements que l'app téléphone.
+
+**Remplacer un traceur en panne** : éditer le véhicule, resaisir le nouvel IMEI dans le même
+champ (laissé vide, l'ancien traceur reste lié — un nouvel IMEI en crée et lie un nouveau).
+
+> Le device DOIT exister côté Traccar avant que le traceur physique ne commence à émettre —
+> Traccar rejette silencieusement les positions d'un IMEI inconnu (pas d'auto-enregistrement
+> configuré). Faites donc TOUJOURS cette étape 2 **avant** l'étape 3 (config SMS).
 
 ## 3. Configurer le traceur par SMS
 
@@ -51,16 +55,16 @@ Envoyer les SMS suivants depuis un téléphone **vers le numéro de la SIM du tr
 
 ### 3.2 Serveur Traccar
 
-- **Traccar Cloud** (domaine — le traceur gère le DNS) :
-  ```
-  SERVER,1,server.traccar.org,<PORT_GT06_DONNÉ_PAR_LUI>,0#
-  ```
-- **VPS auto-hébergé** (IP — plus fiable si le DNS pose problème) :
-  ```
-  SERVER,0,<IP_PUBLIQUE_DU_VPS>,5055,0#
-  ```
+Production DelivTrack = VPS Contabo auto-hébergé (pas de Traccar Cloud — voir `TRACCAR_SETUP.md`
+et `DEPLOYMENT.md`). Adresse IP, port fixe pour GT06 (identique en dev local, voir
+`docs/RAPPORT_PORTS_TRACCAR.md`) :
+
+```
+SERVER,0,169.58.237.88,5055,0#
+```
 
 > Format confirmé GT06 : `SERVER,0=IP / 1=domaine,adresse,port,0=TCP#`. **Garder le 0 final (TCP).**
+> En dev local, remplacer l'IP par celle de la machine hôte (même port 5055).
 
 ### 3.3 Fréquence d'envoi (recommandée)
 
@@ -78,41 +82,32 @@ PARAM#
 SERVER#
 ```
 
-## 4. Vérifier que le traceur se connecte (AVANT de lier dans DelivTrack)
+## 4. Vérifier que le traceur remonte bien dans DelivTrack
 
-1. **Traccar Cloud** : le device doit passer **online** dans l'UI et recevoir des positions.
-2. **API Traccar** (ou l'UI) : `GET /api/positions?deviceId=<id>` ne doit pas être vide.
-   - Position reçue = le traceur parle à Traccar ✓.
-   - Aucune position après 5-10 min → voir §6.
-3. Noter le **deviceId numérique** Traccar (affiché dans l'UI/API — indépendant de l'IMEI).
+Plus besoin d'accéder à l'API/UI Traccar séparément — tout se vérifie depuis DelivTrack :
 
-## 5. Lier dans DelivTrack
+1. **Carte temps réel** (`/map`) : le véhicule doit apparaître et bouger.
+2. **Fiche véhicule** (Véhicules → éditer) : la source GPS reste `Traceur physique`, l'IMEI a
+   bien été accepté (pas d'erreur au moment de l'enregistrement — sinon voir §6).
+3. Aucune position après 5-10 min alors que le traceur est sous tension avec du réseau → voir §6.
 
-```bash
-POST /tracking/vehicles/:vehicleId/link-traccar
-Content-Type: application/json
-{ "traccarDeviceId": "<deviceId numérique Traccar>" }
-```
-Ou UI admin → **Véhicules → éditer → « ID device Traccar »**.
-→ Le véhicule passe `positionSource = physical_tracker` : le pont Traccar alimente la carte
-temps réel, la détection de téléportation, les alertes (vitesse/arrêt/retard/géofence), le
-rapport carburant (mêmes traitements que l'app téléphone).
-
-## 6. Dépannage — le traceur n'envoie rien
+## 5. Dépannage — le traceur n'envoie rien
 
 | Symptôme | Cause probable | Action |
 |---|---|---|
+| Erreur à la création du véhicule (« Impossible de créer le traceur pour l'IMEI... ») | IMEI déjà utilisé par un autre véhicule (même entreprise ou faute de frappe) | Vérifier qu'aucun autre véhicule n'a déjà cet IMEI |
 | Pas de réponse SMS aux commandes | SIM non reconnue (insérée après mise sous tension) | Réinsérer SIM, redémarrer (`RESET#`) |
 | Réponse SMS mais aucune position | APN incorrect / pas de données GPRS | Vérifier APN 3.1 + solde + activation data |
 | Réponse SMS mais aucune position | Serveur non configuré / mauvais port | `SERVER#` puis re-envoyer la commande 3.2 |
-| Réponse SMS mais aucune position (auto-hébergé) | Port 5055 fermé (firewall) | ufw + firewall DigitalOcean (voir 2b) |
-| Position envoyée mais device offline dans Traccar | Mauvais IMEI/uniqueId du device | Recréer le device avec l'IMEI exact |
+| Réponse SMS mais aucune position | Véhicule pas encore créé avec cet IMEI côté DelivTrack (§2 sauté ou fait après) | Créer/éditer le véhicule avec l'IMEI exact, PUIS reconfigurer le traceur |
+| Position envoyée mais rien sur la carte | IMEI saisi côté DelivTrack ≠ IMEI réel du traceur (faute de frappe) | Éditer le véhicule, resaisir l'IMEI exact (recrée un nouveau device lié) |
 | LED jaune allumée en continu | Pas de réseau GSM | SIM/APN/réseau — vérifier 3.1 |
 
 **LED** : jaune clignote = GSM ok · bleue clignote = GPS ok · rouge allumée = alimentation ok.
-**Notification DelivTrack « Traceur physique : jamais connecté »** (30 min après création) = les 4 mêmes causes.
+**Notification DelivTrack « Traceur physique : jamais connecté »** (30 min après création) = les
+mêmes causes que ci-dessus.
 
-## 7. Options du traceur (facultatives)
+## 6. Options du traceur (facultatives)
 
 - **Centres SMS (alarmes du traceur)** : `CENTER,A,<numéro>#` — les alarmes (vibration, coupure
   alimentation, SOS) partent vers ce numéro. *Non requis pour DelivTrack* : les alertes
@@ -124,9 +119,9 @@ rapport carburant (mêmes traitements que l'app téléphone).
 - **Fuseau horaire** : `GMT,A,B,C#` (ex. Madagascar UTC+3 : à régler si les horodatages SMS
   décalent ; les positions Traccar sont horodatées par le fix GPS, indépendant du fuseau).
 
-## 8. Compatibilité — confirmée
+## 7. Compatibilité — confirmée
 
-- **Protocole** : GT06 série → supporté par Traccar (auto-hébergé `gt06.port` ET Traccar Cloud). ✅
+- **Protocole** : GT06 série → supporté nativement par Traccar (auto-hébergé, `gt06.port` fixe). ✅
 - **Précision** : < 5 m CEP — cohérent avec le seuil de bruit GPS DelivTrack (5 m). ✅
 - **Fréquence** : programmable 5-60 s — compatible (pas de rate limit sur le chemin Traccar, rafales gérées). ✅
 - **Champs envoyés** : position, vitesse (nœuds → converti), cap, altitude, accuracy, `valid`,

@@ -253,6 +253,29 @@ describe('FleetPage', () => {
     expect(screen.queryByTestId('tracking-reliability-badge')).not.toBeInTheDocument();
   });
 
+  it("affiche le champ IMEI (et plus l'ancien sélecteur de dispositif) quand la source GPS passe sur traceur physique", async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Chargement...')).toBeNull();
+    });
+
+    fireEvent.click(screen.getAllByText('Nouveau véhicule')[0]);
+    expect(screen.getByText('Ajoutez un véhicule à votre flotte')).toBeInTheDocument();
+
+    // Par défaut (source = app mobile) : pas de champ IMEI visible.
+    expect(screen.queryByLabelText(/IMEI du traceur GPS/i)).not.toBeInTheDocument();
+
+    const positionSelect = screen.getByLabelText(/Source de position/i);
+    fireEvent.change(positionSelect, { target: { value: 'physical_tracker' } });
+
+    // Le nouveau flux : un seul champ IMEI, saisie libre — plus de sélecteur de
+    // dispositif ni de bouton "+ Ajouter" (ancien flux en 2 étapes supprimé).
+    expect(screen.getByLabelText(/IMEI du traceur GPS/i)).toBeInTheDocument();
+    expect(screen.queryByText('Sélectionnez un dispositif…')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Ajouter un nouveau dispositif Traccar/i })).not.toBeInTheDocument();
+  });
+
   it('shows skeleton loading state initially', async () => {
     mockUseQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => {
       if (queryKey[0] === 'traccar-devices') {

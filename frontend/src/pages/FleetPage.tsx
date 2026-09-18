@@ -26,7 +26,7 @@ interface VehicleFormValues {
   brand: string; model: string; year: string;
   licensePlate: string; fuelType: string;
   vin: string; theoreticalConsumption: string;
-  positionSource: string; traccarDeviceId: string;
+  positionSource: string; imei: string;
 }
 
 function KpiCard({ icon, label, value, color }: {
@@ -151,9 +151,6 @@ export default function FleetPage() {
   const [deleting, setDeleting] = useState<Vehicle | null>(null);
   const [_highlightedId, setHighlightedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [showAddDevice, setShowAddDevice] = useState(false);
-  const [newDeviceName, setNewDeviceName] = useState('');
-  const [newDeviceId, setNewDeviceId] = useState('');
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -161,12 +158,6 @@ export default function FleetPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['vehicles', page],
     queryFn: () => api.get(`/vehicles?page=${page}&limit=20`).then((r) => r.data),
-  });
-
-  const { data: traccarDevices } = useQuery({
-    queryKey: ['traccar-devices'],
-    queryFn: () => api.get('/vehicles/available-traccar-devices').then((r) => r.data),
-    staleTime: 30000,
   });
 
   const vehicles: Vehicle[] = data?.data ?? [];
@@ -220,26 +211,6 @@ export default function FleetPage() {
     },
   });
 
-  const addDeviceMutation = useMutation({
-    mutationFn: (body: { name: string; uniqueId: string }) =>
-      api.post('/vehicles/traccar-devices', body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['traccar-devices'] });
-      toast(t('fleet.toast.deviceAdded'));
-      setShowAddDevice(false);
-      setNewDeviceName('');
-      setNewDeviceId('');
-    },
-    onError: (err: ApiError) => {
-      toast(err?.response?.data?.message || t('fleet.toast.deviceError'), 'error');
-    },
-  });
-
-  const traccarDeviceOptions = ((traccarDevices ?? []) as { id: string; name: string }[]).map((d) => ({
-    value: String(d.id),
-    label: `${d.name} (ID: ${d.id})`,
-  }));
-
   const vehicleFields: FieldDef<VehicleFormValues>[] = [
     { name: 'brand', label: t('fleet.fields.brand'), type: 'text', required: true, section: 'identity', autoFocus: true,
       rules: { minLength: 2, maxLength: 50 } },
@@ -266,24 +237,17 @@ export default function FleetPage() {
         { value: 'phone', label: t('fleet.positionSources.phone') },
         { value: 'physical_tracker', label: t('fleet.positionSources.tracker') },
       ] },
-    { name: 'traccarDeviceId', label: t('fleet.fields.traccarDeviceId'), type: 'select', section: 'gps' },
+    { name: 'imei', label: t('fleet.fields.imei'), type: 'text', section: 'gps',
+      placeholder: t('fleet.imeiPlaceholder'),
+      rules: { pattern: /^\d{14,16}$/, patternMessage: t('fleet.validation.invalidImei') } },
   ];
 
   const vehicleSections: FormSection[] = [
     { title: t('fleet.formSections.identity'), fields: ['brand', 'model', 'year'] },
     { title: t('fleet.formSections.registration'), fields: ['licensePlate', 'vin'] },
     { title: t('fleet.formSections.features'), fields: ['fuelType', 'theoreticalConsumption'] },
-    { title: t('fleet.formSections.positionSource'), fields: ['positionSource', 'traccarDeviceId'] },
+    { title: t('fleet.formSections.positionSource'), fields: ['positionSource', 'imei'] },
   ];
-
-  const fieldsWithTraccar = useMemo(() => {
-    return vehicleFields.map((f) => {
-      if (f.name === 'traccarDeviceId') {
-        return { ...f, options: traccarDeviceOptions };
-      }
-      return f;
-    });
-  }, [traccarDeviceOptions]);
 
   const saveMutation = useMutation({
     mutationFn: (body: VehicleFormValues) => {
@@ -299,8 +263,16 @@ export default function FleetPage() {
       else if (editing) payload.vin = '';
       if (body.theoreticalConsumption) payload.theoreticalConsumption = Number(body.theoreticalConsumption);
       else if (editing) payload.theoreticalConsumption = null;
-      if (body.positionSource === 'physical_tracker' && body.traccarDeviceId) {
-        payload.traccarDeviceId = body.traccarDeviceId;
+      if (body.positionSource === 'physical_tracker') {
+        if (body.imei) {
+          // Nouvel IMEI saisi (nouveau traceur ou remplacement) : le backend crée
+          // et lie le device Traccar automatiquement — rien d'autre à faire.
+          payload.imei = body.imei;
+        } else if (editing?.traccarDeviceId) {
+          // Pas de nouvel IMEI saisi mais un traceur est déjà lié : on le
+          // reconduit tel quel (sinon le serveur exigerait un identifiant).
+          payload.traccarDeviceId = editing.traccarDeviceId;
+        }
       }
       return editing
         ? api.patch(`/vehicles/${editing.id}`, payload)
@@ -334,9 +306,12 @@ export default function FleetPage() {
       vin: editing.vin ?? '',
       theoreticalConsumption: editing.theoreticalConsumption != null ? String(editing.theoreticalConsumption) : '',
       positionSource: editing.positionSource || 'phone',
-      traccarDeviceId: editing.traccarDeviceId || '',
-    } : { brand: '', model: '', year: String(new Date().getFullYear()), licensePlate: '', fuelType: 'Diesel', vin: '', theoreticalConsumption: '', positionSource: 'phone', traccarDeviceId: '' },
-    fields: fieldsWithTraccar,
+      // Toujours vide en édition : un IMEI déjà lié n'a pas besoin d'être
+      // ressaisi (voir saveMutation) — ce champ ne sert qu'à saisir un NOUVEAU
+      // traceur ou en remplacer un existant.
+      imei: '',
+    } : { brand: '', model: '', year: String(new Date().getFullYear()), licensePlate: '', fuelType: 'Diesel', vin: '', theoreticalConsumption: '', positionSource: 'phone', imei: '' },
+    fields: vehicleFields,
     sections: vehicleSections,
     onSubmit: async (values) => { saveMutation.mutate(values); },
   });
@@ -518,41 +493,35 @@ export default function FleetPage() {
           {vehicleSections.map((sec) => (
             <DialogSection key={sec.title} title={sec.title}>
               {sec.fields.map((fieldName) => {
-                const def = fieldsWithTraccar.find((f) => f.name === fieldName)!;
-                if (fieldName === 'traccarDeviceId' && vehicleForm.values.positionSource !== 'physical_tracker') {
+                const def = vehicleFields.find((f) => f.name === fieldName)!;
+                if (fieldName === 'imei' && vehicleForm.values.positionSource !== 'physical_tracker') {
                   return null;
                 }
                 const val = vehicleForm.values[fieldName as keyof VehicleFormValues] as string;
                 const err = vehicleForm.touched.has(fieldName) ? vehicleForm.errors[fieldName] : null;
+                // Véhicule déjà lié à un traceur (édition) : le champ IMEI sert
+                // seulement à en saisir un NOUVEAU (remplacement) — vide, il
+                // n'exige rien de plus, le lien existant est reconduit tel quel
+                // (voir saveMutation). Sans ce hint, on pourrait croire à tort
+                // que laisser vide casse le suivi GPS déjà en place.
+                const imeiHint = fieldName === 'imei' && editing?.traccarDeviceId
+                  ? t('fleet.imeiHint.linked', { deviceId: editing.traccarDeviceId })
+                  : fieldName === 'imei'
+                    ? t('fleet.imeiHint.new')
+                    : undefined;
                 return (
-                  <DialogField key={fieldName} label={def.label} error={err} required={def.required}>
+                  <DialogField key={fieldName} label={def.label} error={err} required={def.required} hint={imeiHint}>
                     {def.type === 'select' ? (
-                      <div className={styles.formSelectWrapper}>
-                        <select
-                          className="dialog-select"
-                          value={val}
-                          onChange={(e) => vehicleForm.setValue(fieldName as keyof VehicleFormValues, e.target.value)}
-                          onBlur={() => vehicleForm.handleBlur(fieldName as keyof VehicleFormValues)}
-                          style={{ flex: 1 }}
-                        >
-                          {def.name === 'traccarDeviceId' && (
-                            <option value="">{t('fleet.selectDevicePlaceholder')}</option>
-                          )}
-                          {def.options?.map((o: { value: string; label: string }) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                        </select>
-                        {def.name === 'traccarDeviceId' && (
-                          <button
-                            type="button"
-                            onClick={() => setShowAddDevice(true)}
-                            title={t('fleet.addDeviceHint')}
-                            className={styles.addDeviceBtn}
-                          >
-                            <Plus size={14} /> {t('fleet.addDevice')}
-                          </button>
-                        )}
-                      </div>
+                      <select
+                        className="dialog-select"
+                        value={val}
+                        onChange={(e) => vehicleForm.setValue(fieldName as keyof VehicleFormValues, e.target.value)}
+                        onBlur={() => vehicleForm.handleBlur(fieldName as keyof VehicleFormValues)}
+                      >
+                        {def.options?.map((o: { value: string; label: string }) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
                     ) : (
                       <input
                         className="dialog-input"
@@ -585,60 +554,6 @@ export default function FleetPage() {
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />
-
-      {showAddDevice && (
-        <div className={styles.modalOverlay}>
-          <div
-            onClick={() => setShowAddDevice(false)}
-            className={styles.modalBackdrop}
-          />
-          <div className={styles.modalContent}>
-            <h3 className={styles.modalTitle}>
-              {t('fleet.modalDevice.title')}
-            </h3>
-            <div className={styles.modalField}>
-              <label className={styles.modalLabel}>
-                {t('fleet.modalDevice.nameLabel')} *
-              </label>
-              <input
-                className="dialog-input"
-                value={newDeviceName}
-                onChange={(e) => setNewDeviceName(e.target.value)}
-                placeholder={t('fleet.modalDevice.namePlaceholder')}
-              />
-            </div>
-            <div className={styles.modalField}>
-              <label className={styles.modalLabel}>
-                {t('fleet.modalDevice.imeiLabel')} *
-              </label>
-              <input
-                className="dialog-input"
-                value={newDeviceId}
-                onChange={(e) => setNewDeviceId(e.target.value)}
-                placeholder={t('fleet.modalDevice.imeiPlaceholder')}
-              />
-            </div>
-            <div className={styles.modalActions}>
-              <button
-                type="button"
-                onClick={() => setShowAddDevice(false)}
-                className={styles.cancelBtn}
-              >
-                {t('fleet.modalDevice.cancel')}
-              </button>
-              <button
-                type="button"
-                disabled={!newDeviceName.trim() || !newDeviceId.trim() || addDeviceMutation.isPending}
-                onClick={() => addDeviceMutation.mutate({ name: newDeviceName.trim(), uniqueId: newDeviceId.trim() })}
-                className={styles.submitBtn}
-                style={{ opacity: (!newDeviceName.trim() || !newDeviceId.trim()) ? 0.5 : 1 }}
-              >
-                {addDeviceMutation.isPending ? t('fleet.modalDevice.adding') : t('fleet.modalDevice.add')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

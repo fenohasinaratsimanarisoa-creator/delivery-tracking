@@ -468,7 +468,13 @@
       "fuelType": "Type de carburant",
       "theoreticalConsumption": "Consommation théorique (L/100km)",
       "positionSource": "Source de position",
-      "traccarDeviceId": "Dispositif Traccar"
+      "traccarDeviceId": "Dispositif Traccar",
+      "imei": "IMEI du traceur GPS"
+    },
+    "imeiPlaceholder": "Ex. 863295042345678",
+    "imeiHint": {
+      "new": "Saisissez l'IMEI inscrit sur le traceur — tout le reste (création, liaison) est automatique.",
+      "linked": "Un traceur est déjà lié (ID Traccar : {{deviceId}}). Laissez vide pour le garder, ou saisissez un nouvel IMEI pour le remplacer."
     },
     "fuelTypes": {
       "gasoline": "Essence",
@@ -527,7 +533,8 @@
       "adding": "Ajout..."
     },
     "validation": {
-      "invalidYear": "Année invalide (ex. 2024)"
+      "invalidYear": "Année invalide (ex. 2024)",
+      "invalidImei": "IMEI invalide (14 à 16 chiffres attendus)"
     }
   },
   "drivers": {
