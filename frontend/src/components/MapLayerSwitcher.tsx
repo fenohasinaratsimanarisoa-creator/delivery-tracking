@@ -23,14 +23,21 @@ function saveLayer(layer: string) {
 // Couches exposées dans le sélecteur. La couche par défaut (« Plan ») est CARTO
 // voyager avec tuiles @2x (retina) : nette sur écrans 4K/HiDPI, là où OSM 256px
 // était étirée et floue. La couche « Sombre » colle au thème sombre de l'app.
+//
+// Satellite : UNE SEULE entrée « Satellite » dans le sélecteur, jamais deux —
+// avant, « Satellite » (imagerie Esri brute, SANS aucun nom de lieu) et
+// « Satellite HD » (Mapbox, avec labels superposés) coexistaient, et rien ne
+// signalait à l'utilisateur laquelle choisir pour avoir les noms de lieux
+// visibles (demande explicite : lisibilité type Google Maps hybride). Quand un
+// token Mapbox est configuré, l'entrée « Satellite » pointe directement vers
+// la version labellisée (satelliteHD) ; sinon repli sur Esri (fonctionnel mais
+// sans texte, mieux que rien sans compte Mapbox).
 const SWITCHER_LAYERS = [
   TILE_PROVIDERS.plan,
   TILE_PROVIDERS.planDark,
-  // "Satellite HD" seulement si un token Mapbox a été configuré au build —
-  // sinon son url est vide (voir tileProviders.ts) et ajouterait une couche
-  // cassée au sélecteur.
-  ...(isSatelliteHDAvailable ? [TILE_PROVIDERS.satelliteHD] : []),
-  TILE_PROVIDERS.satellite,
+  isSatelliteHDAvailable
+    ? { ...TILE_PROVIDERS.satelliteHD, key: 'satellite', name: TILE_PROVIDERS.satellite.name }
+    : TILE_PROVIDERS.satellite,
   TILE_PROVIDERS.planLight,
 ];
 
