@@ -161,16 +161,25 @@ export class RoutingService {
    * le service `/trip/` d'OSRM (résolution TSP approchée, déjà supporté par
    * notre instance osrm-routed --algorithm mld, aucune config OSRM à changer).
    *
-   * `source=any&destination=any&roundtrip=false` : pas de point de départ/
-   * arrivée imposé (pas de notion de dépôt fixe dans le schéma Delivery
-   * aujourd'hui) — OSRM choisit le meilleur chemin (pas un circuit fermé)
-   * parmi TOUS les points fournis. Même politique « aucun fallback externe »
-   * que getOsrmDirections/matchToRoad (conformité DPA — voir leurs commentaires).
+   * `roundtrip=false&source=first&destination=any` : BUG CORRIGÉ EN PROD
+   * (2026-09-18) — `source=any&destination=any` (pas de départ/arrivée fixé du
+   * tout) semblait le choix logique vu l'absence de dépôt fixe dans le schéma
+   * Delivery, mais OSRM renvoie 400 "NotImplemented" pour cette combinaison :
+   * un TSP ouvert (pas un circuit fermé) sans AUCUNE extrémité fixée n'est pas
+   * un problème qu'OSRM résout — il faut fixer au moins une extrémité (vérifié
+   * empiriquement contre l'instance osrm-routed réelle, pas dans la doc). On
+   * fixe le DÉPART sur le premier point fourni (ordre d'entrée arbitraire côté
+   * appelant — aucun dépôt réel), l'arrivée reste libre : OSRM optimise
+   * librement l'ordre des points restants. `roundtrip=true` (circuit fermé)
+   * aurait aussi marché mais fausserait la distance totale affichée (ajoute un
+   * retour au point de départ que le chauffeur ne fait jamais en réalité).
+   * Même politique « aucun fallback externe » que getOsrmDirections/
+   * matchToRoad (conformité DPA — voir leurs commentaires).
    */
   async optimizeTrip(dto: OptimizeTripDto): Promise<OptimizeTripResponse> {
     const profile = dto.profile || 'driving';
     const coords = dto.coordinates.map((c) => `${c[1]},${c[0]}`).join(';');
-    const url = `${this.osrmBaseUrl}/trip/v1/${profile}/${coords}?roundtrip=false&source=any&destination=any&geometries=geojson&overview=full&steps=false`;
+    const url = `${this.osrmBaseUrl}/trip/v1/${profile}/${coords}?roundtrip=false&source=first&destination=any&geometries=geojson&overview=full&steps=false`;
 
     this.logger.debug(`OSRM trip request: ${url}`);
 
@@ -188,7 +197,12 @@ export class RoutingService {
     }
 
     if (!response.ok) {
-      this.logger.error(`Local OSRM trip failed: HTTP ${response.status}`);
+      // Corps de la réponse loggé (pas juste le status) : c'est ce qui a permis
+      // de diagnostiquer le vrai problème en prod (400 "NotImplemented" d'OSRM,
+      // pas une panne) — un simple "HTTP 400" n'aurait pas suffi sans SSH+curl
+      // manuel contre osrm-routed.
+      const body = await response.text().catch(() => '');
+      this.logger.error(`Local OSRM trip failed: HTTP ${response.status} — ${body}`);
       throw new HttpException('Routing unavailable', HttpStatus.SERVICE_UNAVAILABLE);
     }
 

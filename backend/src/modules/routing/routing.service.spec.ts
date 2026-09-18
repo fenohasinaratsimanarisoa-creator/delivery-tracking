@@ -284,7 +284,12 @@ describe('RoutingService', () => {
       expect(result.polyline[0]).toEqual([-18.95, 47.55]);
     });
 
-    it('appelle le service /trip/ OSRM local avec roundtrip=false (pas de dépôt fixe)', async () => {
+    it('appelle le service /trip/ OSRM local avec roundtrip=false&source=first&destination=any', async () => {
+      // source=first est OBLIGATOIRE : OSRM renvoie 400 "NotImplemented" pour
+      // source=any&destination=any en roundtrip=false (vérifié en prod,
+      // 2026-09-18) — un TSP ouvert sans AUCUNE extrémité fixée n'est pas un
+      // problème qu'OSRM résout. Ne pas revenir à source=any sans avoir
+      // retesté contre une vraie instance osrm-routed.
       mockFetchOnce(osrmTripResponse);
 
       await service.optimizeTrip(dto);
@@ -292,6 +297,8 @@ describe('RoutingService', () => {
       const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
       expect(url).toContain('localhost:5000/trip/v1/driving/');
       expect(url).toContain('roundtrip=false');
+      expect(url).toContain('source=first');
+      expect(url).toContain('destination=any');
       expect(url).not.toContain('project-osrm.org');
     });
 
