@@ -1,0 +1,104 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg, 20px);
+}
+
+.loading,
+.empty {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+  padding: var(--space-md) 0;
+  text-align: center;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg, 8px);
+  background: var(--color-surface);
+}
+
+.itemMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.itemLabel {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.itemInterval {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-tertiary);
+}
+
+.itemStatus {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.itemRemaining {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.deleteBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius-md, 6px);
+  transition: background var(--duration-fast, 120ms) var(--ease-smooth, ease), color var(--duration-fast, 120ms) var(--ease-smooth, ease);
+}
+
+.deleteBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-red) 12%, transparent);
+  color: var(--color-red);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.formTitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm);
+}

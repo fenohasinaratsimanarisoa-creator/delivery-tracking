@@ -497,7 +497,42 @@
       "licensePlate": "Plate",
       "fuelType": "Fuel",
       "status": "Status",
-      "driver": "Driver"
+      "driver": "Driver",
+      "maintenance": "Maintenance"
+    },
+    "maintenance": {
+      "title": "Maintenance — {{vehicle}}",
+      "openAria": "Manage maintenance",
+      "empty": "No maintenance rule configured for this vehicle.",
+      "addTitle": "Add a rule",
+      "add": "Add rule",
+      "missingFields": "Fill in a label, a type, and at least one interval (km or months)",
+      "everyKm": "every {{km}} km",
+      "everyMonths": "every {{months}} months",
+      "remainingKm": "{{km}} km left",
+      "overdueKm": "{{km}} km overdue",
+      "remainingDays": "{{days}} days left",
+      "overdueDays": "{{days}} days overdue",
+      "deleteAria": "Delete rule {{label}}",
+      "status": {
+        "ok": "Up to date",
+        "upcoming": "Coming up",
+        "overdue": "Overdue"
+      },
+      "fields": {
+        "label": "Label",
+        "labelPlaceholder": "e.g. Oil change",
+        "type": "Type",
+        "typePlaceholder": "e.g. oil_change",
+        "typeHint": "Used to match the corresponding maintenance history",
+        "intervalKm": "Interval (km)",
+        "intervalMonths": "Interval (months)"
+      },
+      "toast": {
+        "created": "Maintenance rule added",
+        "deleted": "Maintenance rule deleted",
+        "error": "Error performing this operation"
+      }
     },
     "status": {
       "active": "Active",
@@ -1322,6 +1357,11 @@
     },
     "recentDeliveries": "Recent deliveries",
     "noDeliveriesToday": "No deliveries today",
+    "maintenanceDue": "Maintenance due",
+    "maintenanceStatus": {
+      "upcoming": "Coming up",
+      "overdue": "Overdue"
+    },
     "reliabilityScore": "Operational reliability",
     "vsPreviousMonth": "vs prev. month",
     "perfectMonth": "100% on-time deliveries in {{month}}",

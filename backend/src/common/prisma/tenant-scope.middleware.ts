@@ -13,6 +13,7 @@ const TENANT_SCOPED_MODELS = new Set([
   'FuelLog',
   'FuelPriceHistory',
   'MaintenanceRecord',
+  'VehicleMaintenanceSchedule',
   'DailyFuelReport',
   'Invitation',
   'AuditLog',

@@ -226,6 +226,59 @@ function RecentDeliveriesMini() {
   );
 }
 
+// Widget additif (mvpromax.md §1.2) : même pattern autonome que
+// RecentDeliveriesMini juste au-dessus (fetch propre, null pendant le
+// chargement, réutilise les classes .recentPanel/.recentItem génériques —
+// aucune nouvelle CSS, aucun impact sur le reste du Dashboard).
+interface DueMaintenance {
+  id: string;
+  label: string;
+  vehicleLabel: string;
+  status: 'upcoming' | 'overdue';
+}
+
+function MaintenanceDueMini() {
+  const { t } = useTranslation();
+  const [items, setItems] = useState<DueMaintenance[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get('/maintenance-schedules/due-soon')
+      .then((r) => { setItems((r.data ?? []).slice(0, 5)); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const statusColor: Record<string, string> = {
+    overdue: 'var(--color-red)',
+    upcoming: 'var(--color-accent)',
+  };
+
+  if (loading || items.length === 0) return null;
+
+  return (
+    <div className={styles.recentPanel}>
+      <div className={styles.recentHeader}>
+        <span className={styles.recentTitle}>{t('dashboard.maintenanceDue')}</span>
+        <span className={styles.recentCount}>{items.length}</span>
+      </div>
+      <div className={styles.recentList}>
+        {items.map((item) => (
+          <div key={item.id} className={styles.recentItem}>
+            <span className={styles.recentDot} style={{ background: statusColor[item.status] }} />
+            <span className={styles.recentItemTitle}>{item.vehicleLabel} — {item.label}</span>
+            <span
+              className={styles.recentStatusPill}
+              style={{ color: statusColor[item.status], borderColor: statusColor[item.status] }}
+            >
+              {t(`dashboard.maintenanceStatus.${item.status}`)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PerfectMonthBadge({ month }: { month: string }) {
   const { t } = useTranslation();
   return (
@@ -357,6 +410,7 @@ export default function DashboardPage() {
                 {deliveryStats.length > 0 && <MiniChart data={deliveryStats} />}
                 {fuelData.length > 0 && <FuelMiniChart data={fuelData} />}
                 <RecentDeliveriesMini />
+                <MaintenanceDueMini />
               </div>
             )}
           </div>
@@ -401,6 +455,7 @@ export default function DashboardPage() {
                 {deliveryStats.length > 0 && <MiniChart data={deliveryStats} />}
                 {fuelData.length > 0 && <FuelMiniChart data={fuelData} />}
                 <RecentDeliveriesMini />
+                <MaintenanceDueMini />
               </>
             )}
 

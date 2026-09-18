@@ -497,7 +497,42 @@
       "licensePlate": "Plaque",
       "fuelType": "Carburant",
       "driver": "Chauffeur",
+      "maintenance": "Entretien",
       "status": "Statut"
+    },
+    "maintenance": {
+      "title": "Entretien — {{vehicle}}",
+      "openAria": "Gérer l'entretien",
+      "empty": "Aucune règle d'entretien configurée pour ce véhicule.",
+      "addTitle": "Ajouter une règle",
+      "add": "Ajouter la règle",
+      "missingFields": "Renseignez un libellé, un type, et au moins un intervalle (km ou mois)",
+      "everyKm": "tous les {{km}} km",
+      "everyMonths": "tous les {{months}} mois",
+      "remainingKm": "{{km}} km restants",
+      "overdueKm": "dépassé de {{km}} km",
+      "remainingDays": "{{days}} j restants",
+      "overdueDays": "dépassé de {{days}} j",
+      "deleteAria": "Supprimer la règle {{label}}",
+      "status": {
+        "ok": "À jour",
+        "upcoming": "Bientôt",
+        "overdue": "En retard"
+      },
+      "fields": {
+        "label": "Libellé",
+        "labelPlaceholder": "Ex. Vidange",
+        "type": "Type",
+        "typePlaceholder": "Ex. vidange",
+        "typeHint": "Sert à retrouver l'historique d'entretien correspondant",
+        "intervalKm": "Intervalle (km)",
+        "intervalMonths": "Intervalle (mois)"
+      },
+      "toast": {
+        "created": "Règle d'entretien ajoutée",
+        "deleted": "Règle d'entretien supprimée",
+        "error": "Erreur lors de l'opération"
+      }
     },
     "status": {
       "active": "Actif",
@@ -1322,6 +1357,11 @@
     },
     "recentDeliveries": "Dernières livraisons",
     "noDeliveriesToday": "Aucune livraison aujourd'hui",
+    "maintenanceDue": "Entretien à prévoir",
+    "maintenanceStatus": {
+      "upcoming": "Bientôt",
+      "overdue": "En retard"
+    },
     "reliabilityScore": "Fiabilité opérationnelle",
     "vsPreviousMonth": "vs mois préc.",
     "perfectMonth": "100% de livraisons à l'heure en {{month}}",

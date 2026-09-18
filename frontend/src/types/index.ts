@@ -52,6 +52,23 @@ export interface Vehicle {
   } | null;
 }
 
+export interface MaintenanceSchedule {
+  id: string;
+  label: string;
+  type: string;
+  intervalKm: number | null;
+  intervalMonths: number | null;
+  isActive: boolean;
+  vehicleId: string;
+  vehicleLabel: string;
+  referenceDate: string;
+  kmSinceService: number | null;
+  kmRemaining: number | null;
+  nextDueDate: string | null;
+  daysRemaining: number | null;
+  status: 'ok' | 'upcoming' | 'overdue';
+}
+
 export interface VehicleListItem {
   id: string;
   brand: string;

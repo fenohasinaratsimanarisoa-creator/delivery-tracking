@@ -146,29 +146,30 @@ model Company {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  users              User[]
-  vehicles           Vehicle[]
-  drivers            Driver[]
-  deliveries         Delivery[]
-  fuelLogs           FuelLog[]
-  maintenanceRecords MaintenanceRecord[]
-  notifications      Notification[]
-  settings           CompanySettings?
-  fuelSettings       CompanyFuelSettings?
-  invitations        Invitation[]
-  auditLogs          AuditLog[]
-  platformAuditLogs  PlatformAuditLog[]
-  subscription       Subscription?
-  invoices           Invoice[]
-  usageRecords       UsageRecord[]
-  apiKeys            ApiKey[]
-  webhooks           Webhook[]
-  geofences          Geofence[]
-  fuelPriceHistory   FuelPriceHistory[]
-  gpsPositions       GpsPosition[]
-  dailyFuelReports   DailyFuelReport[]
-  vehicleAssignments VehicleAssignmentHistory[]
-  paymentProofs      PaymentProof[]
+  users                User[]
+  vehicles             Vehicle[]
+  drivers              Driver[]
+  deliveries           Delivery[]
+  fuelLogs             FuelLog[]
+  maintenanceRecords   MaintenanceRecord[]
+  maintenanceSchedules VehicleMaintenanceSchedule[]
+  notifications        Notification[]
+  settings             CompanySettings?
+  fuelSettings         CompanyFuelSettings?
+  invitations          Invitation[]
+  auditLogs            AuditLog[]
+  platformAuditLogs    PlatformAuditLog[]
+  subscription         Subscription?
+  invoices             Invoice[]
+  usageRecords         UsageRecord[]
+  apiKeys              ApiKey[]
+  webhooks             Webhook[]
+  geofences            Geofence[]
+  fuelPriceHistory     FuelPriceHistory[]
+  gpsPositions         GpsPosition[]
+  dailyFuelReports     DailyFuelReport[]
+  vehicleAssignments   VehicleAssignmentHistory[]
+  paymentProofs        PaymentProof[]
 
   @@map("companies")
 }
@@ -273,15 +274,15 @@ model User {
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
 
-  assignedDeliveries    Delivery[]       @relation("AssignedDriverDeliveries")
-  clientDeliveries      Delivery[]       @relation("ClientDeliveries")
-  driver                Driver?
-  notifications         Notification[]
-  resolvedNotifications Notification[]   @relation("ResolvedNotifications")
-  preferences           UserPreferences?
-  sessions              UserSession[]
-  auditLogs             AuditLog[]
-  sentInvitations       Invitation[]     @relation("SentInvitations")
+  assignedDeliveries     Delivery[]       @relation("AssignedDriverDeliveries")
+  clientDeliveries       Delivery[]       @relation("ClientDeliveries")
+  driver                 Driver?
+  notifications          Notification[]
+  resolvedNotifications  Notification[]   @relation("ResolvedNotifications")
+  preferences            UserPreferences?
+  sessions               UserSession[]
+  auditLogs              AuditLog[]
+  sentInvitations        Invitation[]     @relation("SentInvitations")
   paymentProofsSubmitted PaymentProof[]
 
   @@index([companyId])
@@ -392,14 +393,15 @@ model Vehicle {
   companyId String  @map("company_id") @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
 
-  driver             Driver?
-  deliveries         Delivery[]
-  fuelLogs           FuelLog[]
-  maintenanceRecords MaintenanceRecord[]
-  gpsPositions       GpsPosition[]
-  geofenceEvents     GeofenceEvent[]
-  dailyFuelReports   DailyFuelReport[]
-  vehicleAssignments VehicleAssignmentHistory[]
+  driver               Driver?
+  deliveries           Delivery[]
+  fuelLogs             FuelLog[]
+  maintenanceRecords   MaintenanceRecord[]
+  maintenanceSchedules VehicleMaintenanceSchedule[]
+  gpsPositions         GpsPosition[]
+  geofenceEvents       GeofenceEvent[]
+  dailyFuelReports     DailyFuelReport[]
+  vehicleAssignments   VehicleAssignmentHistory[]
 
   @@unique([companyId, licensePlate])
   @@index([companyId])
@@ -700,6 +702,36 @@ model MaintenanceRecord {
   @@map("maintenance_records")
 }
 
+// Règle de seuil d'entretien (mvpromax.md §1.2) — ex. "Vidange tous les 5000 km
+// ou 6 mois". Le "dernier entretien fait" pour cette règle est déduit du
+// MaintenanceRecord le plus récent du même vehicleId+type (pas dupliqué ici) ;
+// à défaut (aucun MaintenanceRecord encore créé), VehicleMaintenanceService
+// utilise createdAt comme point de départ du décompte. Le kilométrage parcouru
+// depuis est déduit de la somme de DailyFuelReport.distanceKm (déjà calculée
+// et testée pour le rapport carburant — aucune nouvelle logique de distance).
+model VehicleMaintenanceSchedule {
+  id             String   @id @default(uuid()) @db.Uuid
+  label          String
+  // Même valeur que MaintenanceRecord.type pour lier la règle à son historique
+  // (texte libre, pas d'enum — cohérent avec MaintenanceRecord.type existant).
+  type           String
+  intervalKm     Int?     @map("interval_km")
+  intervalMonths Int?     @map("interval_months")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  vehicleId String  @map("vehicle_id") @db.Uuid
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([vehicleId])
+  @@map("vehicle_maintenance_schedules")
+}
+
 /// Données comptables — jamais supprimées (soft-delete), conservées pour fiscalité.
 /// Anonymisées via le job company-purge après délai de grâce.
 model DailyFuelReport {
@@ -923,13 +955,13 @@ enum PaymentProofStatus {
 }
 
 model PaymentProof {
-  id            String      @id @default(uuid()) @db.Uuid
-  companyId     String      @map("company_id") @db.Uuid
-  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  submittedById String      @map("submitted_by_id") @db.Uuid
-  submittedBy   User        @relation(fields: [submittedById], references: [id])
-  claimedPlanId String      @map("claimed_plan_id") @db.Uuid
-  claimedPlan   BillingPlan @relation(fields: [claimedPlanId], references: [id])
+  id              String                @id @default(uuid()) @db.Uuid
+  companyId       String                @map("company_id") @db.Uuid
+  company         Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  submittedById   String                @map("submitted_by_id") @db.Uuid
+  submittedBy     User                  @relation(fields: [submittedById], references: [id])
+  claimedPlanId   String                @map("claimed_plan_id") @db.Uuid
+  claimedPlan     BillingPlan           @relation(fields: [claimedPlanId], references: [id])
   // Ariary, unités entières — instantané de BillingPlan.price au moment de la
   // soumission (le prix affiché au client ne doit jamais bouger rétroactivement
   // si le tarif du plan change ensuite).
@@ -938,7 +970,7 @@ model PaymentProof {
   paymentMethod   PlatformPaymentMethod @relation(fields: [paymentMethodId], references: [id])
 
   // Référence de transaction / nom de l'expéditeur (texte libre fourni par le client).
-  reference String
+  reference      String
   // Capture d'écran Mobile Money — stockée en base (même idiome qu'Invoice.pdfData),
   // pas de S3/disque : volume faible, évite d'introduire une nouvelle dépendance.
   proofImage     Bytes  @map("proof_image")
@@ -1067,7 +1099,7 @@ model PlatformAdmin {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  auditLogs            PlatformAuditLog[]
+  auditLogs             PlatformAuditLog[]
   paymentProofsReviewed PaymentProof[]
 
   @@map("platform_admins")

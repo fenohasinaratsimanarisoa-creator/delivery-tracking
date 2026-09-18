@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Search, Power, PowerOff, Plus, Truck, CarFront, Fuel, Zap, Droplets,
   Battery, Flame, IdCard, CheckCircle2, CircleOff, UserCheck, SearchX,
-  AlertTriangle,
+  AlertTriangle, Wrench,
 } from 'lucide-react';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
@@ -13,6 +13,7 @@ import api from '../services/api/client';
 import DataTable from '../components/DataTable';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
+import VehicleMaintenanceModal from '../components/VehicleMaintenanceModal';
 import { useEntityForm, type FieldDef, type FormSection } from '../hooks/useEntityForm';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../hooks/AuthContext';
@@ -149,6 +150,7 @@ export default function FleetPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Vehicle | null>(null);
   const [deleting, setDeleting] = useState<Vehicle | null>(null);
+  const [maintenanceVehicle, setMaintenanceVehicle] = useState<Vehicle | null>(null);
   const [_highlightedId, setHighlightedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
@@ -442,6 +444,20 @@ export default function FleetPage() {
                   render: (r: Vehicle) => <DriverCell driver={r.driver} />,
                 },
                 {
+                  // Colonne purement additive (mvpromax.md §1.2) : n'affecte
+                  // aucune donnée/colonne existante, ouvre une modale dédiée.
+                  key: 'maintenance', label: t('fleet.table.maintenance'),
+                  render: (r: Vehicle) => (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<Wrench size={14} />}
+                      onClick={() => setMaintenanceVehicle(r)}
+                      title={t('fleet.maintenance.openAria')}
+                    />
+                  ),
+                },
+                {
                   key: 'isActive', label: t('fleet.table.status'),
                   render: (r: Vehicle) => (
                     <span className={styles.statusCell}>
@@ -554,6 +570,15 @@ export default function FleetPage() {
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />
+
+      {maintenanceVehicle && (
+        <VehicleMaintenanceModal
+          vehicleId={maintenanceVehicle.id}
+          vehicleLabel={`${maintenanceVehicle.brand} ${maintenanceVehicle.model} (${maintenanceVehicle.licensePlate})`}
+          open={!!maintenanceVehicle}
+          onClose={() => setMaintenanceVehicle(null)}
+        />
+      )}
     </div>
   );
 }
