@@ -1,3 +1,12 @@
+// DORMANT (conservé volontairement, pas mort) : frontend de l'ancien flux de
+// paiement automatisé (Stripe checkout + Mvola API), pas routé dans App.tsx
+// depuis le passage au paiement manuel (voir features/manual-billing/PaywallPage.tsx,
+// routé sous /paywall). Backend correspondant : backend/src/modules/billing/
+// (billing.service.ts, stripe.service.ts, mobile-money.service.ts), lui aussi
+// dormant (BILLING_ENABLED=false en prod, aucune clé Stripe configurée) mais
+// fonctionnel — voir l'audit du mode de paiement, 2026-09-18. Gardé ici pour
+// reprise rapide si l'automatisation du paiement (Mvola Merchant Pay notamment)
+// est un jour réactivée, plutôt que de tout réécrire depuis l'historique git.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';

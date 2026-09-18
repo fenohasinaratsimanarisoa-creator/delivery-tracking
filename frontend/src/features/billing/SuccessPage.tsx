@@ -1,3 +1,5 @@
+// DORMANT (conservé volontairement, pas mort) : voir la bannière identique en
+// tête de PlansPage.tsx (même dossier) pour le contexte complet.
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams, Link } from 'react-router-dom';
