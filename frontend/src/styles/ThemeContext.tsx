@@ -9,7 +9,7 @@ interface ThemeCtx {
 }
 
 const ThemeContext = createContext<ThemeCtx>({
-  mode: 'dark',
+  mode: 'light',
   toggle: () => {},
   setMode: () => {},
 });
@@ -21,7 +21,7 @@ function getInitialMode(): ThemeMode {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'light' || stored === 'dark') return stored;
   } catch {}
-  return 'dark';
+  return 'light';
 }
 
 function injectStyles(mode: ThemeMode) {
