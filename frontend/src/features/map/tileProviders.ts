@@ -34,13 +34,13 @@ export const TILE_PROVIDERS: Record<
   plan: {
     key: 'plan',
     name: 'Plan',
-    // "navigation-day-v1" (pas "streets-v12") : style Mapbox conçu pour être lu
-    // d'un coup d'œil en conduite — noms de lieux/rues nettement plus gros et
-    // plus gras que le style "streets" standard, le plus proche du rendu
-    // Google Maps parmi les styles Mapbox stock (demande explicite : labels
-    // "très visibles").
+    // "streets-v12" (PAS "navigation-day-v1" — testé puis rejeté : ce style
+    // colore les grands axes en vert vif, trop "GPS voiture", pas assez sobre
+    // pour un dashboard flotte pro). Labels de lieux/rues déjà nets à ce
+    // niveau ; le style "navigation" n'apporte que du contraste de couleur, pas
+    // de vraie lisibilité en plus.
     url: MAPBOX_TOKEN
-      ? `https://api.mapbox.com/styles/v1/mapbox/navigation-day-v1/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
+      ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
       : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: MAPBOX_TOKEN
       ? '&copy; Mapbox &copy; OpenStreetMap contributors'
@@ -51,10 +51,8 @@ export const TILE_PROVIDERS: Record<
   planDark: {
     key: 'planDark',
     name: 'Sombre',
-    // "navigation-night-v1" : pendant sombre de navigation-day-v1 ci-dessus,
-    // mêmes labels agrandis/renforcés adaptés au thème sombre.
     url: MAPBOX_TOKEN
-      ? `https://api.mapbox.com/styles/v1/mapbox/navigation-night-v1/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
+      ? `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
       : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: MAPBOX_TOKEN
       ? '&copy; Mapbox &copy; OpenStreetMap contributors'
