@@ -170,6 +170,7 @@ model Company {
   dailyFuelReports     DailyFuelReport[]
   vehicleAssignments   VehicleAssignmentHistory[]
   paymentProofs        PaymentProof[]
+  driverScores         DriverScore[]
 
   @@map("companies")
 }
@@ -402,6 +403,7 @@ model Vehicle {
   geofenceEvents       GeofenceEvent[]
   dailyFuelReports     DailyFuelReport[]
   vehicleAssignments   VehicleAssignmentHistory[]
+  driverScores         DriverScore[]
 
   @@unique([companyId, licensePlate])
   @@index([companyId])
@@ -436,6 +438,7 @@ model Driver {
   deliveries         Delivery[]
   gpsPositions       GpsPosition[]
   vehicleAssignments VehicleAssignmentHistory[]
+  driverScores       DriverScore[]
 
   @@unique([companyId, licenseNumber])
   @@index([companyId])
@@ -763,6 +766,35 @@ model DailyFuelReport {
   @@index([vehicleId])
   @@index([vehicleId, reportDate])
   @@map("daily_fuel_reports")
+}
+
+/// Score de conduite quotidien (0-100) par (chauffeur, véhicule, jour), calculé
+/// par un cron nocturne à partir des positions GPS du jour — voir
+/// DriverScoreService.computeScore(). Une ligne par (driverId, vehicleId,
+/// scoreDate), même granularité que DailyFuelReport dont ce calcul réutilise
+/// le regroupement déjà résolu (distanceKm notamment).
+model DriverScore {
+  id             String   @id @default(uuid()) @db.Uuid
+  scoreDate      DateTime @map("score_date")
+  score          Int
+  speedingEvents Int      @default(0) @map("speeding_events")
+  harshEvents    Int      @default(0) @map("harsh_events")
+  distanceKm     Float    @default(0) @map("distance_km")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  companyId String  @map("company_id") @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  driverId String @map("driver_id") @db.Uuid
+  driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  vehicleId String  @map("vehicle_id") @db.Uuid
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@unique([driverId, vehicleId, scoreDate])
+  @@index([companyId, scoreDate])
+  @@index([driverId, scoreDate])
+  @@map("driver_scores")
 }
 
 /// Données comptables — jamais supprimées (soft-delete), conservées pour fiscalité.

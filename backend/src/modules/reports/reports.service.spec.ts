@@ -1,6 +1,7 @@
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { ReportsService } from './reports.service';
+import { DriverScoreService } from '../driver-score/driver-score.service';
 
 const mockPrisma = {
   delivery: {
@@ -23,14 +24,20 @@ const mockCache = {
   set: jest.fn(),
 };
 
+const mockDriverScoreService = {
+  getScoreSummary: jest.fn(),
+};
+
 describe('ReportsService', () => {
   let service: ReportsService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDriverScoreService.getScoreSummary.mockResolvedValue(new Map());
     service = new ReportsService(
       mockPrisma as unknown as PrismaService,
       mockCache as unknown as CacheService,
+      mockDriverScoreService as unknown as DriverScoreService,
     );
   });
 
@@ -307,7 +314,24 @@ describe('ReportsService', () => {
       // getReliabilityScore — voir le commentaire dans reports.service.ts).
       expect(result.drivers[0].failedDeliveries).toBe(1);
       expect(result.drivers[0].onTimeRate).toBe(33);
+      expect(result.drivers[0].avgScore).toBeNull();
       expect(mockCache.set).toHaveBeenCalled();
+    });
+
+    it('attaches the average driving score when DriverScore data exists for the period', async () => {
+      mockCache.get.mockResolvedValueOnce(null);
+      mockPrisma.driver.findMany.mockResolvedValueOnce([
+        { id: 'driver-1', firstName: 'Alice', lastName: 'Driver', phone: null, isActive: true, deliveries: [] },
+      ]);
+      mockDriverScoreService.getScoreSummary.mockResolvedValueOnce(
+        new Map([
+          ['driver-1', { avgScore: 87, daysScored: 5, distanceKm: 320, speedingEvents: 2, harshEvents: 1 }],
+        ]),
+      );
+
+      const result = await service.getDriverReport('company-1');
+
+      expect(result.drivers[0].avgScore).toBe(87);
     });
   });
 });

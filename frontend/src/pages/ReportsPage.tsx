@@ -59,6 +59,7 @@ interface DriverReportEntry {
   failedDeliveries: number;
   onTimeDeliveries: number;
   onTimeRate: number;
+  avgScore: number | null;
 }
 
 interface DriverReport {
@@ -652,7 +653,7 @@ function DriverReport({ data, loading }: { data: DriverReport | undefined; loadi
             <table className={styles.table}>
               <thead>
                 <tr className={styles.tableHeadRow}>
-                  {[t('reports.table.driver'), t('reports.table.phone'), t('reports.table.deliveries'), t('reports.table.completed'), t('reports.table.onTime'), t('reports.table.punctuality'), t('reports.table.failed')].map((h) => (
+                  {[t('reports.table.driver'), t('reports.table.phone'), t('reports.table.deliveries'), t('reports.table.completed'), t('reports.table.onTime'), t('reports.table.punctuality'), t('reports.table.failed'), t('reports.table.score')].map((h) => (
                     <th key={h} className={styles.tableHeadCell}>{h}</th>
                   ))}
                 </tr>
@@ -685,6 +686,21 @@ function DriverReport({ data, loading }: { data: DriverReport | undefined; loadi
                       <span className={styles.cellNumber} style={{ color: d.failedDeliveries > 0 ? COLORS.red : 'inherit' }}>
                         {formatNumber(d.failedDeliveries)}
                       </span>
+                    </td>
+                    <td className={styles.tableCell}>
+                      {d.avgScore === null ? (
+                        <span className={styles.cellSub}>—</span>
+                      ) : (
+                        <span
+                          className={styles.ratePill}
+                          style={{
+                            color: d.avgScore >= 80 ? COLORS.teal : d.avgScore >= 50 ? COLORS.accent : COLORS.red,
+                            background: d.avgScore >= 80 ? 'rgba(34,197,94,0.12)' : d.avgScore >= 50 ? 'rgba(242,169,60,0.12)' : 'rgba(239,68,68,0.12)',
+                          }}
+                        >
+                          {d.avgScore}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

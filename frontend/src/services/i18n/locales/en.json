@@ -619,7 +619,11 @@
       "phone": "Phone",
       "license": "License",
       "status": "Status",
-      "vehicle": "Vehicle"
+      "vehicle": "Vehicle",
+      "score": "Score"
+    },
+    "score": {
+      "tooltip": "{{days}} day(s) scored, {{km}} km driven"
     },
     "status": {
       "active": "Active",
@@ -958,7 +962,8 @@
       "punctuality": "Punctuality",
       "failed": "Failed",
       "online": "Online",
-      "offline": "Offline"
+      "offline": "Offline",
+      "score": "Driving score"
     },
     "empty": {
       "noData": "No data for this period",

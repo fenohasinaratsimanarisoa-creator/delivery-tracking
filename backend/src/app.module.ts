@@ -22,6 +22,7 @@ import { VehiclesModule } from './modules/vehicles/vehicles.module';
 import { DriversModule } from './modules/drivers/drivers.module';
 import { DeliveriesModule } from './modules/deliveries/deliveries.module';
 import { VehicleMaintenanceModule } from './modules/vehicle-maintenance/vehicle-maintenance.module';
+import { DriverScoreModule } from './modules/driver-score/driver-score.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
 import { FuelConsumptionModule } from './modules/fuel-consumption/fuel-consumption.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -136,6 +137,7 @@ import { TenantModule } from './common/tenant/tenant.module';
     DriversModule,
     DeliveriesModule,
     VehicleMaintenanceModule,
+    DriverScoreModule,
     TrackingModule,
     FuelConsumptionModule,
     NotificationsModule,

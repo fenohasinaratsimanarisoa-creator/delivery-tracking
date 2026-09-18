@@ -13,7 +13,7 @@ import DataTable from '../components/DataTable';
 import EntityDialog, { DialogField, DialogSection, DialogSubmitBar } from '../components/EntityDialog';
 import { useEntityForm, type FieldDef, type FormSection } from '../hooks/useEntityForm';
 import { useToast } from '../components/Toast';
-import type { Driver, VehicleListItem } from '../types';
+import type { Driver, VehicleListItem, DriverScoreSummary } from '../types';
 import styles from './DriversPage.module.css';
 import { useCountUp } from '../hooks/useCountUp';
 
@@ -74,6 +74,17 @@ function VehicleCell({ vehicle }: { vehicle: Driver['vehicle'] }) {
   );
 }
 
+function ScoreCell({ summary }: { summary: DriverScoreSummary | undefined }) {
+  const { t } = useTranslation();
+  if (!summary) return <span className={styles.vehicleNone}>—</span>;
+  const variant = summary.avgScore >= 80 ? 'success' : summary.avgScore >= 50 ? 'warning' : 'danger';
+  return (
+    <span title={t('drivers.score.tooltip', { days: summary.daysScored, km: Math.round(summary.distanceKm) }) as string}>
+      <Badge variant={variant} size="sm">{summary.avgScore}</Badge>
+    </span>
+  );
+}
+
 function SkeletonRows() {
   return (
     <>
@@ -111,6 +122,16 @@ export default function DriversPage() {
     queryFn: () => api.get('/vehicles/list').then((r) => r.data),
   });
   const allVehicles: VehicleListItem[] = vehiclesData ?? [];
+
+  const { data: scoresData } = useQuery({
+    queryKey: ['driver-scores', 'summary'],
+    queryFn: () => api.get<DriverScoreSummary[]>('/driver-scores/summary?days=30').then((r) => r.data),
+  });
+  const scoresByDriver = useMemo(() => {
+    const map = new Map<string, DriverScoreSummary>();
+    for (const s of scoresData ?? []) map.set(s.driverId, s);
+    return map;
+  }, [scoresData]);
 
   const availableVehicles = useMemo(() => {
     return allVehicles.filter((v) => !v.driver || (editing && v.driver.id === editing.id));
@@ -318,6 +339,10 @@ export default function DriversPage() {
                 {
                   key: 'vehicle', label: t('drivers.table.vehicle'), sortable: false,
                   render: (r: Driver) => <VehicleCell vehicle={r.vehicle} />,
+                },
+                {
+                  key: 'score', label: t('drivers.table.score'), sortable: false,
+                  render: (r: Driver) => <ScoreCell summary={scoresByDriver.get(r.id)} />,
                 },
                 {
                   key: 'isActive', label: t('drivers.table.status'),

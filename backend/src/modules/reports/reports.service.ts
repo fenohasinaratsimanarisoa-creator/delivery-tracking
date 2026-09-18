@@ -3,12 +3,14 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { hasFuelAnomaly } from '../../common/fuel/fuel-anomaly.utils';
 import { isOnTime } from '../../common/utils/delivery-timing';
+import { DriverScoreService } from '../driver-score/driver-score.service';
 
 @Injectable()
 export class ReportsService {
   constructor(
     private prisma: PrismaService,
     private cache: CacheService,
+    private driverScoreService: DriverScoreService,
   ) {}
 
   async getDeliveryReport(companyId: string, from?: string, to?: string) {
@@ -179,6 +181,16 @@ export class ReportsService {
       },
     });
 
+    // Score de conduite (mvpromax.md §1.3) : moyenne des DriverScore quotidiens
+    // déjà calculés par le cron nocturne, sur la même fenêtre que le reste du
+    // rapport — null si aucune donnée GPS scorée sur la période (chauffeur
+    // inactif, ou avant le déploiement de la fonctionnalité).
+    const scoreSummary = await this.driverScoreService.getScoreSummary(
+      companyId,
+      periodStart,
+      periodEnd,
+    );
+
     const driverData = drivers.map((d) => {
       const completed = d.deliveries.filter((del) => del.status === 'delivered');
       const failed = d.deliveries.filter((del) => del.status === 'failed');
@@ -187,6 +199,7 @@ export class ReportsService {
       // dashboard.service.ts — un chauffeur avec des échecs ne doit pas afficher
       // un taux "à l'heure" de 100% calculé sur ses seules livraisons réussies.
       const onTimeDenominator = completed.length + failed.length;
+      const score = scoreSummary.get(d.id);
 
       return {
         driverId: d.id,
@@ -200,6 +213,7 @@ export class ReportsService {
           onTimeDenominator > 0 ? Math.round((onTime.length / onTimeDenominator) * 100) : 0,
         failedDeliveries: failed.length,
         inProgressDeliveries: d.deliveries.filter((del) => del.status === 'in_progress').length,
+        avgScore: score?.avgScore ?? null,
       };
     });
 

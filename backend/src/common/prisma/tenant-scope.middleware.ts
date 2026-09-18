@@ -15,6 +15,7 @@ const TENANT_SCOPED_MODELS = new Set([
   'MaintenanceRecord',
   'VehicleMaintenanceSchedule',
   'DailyFuelReport',
+  'DriverScore',
   'Invitation',
   'AuditLog',
   'ApiKey',

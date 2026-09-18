@@ -69,6 +69,15 @@ export interface MaintenanceSchedule {
   status: 'ok' | 'upcoming' | 'overdue';
 }
 
+export interface DriverScoreSummary {
+  driverId: string;
+  avgScore: number;
+  daysScored: number;
+  distanceKm: number;
+  speedingEvents: number;
+  harshEvents: number;
+}
+
 export interface VehicleListItem {
   id: string;
   brand: string;
