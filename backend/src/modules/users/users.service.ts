@@ -12,6 +12,7 @@ import type Redis from 'ioredis';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
+import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { VehicleAssignmentHistoryService } from '../../common/vehicle-assignment/vehicle-assignment-history.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import {
@@ -27,6 +28,7 @@ export class UsersService {
   constructor(
     private prisma: PrismaService,
     private assignmentHistory: VehicleAssignmentHistoryService,
+    private dataUpdateBus: DataUpdateBus,
     private configService: ConfigService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis | null = null,
   ) {}
@@ -375,6 +377,8 @@ export class UsersService {
       data.refreshTokenHash = null;
     }
 
+    let updatedDriverId: string | null = null;
+
     const result = await this.prisma.$transaction(async (tx) => {
       const updatedUser = await tx.user.update({
         where: { id },
@@ -409,12 +413,21 @@ export class UsersService {
         const driverData: any = {};
         if (dto.vehicleId !== undefined) driverData.vehicleId = dto.vehicleId;
         if (dto.licenseNumber !== undefined) driverData.licenseNumber = dto.licenseNumber;
+        // Driver.firstName/lastName/email/phone sont des copies dénormalisées de
+        // User (affichées partout : dashboard, carte temps réel, livraisons...).
+        // Sans ce sync, un changement de nom via Utilisateurs n'apparaît jamais
+        // ailleurs — la page Chauffeurs ne fait QUE l'assignation véhicule.
+        if (dto.firstName !== undefined) driverData.firstName = dto.firstName;
+        if (dto.lastName !== undefined) driverData.lastName = dto.lastName;
+        if (dto.email !== undefined) driverData.email = dto.email.toLowerCase().trim();
+        if (dto.phone !== undefined) driverData.phone = dto.phone;
 
         if (existingDriver) {
           await tx.driver.update({
             where: { id: existingDriver.id },
             data: driverData,
           });
+          updatedDriverId = existingDriver.id;
           if (dto.vehicleId !== undefined) {
             if (dto.vehicleId === null) {
               await this.assignmentHistory.unassign(tx, { driverId: existingDriver.id });
@@ -439,6 +452,7 @@ export class UsersService {
               ...(dto.vehicleId ? { vehicleId: dto.vehicleId } : {}),
             },
           });
+          updatedDriverId = createdDriver.id;
           if (dto.vehicleId) {
             await this.assignmentHistory.assign(tx, {
               companyId,
@@ -451,6 +465,18 @@ export class UsersService {
 
       return updatedUser;
     });
+
+    if (updatedDriverId) {
+      // Le nom/email/téléphone affichés partout (dashboard, carte, livraisons)
+      // viennent du record Driver — sans cette invalidation, les vues déjà
+      // ouvertes gardent l'ancien nom jusqu'à un rechargement complet.
+      this.dataUpdateBus.emitUpdate({
+        companyId,
+        entity: 'driver',
+        action: 'updated',
+        payload: { id: updatedDriverId },
+      });
+    }
 
     return result;
   }

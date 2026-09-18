@@ -376,15 +376,22 @@ export default function DriversPage() {
                   : def;
                 const val = driverForm.values[fieldName as keyof DriverFormValues] as string;
                 const err = driverForm.touched.has(fieldName) ? driverForm.errors[fieldName] : null;
+                const locked = fieldName !== 'vehicleId';
                 return (
-                  <DialogField key={fieldName} label={effectiveDef.label} error={err} required={effectiveDef.required}>
+                  <DialogField
+                    key={fieldName}
+                    label={effectiveDef.label}
+                    error={err}
+                    required={effectiveDef.required}
+                    hint={locked ? t('drivers.editFromUsersHint') : undefined}
+                  >
                     {effectiveDef.type === 'select' ? (
                       <select
                         className="dialog-select"
                         value={val}
                         onChange={(e) => driverForm.setValue(fieldName as keyof DriverFormValues, e.target.value)}
                         onBlur={() => driverForm.handleBlur(fieldName as keyof DriverFormValues)}
-                        disabled={fieldName !== 'vehicleId'}
+                        disabled={locked}
                       >
                         {effectiveDef.options?.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
@@ -399,7 +406,7 @@ export default function DriversPage() {
                         onBlur={() => driverForm.handleBlur(fieldName as keyof DriverFormValues)}
                         placeholder={effectiveDef.placeholder || ''}
                         autoFocus={effectiveDef.autoFocus}
-                        readOnly={fieldName !== 'vehicleId'}
+                        disabled={locked}
                       />
                     )}
                   </DialogField>

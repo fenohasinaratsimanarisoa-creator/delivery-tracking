@@ -537,6 +537,7 @@
     "countSubtitle": "{{count}} chauffeur dans votre flotte",
     "countSubtitle_plural": "{{count}} chauffeurs dans votre flotte",
     "fromUsersHint": "Les chauffeurs apparaissent ici depuis Utilisateurs (rôle Chauffeur)",
+    "editFromUsersHint": "Modifiable depuis Utilisateurs",
     "vehicleAssignment": "Assignation du véhicule",
     "noVehicle": "Aucun véhicule",
     "newDriver": "Nouveau chauffeur",

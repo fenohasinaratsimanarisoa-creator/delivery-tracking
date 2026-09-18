@@ -9,6 +9,7 @@ import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from './users.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { DataUpdateBus } from '../../common/events/data-update.bus';
 import { VehicleAssignmentHistoryService } from '../../common/vehicle-assignment/vehicle-assignment-history.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -84,6 +85,7 @@ describe('UsersService', () => {
         UsersService,
         { provide: PrismaService, useValue: mockPrisma },
         VehicleAssignmentHistoryService,
+        { provide: DataUpdateBus, useValue: { emitUpdate: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('15m') } },
         { provide: REDIS_CLIENT, useValue: null },
       ],

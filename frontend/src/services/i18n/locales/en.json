@@ -537,6 +537,7 @@
     "countSubtitle": "{{count}} driver in your fleet",
     "countSubtitle_plural": "{{count}} drivers in your fleet",
     "fromUsersHint": "Drivers appear here after being created from Users (Role “Driver”)",
+    "editFromUsersHint": "Editable from Users",
     "vehicleAssignment": "Vehicle assignment",
     "noVehicle": "No vehicle",
     "newDriver": "New driver",
