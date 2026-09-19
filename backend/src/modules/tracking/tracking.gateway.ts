@@ -21,7 +21,11 @@ import { UpdatePositionDto, BatchPositionDto } from './dto/update-position.dto';
 import { DataUpdateBus, DataUpdateEvent } from '../../common/events/data-update.bus';
 import { WsTrackingExceptionFilter } from '../../common/filters/ws-tracking-exception.filter';
 import { CompanyScopedContext } from '../../common/tenant/company-scoped-context';
-import { resolveGroundSpeed } from '../../common/geo/geo.utils';
+import {
+  resolveGroundSpeed,
+  selectSpeedWindowRef,
+  type GroundSpeedRef,
+} from '../../common/geo/geo.utils';
 import { computeConfidence } from '../../common/geo/gps-quality';
 import { getCorsOrigins } from '../../config/cors';
 
@@ -55,6 +59,12 @@ export class TrackingGateway
 
   private readonly logger = new Logger(TrackingGateway.name);
   private disconnectedDrivers = new Map<string, Date>();
+  /**
+   * Historique récent (≈ 2 min) des fixes téléphone par véhicule, pour la FENÊTRE de
+   * vitesse (audit 2026-09-19) : à basse vitesse le pas entre deux fixes est sous le
+   * seuil de bruit pairwise, la vitesse était forcée à 0 en roulant.
+   */
+  private readonly speedWindows = new Map<string, GroundSpeedRef[]>();
   private driverCleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   private dataUpdateListener: (event: DataUpdateEvent) => void;
@@ -229,6 +239,11 @@ export class TrackingGateway
       // position qui n'a pas bougé. La valeur RÉSOLUE est persistée ET diffusée —
       // sans elle, un véhicule immobile affichait ≈ 6 km/h en permanence sur la carte.
       const last = await this.trackingService.getLastPosition(dto.vehicleId);
+      const fixTs = new Date(dto.timestamp);
+      // Fix EN RETARD (plus ancien que le dernier stocké) : enregistré, jamais diffusé
+      // comme position courante (le marqueur reculerait — audit 2026-09-19).
+      const outOfOrder = !!last && fixTs.getTime() < last.timestamp.getTime();
+      const speedWindow = this.speedWindows.get(dto.vehicleId) ?? [];
       const speed = resolveGroundSpeed({
         reportedSpeedMs: dto.speed,
         previous: last
@@ -242,9 +257,10 @@ export class TrackingGateway
         current: {
           latitude: dto.latitude,
           longitude: dto.longitude,
-          timestamp: new Date(dto.timestamp),
+          timestamp: fixTs,
           accuracy: dto.accuracy,
         },
+        windowPrevious: selectSpeedWindowRef(speedWindow, fixTs),
       }).speedMs;
 
       // Le WebSocket de l'app mobile est toujours une source 'phone'.
@@ -273,6 +289,22 @@ export class TrackingGateway
         return;
       }
 
+      if (!outOfOrder && !position.suspect) {
+        speedWindow.push({
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+          timestamp: fixTs,
+          accuracy: dto.accuracy,
+        });
+        while (
+          speedWindow.length > 0 &&
+          fixTs.getTime() - speedWindow[0].timestamp.getTime() > 130_000
+        ) {
+          speedWindow.shift();
+        }
+        this.speedWindows.set(dto.vehicleId, speedWindow);
+      }
+
       this.logger.log(
         `[POSITION] driver=${driver.id} lat=${dto.latitude.toFixed(6)} lng=${dto.longitude.toFixed(6)} speed=${speed?.toFixed(2)} heading=${dto.heading} delivery=${dto.deliveryId || 'none'} company=${user.companyId}`,
       );
@@ -292,6 +324,8 @@ export class TrackingGateway
       // `displayLatitude/Longitude` : purement additif, cohérent avec vehicleMap.ts
       // (fallback sur latitude/longitude brutes si null). Le stockage DB (dto,
       // position) reste inchangé.
+      if (outOfOrder) return;
+
       const display = await this.trackingService.getDisplayPosition(dto.vehicleId, {
         speed,
         suspect: position.suspect,

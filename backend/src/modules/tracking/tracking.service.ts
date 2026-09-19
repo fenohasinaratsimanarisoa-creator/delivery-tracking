@@ -33,6 +33,8 @@ import {
   GPS_NOISE_THRESHOLD_M,
   computeFilteredDistance,
   resolveGroundSpeed,
+  selectSpeedWindowRef,
+  type GroundSpeedRef,
   STATIONARY_RADIUS_M,
 } from '../../common/geo/geo.utils';
 import { computeAnchoredPosition, type AnchorFix } from '../../common/geo/stationary-anchor';
@@ -1311,6 +1313,8 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     // par lastPositions, dont la forme est partagée avec la lecture DB ci-dessus.
     // Amorcé depuis la DB puis maintenu au fil du lot (comme lastPositions).
     const lastAccuracy = new Map<string, number | null | undefined>();
+    // Historique récent par véhicule pour la fenêtre de vitesse (audit 2026-09-19).
+    const speedHistory = new Map<string, GroundSpeedRef[]>();
     if (vehicleIds.length > 0) {
       const rows = await this.prisma.gpsPosition.findMany({
         where: { vehicleId: { in: vehicleIds } },
@@ -1449,6 +1453,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
           timestamp: ts,
           accuracy: pos.accuracy,
         },
+        windowPrevious: selectSpeedWindowRef(speedHistory.get(pos.vehicleId) ?? [], ts),
       }).speedMs;
 
       let suspect = false;
@@ -1475,6 +1480,17 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         speed: resolvedSpeed ?? null,
       });
       lastAccuracy.set(pos.vehicleId, pos.accuracy);
+      if (!suspect) {
+        const h = speedHistory.get(pos.vehicleId) ?? [];
+        h.push({
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          timestamp: ts,
+          accuracy: pos.accuracy,
+        });
+        while (h.length > 30) h.shift();
+        speedHistory.set(pos.vehicleId, h);
+      }
 
       toInsert.push({
         latitude: pos.latitude,

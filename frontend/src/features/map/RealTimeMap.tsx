@@ -13,6 +13,7 @@ import { useDevicePerformance } from '../../hooks/useDevicePerformance';
 import { getDirections, formatDistance } from '../../services/routing/routingService';
 import { resolveDeadReckonedPosition, maxDeadReckonTime } from '../../services/tracking/deadReckoning';
 import { computeAnimationDuration, FALLBACK_ANIMATION_MS } from './animationTiming';
+import { isBackwardJitter, deadReckonHorizonMs, MAX_CONSECUTIVE_HOLDS } from './markerMotion';
 
 import MapLayerSwitcher from '../../components/MapLayerSwitcher';
 import VehicleStatusPill, { mapVehicleStatus } from '../../components/VehicleStatusPill';
@@ -170,6 +171,11 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
   // Timestamp (epoch ms) de la position PRÉCÉDENTE reçue : c'est lui qui permet
   // de calculer le délai réel entre deux positions (computeAnimationDuration).
   const prevTsRef = useRef<number | null>(null);
+  // Deux derniers fixes RÉELS (positions affichées reçues) + nombre de fixes consécutifs
+  // retenus par la garde anti-recul (voir markerMotion.isBackwardJitter).
+  const prevRealRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastRealRef = useRef<{ lat: number; lng: number } | null>(null);
+  const holdCountRef = useRef(0);
   const lastUpdateRef = useRef<number>(Date.now());
   const lastStateRef = useRef<{ lat: number; lng: number; speed: number; heading: number } | null>(null);
   const vehicleRef = useRef(vehicle);
@@ -219,6 +225,37 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
       speed: vehicle.speed ?? 0,
       heading: vehicle.heading ?? 0,
     };
+
+    // Fix RÉEL nouveau ? (l'effet se relance aussi sur un simple changement de statut /
+    // cap : ne pas décaler prevReal/lastReal dans ce cas.)
+    const nextReal = { lat: vehicle.lat, lng: vehicle.lng };
+    const lastReal = lastRealRef.current;
+    const isNewFix = !lastReal || lastReal.lat !== nextReal.lat || lastReal.lng !== nextReal.lng;
+    let holdBackward = false;
+    if (isNewFix) {
+      const cur = fromRef.current;
+      // Garde anti-recul (audit 2026-09-19) : si ce fix ferait reculer le marqueur par
+      // rapport au sens de marche (avance fictive du dead reckoning, bruit GPS), on le
+      // GARDE en place — il n'avance jamais « puis revient ». Borné : jamais figé.
+      holdBackward =
+        !!cur &&
+        !disableAnimation &&
+        holdCountRef.current < MAX_CONSECUTIVE_HOLDS &&
+        isBackwardJitter(prevRealRef.current, lastReal, cur, nextReal);
+      holdCountRef.current = holdBackward ? holdCountRef.current + 1 : 0;
+      prevRealRef.current = lastReal;
+      lastRealRef.current = nextReal;
+    }
+    if (holdBackward) {
+      prevTsRef.current = vehicle.timestamp ? new Date(vehicle.timestamp).getTime() : null;
+      // L'extrapolation (dead reckoning) doit repartir d'OÙ SE TROUVE le marqueur, pas
+      // du fix réel resté derrière lui — sinon elle le ramènerait en arrière.
+      const held = fromRef.current;
+      if (held && lastStateRef.current) {
+        lastStateRef.current = { ...lastStateRef.current, lat: held.lat, lng: held.lng };
+      }
+      return;
+    }
 
     const from = fromRef.current;
     if (!from || disableAnimation) {
@@ -298,7 +335,9 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
   // garé (audit VITESSE FANTÔME 2026-09-09). Le backend ramène ces valeurs à 0,
   // ce garde reste une défense en profondeur.
   useEffect(() => {
-    const maxDrMs = isMovingSpeed(vehicle.speed) ? maxDeadReckonTime(vehicle.speed as number) : 0;
+    const maxDrMs = isMovingSpeed(vehicle.speed)
+      ? deadReckonHorizonMs(vehicle.speed as number, maxDeadReckonTime(vehicle.speed as number))
+      : 0;
     if (maxDrMs <= 0) return;
 
     const interval = setInterval(() => {
@@ -319,6 +358,14 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
       if (!state || !isMovingSpeed(state.speed)) return;
 
       const drElapsed = elapsed - animMs;
+      // Fenêtre expirée : le marqueur RESTE où il est (dernier point extrapolé, avancé de
+      // 30 m au plus) — il n'est PLUS ramené d'un coup sur le dernier fix réel (recul
+      // garanti à chaque fix tardif, audit 2026-09-19). Le fix suivant le rejoint en
+      // glissant (ou est retenu par la garde anti-recul s'il est derrière).
+      if (drElapsed > maxDrMs) {
+        clearInterval(interval);
+        return;
+      }
       const resolved = resolveDeadReckonedPosition({ ...state, timestamp: 0 }, drElapsed, maxDrMs);
       marker.setLatLng([resolved.lat, resolved.lng]);
       // Le point retenu devient la base de la prochaine animation : continuité

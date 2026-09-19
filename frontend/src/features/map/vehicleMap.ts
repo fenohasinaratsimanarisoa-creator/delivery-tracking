@@ -19,6 +19,8 @@ export interface VehicleData {
   vehicleId: string;
   deliveryId?: string;
   suspect?: boolean;
+  /** Horodatage du dernier fix « en mouvement » — sert à l'hystérésis du statut. */
+  lastMovingAt?: string;
 }
 
 export interface LivePositionInput {
@@ -59,6 +61,21 @@ export interface PositionUpdateInput {
 export const FALLBACK_DRIVER_NAME = 'Véhicule sans chauffeur assigné';
 
 export const OFFLINE_TIMEOUT_MIN = 15;
+
+/**
+ * Hystérésis « en mouvement → à l'arrêt » (audit 2026-09-19) : un fix isolé à vitesse
+ * nulle (pas sous le bruit GPS, ralentissement) ne fait plus basculer le statut ; il
+ * faut que le véhicule reste immobile plus longtemps que ce délai depuis son dernier
+ * fix en mouvement. Au plus quelques secondes de retard sur un vrai arrêt.
+ */
+export const STATUS_STATIC_DEBOUNCE_MS = 12_000;
+
+/**
+ * Un fix plus ANCIEN que celui déjà affiché est ignoré (file Traccar, reconnexion,
+ * désordre réseau : le marqueur reculait sur le point ancien). Au-delà de cet écart
+ * (horloge du traceur réinitialisée), on l'accepte pour ne jamais figer un véhicule.
+ */
+export const STALE_UPDATE_RESET_MS = 10 * 60_000;
 
 const EARTH_RADIUS_M = 6371000;
 
@@ -223,8 +240,13 @@ export function mergePositionUpdate(
   update: PositionUpdateInput,
   etaFor?: (update: PositionUpdateInput) => string | null,
 ): Map<string, VehicleData> {
-  const next = new Map(prev);
   const key = update.vehicleId;
+  const existingForOrder = prev.get(key);
+  if (existingForOrder) {
+    const dt = Date.parse(update.timestamp) - Date.parse(existingForOrder.timestamp);
+    if (Number.isFinite(dt) && dt < 0 && dt > -STALE_UPDATE_RESET_MS) return prev;
+  }
+  const next = new Map(prev);
   const existing = next.get(key);
 
   if (update.suspect) {
@@ -246,6 +268,15 @@ export function mergePositionUpdate(
       suspect: true,
     });
   } else {
+    const movingNow = isMovingSpeed(update.speed);
+    const lastMovingAt = movingNow ? update.timestamp : existing?.lastMovingAt;
+    let nextStatus: VehicleData['status'] = movingNow ? 'moving' : 'static';
+    if (!movingNow && existing?.status === 'moving' && existing.lastMovingAt) {
+      const sinceMoving = Date.parse(update.timestamp) - Date.parse(existing.lastMovingAt);
+      if (Number.isFinite(sinceMoving) && sinceMoving < STATUS_STATIC_DEBOUNCE_MS) {
+        nextStatus = 'moving';
+      }
+    }
     next.set(key, {
       id: key,
       lat: update.displayLatitude ?? update.latitude,
@@ -260,7 +291,8 @@ export function mergePositionUpdate(
       deliveryId: update.deliveryId,
       confidence: update.confidence ?? (update.accuracy ? Math.max(0.1, 1 - update.accuracy / 50) : 1),
       timestamp: update.timestamp,
-      status: isMovingSpeed(update.speed) ? 'moving' : 'static',
+      status: nextStatus,
+      lastMovingAt,
       suspect: false,
       eta: etaFor ? etaFor(update) : undefined,
     });

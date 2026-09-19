@@ -13,6 +13,7 @@ import {
   signalLostSinceMs,
   FALLBACK_DRIVER_NAME,
   rawPositionDiverges,
+  STATUS_STATIC_DEBOUNCE_MS,
   RAW_POSITION_DIVERGENCE_M,
   type PositionUpdateInput,
   type VehicleData,
@@ -317,5 +318,53 @@ describe('rawPositionDiverges', () => {
 
   it('RAW_POSITION_DIVERGENCE_M documente le seuil (20 m)', () => {
     expect(RAW_POSITION_DIVERGENCE_M).toBe(20);
+  });
+});
+
+describe('mergePositionUpdate — anti-recul et hystérésis (audit 2026-09-19)', () => {
+  const upd = (over: Partial<PositionUpdateInput>): PositionUpdateInput => ({
+    ...baseUpdate('veh-1', undefined),
+    ...over,
+  });
+  const T = (sec: number) => new Date(Date.parse('2026-09-18T15:00:00.000Z') + sec * 1000).toISOString();
+
+  it('un fix plus ANCIEN que celui affiché est ignoré (le marqueur ne recule pas sur un point tardif)', () => {
+    const m = mergePositionUpdate(new Map(), upd({ latitude: -18.87, timestamp: T(10), speed: 5 }));
+    const after = mergePositionUpdate(m, upd({ latitude: -18.871, timestamp: T(5), speed: 5 }));
+    expect(after).toBe(m); // état inchangé
+    expect(after.get('veh-1')?.lat).toBe(-18.87);
+  });
+
+  it('un fix de même horodatage ou plus récent est accepté', () => {
+    const m = mergePositionUpdate(new Map(), upd({ latitude: -18.87, timestamp: T(10) }));
+    const same = mergePositionUpdate(m, upd({ latitude: -18.8701, timestamp: T(10) }));
+    expect(same.get('veh-1')?.lat).toBe(-18.8701);
+  });
+
+  it('horloge du traceur réinitialisée (> 10 min en arrière) : accepté, jamais de véhicule figé', () => {
+    const m = mergePositionUpdate(new Map(), upd({ latitude: -18.87, timestamp: T(3600) }));
+    const after = mergePositionUpdate(m, upd({ latitude: -18.9, timestamp: T(0) }));
+    expect(after.get('veh-1')?.lat).toBe(-18.9);
+  });
+
+  it('un seul fix à vitesse nulle pendant la marche ne fait PAS passer le statut à « à l\'arrêt »', () => {
+    let m = mergePositionUpdate(new Map(), upd({ timestamp: T(0), speed: 3 }));
+    m = mergePositionUpdate(m, upd({ timestamp: T(5), speed: 0 }));
+    expect(m.get('veh-1')?.status).toBe('moving');
+    m = mergePositionUpdate(m, upd({ timestamp: T(10), speed: 3 }));
+    expect(m.get('veh-1')?.status).toBe('moving');
+  });
+
+  it('un vrai arrêt (immobile plus longtemps que le délai) bascule bien en « à l\'arrêt »', () => {
+    let m = mergePositionUpdate(new Map(), upd({ timestamp: T(0), speed: 3 }));
+    m = mergePositionUpdate(m, upd({ timestamp: T(5), speed: 0 }));
+    m = mergePositionUpdate(m, upd({ timestamp: T(STATUS_STATIC_DEBOUNCE_MS / 1000 + 1), speed: 0 }));
+    expect(m.get('veh-1')?.status).toBe('static');
+  });
+
+  it('un véhicule déjà à l\'arrêt reste à l\'arrêt (pas de faux « en mouvement »)', () => {
+    let m = mergePositionUpdate(new Map(), upd({ timestamp: T(0), speed: 0 }));
+    m = mergePositionUpdate(m, upd({ timestamp: T(5), speed: 0 }));
+    expect(m.get('veh-1')?.status).toBe('static');
   });
 });

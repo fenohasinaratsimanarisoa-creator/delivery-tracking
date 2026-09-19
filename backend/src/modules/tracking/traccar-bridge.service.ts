@@ -1360,6 +1360,15 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               timestamp: Date;
               accuracy: number | null;
             } | null = null;
+            // Historique récent (fenêtre de vitesse ≥ 12 s, audit 2026-09-19) — même
+            // logique que le temps réel : sans elle un véhicule lent était rattrapé
+            // avec une vitesse forcée à 0.
+            const backfillHistory: Array<{
+              latitude: number;
+              longitude: number;
+              timestamp: Date;
+              accuracy: number | null;
+            }> = [];
             {
               const lastDbPos = await this.trackingService.getLastPosition(vehicle.id);
               if (lastDbPos) {
@@ -1416,6 +1425,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                   accuracy,
                 },
                 currentTimestampIsServerFallback: timestampFromServerClock,
+                windowPrevious: selectSpeedWindowRef(backfillHistory, timestamp),
               }).speedMs;
 
               // Télémétrie stockée sur les positions backfillées aussi (historique) :
@@ -1460,6 +1470,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                   timestamp,
                   accuracy,
                 };
+                backfillHistory.push(lastBackfillPos);
+                while (backfillHistory.length > 30) backfillHistory.shift();
               }
 
               toInsert.push({
@@ -1862,6 +1874,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           motion: typeof motionAttr === 'boolean' ? motionAttr : null,
           timestamp,
         };
+        // FIX EN RETARD (audit 2026-09-19) : un point plus ANCIEN que le dernier reçu
+        // (file Traccar, reconnexion, désordre réseau) est stocké mais ne doit JAMAIS
+        // être diffusé comme position courante — le marqueur reculerait sur le
+        // point ancien. Détecté avant l'insertion dans le buffer d'ancre.
+        const bufBefore = this.anchorBuffers.get(vehicleMapping.id);
+        const outOfOrder =
+          !!bufBefore?.length &&
+          timestamp.getTime() < bufBefore[bufBefore.length - 1].timestamp.getTime();
         if (!position.suspect) {
           const buf = this.anchorBuffers.get(vehicleMapping.id) ?? [];
           buf.push(currentFix);
@@ -1958,6 +1978,13 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           deliveryId: updateDto.deliveryId ?? undefined,
           vehicleId: vehicleMapping.id,
         };
+
+        if (outOfOrder) {
+          this.logger.debug(
+            `Traccar fix en retard (${timestamp.toISOString()}) : stocké, non diffusé (device ${pos.deviceId})`,
+          );
+          return;
+        }
 
         this.trackingGateway.broadcastToCompany(
           vehicleMapping.companyId,
