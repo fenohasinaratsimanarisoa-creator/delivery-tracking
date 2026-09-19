@@ -179,6 +179,34 @@ export const STATIONARY_SPEED_MS = 0.5;
  */
 export const RELIABLE_REPORTED_SPEED_MS = 3;
 
+/**
+ * Fenêtre (s) sur laquelle on juge le mouvement en plus du couple de fixes
+ * consécutifs. AUDIT 2026-09-19 (trajet réel GT06, 15 sat, accuracy 8 m) : à 5 s
+ * entre deux fixes, un véhicule à 5-8 km/h avance de 7-11 m, SOUS le seuil de bruit
+ * pairwise (≈ 16 m) → vitesse forcée à 0 en pleine marche, statut « à l'arrêt » et
+ * ancre affichée derrière le véhicule. Sur ~12 s le même véhicule sort du bruit.
+ */
+export const SPEED_WINDOW_MIN_S = 12;
+/** Vitesse pairwise courante minimale (m/s ≈ 3,6 km/h) : évite de « prolonger » le mouvement de la fenêtre juste après un arrêt. */
+export const SPEED_WINDOW_PAIR_MIN_MS = 1.0;
+
+/**
+ * Fix de référence pour la fenêtre de vitesse : le plus RÉCENT de `history`
+ * (ordre quelconque) qui a au moins SPEED_WINDOW_MIN_S et au plus
+ * GROUND_SPEED_MAX_DT_S d'ancienneté par rapport à `current`. `null` sinon.
+ */
+export function selectSpeedWindowRef<
+  T extends { latitude: number; longitude: number; timestamp: Date; accuracy?: number | null },
+>(history: T[], current: Date): T | null {
+  let best: T | null = null;
+  for (const f of history) {
+    const age = (current.getTime() - f.timestamp.getTime()) / 1000;
+    if (age < SPEED_WINDOW_MIN_S || age > GROUND_SPEED_MAX_DT_S) continue;
+    if (!best || f.timestamp.getTime() > best.timestamp.getTime()) best = f;
+  }
+  return best;
+}
+
 /** Bande de Δt (s) exploitable pour dériver une vitesse haversine/Δt entre deux fixes. */
 export const GROUND_SPEED_MIN_DT_S = 1;
 export const GROUND_SPEED_MAX_DT_S = 120;
@@ -214,6 +242,12 @@ export interface ResolveGroundSpeedInput {
   current: GroundSpeedRef;
   /** true si `current.timestamp` est un repli sur l'heure serveur (Δt non fiable, R3). */
   currentTimestampIsServerFallback?: boolean;
+  /**
+   * Fix plus ANCIEN (≥ SPEED_WINDOW_MIN_S) du même véhicule, pour juger le
+   * mouvement sur une FENÊTRE et non sur deux fixes consécutifs (voir
+   * selectSpeedWindowRef). Sans lui, comportement pairwise inchangé.
+   */
+  windowPrevious?: GroundSpeedRef | null;
 }
 
 export interface ResolveGroundSpeedResult {
@@ -236,7 +270,8 @@ export interface ResolveGroundSpeedResult {
  * - Aucune info exploitable → 0.
  */
 export function resolveGroundSpeed(input: ResolveGroundSpeedInput): ResolveGroundSpeedResult {
-  const { reportedSpeedMs, previous, current, currentTimestampIsServerFallback } = input;
+  const { reportedSpeedMs, previous, current, currentTimestampIsServerFallback, windowPrevious } =
+    input;
 
   const reported =
     reportedSpeedMs != null && Number.isFinite(reportedSpeedMs) && reportedSpeedMs > 0
@@ -279,7 +314,41 @@ export function resolveGroundSpeed(input: ResolveGroundSpeedInput): ResolveGroun
   const demonstrablyStationary =
     dtPositive && (movedMeters < gate || (movedMeters + gate) / dtSec < STATIONARY_SPEED_MS);
 
+  // Mouvement prouvé sur la FENÊTRE (≥ SPEED_WINDOW_MIN_S) : le véhicule est sorti du
+  // bruit combiné sur cet horizon ET bouge encore maintenant (le pas courant vaut au
+  // moins SPEED_WINDOW_PAIR_MIN_RATIO du seuil pairwise — sinon c'est un arrêt récent).
+  let windowSpeedMs: number | null = null;
+  if (
+    windowPrevious &&
+    !currentTimestampIsServerFallback &&
+    windowPrevious.timestamp instanceof Date &&
+    Number.isFinite(windowPrevious.latitude) &&
+    Number.isFinite(windowPrevious.longitude)
+  ) {
+    const wDt = (current.timestamp.getTime() - windowPrevious.timestamp.getTime()) / 1000;
+    const wMoved = haversineDistance(
+      windowPrevious.latitude,
+      windowPrevious.longitude,
+      current.latitude,
+      current.longitude,
+    );
+    const wGate = combinedGpsNoiseGate(windowPrevious.accuracy, current.accuracy);
+    if (
+      wDt >= SPEED_WINDOW_MIN_S &&
+      wDt <= GROUND_SPEED_MAX_DT_S &&
+      wMoved > wGate &&
+      wMoved / wDt >= STATIONARY_SPEED_MS &&
+      dtSec > 0 &&
+      movedMeters / dtSec >= SPEED_WINDOW_PAIR_MIN_MS
+    ) {
+      windowSpeedMs = wMoved / wDt;
+    }
+  }
+
   if (reported != null) {
+    if (demonstrablyStationary && windowSpeedMs != null) {
+      return { speedMs: Math.max(reported, windowSpeedMs), source: 'measured' };
+    }
     // AUDIT « EN MOUVEMENT → À L'ARRÊT → RETOUR EN ARRIÈRE » 2026-09-19 : à 5-7
     // satellites le seuil de bruit (≈ 2 × accuracy = 70-180 m) dépasse la distance
     // parcourue entre deux fixes GT06 (9-20 s) → un véhicule qui ROULE était jugé
@@ -297,6 +366,16 @@ export function resolveGroundSpeed(input: ResolveGroundSpeedInput): ResolveGroun
     if (demonstrablyStationary) return { speedMs: 0, source: 'clamped_zero' };
     if (reported < STATIONARY_SPEED_MS) return { speedMs: 0, source: 'clamped_zero' };
     return { speedMs: reported, source: 'measured' };
+  }
+
+  // Vitesse DÉRIVÉE de la fenêtre : mêmes garde-fous que la dérivation pairwise (C8) —
+  // jamais fabriquer une vitesse à partir d'un signal peu fiable (accuracy > 30 m).
+  if (
+    windowSpeedMs != null &&
+    isAccuracyTrustworthy(windowPrevious?.accuracy) &&
+    isAccuracyTrustworthy(current.accuracy)
+  ) {
+    return { speedMs: windowSpeedMs, source: 'derived' };
   }
 
   // Pas de vitesse rapportée → dérivation haversine/Δt, sous conditions strictes :

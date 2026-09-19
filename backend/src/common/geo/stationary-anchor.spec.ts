@@ -155,3 +155,33 @@ describe('computeAnchoredPosition', () => {
     ).toBeLessThan(3);
   });
 });
+
+describe('computeAnchoredPosition — retard maximal ancre ↔ dernier fix (audit 2026-09-19)', () => {
+  const T0 = new Date('2026-09-18T14:50:00.000Z').getTime();
+  const fix = (i: number, metersNorth: number, accuracy: number) => ({
+    latitude: -18.87 - metersNorth / 111_320,
+    longitude: 47.554,
+    accuracy,
+    speed: 0, // mal classé « à l'arrêt » (cas réel : vitesse forcée à 0 en roulant)
+    timestamp: new Date(T0 + i * 5000),
+  });
+
+  it("fix précis (8 m) : jamais d'ancre à plus de 30 m derrière lui (marqueur qui recule)", () => {
+    // 12 fixes « à l'arrêt » étalés sur 110 m (véhicule qui roule mal classé) : le
+    // centroïde serait ~55 m derrière le dernier fix, précis à 8 m → brut affiché.
+    const fixes = Array.from({ length: 12 }, (_, i) => fix(i, i * 10, 8));
+    expect(computeAnchoredPosition(fixes)).toBeNull();
+  });
+
+  it("fix faible (55 m, 6 sat) : la latitude d'ancrage de l'audit précision est conservée", () => {
+    const fixes = [
+      fix(0, 0, 8),
+      fix(1, 3, 8),
+      fix(2, -2, 8),
+      fix(3, 4, 8),
+      fix(4, 90, 55), // outlier faible, ~90 m de la série précise
+    ];
+    const a = computeAnchoredPosition(fixes);
+    expect(a).not.toBeNull();
+  });
+});

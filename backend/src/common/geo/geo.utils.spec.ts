@@ -1,4 +1,5 @@
 import {
+  selectSpeedWindowRef,
   computeFilteredDistance,
   collapseStationaryWindows,
   resolveGroundSpeed,
@@ -472,5 +473,82 @@ describe('resolveGroundSpeed — vitesse sol fiable (audit VITESSE FANTÔME 2026
     });
     expect(r.speedMs).toBeCloseTo(35 * 0.514444, 3);
     expect(r.source).toBe('measured');
+  });
+});
+
+describe("resolveGroundSpeed — fenêtre de vitesse (audit 2026-09-19 « en mouvement → à l'arrêt → retour en arrière »)", () => {
+  const T0 = new Date('2026-09-18T14:55:00.000Z');
+  const at = (sec: number) => new Date(T0.getTime() + sec * 1000);
+  // Véhicule à ~2 m/s plein nord, fix toutes les 5 s (≈ 10 m/fix), 15 sat → accuracy 8 m
+  // (seuil pairwise ≈ 16 m : chaque pas est SOUS le bruit alors que le véhicule roule).
+  const fixes = Array.from({ length: 12 }, (_, i) => ({
+    latitude: -18.87 - (i * 10) / 111_320,
+    longitude: 47.554,
+    timestamp: at(i * 5),
+    accuracy: 8,
+  }));
+
+  it('à 2 m/s, fix à 5 s, accuracy 8 m : sans fenêtre la vitesse est (à tort) 0', () => {
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 0,
+      previous: fixes[10],
+      current: fixes[11],
+    });
+    expect(r.speedMs).toBe(0);
+  });
+
+  it('à 2 m/s avec fenêtre ≥ 12 s : vitesse > 0 (le véhicule roule)', () => {
+    const win = selectSpeedWindowRef(fixes.slice(0, 11), fixes[11].timestamp);
+    expect(win).not.toBeNull();
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 0,
+      previous: fixes[10],
+      current: fixes[11],
+      windowPrevious: win,
+    });
+    expect(r.speedMs).toBeGreaterThan(1.5);
+    expect(r.speedMs).toBeLessThan(2.6);
+  });
+
+  it("véhicule réellement à l'arrêt (dérive de quelques mètres) : reste à 0 avec la fenêtre", () => {
+    const still = Array.from({ length: 12 }, (_, i) => ({
+      latitude: -18.87 + ((i % 2) * 3) / 111_320,
+      longitude: 47.554,
+      timestamp: at(i * 5),
+      accuracy: 8,
+    }));
+    const win = selectSpeedWindowRef(still.slice(0, 11), still[11].timestamp);
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 1.6, // fond fantôme du GT06
+      previous: still[10],
+      current: still[11],
+      windowPrevious: win,
+    });
+    expect(r.speedMs).toBe(0);
+  });
+
+  it('juste après un arrêt (fenêtre encore « en mouvement », pas courant nul) : 0, pas de mouvement prolongé', () => {
+    const moving = fixes.slice(0, 10);
+    const last = moving[9];
+    const stopped = { ...last, timestamp: at(50) }; // même position, 5 s plus tard
+    const win = selectSpeedWindowRef(moving, stopped.timestamp);
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 0,
+      previous: last,
+      current: stopped,
+      windowPrevious: win,
+    });
+    expect(r.speedMs).toBe(0);
+  });
+
+  it('selectSpeedWindowRef : ignore les fixes trop récents (< 12 s) ou trop vieux (> 120 s)', () => {
+    const now = at(200);
+    const hist = [
+      { latitude: 0, longitude: 0, timestamp: at(50) }, // 150 s → trop vieux
+      { latitude: 1, longitude: 1, timestamp: at(195) }, // 5 s → trop récent
+    ];
+    expect(selectSpeedWindowRef(hist, now)).toBeNull();
+    hist.push({ latitude: 2, longitude: 2, timestamp: at(180) }); // 20 s → ok
+    expect(selectSpeedWindowRef(hist, now)?.latitude).toBe(2);
   });
 });

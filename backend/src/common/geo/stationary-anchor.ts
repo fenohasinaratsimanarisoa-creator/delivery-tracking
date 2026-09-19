@@ -39,6 +39,11 @@ export const ANCHOR_INITIAL_RADIUS_ACC_MULT = 4;
 /** Rayon (autour du meilleur fix) du cluster finalement pondéré. */
 export const ANCHOR_CLUSTER_RADIUS_MIN_M = 60;
 export const ANCHOR_CLUSTER_RADIUS_ACC_MULT = 3;
+/** Écart max ancre ↔ dernier fix : max(MIN, MULT × accuracy du dernier fix). */
+export const ANCHOR_MAX_LAG_MIN_M = 20;
+/** Le plafond ne s'applique qu'en trajet CONTINU : fix précédent à moins de ce délai (s). Après une longue coupure, le fix isolé reste traité par le filet du 2026-09-15. */
+export const ANCHOR_MAX_LAG_CONTINUOUS_S = 120;
+export const ANCHOR_MAX_LAG_ACC_MULT = 3;
 /** Accuracy plancher pour la pondération (un fix ne « vaut » jamais mieux que 5 m). */
 export const ANCHOR_ACCURACY_FLOOR_M = 5;
 
@@ -158,9 +163,31 @@ export function computeAnchoredPosition(
 
   if (!isStoppedFix(sorted[sorted.length - 1])) return null;
 
+  const newest = sorted[sorted.length - 1];
+  // Retard maximal toléré entre l'ancre et le dernier fix. AUDIT 2026-09-19 (trajet
+  // réel, 15 sat, accuracy 8 m) : une série de fixes mal classés « à l'arrêt » en
+  // roulant produisait une ancre jusqu'à 105-490 m DERRIÈRE un fix pourtant précis →
+  // marqueur qui recule. Un fix précis (8 m) ne peut pas être « corrigé » par un
+  // centroïde à plus de 3σ ; un fix faible (sat 5-7, 50-100 m) garde toute la latitude
+  // voulue par l'audit précision du 2026-09-09 / écart 250 m du 2026-09-15.
+  const maxLagM = Math.max(ANCHOR_MAX_LAG_MIN_M, ANCHOR_MAX_LAG_ACC_MULT * accOf(newest));
+  const previousFix = sorted[sorted.length - 2];
+  const continuous =
+    (newest.timestamp.getTime() - previousFix.timestamp.getTime()) / 1000 <=
+    ANCHOR_MAX_LAG_CONTINUOUS_S;
+
   for (let endIndex = sorted.length - 1; endIndex >= ANCHOR_MIN_FIXES - 1; endIndex--) {
     const anchor = tryAnchorEndingAt(sorted, endIndex);
-    if (anchor) return anchor;
+    if (anchor) {
+      if (
+        continuous &&
+        haversineDistance(anchor.latitude, anchor.longitude, newest.latitude, newest.longitude) >
+          maxLagM
+      ) {
+        return null;
+      }
+      return anchor;
+    }
   }
   return null;
 }

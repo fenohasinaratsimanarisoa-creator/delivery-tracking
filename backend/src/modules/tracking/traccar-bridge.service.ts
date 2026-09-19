@@ -50,7 +50,11 @@ interface TraccarPosition {
 // UERE pour récepteur GPS grand public : ~5m (combinaison erreurs satellite + atmosphère + récepteur)
 // HDOP * UERE = accuracy estimée ; on prend la plus prudente (max) entre accuracy du device et HDOP dérivé
 import { computeConfidence, computeCombinedAccuracy } from '../../common/geo/gps-quality';
-import { resolveGroundSpeed, haversineDistance } from '../../common/geo/geo.utils';
+import {
+  resolveGroundSpeed,
+  haversineDistance,
+  selectSpeedWindowRef,
+} from '../../common/geo/geo.utils';
 import {
   computeAnchoredPosition,
   isStoppedFix,
@@ -1745,6 +1749,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             accuracy: derivedAccuracy,
           },
           currentTimestampIsServerFallback: timestampFromServerClock,
+          // Fenêtre ≥ 12 s (AUDIT 2026-09-19, « en mouvement → à l'arrêt → retour en
+          // arrière ») : un véhicule lent (5-8 km/h) avance de < 16 m entre deux fixes
+          // à 5 s, sous le seuil de bruit pairwise, alors qu'il sort clairement du bruit
+          // sur 12 s. Sans ça, sa vitesse était forcée à 0 en roulant.
+          windowPrevious: selectSpeedWindowRef(
+            this.anchorBuffers.get(vehicleMapping.id) ?? [],
+            timestamp,
+          ),
         }).speedMs;
 
         const updateDto = {
