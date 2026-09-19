@@ -209,11 +209,11 @@ describe('collapseStationaryWindows — arrêt confirmé (rayon + densité + dur
     expect(collapsed.length).toBe(positions.length); // rien collapsé
   });
 
-  it('NE collapse PAS une fenêtre trop courte (< 5 min), même dense et immobile', () => {
-    const positions = Array.from({ length: 10 }, (_, i) => ({
+  it('NE collapse PAS une fenêtre trop courte (< 60 s), même dense et immobile', () => {
+    const positions = Array.from({ length: 5 }, (_, i) => ({
       latitude: 0,
       longitude: 0,
-      timestamp: new Date(T0 + i * 10_000), // 10s d'intervalle, 100s au total < 5min
+      timestamp: new Date(T0 + i * 10_000), // 10s d'intervalle, 40s au total < 60s
     }));
     const collapsed = collapseStationaryWindows(positions);
     expect(collapsed.length).toBe(positions.length); // rien collapsé (fenêtre trop courte)

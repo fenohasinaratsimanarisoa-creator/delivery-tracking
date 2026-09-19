@@ -117,6 +117,28 @@ export const MOVEMENT_TRUST_MAX_ACCURACY_M = 30;
 export const STATIONARY_RADIUS_M = 30;
 export const STATIONARY_MIN_DURATION_S = 300;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT « ÉCART À L'ARRÊT = FAUX TRAJET » 2026-09-19.
+//
+// Symptôme : à l'arrêt la position GPS dérive autour de l'endroit réel et cette
+// dérive était comptée comme un trajet (distance, tracé, arrêts). Cause mesurée :
+// le GT06 déduit `accuracy` du NOMBRE DE SATELLITES (15 sat → 8 m) — jamais mesurée.
+// Son erreur RÉELLE au repos est souvent de 12-20 m ; le seuil de bruit (2 × 8 m =
+// 16 m) est alors franchi en permanence et la RÈGLE FENÊTRE (4) de
+// computeFilteredDistance additionne la dérive. Simulation, véhicule IMMOBILE, précision
+// annoncée 8 m : erreur réelle 12 m → 346 m / 10 min, 20 m → 1360 m / 10 min, 6 km / h.
+//
+// Correctif : le regroupement d'arrêt ne dépend plus de l'accuracy ANNONCÉE.
+//  - référence = CENTRE COURANT du groupe (pas le 1er point : la dérive s'étale autour
+//    de la vraie position, pas d'un point donné) ;
+//  - rayon 50 m (≈ 2,5 σ d'une erreur de 20 m) ;
+//  - durée mini 60 s (au lieu de 300 s) : un feu rouge / arrêt livraison compte.
+// Un vrai déplacement n'est jamais effacé : tout fix à vitesse fiable > seuil casse le
+// groupe, et à ≥ 1 m/s un véhicule sort de 50 m en moins d'une minute.
+// ─────────────────────────────────────────────────────────────────────────────
+export const STOP_CLUSTER_RADIUS_M = 50;
+export const STOP_CLUSTER_MIN_DURATION_S = 60;
+
 // BUG CORRIGÉ (première version de cette fenêtre, audit terrain 2026-08-27) :
 // sans garde-fou sur la densité d'échantillonnage, une progression RÉELLE mais
 // échantillonnée peu fréquemment (ex. un fix par heure — scénario testé dans
@@ -395,70 +417,102 @@ export function resolveGroundSpeed(input: ResolveGroundSpeedInput): ResolveGroun
   return { speedMs: 0, source: hasRef ? 'clamped_zero' : 'unknown' };
 }
 
-/**
- * Réduit une suite de positions en collapsant les fenêtres d'ARRÊT CONFIRMÉ
- * (voir STATIONARY_RADIUS_M / STATIONARY_MIN_DURATION_S / STATIONARY_MAX_SAMPLE_GAP_S)
- * à un seul point représentatif chacune. No-op silencieux si un timestamp
- * manque (repli sûr : computeFilteredDistance() retombe alors sur son
- * comportement pairwise habituel, inchangé).
- */
-export function collapseStationaryWindows<
-  T extends {
-    latitude: number;
-    longitude: number;
-    timestamp?: Date | null;
-    speed?: number | null;
-    accuracy?: number | null;
-  },
->(positions: T[]): T[] {
-  if (positions.length < 3 || positions.some((p) => !p.timestamp)) return positions;
+type StopFix = {
+  latitude: number;
+  longitude: number;
+  timestamp?: Date | null;
+  speed?: number | null;
+  accuracy?: number | null;
+};
 
-  const out: T[] = [];
-  let i = 0;
+export interface StopWindow {
+  /** Index (inclus) du premier fix de l'arrêt dans la liste triée fournie. */
+  startIndex: number;
+  /** Index (inclus) du dernier fix de l'arrêt. */
+  endIndex: number;
+  /** Centre de l'arrêt (moyenne des fixes) : la vraie position est AUTOUR de lui, pas sur un fix. */
+  latitude: number;
+  longitude: number;
+  durationSec: number;
+}
+
+/**
+ * Détecte les ARRÊTS d'une suite chronologique de positions : groupes de fixes
+ * consécutifs qui restent dans STOP_CLUSTER_RADIUS_M du CENTRE COURANT du groupe,
+ * sans trou d'échantillonnage > STATIONARY_MAX_SAMPLE_GAP_S, sans fix à vitesse
+ * fiable > MOVEMENT_SPEED_THRESHOLD_MS (un déplacement réel interrompt l'arrêt),
+ * pendant au moins STOP_CLUSTER_MIN_DURATION_S. Voir le bloc « ÉCART À L'ARRÊT =
+ * FAUX TRAJET » plus haut. Liste vide si un timestamp manque (repli sûr).
+ */
+export function detectStopWindows<T extends StopFix>(positions: T[]): StopWindow[] {
+  const windows: StopWindow[] = [];
+  if (positions.length < 3 || positions.some((p) => !p.timestamp)) return windows;
   const n = positions.length;
+  let i = 0;
   while (i < n) {
     let j = i + 1;
+    let cLat = positions[i].latitude;
+    let cLng = positions[i].longitude;
+    let count = 1;
     while (j < n) {
       const gapS =
         (positions[j].timestamp!.getTime() - positions[j - 1].timestamp!.getTime()) / 1000;
       if (gapS > STATIONARY_MAX_SAMPLE_GAP_S) break;
-      // BUG CORRIGÉ (audit GPS 2026-08-28, C9) : une fenêtre était collapsée sur
-      // le seul critère rayon+durée+densité, ce qui effaçait de VRAIS
-      // déplacements confinés (manœuvres répétées en dépôt, deux-roues circulant
-      // dans un marché, livraison en zone piétonne) — du carburant réellement
-      // consommé disparaissait du rapport. Une position qui rapporte une vitesse
-      // RÉELLE et FIABLE prouve un déplacement : elle interrompt la fenêtre
-      // d'arrêt, qui redevient ce qu'elle doit être — un arrêt.
+      // BUG CORRIGÉ (audit GPS 2026-08-28, C9) : une position qui rapporte une vitesse
+      // RÉELLE et FIABLE prouve un déplacement : elle interrompt l'arrêt.
       const movingHere =
         positions[j].speed != null &&
         positions[j].speed! > MOVEMENT_SPEED_THRESHOLD_MS &&
         isAccuracyTrustworthy(positions[j].accuracy);
       if (movingHere) break;
       if (
-        haversineDistance(
-          positions[i].latitude,
-          positions[i].longitude,
-          positions[j].latitude,
-          positions[j].longitude,
-        ) > STATIONARY_RADIUS_M
+        haversineDistance(cLat, cLng, positions[j].latitude, positions[j].longitude) >
+        STOP_CLUSTER_RADIUS_M
       ) {
         break;
       }
+      cLat = (cLat * count + positions[j].latitude) / (count + 1);
+      cLng = (cLng * count + positions[j].longitude) / (count + 1);
+      count++;
       j++;
     }
-    const windowEnd = j - 1;
-    const durationS =
-      (positions[windowEnd].timestamp!.getTime() - positions[i].timestamp!.getTime()) / 1000;
-    if (windowEnd > i && durationS >= STATIONARY_MIN_DURATION_S) {
-      // Arrêt confirmé : un seul point représentatif (le dernier de la fenêtre,
-      // pour préserver la continuité chronologique avec ce qui suit).
-      out.push(positions[windowEnd]);
-      i = windowEnd + 1;
+    const end = j - 1;
+    const durationSec =
+      (positions[end].timestamp!.getTime() - positions[i].timestamp!.getTime()) / 1000;
+    if (end > i && durationSec >= STOP_CLUSTER_MIN_DURATION_S) {
+      windows.push({
+        startIndex: i,
+        endIndex: end,
+        latitude: cLat,
+        longitude: cLng,
+        durationSec,
+      });
+      i = end + 1;
     } else {
-      out.push(positions[i]);
       i++;
     }
   }
+  return windows;
+}
+
+/**
+ * Réduit une suite de positions en remplaçant chaque ARRÊT CONFIRMÉ (voir
+ * detectStopWindows) par UN seul point : le CENTRE de l'arrêt, horodaté au dernier
+ * fix de la fenêtre (continuité chronologique). La dérive GPS à l'intérieur de l'arrêt
+ * disparaît : ni distance, ni tracé, ni « trajet » fantôme. No-op silencieux si un
+ * timestamp manque (computeFilteredDistance retombe alors sur son comportement pairwise).
+ */
+export function collapseStationaryWindows<T extends StopFix>(positions: T[]): T[] {
+  const stops = detectStopWindows(positions);
+  if (stops.length === 0) return positions;
+  const out: T[] = [];
+  let k = 0;
+  for (const w of stops) {
+    for (; k < w.startIndex; k++) out.push(positions[k]);
+    out.push({ ...positions[w.endIndex], latitude: w.latitude, longitude: w.longitude });
+    k = w.endIndex + 1;
+  }
+  for (; k < positions.length; k++) out.push(positions[k]);
   return out;
 }
 

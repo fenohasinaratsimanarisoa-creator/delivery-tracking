@@ -33,6 +33,8 @@ import {
   GPS_NOISE_THRESHOLD_M,
   computeFilteredDistance,
   resolveGroundSpeed,
+  detectStopWindows,
+  collapseStationaryWindows,
   selectSpeedWindowRef,
   type GroundSpeedRef,
   STATIONARY_RADIUS_M,
@@ -1996,13 +1998,27 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
 
     const gapThresholdSec = this.getGapThresholdSec(source);
 
-    const positions = rows.map((p) => ({
+    // ARRÊTS (audit « écart à l'arrêt = faux trajet » 2026-09-19) : à l'arrêt la position
+    // GPS dérive autour de l'endroit réel (le GT06 annonce 8 m mais son erreur réelle est
+    // de 12-20 m). Tracer les fixes bruts dessinait un gribouillis — un « trajet » que le
+    // véhicule n'a pas fait — que le map-matching accrochait ensuite aux routes voisines.
+    // Le tracé renvoyé remplace chaque arrêt (≥ 60 s, ≤ 50 m) par UN point : son centre.
+    // Les fixes bruts restent intacts en base (litiges, audit).
+    const stopWindows = detectStopWindows(rows);
+    const positions = collapseStationaryWindows(rows).map((p) => ({
       latitude: p.latitude,
       longitude: p.longitude,
       speed: p.speed,
       accuracy: p.accuracy,
       heading: p.heading,
       timestamp: p.timestamp.toISOString(),
+    }));
+    const stops = stopWindows.map((w) => ({
+      latitude: w.latitude,
+      longitude: w.longitude,
+      fromTimestamp: rows[w.startIndex].timestamp.toISOString(),
+      toTimestamp: rows[w.endIndex].timestamp.toISOString(),
+      durationSec: Math.round(w.durationSec),
     }));
 
     let totalDistanceM = 0;
@@ -2065,6 +2081,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         : null,
       date: dayStr,
       positions,
+      stops,
       report: {
         totalDistance: {
           meters: Math.round(totalDistanceM),

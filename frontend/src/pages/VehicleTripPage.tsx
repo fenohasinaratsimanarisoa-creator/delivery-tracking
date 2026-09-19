@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MapContainer, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, Polyline, CircleMarker, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Play, Square, Map as MapIcon } from 'lucide-react';
@@ -49,12 +49,23 @@ interface TripReport {
   signalGaps: unknown[];
 }
 
+/** Arrêt détecté côté serveur : centre du groupe de fixes immobiles (≥ 60 s, ≤ 50 m). */
+interface TripStop {
+  latitude: number;
+  longitude: number;
+  fromTimestamp: string;
+  toTimestamp: string;
+  durationSec: number;
+}
+
 interface VehicleTrip {
   vehicleId: string;
   vehiclePlate: string | null;
   vehicleLabel: string | null;
   date: string;
   positions: TripPosition[];
+  /** Absent sur une ancienne version du serveur. */
+  stops?: TripStop[];
   report: TripReport;
 }
 
@@ -284,6 +295,18 @@ export default function VehicleTripPage() {
               {matched && matched.length > 1 && (
                 <Polyline positions={matched} color={roadColor} weight={4} opacity={0.9} dashArray="3 7" />
               )}
+              {(trip?.stops ?? []).map((st) => (
+                <CircleMarker
+                  key={st.fromTimestamp}
+                  center={[st.latitude, st.longitude]}
+                  radius={7}
+                  pathOptions={{ color: '#111827', weight: 2, fillColor: '#f59e0b', fillOpacity: 0.9 }}
+                >
+                  <Tooltip>
+                    {t('vehicleTrip.stops')} · {Math.max(1, Math.round(st.durationSec / 60))} min
+                  </Tooltip>
+                </CircleMarker>
+              ))}
               {cur && <ReplayMarker position={[cur.latitude, cur.longitude]} />}
             </MapContainer>
           </div>

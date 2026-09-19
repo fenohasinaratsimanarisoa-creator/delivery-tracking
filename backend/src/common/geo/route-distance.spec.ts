@@ -10,13 +10,18 @@ import { haversineDistance, computeFilteredDistance } from './geo.utils';
 const T0 = new Date('2026-09-15T06:00:00.000Z').getTime();
 const at = (i: number) => new Date(T0 + i * 4000);
 
-/** Trace rectiligne plein nord, `n` points espacés de `stepM` mètres. */
+/**
+ * Trace rectiligne plein nord, `n` points espacés de `stepM` mètres. La vitesse est
+ * celle qu'implique l'espacement (stepM / 4 s) : un véhicule qui ROULE. Avec
+ * `speed: 0` sur 57 m en 76 s, la trace était indiscernable d'un ARRÊT avec dérive GPS
+ * (détection d'arrêt du 2026-09-19) et se faisait — à raison — regrouper en un point.
+ */
 function straightLine(n: number, stepM: number, accuracy = 8): RouteDistanceFix[] {
   return Array.from({ length: n }, (_, i) => ({
     latitude: (stepM * i) / 111320,
     longitude: 0,
     accuracy,
-    speed: 0,
+    speed: Math.max(stepM / 4, 2),
     timestamp: at(i),
   }));
 }
