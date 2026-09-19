@@ -172,6 +172,13 @@ export function isAccuracyTrustworthy(accuracy?: number | null): boolean {
 /** Sous cette vitesse (m/s ≈ 1,8 km/h), jamais un déplacement de véhicule — c'est du bruit. */
 export const STATIONARY_SPEED_MS = 0.5;
 
+/**
+ * Vitesse rapportée (m/s ≈ 10,8 km/h) au-dessus de laquelle on ne l'écrase plus à 0
+ * sur simple « déplacement sous le bruit » : le fond fantôme du GT06 à l'arrêt
+ * plafonne à 3-6 km/h (audit VITESSE FANTÔME 2026-09-09).
+ */
+export const RELIABLE_REPORTED_SPEED_MS = 3;
+
 /** Bande de Δt (s) exploitable pour dériver une vitesse haversine/Δt entre deux fixes. */
 export const GROUND_SPEED_MIN_DT_S = 1;
 export const GROUND_SPEED_MAX_DT_S = 120;
@@ -273,6 +280,20 @@ export function resolveGroundSpeed(input: ResolveGroundSpeedInput): ResolveGroun
     dtPositive && (movedMeters < gate || (movedMeters + gate) / dtSec < STATIONARY_SPEED_MS);
 
   if (reported != null) {
+    // AUDIT « EN MOUVEMENT → À L'ARRÊT → RETOUR EN ARRIÈRE » 2026-09-19 : à 5-7
+    // satellites le seuil de bruit (≈ 2 × accuracy = 70-180 m) dépasse la distance
+    // parcourue entre deux fixes GT06 (9-20 s) → un véhicule qui ROULE était jugé
+    // « démontrablement immobile », vitesse forcée à 0, statut « à l'arrêt » et ancre
+    // (centroïde des fixes passés) affichée derrière lui. Une vitesse rapportée
+    // au-dessus du « fond » fantôme du traceur (RELIABLE_REPORTED_SPEED_MS) et que
+    // la position ne CONTREDIT pas (distance + bruit ≥ vitesse × Δt) est conservée.
+    if (
+      demonstrablyStationary &&
+      reported >= RELIABLE_REPORTED_SPEED_MS &&
+      reported * dtSec <= movedMeters + gate
+    ) {
+      return { speedMs: reported, source: 'measured' };
+    }
     if (demonstrablyStationary) return { speedMs: 0, source: 'clamped_zero' };
     if (reported < STATIONARY_SPEED_MS) return { speedMs: 0, source: 'clamped_zero' };
     return { speedMs: reported, source: 'measured' };

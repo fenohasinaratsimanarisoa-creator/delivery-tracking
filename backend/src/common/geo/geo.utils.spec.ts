@@ -369,6 +369,25 @@ describe('resolveGroundSpeed — vitesse sol fiable (audit VITESSE FANTÔME 2026
     expect(r.source).toBe('clamped_zero');
   });
 
+  it('R2 — véhicule qui ROULE (30 km/h) à 6 satellites, 75 m en 9 s sous le seuil de bruit (110 m) : vitesse conservée', () => {
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 8.3, // 30 km/h
+      previous: ref(-18.8792, 47.5079, 0, 55),
+      current: ref(-18.8792 + 0.00068, 47.5079, 9, 55), // ~75 m en 9 s
+    });
+    expect(r.speedMs).toBe(8.3);
+    expect(r.source).toBe('measured');
+  });
+
+  it('R2 — vitesse rapportée élevée mais position immobile (75 m annoncés, 3 m réels, signal précis) : ramenée à 0', () => {
+    const r = resolveGroundSpeed({
+      reportedSpeedMs: 8.3,
+      previous: ref(-18.8792, 47.5079, 0, 8),
+      current: ref(-18.8792 + 0.00003, 47.5079, 9, 8), // 3 m, gate ≈ 16 m
+    });
+    expect(r.speedMs).toBe(0);
+  });
+
   it('R2 — vitesse rapportée sous le plancher de stationnarité : ramenée à 0 même sans référence', () => {
     const r = resolveGroundSpeed({
       reportedSpeedMs: STATIONARY_SPEED_MS - 0.1,
