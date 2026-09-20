@@ -83,7 +83,10 @@ services:
         reservations: { cpus: '0.1', memory: 64M }
 
   traccar:
-    image: traccar/traccar:latest
+    # Épinglée par DIGEST (audit 2026-09-20) : `latest` pouvait changer le comportement d'ingestion à
+    # la moindre mise à jour silencieuse. Digest = celui de l'image en production (Traccar 6.15.2).
+    # N'a d'effet qu'à la prochaine recréation du conteneur (aucun redémarrage forcé).
+    image: traccar/traccar@sha256:b652919b4e58884828d907f0ee8d499f7aeee5efed7836b99fe7ffb08344ae4a
     container_name: delivery-tracking-traccar
     environment:
       # Xmx relevé de 512m à 1536m avec la limite mémoire du conteneur (voir

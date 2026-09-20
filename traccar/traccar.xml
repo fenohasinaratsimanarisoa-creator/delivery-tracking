@@ -25,9 +25,6 @@
     <entry key='ast.port'>5065</entry>
 
     <entry key='logger.level'>INFO</entry>
-    <!-- ⚠️ CHANGEZ CES IDENTIFIANTS EN PRODUCTION -->
-    <entry key='users.default'>admin:admin</entry>
-
     <entry key='filter.enable'>true</entry>
     <entry key='filter.distance'>5</entry>
     <entry key='filter.future'>300</entry>
