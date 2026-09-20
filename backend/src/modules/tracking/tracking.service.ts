@@ -2509,8 +2509,28 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     // recalcule la position À AFFICHER = centroïde pondéré des fixes récents à
     // l'arrêt (même logique que le broadcast temps réel du pont). Uniquement quand
     // le dernier fix est « à l'arrêt » ET non suspect ; sinon on garde le brut.
+    //
+    // POINT SUSPECT EN DERNIER (audit « position bloquée sur le faux point » 2026-09-20) : le
+    // point suspect reste EXPOSÉ (badge « signal GPS instable », véhicule toujours visible)
+    // mais il ne doit JAMAIS positionner le marqueur — le flux temps réel garde déjà la
+    // position précédente pour un point suspect (vehicleMap.mergePositionUpdate). Sans ça, un
+    // fix aberrant marqué suspect restait affiché tel quel à chaque rechargement de la carte.
+    // Le marqueur se place alors sur le dernier point FIABLE (ancré si le véhicule est à l'arrêt).
+    const suspectVehicleIds = positions.filter((p) => p.suspect).map((p) => p.vehicle_id);
+    const lastGoodByVehicle = new Map<string, { latitude: number; longitude: number }>();
+    if (suspectVehicleIds.length > 0) {
+      const goods = await this.prisma.$queryRaw<
+        Array<{ vehicle_id: string; latitude: number; longitude: number }>
+      >`
+        SELECT DISTINCT ON (vehicle_id) vehicle_id, latitude, longitude
+        FROM gps_positions
+        WHERE vehicle_id = ANY(${suspectVehicleIds}::uuid[]) AND suspect = false
+        ORDER BY vehicle_id, timestamp DESC
+      `;
+      for (const g of goods ?? []) lastGoodByVehicle.set(g.vehicle_id, g);
+    }
     const stoppedVehicleIds = positions
-      .filter((p) => !p.suspect && (p.speed == null || p.speed < 0.5))
+      .filter((p) => p.suspect || p.speed == null || p.speed < 0.5)
       .map((p) => p.vehicle_id);
     const anchorByVehicle = await this.computeAnchorByVehicle(stoppedVehicleIds);
 
@@ -2524,8 +2544,10 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
             : `${p.driver_first_name} ${p.driver_last_name}`,
         latitude: p.latitude,
         longitude: p.longitude,
-        displayLatitude: anchor?.latitude ?? p.latitude,
-        displayLongitude: anchor?.longitude ?? p.longitude,
+        displayLatitude:
+          anchor?.latitude ?? lastGoodByVehicle.get(p.vehicle_id)?.latitude ?? p.latitude,
+        displayLongitude:
+          anchor?.longitude ?? lastGoodByVehicle.get(p.vehicle_id)?.longitude ?? p.longitude,
         speed: p.speed,
         heading: p.heading,
         accuracy: p.accuracy,

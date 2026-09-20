@@ -2077,6 +2077,38 @@ describe('TrackingService', () => {
   });
 
   describe('getLivePositions', () => {
+    it('dernier point SUSPECT : exposé avec son badge mais le marqueur est placé sur le dernier point FIABLE', async () => {
+      // Audit 2026-09-20 : 2 faux fixes de réveil (430 m) marqués suspect restaient « dernière
+      // position » et la carte les affichait brut au rechargement.
+      const good = { latitude: -18.863258, longitude: 47.563883 };
+      mockPrisma.$queryRaw = jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            driver_id: null,
+            driver_first_name: null,
+            driver_last_name: null,
+            latitude: -18.862526, // faux fix (430 m)
+            longitude: 47.567985,
+            speed: 0,
+            heading: null,
+            accuracy: 35,
+            suspect: true,
+            timestamp: new Date(),
+            vehicle_id: 'vehicle-9',
+            delivery_id: null,
+            minutes_ago: 1,
+          },
+        ])
+        .mockResolvedValueOnce([{ vehicle_id: 'vehicle-9', ...good }]) // dernier point fiable
+        .mockResolvedValue([]); // historique d'ancre : vide
+      const [r] = await service.getLivePositions('company-a');
+      expect(r.suspect).toBe(true); // badge conservé, véhicule toujours visible
+      expect(r.latitude).toBe(-18.862526); // brut suspect exposé (litige / popup)
+      expect(r.displayLatitude).toBe(good.latitude); // marqueur sur le dernier point fiable
+      expect(r.displayLongitude).toBe(good.longitude);
+    });
+
     it('returns live positions scoped by companyId', async () => {
       mockPrisma.$queryRaw = jest.fn().mockResolvedValue([
         {
