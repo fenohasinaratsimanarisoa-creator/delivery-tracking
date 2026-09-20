@@ -347,16 +347,30 @@ services:
   backup:
     image: postgis/postgis:16-3.4
     container_name: delivery-tracking-backup
+    # AUDIT 2026-09-20 : le service produisait 0 sauvegarde depuis 26 jours — cron ne transmet pas
+    # l'environnement du conteneur (« PGHOST: parameter not set »), sans aucun journal. Corrigé :
+    #  - backup.sh relit l'environnement depuis le processus 1 ;
+    #  - la sortie de cron va dans les journaux du conteneur (docker logs) ;
+    #  - une sauvegarde est faite ~90 s après CHAQUE démarrage du service (fraîcheur garantie) ;
+    #  - le healthcheck passe « unhealthy » si aucune sauvegarde de moins de 26 h n'existe.
     entrypoint: >
       sh -c "
-      apt-get update -qq && apt-get install -y -qq --no-install-recommends awscli cron > /dev/null 2>&1 || true;
-      echo '0 3 * * * /backup/backup.sh' > /etc/cron.d/backup;
-      crontab /etc/cron.d/backup;
+      apt-get update -qq && apt-get install -y -qq --no-install-recommends awscli cron curl > /dev/null 2>&1 || true;
+      echo '0 3 * * * /backup/backup.sh >> /proc/1/fd/1 2>&1' > /tmp/backup.cron;
+      crontab /tmp/backup.cron;
+      (sleep 90 && /backup/backup.sh >> /proc/1/fd/1 2>&1) &
       cron -f
       "
+    healthcheck:
+      test: ["CMD-SHELL", "find /backup/data -name 'delivery_tracking_*.sql.gz' -mmin -1560 | grep -q ."]
+      interval: 30m
+      timeout: 10s
+      retries: 1
+      start_period: 10m
     volumes:
       - ./scripts/backup.sh:/backup/backup.sh:ro
       - backupdata:/backup/data
+      - traccar_data:/backup/traccar:ro
     environment:
       PGUSER: ${POSTGRES_USER:-delivery_app}
       PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -367,6 +381,9 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      TRACCAR_URL: ${TRACCAR_URL:-http://traccar:8082}
+      TRACCAR_USER: ${TRACCAR_USER:?TRACCAR_USER is required}
+      TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:?TRACCAR_PASSWORD is required}
     depends_on:
       postgres:
         condition: service_healthy
