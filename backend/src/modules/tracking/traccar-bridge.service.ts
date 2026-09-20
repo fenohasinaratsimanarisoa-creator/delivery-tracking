@@ -49,7 +49,11 @@ interface TraccarPosition {
 
 // UERE pour récepteur GPS grand public : ~5m (combinaison erreurs satellite + atmosphère + récepteur)
 // HDOP * UERE = accuracy estimée ; on prend la plus prudente (max) entre accuracy du device et HDOP dérivé
-import { computeConfidence, computeCombinedAccuracy } from '../../common/geo/gps-quality';
+import {
+  computeConfidence,
+  computeCombinedAccuracy,
+  evaluateWakeFix,
+} from '../../common/geo/gps-quality';
 import {
   resolveGroundSpeed,
   haversineDistance,
@@ -209,6 +213,11 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
    * le bootstrap /tracking/live recalcule l'ancre depuis la DB en attendant.
    */
   private readonly anchorBuffers = new Map<string, AnchorFix[]>();
+  /**
+   * Début (ms) de la quarantaine des fixes de RÉVEIL peu fiables, par véhicule (voir
+   * evaluateWakeFix). En mémoire : un redémarrage la remet à zéro, sans conséquence.
+   */
+  private readonly wakeQuarantine = new Map<string, number>();
   private static readonly ANCHOR_BUFFER_SIZE = 20;
 
   /**
@@ -1363,6 +1372,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             // Historique récent (fenêtre de vitesse ≥ 12 s, audit 2026-09-19) — même
             // logique que le temps réel : sans elle un véhicule lent était rattrapé
             // avec une vitesse forcée à 0.
+            // Quarantaine des fixes de réveil peu fiables (voir evaluateWakeFix) — même règle
+            // que le temps réel, sur l'historique rattrapé.
+            let backfillQuarantineSince: number | null = null;
             const backfillHistory: Array<{
               latitude: number;
               longitude: number;
@@ -1388,6 +1400,22 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
               if (pos.valid === false) {
                 this.logger.warn(
                   `Backfill: position LBS rejetée (valid=false) pour device ${pos.deviceId}`,
+                );
+                continue;
+              }
+
+              const backfillWake = evaluateWakeFix({
+                sat: (pos.attributes as Record<string, unknown> | undefined)?.sat,
+                gapSincePrevSec: lastBackfillPos
+                  ? (timestamp.getTime() - lastBackfillPos.timestamp.getTime()) / 1000
+                  : null,
+                quarantineSinceMs: backfillQuarantineSince,
+                fixTimeMs: timestamp.getTime(),
+              });
+              backfillQuarantineSince = backfillWake.quarantineSinceMs;
+              if (backfillWake.quarantine) {
+                this.logger.warn(
+                  `Backfill: fix de réveil peu fiable ignoré pour device ${pos.deviceId} à ${timestamp.toISOString()}`,
                 );
                 continue;
               }
@@ -1659,6 +1687,29 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
 
         if (!vehicleMapping) return null;
 
+        // FIX DE RÉVEIL PEU FIABLE (audit « téléportation » 2026-09-20) : après un long
+        // silence, un fix à < 10 satellites (GPS pas convergé, erreur jusqu'à ~430 m) est
+        // mis en quarantaine — ni stocké, ni affiché, ni compté comme trajet. Voir
+        // evaluateWakeFix (gps-quality.ts). Le dernier fix stocké sert aussi plus bas.
+        const lastDb = await this.trackingService.getLastPosition(vehicleMapping.id);
+        const wake = evaluateWakeFix({
+          sat: satCount,
+          gapSincePrevSec: lastDb
+            ? (timestamp.getTime() - lastDb.timestamp.getTime()) / 1000
+            : null,
+          quarantineSinceMs: this.wakeQuarantine.get(vehicleMapping.id) ?? null,
+          fixTimeMs: timestamp.getTime(),
+        });
+        if (wake.quarantineSinceMs == null) this.wakeQuarantine.delete(vehicleMapping.id);
+        else this.wakeQuarantine.set(vehicleMapping.id, wake.quarantineSinceMs);
+        if (wake.quarantine) {
+          this.logger.warn(
+            `Fix de réveil peu fiable ignoré (${satCount} satellites après silence) pour device ` +
+              `${pos.deviceId} à ${pos.latitude},${pos.longitude} — en attente d'un fix fiable`,
+          );
+          return null;
+        }
+
         // Résolution du chauffeur AU MOMENT du fix GPS (VehicleAssignmentHistory),
         // jamais l'affectation COURANTE (driver.vehicleId) : sur un backfill, un
         // changement de chauffeur pendant la fenêtre ne doit pas faire hériter les
@@ -1743,7 +1794,6 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         // déjà la meilleure estimation disponible quelle que soit sa source
         // (device, HDOP, ou satellites) — les utiliser directement, sans repli sur
         // `undefined`.
-        const lastDb = await this.trackingService.getLastPosition(vehicleMapping.id);
         const speedMs = resolveGroundSpeed({
           reportedSpeedMs: (pos.speed || 0) * 0.514444,
           previous: lastDb

@@ -459,7 +459,10 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
         baseTraccarPos({
           speed: 0,
           accuracy: 10,
-          attributes: { sat: 8, motion: false },
+          // 12 satellites : un fix à < 10 satellites après une longue coupure est désormais mis en
+          // quarantaine AVANT (evaluateWakeFix, audit 2026-09-20 — voir traccar-wake-fix.spec.ts) ; ce
+          // test vérifie le filet « saut isolé non corroboré » pour un fix qui, lui, semble fiable.
+          attributes: { sat: 12, motion: false },
           latitude: glitchLat,
           longitude: DELIVERY_LNG,
           fixTime: new Date(now + 10 * 60_000).toISOString(),
@@ -530,7 +533,7 @@ describe('Tâche 4 — Parité fonctionnelle phone vs physical_tracker', () => {
         baseTraccarPos({
           speed: 0,
           accuracy: 55,
-          attributes: { sat: 6, motion: true }, // motion fantôme : device dit "mouvement", speed=0
+          attributes: { sat: 12, motion: true }, // motion fantôme : device dit "mouvement", speed=0 (12 sat : voir note evaluateWakeFix plus haut)
           latitude: glitchLat,
           longitude: DELIVERY_LNG,
           fixTime: new Date(now + 100 * 60_000).toISOString(),

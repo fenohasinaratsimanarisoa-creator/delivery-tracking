@@ -1,4 +1,11 @@
-import { computeConfidence, computeCombinedAccuracy, accuracyFromSatellites } from './gps-quality';
+import {
+  evaluateWakeFix,
+  WAKE_QUARANTINE_MAX_S,
+  WAKE_SILENCE_MIN_S,
+  computeConfidence,
+  computeCombinedAccuracy,
+  accuracyFromSatellites,
+} from './gps-quality';
 
 describe('computeCombinedAccuracy', () => {
   it('should use device accuracy when no HDOP', () => {
@@ -125,5 +132,83 @@ describe('computeConfidence', () => {
 
   it('should return 70 for unknown accuracy', () => {
     expect(computeConfidence(undefined, false)).toBe(70);
+  });
+});
+
+describe('evaluateWakeFix — fix de réveil peu fiable (audit téléportation 2026-09-20)', () => {
+  const T = 1_800_000_000_000;
+
+  it("7 satellites après 34 min de silence : QUARANTAINE (cas réel : 430 m d'erreur)", () => {
+    const v = evaluateWakeFix({
+      sat: 7,
+      gapSincePrevSec: 2004,
+      quarantineSinceMs: null,
+      fixTimeMs: T,
+    });
+    expect(v).toEqual({ quarantine: true, quarantineSinceMs: T });
+  });
+
+  it('le 2e fix faible à côté du 1er RESTE en quarantaine (il ne peut pas « corroborer » le premier)', () => {
+    const v = evaluateWakeFix({
+      sat: 7,
+      gapSincePrevSec: 2009,
+      quarantineSinceMs: T,
+      fixTimeMs: T + 5_000,
+    });
+    expect(v.quarantine).toBe(true);
+    expect(v.quarantineSinceMs).toBe(T);
+  });
+
+  it('un fix fiable (15 satellites) lève la quarantaine et est accepté', () => {
+    const v = evaluateWakeFix({
+      sat: 15,
+      gapSincePrevSec: 2050,
+      quarantineSinceMs: T,
+      fixTimeMs: T + 40_000,
+    });
+    expect(v).toEqual({ quarantine: false, quarantineSinceMs: null });
+  });
+
+  it('un fix à 15 satellites après un long silence est accepté tel quel (jamais bloqué)', () => {
+    expect(
+      evaluateWakeFix({ sat: 15, gapSincePrevSec: 70_000, quarantineSinceMs: null, fixTimeMs: T })
+        .quarantine,
+    ).toBe(false);
+  });
+
+  it('en trajet continu (fix précédent < 2 min), un fix faible passe : pas de perte de couverture', () => {
+    const v = evaluateWakeFix({
+      sat: 6,
+      gapSincePrevSec: WAKE_SILENCE_MIN_S - 1,
+      quarantineSinceMs: null,
+      fixTimeMs: T,
+    });
+    expect(v.quarantine).toBe(false);
+  });
+
+  it('ciel limité : après WAKE_QUARANTINE_MAX_S de fixes faibles, ils sont libérés (jamais de traceur bloqué)', () => {
+    const v = evaluateWakeFix({
+      sat: 8,
+      gapSincePrevSec: 5000,
+      quarantineSinceMs: T,
+      fixTimeMs: T + WAKE_QUARANTINE_MAX_S * 1000,
+    });
+    expect(v).toEqual({ quarantine: false, quarantineSinceMs: null });
+  });
+
+  it('nombre de satellites absent ou invalide : jamais considéré faible (aucune hypothèse)', () => {
+    for (const sat of [undefined, null, 'abc', 0, -1]) {
+      expect(
+        evaluateWakeFix({ sat, gapSincePrevSec: 9999, quarantineSinceMs: null, fixTimeMs: T })
+          .quarantine,
+      ).toBe(false);
+    }
+  });
+
+  it('aucun fix stocké (premier fix du véhicule) et faible : quarantaine (pas de référence pour le vérifier)', () => {
+    expect(
+      evaluateWakeFix({ sat: 5, gapSincePrevSec: null, quarantineSinceMs: null, fixTimeMs: T })
+        .quarantine,
+    ).toBe(true);
   });
 });

@@ -241,6 +241,15 @@ describe('TraccarBridgeService — Champ valid', () => {
 
   it('should ACCEPT a fix at exactly 4 satellites but with realistic accuracy (150 m)', async () => {
     mockMappedVehicle();
+    // Trajet continu (fix précédent 10 s avant) : un fix faible n'est pas un fix de RÉVEIL
+    // (evaluateWakeFix, audit 2026-09-20) — il reste accepté, sans perte de couverture.
+    mockTrackingService.getLastPosition.mockResolvedValue({
+      latitude: -18.87,
+      longitude: 47.52,
+      timestamp: new Date(Date.now() - 10_000),
+      accuracy: 8,
+      speed: 3,
+    });
     const pos = basePos({ attributes: { sat: 4 } });
     delete (pos as any).accuracy;
 

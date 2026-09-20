@@ -133,3 +133,64 @@ export function computeCombinedAccuracy(
 
   return { accuracy, hdopInfo };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX DE RÉVEIL PEU FIABLE (audit « téléportation » 2026-09-20).
+//
+// Un GT06 motion-triggered dort à l'arrêt. À son réveil, son premier fix est calculé
+// avant que le GPS ait convergé : 5-9 satellites au lieu de 15, et une erreur qui a
+// atteint ~430 m (fix de 15:53:03/08 UTC : 7 satellites, `accuracy` déduite 35 m, alors
+// que le véhicule n'avait pas bougé). Le serveur l'acceptait dès 4 satellites, le
+// stockait, le comptait comme un déplacement (« un trajet que je n'ai pas fait ») et
+// l'AFFICHAIT : le 2e fix faux, à côté du 1er, était « corroboré » par l'ancre d'arrêt.
+// Historique 45 jours : 99 % des fixes ont ≥ 12 satellites ; les rares fixes < 10 arrivent
+// presque tous juste après une longue veille (écart de plusieurs heures avant).
+//
+// Règle : après un silence > WAKE_SILENCE_MIN_S, un fix à moins de WAKE_TRUST_MIN_SAT
+// satellites est mis en QUARANTAINE (ni stocké, ni affiché, ni compté). Elle se lève dès
+// qu'un fix fiable arrive (cas normal : il est alors accepté tel quel, même s'il est
+// loin — le véhicule a pu réellement bouger pendant la veille), ou après
+// WAKE_QUARANTINE_MAX_S de fixes faibles seuls (ciel limité : jamais de traceur bloqué).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** En dessous, un fix qui suit un long silence n'est pas fiable (GPS pas convergé). */
+export const WAKE_TRUST_MIN_SAT = 10;
+/** Silence (s) au-delà duquel un fix est un fix de « réveil ». */
+export const WAKE_SILENCE_MIN_S = 120;
+/** Durée max (s) pendant laquelle des fixes faibles restent en quarantaine. */
+export const WAKE_QUARANTINE_MAX_S = 120;
+
+export interface WakeFixInput {
+  /** `attributes.sat` du fix (inconnu/absent → jamais considéré faible). */
+  sat: unknown;
+  /** Secondes depuis le dernier fix STOCKÉ du véhicule ; null s'il n'y en a aucun. */
+  gapSincePrevSec: number | null;
+  /** Horodatage (ms) du début de la quarantaine en cours pour ce véhicule, sinon null. */
+  quarantineSinceMs: number | null;
+  /** Horodatage (ms) du fix évalué. */
+  fixTimeMs: number;
+}
+
+export interface WakeFixVerdict {
+  /** true → ne PAS stocker ni diffuser ce fix. */
+  quarantine: boolean;
+  /** Nouvel état de quarantaine à mémoriser pour ce véhicule (null = aucune). */
+  quarantineSinceMs: number | null;
+}
+
+export function evaluateWakeFix(input: WakeFixInput): WakeFixVerdict {
+  const satN = Number(input.sat);
+  const weak = input.sat != null && Number.isFinite(satN) && satN > 0 && satN < WAKE_TRUST_MIN_SAT;
+  // Fix fiable (ou sans information de satellites) : met fin à toute quarantaine.
+  if (!weak) return { quarantine: false, quarantineSinceMs: null };
+
+  if (input.quarantineSinceMs != null) {
+    const elapsedS = (input.fixTimeMs - input.quarantineSinceMs) / 1000;
+    if (elapsedS >= WAKE_QUARANTINE_MAX_S) return { quarantine: false, quarantineSinceMs: null };
+    return { quarantine: true, quarantineSinceMs: input.quarantineSinceMs };
+  }
+
+  const afterSilence = input.gapSincePrevSec == null || input.gapSincePrevSec > WAKE_SILENCE_MIN_S;
+  if (!afterSilence) return { quarantine: false, quarantineSinceMs: null }; // trajet continu
+  return { quarantine: true, quarantineSinceMs: input.fixTimeMs };
+}
