@@ -59,7 +59,8 @@ echo "[backup] dump vérifié (intégrité gzip + contenu)"
 #    pendant la copie, à n'utiliser qu'en dernier recours.
 TRACCAR_FILE="${BACKUP_DIR}/traccar_${TIMESTAMP}.tar.gz"
 TRACCAR_TMP="$(mktemp -d)"
-if [ -n "${TRACCAR_URL:-}" ] && [ -n "${TRACCAR_USER:-}" ] && [ -n "${TRACCAR_PASSWORD:-}" ]; then
+# (l'image n'a pas curl : l'export JSON est alors fait côté hôte par traccar/export-registry.sh)
+if command -v curl >/dev/null 2>&1 && [ -n "${TRACCAR_URL:-}" ] && [ -n "${TRACCAR_USER:-}" ] && [ -n "${TRACCAR_PASSWORD:-}" ]; then
   COOKIE="${TRACCAR_TMP}/cj"
   if curl -sf -c "$COOKIE" --data-urlencode "email=${TRACCAR_USER}" --data-urlencode "password=${TRACCAR_PASSWORD}" "${TRACCAR_URL}/api/session" -o /dev/null; then
     for r in devices users groups geofences; do

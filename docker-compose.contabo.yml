@@ -347,19 +347,19 @@ services:
   backup:
     image: postgis/postgis:16-3.4
     container_name: delivery-tracking-backup
-    # AUDIT 2026-09-20 : le service produisait 0 sauvegarde depuis 26 jours — cron ne transmet pas
-    # l'environnement du conteneur (« PGHOST: parameter not set »), sans aucun journal. Corrigé :
-    #  - backup.sh relit l'environnement depuis le processus 1 ;
-    #  - la sortie de cron va dans les journaux du conteneur (docker logs) ;
-    #  - une sauvegarde est faite ~90 s après CHAQUE démarrage du service (fraîcheur garantie) ;
-    #  - le healthcheck passe « unhealthy » si aucune sauvegarde de moins de 26 h n'existe.
+    # AUDIT 2026-09-20 : 0 sauvegarde en 26 jours. CAUSE RACINE : cette image est Debian 11 (bullseye,
+    # fin de vie) — ses dépôts de sécurité répondent 404, donc `apt-get install cron` échouait et le
+    # `|| true` d'origine masquait l'échec : cron n'a jamais tourné. Plus AUCUNE dépendance à apt/cron :
+    # une boucle shell lance backup.sh ~90 s après chaque démarrage puis toutes les 24 h, et sa sortie
+    # va dans `docker logs`. Le healthcheck passe « unhealthy » si aucune sauvegarde de moins de 26 h.
+    # (Image à migrer vers postgres:16 sur Debian maintenu quand possible.)
     entrypoint: >
       sh -c "
-      apt-get update -qq && apt-get install -y -qq --no-install-recommends awscli cron curl > /dev/null 2>&1 || true;
-      echo '0 3 * * * /backup/backup.sh >> /proc/1/fd/1 2>&1' > /tmp/backup.cron;
-      crontab /tmp/backup.cron;
-      (sleep 90 && /backup/backup.sh >> /proc/1/fd/1 2>&1) &
-      cron -f
+      sleep 90;
+      while true; do
+      /backup/backup.sh >> /proc/1/fd/1 2>&1;
+      sleep 86400;
+      done
       "
     healthcheck:
       test: ["CMD-SHELL", "find /backup/data -name 'delivery_tracking_*.sql.gz' -mmin -1560 | grep -q ."]
