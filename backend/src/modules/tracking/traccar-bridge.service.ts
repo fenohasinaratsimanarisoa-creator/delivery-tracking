@@ -79,6 +79,8 @@ const INITIAL_RECONNECT_DELAY_MS = 2000;
 const PENDING_POSITIONS_LIMIT = 1000;
 const PENDING_POSITIONS_RETENTION_MS = 3600000;
 const SILENT_DEVICE_CHECK_INTERVAL_MS = 60000;
+/** Dernier fix au moins à cette vitesse (m/s ≈ 11 km/h) : le traceur s'est tu EN ROULANT → alerte. */
+const SILENCE_ALERT_MIN_LAST_SPEED_MS = 3;
 const TRACCAR_HEALTH_CHECK_INTERVAL_MS = 300000;
 // Au-delà de ce délai sans le moindre message WS, le socket est considéré zombie
 // (voir `lastMessageAt`) — aligné sur le seuil d'alerte de déconnexion prolongée
@@ -218,6 +220,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
    * evaluateWakeFix). En mémoire : un redémarrage la remet à zéro, sans conséquence.
    */
   private readonly wakeQuarantine = new Map<string, number>();
+  /** Dernier silence (horodatage du dernier fix) déjà traité par véhicule — voir checkSilentPhysicalDevices. */
+  private readonly silentAlerted = new Map<string, string>();
   private static readonly ANCHOR_BUFFER_SIZE = 20;
 
   /**
@@ -890,11 +894,45 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       const elapsedMin = (Date.now() - lastPos.timestamp.getTime()) / 60000;
 
       if (elapsedMin > timeout) {
-        const cooldownKey = `silent_alert:${vehicle.id}`;
+        // UN SEUL ALERT PAR SILENCE (audit 2026-09-20) : l'ancienne clé de verrou
+        // (`silent_alert:<véhicule>`, durée = seuil) expirait au bout de 15 min et
+        // ré-alertait en boucle tant que le véhicule restait garé : 968 alertes en 14 j
+        // (99,7 % des notifications). La clé est maintenant liée au DERNIER fix reçu :
+        // un silence donné n'alerte qu'une fois ; un nouveau fix ouvre un nouveau silence.
+        const silenceId = String(lastPos.timestamp.getTime());
+        if (this.silentAlerted.get(vehicle.id) === silenceId) continue;
+        const cooldownKey = `silent_alert:${vehicle.id}:${silenceId}`;
+        if (this.redis && (await this.redis.get(cooldownKey))) {
+          this.silentAlerted.set(vehicle.id, silenceId);
+          continue;
+        }
+
+        // Un traceur motion-triggered se TAIT à l'arrêt : ce n'est pas une panne. On n'alerte
+        // que si le silence survient pendant qu'on attend des positions — livraison en cours
+        // (créée il y a moins de 24 h : une livraison oubliée « en cours » ne compte pas) — ou
+        // si le dernier fix était en pleine vitesse (traceur perdu en roulant).
+        const wasDriving = (lastPos.speed ?? 0) >= SILENCE_ALERT_MIN_LAST_SPEED_MS;
+        const activeDelivery = wasDriving
+          ? null
+          : await this.prisma.delivery.findFirst({
+              where: {
+                vehicleId: vehicle.id,
+                status: 'in_progress',
+                deletedAt: null,
+                createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+              },
+              select: { id: true },
+            });
+        if (!wasDriving && !activeDelivery) {
+          // Véhicule garé, aucune livraison à suivre : silence normal. On mémorise pour ne
+          // pas réinterroger la base à chaque passage (60 s).
+          this.silentAlerted.set(vehicle.id, silenceId);
+          continue;
+        }
+
+        this.silentAlerted.set(vehicle.id, silenceId);
         if (this.redis) {
-          const existing = await this.redis.get(cooldownKey);
-          if (existing) continue;
-          await this.redis.setex(cooldownKey, Math.round(timeout * 60), '1');
+          await this.redis.setex(cooldownKey, 24 * 60 * 60, '1');
         }
 
         // Classification de la cause probable du silence via la DERNIÈRE télémétrie
@@ -1478,6 +1516,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                   pos.longitude,
                   timestamp,
                   accuracy,
+                  speedMs,
                 );
                 suspect = evaluation.suspect;
                 if (suspect) {

@@ -2077,6 +2077,17 @@ describe('TrackingService', () => {
   });
 
   describe('getLivePositions', () => {
+    it('la requête lit la dernière position de chaque véhicule par accès indexé (LATERAL), pas un parcours de toute la table', async () => {
+      mockPrisma.$queryRaw = jest.fn().mockResolvedValue([]);
+      await service.getLivePositions('company-a');
+      const sql = ((mockPrisma.$queryRaw as jest.Mock).mock.calls[0][0] as string[])
+        .join(' ')
+        .replace(/--[^\n]*/g, ''); // les commentaires SQL ne comptent pas
+      expect(sql).toMatch(/JOIN LATERAL/);
+      expect(sql).toMatch(/ORDER BY g\.timestamp DESC\s+LIMIT 1/);
+      expect(sql).not.toMatch(/DISTINCT ON/); // ancien parcours complet (Seq Scan, audit 2026-09-20)
+    });
+
     it('dernier point SUSPECT : exposé avec son badge mais le marqueur est placé sur le dernier point FIABLE', async () => {
       // Audit 2026-09-20 : 2 faux fixes de réveil (430 m) marqués suspect restaient « dernière
       // position » et la carte les affichait brut au rechargement.

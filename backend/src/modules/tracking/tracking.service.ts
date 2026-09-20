@@ -40,7 +40,10 @@ import {
   STATIONARY_RADIUS_M,
 } from '../../common/geo/geo.utils';
 import { computeAnchoredPosition, type AnchorFix } from '../../common/geo/stationary-anchor';
-import { evaluateTeleportation } from '../../common/geo/teleportation.utils';
+import {
+  evaluateTeleportation,
+  type TeleportReference,
+} from '../../common/geo/teleportation.utils';
 
 const STOP_SPEED_THRESHOLD_MS = 0.3; // ~1 km/h — seuil pour détecter l'arrêt (évite les égalités strictes sur flottants)
 const SPEED_SMOOTHING_WINDOW = 5; // nombre de positions pour lisser la vitesse (ETA/réveil retard)
@@ -666,6 +669,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     vehicleId: string,
     accuracy?: number,
     source?: PositionSource,
+    speed?: number | null,
   ): Promise<boolean> {
     const last = await this.getLastPosition(vehicleId);
     if (!last) return false;
@@ -683,7 +687,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     // passe (aucune référence fiable pour le qualifier de téléportation). La détection
     // de téléportation n'est PAS désactivée : un vrai saut dans la même source reste
     // suspecté exactement comme avant.
-    let reference: { latitude: number; longitude: number; timestamp: Date } = last;
+    let reference: TeleportReference = last;
     if (source && last.source !== undefined && last.source !== source) {
       const gapSec = (timestamp.getTime() - last.timestamp.getTime()) / 1000;
       if (gapSec > 0 && gapSec <= 300) {
@@ -693,7 +697,13 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         const sameSourceLast = await this.prisma.gpsPosition.findFirst({
           where: { vehicleId, source, suspect: false },
           orderBy: { timestamp: 'desc' },
-          select: { latitude: true, longitude: true, timestamp: true },
+          select: {
+            latitude: true,
+            longitude: true,
+            timestamp: true,
+            speed: true,
+            accuracy: true,
+          },
         });
         if (!sameSourceLast) {
           this.logger.debug(
@@ -707,14 +717,23 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
 
     // Décision unique partagée avec le chemin batch (evaluateTeleportation, source unique
     // dans teleportation.utils) : règles de vitesse + saut court + garde non-croissant.
-    const evaluation = evaluateTeleportation(reference, latitude, longitude, timestamp, accuracy);
+    const evaluation = evaluateTeleportation(
+      reference,
+      latitude,
+      longitude,
+      timestamp,
+      accuracy,
+      speed,
+    );
     if (evaluation.suspect) {
       const reasonLabel =
         evaluation.reason === 'non_croissant'
           ? 'timestamp non croissant'
           : evaluation.reason === 'saut_court'
             ? 'saut court'
-            : 'vitesse';
+            : evaluation.reason === 'saut_incoherent'
+              ? 'saut incohérent avec les vitesses'
+              : 'vitesse';
       this.logger.warn(
         `Teleportation suspect (${reasonLabel}): vehicle=${vehicleId} distance=${Math.round(evaluation.distance)}m time=${evaluation.timeDiffSec.toFixed(1)}s speed=${(evaluation.speedMs * 3.6).toFixed(1)}km/h acc=${accuracy ?? 'N/A'}`,
       );
@@ -1148,6 +1167,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       dto.vehicleId,
       dto.accuracy,
       source,
+      dto.speed,
     );
     if (suspect) this.metrics.teleported++;
 
@@ -1466,11 +1486,12 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         // dédoublonnage ci-dessus (politique documentée, identique au temps réel). Un point
         // suspect est SAUVEGARDÉ avec suspect=true (traçabilité conservée pour l'audit).
         suspect = evaluateTeleportation(
-          last,
+          { ...last, accuracy: lastAccuracy.get(pos.vehicleId) },
           pos.latitude,
           pos.longitude,
           ts,
           pos.accuracy,
+          resolvedSpeed,
         ).suspect;
         if (suspect) this.metrics.teleported++;
       }
@@ -2483,7 +2504,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         minutes_ago: number;
       }>
     >`
-      SELECT DISTINCT ON (gp.vehicle_id)
+      SELECT
         gp.driver_id,
         d.first_name AS driver_first_name,
         d.last_name AS driver_last_name,
@@ -2497,11 +2518,24 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         gp.vehicle_id,
         gp.delivery_id,
         EXTRACT(EPOCH FROM (NOW() - gp.timestamp)) / 60 AS minutes_ago
-      FROM gps_positions gp
+      FROM vehicles v
+      -- Dernière position de CHAQUE véhicule par un accès indexé (vehicle_id, timestamp) :
+      -- coût indépendant de la taille de l'historique. L'ancien DISTINCT ON parcourait et
+      -- triait TOUTES les positions de la société à chaque chargement de carte (audit 2026-09-20 :
+      -- Seq Scan sur gps_positions).
+      CROSS JOIN LATERAL (
+        SELECT g.driver_id, g.latitude, g.longitude, g.speed, g.heading, g.accuracy,
+               g.suspect, g.timestamp, g.vehicle_id, g.delivery_id
+        FROM gps_positions g
+        WHERE g.vehicle_id = v.id
+        ORDER BY g.timestamp DESC
+        LIMIT 1
+      ) gp
       LEFT JOIN drivers d ON d.id = gp.driver_id AND d.deleted_at IS NULL AND d.is_active = true
-      JOIN vehicles v ON v.id = gp.vehicle_id AND v.deleted_at IS NULL AND v.is_active = true
       WHERE v.company_id = CAST(${companyId} AS uuid)
-      ORDER BY gp.vehicle_id, gp.timestamp DESC
+        AND v.deleted_at IS NULL
+        AND v.is_active = true
+      ORDER BY gp.vehicle_id
     `;
 
     // ANCRE À L'ARRÊT (audit PRÉCISION GPS 2026-09-09) : pour un véhicule GARÉ, la

@@ -1,4 +1,9 @@
-import { haversineDistance, GPS_NOISE_MAX_ACCURACY_SCALE } from './geo.utils';
+import {
+  haversineDistance,
+  GPS_NOISE_MAX_ACCURACY_SCALE,
+  combinedGpsNoiseGate,
+  MOVEMENT_TRUST_MAX_ACCURACY_M,
+} from './geo.utils';
 
 // Constantes de détection de téléportation — SOURCE UNIQUE DE VÉRITÉ, partagée entre
 // le chemin temps réel (savePosition) et le chemin batch (saveBatch, rattrapage réseau
@@ -7,15 +12,41 @@ export const TELEPORT_SPEED_THRESHOLD_MS = 55.56;
 export const TELEPORT_DISTANCE_THRESHOLD_M = 5000;
 export const TELEPORT_TIME_THRESHOLD_S = 10;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// RÈGLE « SAUT INCOHÉRENT » (audit 2026-09-20, M1). Les seuils ci-dessus ne voient un saut
+// qu'au-delà de 200 km/h : en ville, un saut GPS de 100-500 m en 5-10 s (20-80 m/s) passait
+// sans être suspecté. Cette règle compare la distance parcourue à ce que les VITESSES ANNONCÉES
+// des deux fixes permettent. Volontairement conservatrice (jamais de faux positif sur un vrai
+// trajet — validée sur l'historique complet de production, 6 870 paires : 0 fix marqué à tort) :
+//  - seulement en suivi CONTINU (fix précédent à moins de 30 s) : après un silence, c'est le rôle
+//    de la quarantaine de réveil (evaluateWakeFix) ;
+//  - seulement si les deux fixes sont précis (≤ 30 m) et la vitesse du nouveau fix connue ;
+//  - marge généreuse : 2 × la plus grande vitesse annoncée (min 1 m/s) × Δt + 3 × bruit combiné.
+// ─────────────────────────────────────────────────────────────────────────────
+export const INCOHERENT_JUMP_MAX_DT_S = 30;
+export const INCOHERENT_JUMP_SPEED_MARGIN = 2;
+export const INCOHERENT_JUMP_NOISE_MULT = 3;
+/**
+ * Plancher de vitesse plausible ENTRE deux fixes (m/s ≈ 29 km/h) : un traceur qui émet toutes
+ * les 10-20 s en mouvement peut avoir des vitesses instantanées faibles aux deux extrémités alors
+ * que le véhicule a accéléré entre-temps (validation réelle : 127 m en 20 s avec 1,7 m/s aux
+ * extrémités = trajet légitime). Sans ce plancher, 4 fixes légitimes sur 6 870 étaient marqués.
+ */
+export const INCOHERENT_JUMP_MIN_SPEED_MS = 8;
+
 export interface TeleportReference {
   latitude: number;
   longitude: number;
   timestamp: Date;
+  /** m/s — vitesse résolue du fix de référence, si connue (règle « saut incohérent »). */
+  speed?: number | null;
+  /** m — accuracy du fix de référence, si connue. */
+  accuracy?: number | null;
 }
 
 export interface TeleportEvaluation {
   suspect: boolean;
-  reason: 'non_croissant' | 'vitesse' | 'saut_court' | null;
+  reason: 'non_croissant' | 'vitesse' | 'saut_court' | 'saut_incoherent' | null;
   timeDiffSec: number;
   distance: number;
   speedMs: number;
@@ -40,6 +71,7 @@ export function evaluateTeleportation(
   longitude: number,
   timestamp: Date,
   accuracy?: number,
+  speed?: number | null,
 ): TeleportEvaluation {
   const timeDiffSec = (timestamp.getTime() - reference.timestamp.getTime()) / 1000;
   if (timeDiffSec <= 0) {
@@ -82,6 +114,30 @@ export function evaluateTeleportation(
   // les constantes évoluent.
   if (distance > adjustedDistanceThreshold && timeDiffSec < TELEPORT_TIME_THRESHOLD_S) {
     return { suspect: true, reason: 'saut_court', timeDiffSec, distance, speedMs };
+  }
+
+  // Saut incohérent avec les vitesses annoncées (voir le bloc plus haut).
+  if (
+    timeDiffSec >= 1 &&
+    timeDiffSec <= INCOHERENT_JUMP_MAX_DT_S &&
+    speed != null &&
+    Number.isFinite(speed) &&
+    accuracy != null &&
+    accuracy > 0 &&
+    accuracy <= MOVEMENT_TRUST_MAX_ACCURACY_M &&
+    (reference.accuracy == null ||
+      (reference.accuracy > 0 && reference.accuracy <= MOVEMENT_TRUST_MAX_ACCURACY_M))
+  ) {
+    const refSpeed =
+      reference.speed != null && Number.isFinite(reference.speed) ? reference.speed : 0;
+    const plausible =
+      Math.max(speed, refSpeed, INCOHERENT_JUMP_MIN_SPEED_MS) *
+        timeDiffSec *
+        INCOHERENT_JUMP_SPEED_MARGIN +
+      INCOHERENT_JUMP_NOISE_MULT * combinedGpsNoiseGate(reference.accuracy ?? accuracy, accuracy);
+    if (distance > plausible) {
+      return { suspect: true, reason: 'saut_incoherent', timeDiffSec, distance, speedMs };
+    }
   }
 
   return { suspect: false, reason: null, timeDiffSec, distance, speedMs };
