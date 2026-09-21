@@ -131,7 +131,7 @@
       "twoFactorSubmit": "Verify",
       "twoFactorInvalid": "Invalid code. Please try again.",
       "twoFactorBack": "Back to sign in",
-      "swCacheWarning": "An old version of the application may be cached on this device.",
+      "swCacheWarning": "An old version of the app may be displayed on this device. Reload the page.",
       "swCacheHint": "If the problem persists after retrying, close the browser completely (all tabs) and reopen it.",
       "swCacheResetButton": "Reset the application",
       "brand": "Pistio",
@@ -393,7 +393,7 @@
   },
   "deliveryProofsPage": {
     "title": "Delivery proofs",
-    "subtitle": "History of GPS validation for your deliveries",
+    "subtitle": "History of position checks for your deliveries",
     "kicker": "Validation & control",
     "count": "{{count}} proof",
     "count_plural": "{{count}} proofs",
@@ -406,14 +406,14 @@
       "total": "Total proofs",
       "delivered": "Delivered",
       "failed": "Failed",
-      "mismatch": "GPS deviations"
+      "mismatch": "Deliveries outside the zone"
     },
     "table": {
       "delivery": "Delivery",
       "driver": "Driver",
       "status": "Status",
       "distance": "Deviation",
-      "proof": "GPS proof",
+      "proof": "Position proof",
       "date": "Verified on"
     },
     "distance": {
@@ -423,7 +423,7 @@
     "noProof": "No position",
     "missing": "—",
     "empty": "No delivery proofs",
-    "emptyDesc": "GPS proofs appear here after validation",
+    "emptyDesc": "Position proofs appear here after validation",
     "view": "View"
   },
   "fleet": {
@@ -439,7 +439,7 @@
     "deleteConfirmLabel": "Delete",
     "selectDevicePlaceholder": "Select a device…",
     "addDevice": "Add",
-    "addDeviceHint": "Add a new Traccar device",
+    "addDeviceHint": "Add a new GPS tracker",
     "trackingReliability": {
       "badge": "Unreliable tracking",
       "messages": {
@@ -457,13 +457,13 @@
     },
     "positionSources": {
       "phone": "Mobile app (driver)",
-      "tracker": "Physical tracker (Traccar)"
+      "tracker": "Installed GPS unit"
     },
     "formSections": {
       "identity": "Vehicle Identity",
       "registration": "Registration",
       "features": "Features",
-      "positionSource": "GPS Source"
+      "positionSource": "Tracking type"
     },
     "fields": {
       "brand": "Brand",
@@ -474,13 +474,13 @@
       "fuelType": "Fuel type",
       "theoreticalConsumption": "Theoretical consumption (L/100km)",
       "positionSource": "Position source",
-      "traccarDeviceId": "Traccar device",
+      "traccarDeviceId": "Linked GPS tracker",
       "imei": "GPS tracker IMEI"
     },
     "imeiPlaceholder": "e.g. 863295042345678",
     "imeiHint": {
       "new": "Enter the IMEI printed on the tracker — everything else (creation, linking) is automatic.",
-      "linked": "A tracker is already linked (Traccar ID: {{deviceId}}). Leave empty to keep it, or enter a new IMEI to replace it."
+      "linked": "A tracker is already linked (no. {{deviceId}}). Leave empty to keep it, or enter a new IMEI to replace it."
     },
     "fuelTypes": {
       "gasoline": "Gasoline",
@@ -552,7 +552,7 @@
       "deleted": "Vehicle deleted",
       "deleteError": "Error deleting vehicle",
       "saveError": "Error saving vehicle",
-      "deviceAdded": "Traccar device added",
+      "deviceAdded": "GPS tracker added",
       "deviceError": "Error adding device"
     },
     "confirmDelete": {
@@ -568,10 +568,10 @@
     "resultCount": "{{count}} result",
     "resultCount_plural": "{{count}} results",
     "modalDevice": {
-      "title": "New Traccar device",
+      "title": "New GPS tracker",
       "nameLabel": "Tracker name",
       "namePlaceholder": "Ex: Renault Kangoo tracker",
-      "imeiLabel": "Unique identifier (IMEI)",
+      "imeiLabel": "IMEI number (printed on the unit)",
       "imeiPlaceholder": "Ex: 863295042345678",
       "cancel": "Cancel",
       "add": "Add",
@@ -692,11 +692,11 @@
       "driver": "Driver",
       "status": "Status",
       "speed": "Speed",
-      "heading": "Heading",
+      "heading": "Direction",
       "coordinates": "GPS position",
-      "rawCoordinates": "Raw position (dispute)",
+      "rawCoordinates": "Exact recorded position (dispute)",
       "gpsAccuracy": "GPS accuracy",
-      "confidence": "Fix reliability",
+      "confidence": "Position reliability",
       "lastPosition": "Last position",
       "eta": "Estimated arrival",
       "distanceRemaining": "Distance remaining",
@@ -827,27 +827,27 @@
     "gpsQualityInsufficient": "GPS distance too low to be reliable this day (positions exist but movement < 0.1 km).",
     "gpsQualitySuspiciousBadge": "Verify",
     "costNoPrice": "Cost not computed: fuel price not configured for this vehicle.",
-    "gpsQualitySuspicious": "This distance looks like GPS noise (vehicle likely stayed put) rather than a real trip — verify before relying on it.",
+    "gpsQualitySuspicious": "This distance looks like GPS inaccuracy (vehicle likely stayed put) rather than a real trip — verify before relying on it.",
     "estimatedCost": "Estimated Cost",
     "date": "Date",
-    "gpsDiagTitle": "Raw GPS position diagnostics",
-    "gpsDiagHelp": "Shows what is actually stored in the database for this date, per vehicle: number of fixes, time gaps, suspect positions, and a comparison between raw distance (straight line) vs filtered distance (the one used by the report). No invented figures: if fixes are missing (app closed), the raw distance is also incomplete.",
+    "gpsDiagTitle": "Recorded GPS positions detail",
+    "gpsDiagHelp": "Shows what is actually recorded for this date, per vehicle: number of positions, time gaps, doubtful positions, and a comparison between the straight-line distance and the distance used (the one in the report). No invented figures: if positions are missing (app closed), the straight-line distance is also incomplete.",
     "gpsDiagShow": "Analyze positions",
     "gpsDiagHide": "Hide diagnostics",
     "gpsDiagLoading": "Analyzing…",
     "gpsDiagError": "Error analyzing positions.",
     "gpsDiagTotal": "{{count}} GPS positions recorded this day",
     "gpsDiagUnattributed": "{{count}} without a vehicle",
-    "gpsDiagSparse": "Sparse coverage detected (gaps > 60 s between fixes): the app was probably closed or in background during part of the trip. GPS distance therefore undercounts the real distance. Keep the app open (screen on) during trips for an accurate measure.",
-    "gpsDiagNoSpeed": "This device never reported speed: the \"speed rule\" of the noise filter cannot apply, only movements above the noise threshold are counted.",
+    "gpsDiagSparse": "Incomplete tracking detected (more than 60 s without a position): the app was probably closed or in the background during part of the trip. GPS distance therefore undercounts the real distance. Keep the app open (screen on) during trips for an accurate measure.",
+    "gpsDiagNoSpeed": "This device never reported its speed: only movements large enough to exceed GPS inaccuracy are counted.",
     "gpsDiagEmpty": "No GPS positions recorded for this date. Make sure the app was open with location enabled during the trips.",
     "gpsDiagColVehicle": "Vehicle",
     "gpsDiagColDriver": "Driver",
-    "gpsDiagColFixes": "Valid fixes / total",
+    "gpsDiagColFixes": "Valid positions / total",
     "gpsDiagColSuspect": "Suspected",
-    "gpsDiagColCoverage": "Coverage",
+    "gpsDiagColCoverage": "Tracking recorded",
     "gpsDiagColGap": "Avg. / max gap",
-    "gpsDiagColDist": "Brute / Filtered",
+    "gpsDiagColDist": "Straight line / Used",
     "gpsDiagColReport": "Report",
     "gpsDiagColFuel": "Fuel / Price",
     "table": {
@@ -1145,7 +1145,7 @@
     "selectDelivery": "Please select a delivery",
     "searchingPosition": "Searching for position...",
     "positionAcquired": "Position acquired (accuracy: {{accuracy}}m)",
-    "gpsError": "GPS error: {{message}}",
+    "gpsError": "Unable to get your position. Check that GPS is enabled.",
     "gpsPermissionDenied": "Location access denied. Please allow geolocation in your browser settings.",
     "gpsUnavailable": "Position unavailable. Check that GPS is enabled.",
     "gpsTimeout": "GPS timeout. Check your connection or move outdoors.",
@@ -1205,7 +1205,7 @@
       "positionSource": "GPS tracking"
     },
     "positionSource": {
-      "physicalTracker": "Physical GPS tracker",
+      "physicalTracker": "Installed GPS tracker",
       "mobileApp": "Mobile app"
     },
     "subtitle": "Your assigned vehicle and its details."
@@ -1757,7 +1757,7 @@
     "moreAlerts_plural": "+{{count}} more alerts"
   },
   "trackingIndicator": {
-    "physicalTrackerTitle": "Tracking via physical GPS tracker installed on the vehicle",
+    "physicalTrackerTitle": "Tracked by the GPS unit installed in the vehicle",
     "physicalTracker": "GPS Tracker",
     "gpsBlocked": "GPS blocked",
     "insecureContext": "HTTPS required",
@@ -1770,7 +1770,7 @@
     "noNetwork": "No network",
     "sessionExpired": "Session expired — reconnect required",
     "reconnectCta": "Reconnect",
-    "offlineQueue": "Offline — {{count}} pending",
+    "offlineQueue": "Offline — {{count}} position(s) to send",
     "reconnecting": "Reconnecting…",
     "syncing": "Syncing — {{count}} pending"
   },
@@ -1797,11 +1797,11 @@
   },
   "api": {
     "error": {
-      "timeout": "The request timed out. Check your connection.",
-      "network": "Unable to reach the server. Check your connection.",
-      "waking": "The server is waking up, please try again in a few seconds.",
+      "timeout": "The request took too long. Check your connection.",
+      "network": "Unable to connect. Check your internet connection.",
+      "waking": "The service is starting up, please try again in a few seconds.",
       "rateLimit": "Too many requests. Please wait.",
-      "server": "Server error. Please try again later."
+      "server": "Something went wrong on our side. Please try again later."
     }
   },
   "dateFormats": {
@@ -1852,7 +1852,7 @@
       "speed_alert": "Speed limit exceeded",
       "prolonged_stop": "Prolonged stop",
       "delay_alert": "Estimated delay",
-      "device_offline": "Device offline",
+      "device_offline": "Tracker offline",
       "geofence_event": "Geographic zone",
       "delivery_status": "Delivery status",
       "location_mismatch": "Position mismatch",
@@ -1914,10 +1914,10 @@
       "digit": "Number",
       "symbol": "Special character"
     },
-    "twoFactorTitle": "Two-factor authentication (2FA)",
+    "twoFactorTitle": "Two-step verification",
     "twoFactorSubtitle": "Secure your account with an authenticator app",
-    "twoFactorEnabled": "2FA enabled",
-    "twoFactorDisabled": "2FA disabled",
+    "twoFactorEnabled": "Two-step verification enabled",
+    "twoFactorDisabled": "Two-step verification disabled",
     "twoFactorEnabledDesc": "A 6-digit code is required at each login",
     "twoFactorDisabledDesc": "Add an extra layer of security",
     "twoFactorEnable": "Enable",
@@ -1929,7 +1929,7 @@
     "loadSessions": "Refresh",
     "twoFactorConfirm": "Confirm",
     "twoFactorCancel": "Cancel",
-    "twoFactorDisableConfirm": "Enter a 2FA code from your authenticator app to confirm disabling",
+    "twoFactorDisableConfirm": "Enter a code from your authenticator app to confirm disabling",
     "toastTwoFactorEnabled": "Two-factor authentication enabled",
     "toastTwoFactorDisabled": "Two-factor authentication disabled",
     "toastTwoFactorCodeRequired": "6-digit code required",
@@ -2050,12 +2050,12 @@
     "kicker": "MONITORING",
     "title": "Tracking health",
     "lastRefresh": "Refreshed at",
-    "autoRefresh": "auto-refresh 60s",
+    "autoRefresh": "Refreshes automatically every minute",
     "loadingHint": "Loading…",
     "vehiclesTracked": "Vehicles tracked",
-    "inSilence": "GPS silent",
-    "silenceTitle": "Ongoing GPS silences (signal age)",
-    "noSilence": "No vehicle in silence",
+    "inSilence": "Signal lost",
+    "silenceTitle": "Vehicles with no GPS signal (age of last signal)",
+    "noSilence": "No vehicle without signal",
     "noSilenceHint": "All active vehicles are transmitting their position.",
     "vehicle": "Vehicle",
     "driver": "Driver",
@@ -2066,13 +2066,13 @@
     "cause": "Probable cause (tracker)",
     "since": "since",
     "neverConnected": "Never connected",
-    "silent": "SILENT",
+    "silent": "SIGNAL LOST",
     "ok": "OK",
-    "coverageTitle": "Today's GPS coverage per vehicle",
+    "coverageTitle": "Tracking recorded today, per vehicle",
     "noCoverage": "No delivery completed today",
     "deliveries": "Deliveries",
     "positions": "Positions",
-    "coverage": "Coverage",
+    "coverage": "Tracking recorded",
     "gaps": "Reported gaps"
   },
   "notificationsPage": {
@@ -2118,14 +2118,14 @@
     "type": {
       "delivery_status": "Delivery status",
       "fuel_anomaly": "Fuel anomaly",
-      "fuel_gps_coverage_missing": "Missing GPS coverage",
+      "fuel_gps_coverage_missing": "Incomplete GPS tracking",
       "maintenance_due": "Maintenance due",
       "system": "System",
       "speed_alert": "Speed alert",
       "prolonged_stop": "Prolonged stop",
       "delay_alert": "Delivery delay",
-      "device_offline": "Device offline",
-      "geofence_event": "Geofence event",
+      "device_offline": "Tracker offline",
+      "geofence_event": "Zone entry / exit",
       "location_mismatch": "Location mismatch"
     },
     "empty": {
@@ -2268,9 +2268,39 @@
     "distance": "Distance",
     "duration": "Duration",
     "stops": "Stops",
-    "coverage": "GPS coverage",
+    "coverage": "Tracking recorded",
     "gaps": "Signal gaps",
-    "rawTrace": "Raw GPS trace",
+    "rawTrace": "Recorded route",
     "roadTrace": "Road-snapped trace"
+  },
+  "publicTracking": {
+    "loading": "Loading…",
+    "unavailable": "Tracking unavailable",
+    "invalidLink": "Invalid or expired tracking link",
+    "live": "LIVE",
+    "updated": "Updated: {{time}}",
+    "status": "Status",
+    "pickup": "Pickup",
+    "delivery": "Delivery",
+    "currentSpeed": "Current speed",
+    "speed": "Speed",
+    "currentPosition": "Current position"
+  },
+  "tripReport": {
+    "title": "Trip report",
+    "exportPdf": "Export PDF",
+    "selectDelivery": "-- Select a delivery --",
+    "status": "Status",
+    "positions": "Recorded positions",
+    "distance": "Distance travelled",
+    "distanceHint": "Distance calculated by discarding GPS inaccuracies (stops and overly imprecise positions excluded). This is the same distance used for fuel consumption.",
+    "avgSpeed": "Average speed",
+    "duration": "Duration",
+    "stops": "Stops",
+    "coverage": "Tracking recorded",
+    "signalInterrupted": "GPS signal interrupted:",
+    "noSignalMin": "{{min}} min without signal",
+    "pickup": "Pickup",
+    "dropoff": "Drop-off"
   }
 }

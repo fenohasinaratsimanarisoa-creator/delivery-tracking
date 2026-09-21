@@ -70,7 +70,7 @@ export default function TripReportPage() {
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>
-        {t('tripReport.title') || 'Trip Report'}
+        {t('tripReport.title')}
       </h1>
 
       <div className={styles.controls}>
@@ -79,7 +79,7 @@ export default function TripReportPage() {
           onChange={(e) => setSelectedId(e.target.value)}
           className={styles.select}
         >
-          <option value="">-- Select delivery --</option>
+          <option value="">{t('tripReport.selectDelivery')}</option>
           {deliveries.map((d) => (
             <option key={d.id} value={d.id}>{d.title}</option>
           ))}
@@ -90,14 +90,14 @@ export default function TripReportPage() {
             disabled={exporting}
             className={styles.exportBtn}
           >
-            <FileText size={14} /> {exporting ? t('common.loading') || '...' : t('tripReport.exportPdf') || 'Export PDF'}
+            <FileText size={14} /> {exporting ? t('common.loading') : t('tripReport.exportPdf')}
           </button>
         )}
       </div>
 
       {loading && (
         <div className={styles.loading}>
-          {t('common.loading') || 'Loading...'}
+          {t('common.loading')}
         </div>
       )}
 
@@ -108,23 +108,23 @@ export default function TripReportPage() {
           </h3>
 
           <div className={styles.reportGrid}>
-            <div className={styles.reportItem}><strong>Status:</strong> {report.delivery.status}</div>
-            <div className={styles.reportItem}><strong>Positions:</strong> {report.positionCount}</div>
+            <div className={styles.reportItem}><strong>{t('tripReport.status')} :</strong> {t(`deliveries.status.${report.delivery.status}`, { defaultValue: report.delivery.status })}</div>
+            <div className={styles.reportItem}><strong>{t('tripReport.positions')} :</strong> {report.positionCount}</div>
             <div className={styles.reportItem}>
               <strong
                 className={styles.distanceLabel}
-                title="Distance filtrée du bruit GPS (segments à l'arrêt et fixes trop imprécis exclus, sauts bornés par la vitesse). Source unique de vérité, utilisée aussi pour la consommation de carburant."
+                title={t('tripReport.distanceHint')}
               >
-                Distance parcourue:
+                {t('tripReport.distance')} :
               </strong>{' '}
               {report.totalDistance.kilometers} km
             </div>
-            <div className={styles.reportItem}><strong>Avg Speed:</strong> {report.avgSpeedKmh} km/h</div>
-            <div className={styles.reportItem}><strong>Duration:</strong> {formatDuration(report.totalDurationSec)}</div>
-            <div className={styles.reportItem}><strong>Stops:</strong> {report.stopCount}</div>
+            <div className={styles.reportItem}><strong>{t('tripReport.avgSpeed')} :</strong> {report.avgSpeedKmh} km/h</div>
+            <div className={styles.reportItem}><strong>{t('tripReport.duration')} :</strong> {formatDuration(report.totalDurationSec)}</div>
+            <div className={styles.reportItem}><strong>{t('tripReport.stops')} :</strong> {report.stopCount}</div>
             {report.trackingCoveragePct !== undefined && (
               <div className={styles.reportItem}>
-                <strong>Couverture GPS:</strong>{' '}
+                <strong>{t('tripReport.coverage')} :</strong>{' '}
                 <span style={{ color: report.trackingCoveragePct >= 95 ? 'var(--color-teal)' : report.trackingCoveragePct >= 75 ? 'var(--color-accent)' : 'var(--color-red)' }}>
                   {report.trackingCoveragePct}%
                 </span>
@@ -134,20 +134,20 @@ export default function TripReportPage() {
 
           {report.signalGaps && report.signalGaps.length > 0 && (
             <div className={styles.reportGaps}>
-              <strong>Signal GPS interrompu :</strong>
+              <strong>{t('tripReport.signalInterrupted')}</strong>
               <ul>
                 {report.signalGaps.slice(0, 5).map((gap, i) => {
                   const from = new Date(gap.fromTimestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
                   const to = new Date(gap.toTimestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-                  return <li key={i}>⚠ {from} → {to} ({Math.round(gap.durationSec / 60)} min sans signal)</li>;
+                  return <li key={i}>⚠ {from} → {to} ({t('tripReport.noSignalMin', { min: Math.round(gap.durationSec / 60) })})</li>;
                 })}
               </ul>
             </div>
           )}
 
           <div className={styles.reportFooter}>
-            <div><strong>Pickup:</strong> {report.delivery.pickupAddress}</div>
-            <div><strong>Dropoff:</strong> {report.delivery.deliveryAddress}</div>
+            <div><strong>{t('tripReport.pickup')} :</strong> {report.delivery.pickupAddress}</div>
+            <div><strong>{t('tripReport.dropoff')} :</strong> {report.delivery.deliveryAddress}</div>
           </div>
         </div>
       )}

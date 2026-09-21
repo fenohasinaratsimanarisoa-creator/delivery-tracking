@@ -131,7 +131,7 @@
       "twoFactorSubmit": "Vérifier",
       "twoFactorInvalid": "Code invalide. Veuillez réessayer.",
       "twoFactorBack": "Retour à la connexion",
-      "swCacheWarning": "Une ancienne version de l'application semble être restée en cache sur cet appareil.",
+      "swCacheWarning": "Une ancienne version de l'application est peut-être affichée sur cet appareil. Rechargez la page.",
       "swCacheHint": "Si le problème persiste après un nouvel essai, ferme complètement le navigateur (tous les onglets) et rouvre-le.",
       "swCacheResetButton": "Réinitialiser l'application",
       "brand": "Pistio",
@@ -393,7 +393,7 @@
   },
   "deliveryProofsPage": {
     "title": "Preuves de livraison",
-    "subtitle": "Historique des validations GPS de vos livraisons",
+    "subtitle": "Historique des validations de position de vos livraisons",
     "kicker": "Validation & contrôle",
     "count": "{{count}} preuve",
     "count_plural": "{{count}} preuves",
@@ -406,14 +406,14 @@
       "total": "Total preuves",
       "delivered": "Livrées",
       "failed": "Échouées",
-      "mismatch": "Écarts GPS"
+      "mismatch": "Livraisons hors zone"
     },
     "table": {
       "delivery": "Livraison",
       "driver": "Chauffeur",
       "status": "Statut",
       "distance": "Écart",
-      "proof": "Preuve GPS",
+      "proof": "Preuve de position",
       "date": "Validé le"
     },
     "distance": {
@@ -423,7 +423,7 @@
     "noProof": "Aucune position",
     "missing": "—",
     "empty": "Aucune preuve de livraison",
-    "emptyDesc": "Les preuves GPS apparaissent ici après validation",
+    "emptyDesc": "Les preuves de position apparaissent ici après validation",
     "view": "Voir"
   },
   "fleet": {
@@ -439,7 +439,7 @@
     "deleteConfirmLabel": "Supprimer",
     "selectDevicePlaceholder": "Sélectionnez un dispositif…",
     "addDevice": "Ajouter",
-    "addDeviceHint": "Ajouter un nouveau dispositif Traccar",
+    "addDeviceHint": "Ajouter un nouveau traceur GPS",
     "trackingReliability": {
       "badge": "Tracking peu fiable",
       "messages": {
@@ -457,13 +457,13 @@
     },
     "positionSources": {
       "phone": "App mobile (chauffeur)",
-      "tracker": "Traceur physique (Traccar)"
+      "tracker": "Boîtier GPS installé"
     },
     "formSections": {
       "identity": "Identité du véhicule",
       "registration": "Immatriculation",
       "features": "Caractéristiques",
-      "positionSource": "Source GPS"
+      "positionSource": "Type de suivi"
     },
     "fields": {
       "brand": "Marque",
@@ -474,13 +474,13 @@
       "fuelType": "Type de carburant",
       "theoreticalConsumption": "Consommation théorique (L/100km)",
       "positionSource": "Source de position",
-      "traccarDeviceId": "Dispositif Traccar",
+      "traccarDeviceId": "Traceur GPS lié",
       "imei": "IMEI du traceur GPS"
     },
     "imeiPlaceholder": "Ex. 863295042345678",
     "imeiHint": {
       "new": "Saisissez l'IMEI inscrit sur le traceur — tout le reste (création, liaison) est automatique.",
-      "linked": "Un traceur est déjà lié (ID Traccar : {{deviceId}}). Laissez vide pour le garder, ou saisissez un nouvel IMEI pour le remplacer."
+      "linked": "Un traceur est déjà lié (n° {{deviceId}}). Laissez vide pour le garder, ou saisissez un nouvel IMEI pour le remplacer."
     },
     "fuelTypes": {
       "gasoline": "Essence",
@@ -552,7 +552,7 @@
       "deleted": "Véhicule supprimé",
       "deleteError": "Erreur lors de la suppression",
       "saveError": "Erreur lors de l'enregistrement",
-      "deviceAdded": "Dispositif Traccar ajouté",
+      "deviceAdded": "Traceur GPS ajouté",
       "deviceError": "Erreur lors de l'ajout"
     },
     "confirmDelete": {
@@ -564,10 +564,10 @@
     "resultCount": "{{count}} résultat",
     "resultCount_plural": "{{count}} résultats",
     "modalDevice": {
-      "title": "Nouveau dispositif Traccar",
+      "title": "Nouveau traceur GPS",
       "nameLabel": "Nom du traceur",
       "namePlaceholder": "Ex. Traceur Renault Kangoo",
-      "imeiLabel": "Identifiant unique (IMEI)",
+      "imeiLabel": "Numéro IMEI (écrit sur le boîtier)",
       "imeiPlaceholder": "Ex. 863295042345678",
       "cancel": "Annuler",
       "add": "Ajouter",
@@ -692,11 +692,11 @@
       "driver": "Chauffeur",
       "status": "Statut",
       "speed": "Vitesse",
-      "heading": "Cap",
+      "heading": "Direction",
       "coordinates": "Position GPS",
-      "rawCoordinates": "Position brute (litige)",
+      "rawCoordinates": "Position exacte enregistrée (litige)",
       "gpsAccuracy": "Précision GPS",
-      "confidence": "Fiabilité du fix",
+      "confidence": "Fiabilité de la position",
       "lastPosition": "Dernière position",
       "eta": "Arrivée estimée",
       "distanceRemaining": "Distance restante",
@@ -827,27 +827,27 @@
     "gpsQualityInsufficient": "Distance GPS trop faible pour être fiable ce jour-là (positions présentes mais déplacement < 0,1 km).",
     "gpsQualitySuspiciousBadge": "À vérifier",
     "costNoPrice": "Coût non chiffré : prix du carburant non configuré pour ce véhicule.",
-    "gpsQualitySuspicious": "Cette distance ressemble à du bruit GPS (véhicule probablement resté immobile) plutôt qu'à un vrai trajet — vérifiez avant de vous y fier.",
+    "gpsQualitySuspicious": "Cette distance ressemble à des imprécisions du GPS (véhicule probablement resté immobile) plutôt qu'à un vrai trajet — vérifiez avant de vous y fier.",
     "estimatedCost": "Coût estimé",
     "date": "Date",
-    "gpsDiagTitle": "Diagnostic des positions GPS brutes",
-    "gpsDiagHelp": "Affiche ce qui est réellement enregistré en base pour cette date, par véhicule : nombre de fixes, écarts de temps, positions suspectes, et comparaison distance brute (ligne droite) vs filtrée (celle du rapport). Aucun chiffre inventé : si des fixes manquent (app fermée), la distance brute est elle aussi incomplète.",
+    "gpsDiagTitle": "Détail des positions GPS enregistrées",
+    "gpsDiagHelp": "Affiche ce qui est réellement enregistré pour cette date, par véhicule : nombre de positions, écarts de temps, positions douteuses, et comparaison entre la distance en ligne droite et la distance retenue (celle du rapport). Aucun chiffre inventé : si des positions manquent (app fermée), la distance en ligne droite est elle aussi incomplète.",
     "gpsDiagShow": "Analyser les positions",
     "gpsDiagHide": "Masquer le diagnostic",
     "gpsDiagLoading": "Analyse en cours…",
     "gpsDiagError": "Erreur lors de l'analyse des positions.",
     "gpsDiagTotal": "{{count}} positions GPS enregistrées ce jour",
     "gpsDiagUnattributed": "{{count}} sans véhicule",
-    "gpsDiagSparse": "Couverture clairsemée détectée (écarts > 60 s entre fixes) : l'app était probablement fermée ou en arrière-plan pendant une partie du trajet. La distance GPS sous-estime donc la distance réelle. Gardez l'app ouverte (écran allumé) pendant les trajets pour une mesure fiable.",
-    "gpsDiagNoSpeed": "La vitesse n'a jamais été remontée par cet appareil : la règle « vitesse » du filtrage ne peut pas s'appliquer, seuls les déplacements au-dessus du seuil de bruit sont comptés.",
+    "gpsDiagSparse": "Suivi incomplet détecté (plus de 60 s sans position) : l'app était probablement fermée ou en arrière-plan pendant une partie du trajet. La distance GPS sous-estime donc la distance réelle. Gardez l'app ouverte (écran allumé) pendant les trajets pour une mesure fiable.",
+    "gpsDiagNoSpeed": "Cet appareil n'a jamais transmis sa vitesse : seuls les déplacements assez importants pour dépasser l'imprécision du GPS sont comptés.",
     "gpsDiagEmpty": "Aucune position GPS enregistrée pour cette date. Vérifiez que l'app a été ouverte avec la localisation active pendant les trajets.",
     "gpsDiagColVehicle": "Véhicule",
     "gpsDiagColDriver": "Chauffeur",
-    "gpsDiagColFixes": "Fixes validés/total",
+    "gpsDiagColFixes": "Positions valides/total",
     "gpsDiagColSuspect": "Suspectes",
-    "gpsDiagColCoverage": "Couverture",
+    "gpsDiagColCoverage": "Suivi enregistré",
     "gpsDiagColGap": "Écart moy. / max",
-    "gpsDiagColDist": "Brute / Filtrée",
+    "gpsDiagColDist": "Ligne droite / Retenue",
     "gpsDiagColReport": "Rapport",
     "gpsDiagColFuel": "Carburant / Prix",
     "table": {
@@ -1145,7 +1145,7 @@
     "selectDelivery": "Veuillez sélectionner une livraison",
     "searchingPosition": "Recherche de la position...",
     "positionAcquired": "Position acquise (précision : {{accuracy}}m)",
-    "gpsError": "Erreur GPS : {{message}}",
+    "gpsError": "Impossible d'obtenir votre position. Vérifiez que le GPS est activé.",
     "gpsPermissionDenied": "Accès à la position refusé. Autorisez la géolocalisation dans les paramètres du navigateur.",
     "gpsUnavailable": "Position indisponible. Vérifiez que le GPS est activé.",
     "gpsTimeout": "Délai d'attente GPS dépassé. Vérifiez votre connexion ou passez à l'extérieur.",
@@ -1205,7 +1205,7 @@
       "positionSource": "Suivi GPS"
     },
     "positionSource": {
-      "physicalTracker": "Traceur GPS physique",
+      "physicalTracker": "Traceur GPS installé",
       "mobileApp": "Application mobile"
     },
     "subtitle": "Votre véhicule affecté et ses caractéristiques."
@@ -1757,7 +1757,7 @@
     "moreAlerts_plural": "+{{count}} autres alertes"
   },
   "trackingIndicator": {
-    "physicalTrackerTitle": "Suivi par traceur GPS physique installé sur le véhicule",
+    "physicalTrackerTitle": "Suivi par le boîtier GPS installé sur le véhicule",
     "physicalTracker": "Traceur GPS",
     "gpsBlocked": "GPS bloqué",
     "insecureContext": "HTTPS requis",
@@ -1770,7 +1770,7 @@
     "noNetwork": "Pas de réseau",
     "sessionExpired": "Session expirée — reconnexion nécessaire",
     "reconnectCta": "Reconnecter",
-    "offlineQueue": "Hors ligne — {{count}} en attente",
+    "offlineQueue": "Hors ligne — {{count}} position(s) à envoyer",
     "reconnecting": "Reconnexion…",
     "syncing": "Synchronisation — {{count}} en attente"
   },
@@ -1797,11 +1797,11 @@
   },
   "api": {
     "error": {
-      "timeout": "La requête a pris trop de temps. Vérifiez votre connexion.",
-      "network": "Impossible de joindre le serveur. Vérifiez votre connexion.",
-      "waking": "Le serveur se réveille, réessaie dans quelques secondes.",
+      "timeout": "La demande a pris trop de temps. Vérifiez votre connexion.",
+      "network": "Connexion impossible. Vérifiez votre connexion internet.",
+      "waking": "Le service démarre, réessayez dans quelques secondes.",
       "rateLimit": "Trop de requêtes. Veuillez patienter.",
-      "server": "Erreur serveur. Veuillez réessayer plus tard."
+      "server": "Un problème est survenu de notre côté. Veuillez réessayer plus tard."
     }
   },
   "dateFormats": {
@@ -1852,7 +1852,7 @@
       "speed_alert": "Excès de vitesse",
       "prolonged_stop": "Arrêt prolongé",
       "delay_alert": "Retard estimé",
-      "device_offline": "Appareil hors ligne",
+      "device_offline": "Traceur hors ligne",
       "geofence_event": "Zone géographique",
       "delivery_status": "Statut livraison",
       "location_mismatch": "Écart de position",
@@ -1914,10 +1914,10 @@
       "digit": "Un chiffre",
       "symbol": "Un caractère spécial"
     },
-    "twoFactorTitle": "Authentification à deux facteurs (2FA)",
+    "twoFactorTitle": "Vérification en deux étapes",
     "twoFactorSubtitle": "Sécurisez votre compte avec une application d'authentification",
-    "twoFactorEnabled": "2FA activée",
-    "twoFactorDisabled": "2FA désactivée",
+    "twoFactorEnabled": "Vérification en deux étapes activée",
+    "twoFactorDisabled": "Vérification en deux étapes désactivée",
     "twoFactorEnabledDesc": "Un code à 6 chiffres vous est demandé à chaque connexion",
     "twoFactorDisabledDesc": "Ajoutez une couche de sécurité supplémentaire",
     "twoFactorEnable": "Activer",
@@ -1929,7 +1929,7 @@
     "loadSessions": "Actualiser",
     "twoFactorConfirm": "Confirmer",
     "twoFactorCancel": "Annuler",
-    "twoFactorDisableConfirm": "Saisissez un code 2FA de votre application d'authentification pour confirmer la désactivation",
+    "twoFactorDisableConfirm": "Saisissez un code de votre application d'authentification pour confirmer la désactivation",
     "toastTwoFactorEnabled": "Authentification à deux facteurs activée",
     "toastTwoFactorDisabled": "Authentification à deux facteurs désactivée",
     "toastTwoFactorCodeRequired": "Code à 6 chiffres requis",
@@ -2050,12 +2050,12 @@
     "kicker": "SUPERVISION",
     "title": "Santé du tracking",
     "lastRefresh": "Actualisé à",
-    "autoRefresh": "auto-refresh 60s",
+    "autoRefresh": "Actualisation automatique toutes les minutes",
     "loadingHint": "Chargement…",
     "vehiclesTracked": "Véhicules suivis",
-    "inSilence": "En silence GPS",
-    "silenceTitle": "Silences GPS en cours (ancienneté du signal)",
-    "noSilence": "Aucun véhicule en silence",
+    "inSilence": "Signal perdu",
+    "silenceTitle": "Véhicules sans signal GPS (ancienneté du dernier signal)",
+    "noSilence": "Aucun véhicule sans signal",
     "noSilenceHint": "Tous les véhicules actifs transmettent leur position.",
     "vehicle": "Véhicule",
     "driver": "Chauffeur",
@@ -2066,13 +2066,13 @@
     "cause": "Cause probable (traceur)",
     "since": "depuis",
     "neverConnected": "Jamais connecté",
-    "silent": "SILENCE",
+    "silent": "SIGNAL PERDU",
     "ok": "OK",
-    "coverageTitle": "Couverture GPS du jour par véhicule",
+    "coverageTitle": "Suivi enregistré aujourd'hui, par véhicule",
     "noCoverage": "Aucune livraison terminée aujourd'hui",
     "deliveries": "Livraisons",
     "positions": "Positions",
-    "coverage": "Couverture",
+    "coverage": "Suivi enregistré",
     "gaps": "Trous signalés"
   },
   "notificationsPage": {
@@ -2118,14 +2118,14 @@
     "type": {
       "delivery_status": "Statut de livraison",
       "fuel_anomaly": "Anomalie carburant",
-      "fuel_gps_coverage_missing": "Couverture GPS manquante",
+      "fuel_gps_coverage_missing": "Suivi GPS incomplet",
       "maintenance_due": "Maintenance due",
       "system": "Système",
       "speed_alert": "Excès de vitesse",
       "prolonged_stop": "Arrêt prolongé",
       "delay_alert": "Retard de livraison",
-      "device_offline": "Dispositif hors ligne",
-      "geofence_event": "Événement géofence",
+      "device_offline": "Traceur hors ligne",
+      "geofence_event": "Entrée / sortie de zone",
       "location_mismatch": "Position incohérente"
     },
     "empty": {
@@ -2268,9 +2268,39 @@
     "distance": "Distance",
     "duration": "Durée",
     "stops": "Arrêts",
-    "coverage": "Couverture GPS",
+    "coverage": "Suivi enregistré",
     "gaps": "Trous de signal",
-    "rawTrace": "Trace GPS brute",
+    "rawTrace": "Trajet enregistré",
     "roadTrace": "Trace alignée route"
+  },
+  "publicTracking": {
+    "loading": "Chargement…",
+    "unavailable": "Suivi indisponible",
+    "invalidLink": "Lien de suivi invalide ou expiré",
+    "live": "EN DIRECT",
+    "updated": "Mis à jour : {{time}}",
+    "status": "Statut",
+    "pickup": "Enlèvement",
+    "delivery": "Livraison",
+    "currentSpeed": "Vitesse actuelle",
+    "speed": "Vitesse",
+    "currentPosition": "Position actuelle"
+  },
+  "tripReport": {
+    "title": "Rapport de trajet",
+    "exportPdf": "Exporter en PDF",
+    "selectDelivery": "-- Choisir une livraison --",
+    "status": "Statut",
+    "positions": "Positions enregistrées",
+    "distance": "Distance parcourue",
+    "distanceHint": "Distance calculée en écartant les imprécisions du GPS (arrêts et positions trop imprécises exclus). C'est la même distance que celle utilisée pour la consommation de carburant.",
+    "avgSpeed": "Vitesse moyenne",
+    "duration": "Durée",
+    "stops": "Arrêts",
+    "coverage": "Suivi enregistré",
+    "signalInterrupted": "Signal GPS interrompu :",
+    "noSignalMin": "{{min}} min sans signal",
+    "pickup": "Enlèvement",
+    "dropoff": "Livraison"
   }
 }

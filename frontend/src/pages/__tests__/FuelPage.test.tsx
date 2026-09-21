@@ -323,11 +323,11 @@ describe("FuelPage", () => {
       expect(screen.getByText("TRK-2")).toBeInTheDocument();
     });
 
-    // Le sous-comptage est expliqué, pas masqué : couverture clairsemée visible.
-    expect(screen.getByText(/Couverture clairs[eé]m[eé]e/)).toBeInTheDocument();
+    // Le sous-comptage est expliqué, pas masqué : suivi incomplet visible.
+    expect(screen.getByText(/Suivi incomplet/)).toBeInTheDocument();
     // Les colonnes brute/filtrée et les colonnes distance du rapport sont affichées.
-    expect(screen.getByText("Brute / Filtrée")).toBeInTheDocument();
-    expect(screen.getByText("Couverture")).toBeInTheDocument();
+    expect(screen.getByText("Ligne droite / Retenue")).toBeInTheDocument();
+    expect(screen.getByText("Suivi enregistré")).toBeInTheDocument();
     // Ratio fixé : brute ≡ filtré pour V1 (déplacement réel), valeur visible.
     expect(screen.getAllByText("0.33").length).toBeGreaterThan(0);
   });

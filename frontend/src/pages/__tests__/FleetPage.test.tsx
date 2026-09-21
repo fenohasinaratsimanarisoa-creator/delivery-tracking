@@ -273,7 +273,7 @@ describe('FleetPage', () => {
     // dispositif ni de bouton "+ Ajouter" (ancien flux en 2 étapes supprimé).
     expect(screen.getByLabelText(/IMEI du traceur GPS/i)).toBeInTheDocument();
     expect(screen.queryByText('Sélectionnez un dispositif…')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Ajouter un nouveau dispositif Traccar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Ajouter un nouveau traceur GPS/i })).not.toBeInTheDocument();
   });
 
   it('shows skeleton loading state initially', async () => {
