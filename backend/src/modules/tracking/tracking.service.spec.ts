@@ -226,15 +226,44 @@ describe('TrackingService', () => {
 
     const ts = new Date(dto.timestamp);
 
-    it('returns null when timestamp is anterior (out-of-order replay)', async () => {
+    it('rejette une retransmission (même instant ±1 s) comme doublon', async () => {
       mockPrisma.gpsPosition.findFirst.mockResolvedValueOnce({
-        timestamp: new Date('2026-07-21T10:00:02.000Z'),
+        timestamp: new Date('2026-07-21T10:00:00.500Z'),
       });
 
       await expect(
         service.savePosition('00000000-0000-4000-0000-000000000002', dto),
       ).resolves.toBeNull();
       expect(mockPrisma.gpsPosition.create).not.toHaveBeenCalled();
+    });
+
+    it('stocke un fix EN RETARD (plus ancien que le dernier, pas une retransmission) — non suspect', async () => {
+      // Traceur GT06 : fixes bufferisés renvoyés après des fixes plus récents. Avant le
+      // correctif, la diff négative (≤ 1 s) les faisait rejeter comme « doublon » : 65
+      // positions valides perdues en une journée (audit 2026-09-21).
+      const newer = {
+        id: 'p-newer',
+        latitude: -18.8792,
+        longitude: 47.5079,
+        timestamp: new Date('2026-07-21T10:00:20.000Z'),
+        speed: 10,
+        accuracy: 8,
+        source: 'physical_tracker',
+        attributes: null,
+      };
+      mockPrisma.gpsPosition.findFirst.mockImplementation(async (args: any) => {
+        const t = args?.where?.timestamp;
+        if (t?.lt) return null; // aucune référence antérieure fiable
+        if (t?.lte) return null; // aucune retransmission proche
+        return newer; // dernière position en base (postérieure au fix)
+      });
+
+      await service.savePosition('00000000-0000-4000-0000-000000000002', dto);
+
+      expect(mockPrisma.gpsPosition.create).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.gpsPosition.create.mock.calls[0][0].data.suspect).toBe(false);
+      // clearAllMocks ne réinitialise pas les implémentations : on évite toute fuite.
+      mockPrisma.gpsPosition.findFirst.mockReset();
     });
 
     it('traite une violation P2002 (contrainte unique vehicleId+timestamp) comme une position déjà présente — aucune erreur remontée', async () => {

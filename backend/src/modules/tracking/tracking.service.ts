@@ -671,8 +671,31 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     source?: PositionSource,
     speed?: number | null,
   ): Promise<boolean> {
-    const last = await this.getLastPosition(vehicleId);
+    let last = await this.getLastPosition(vehicleId);
     if (!last) return false;
+
+    // Fix EN RETARD (plus ancien que la dernière position fiable — fixes bufferisés du
+    // traceur, désordre réseau) : le comparer à un point POSTÉRIEUR donnerait un faux
+    // 'non_croissant'. La référence devient la dernière position fiable ANTÉRIEURE ; sans
+    // elle, aucune référence pour qualifier le point (il passe, comme un premier point).
+    if (timestamp.getTime() <= last.timestamp.getTime()) {
+      const before = await this.prisma.gpsPosition.findFirst({
+        where: { vehicleId, suspect: false, timestamp: { lt: timestamp } },
+        orderBy: { timestamp: 'desc' },
+        select: {
+          id: true,
+          latitude: true,
+          longitude: true,
+          timestamp: true,
+          speed: true,
+          accuracy: true,
+          source: true,
+          attributes: true,
+        },
+      });
+      if (!before) return false;
+      last = before;
+    }
 
     // --- Exemption changement de source (documenté, prompt 4/4) ---
     // Le PREMIER point GPS après un basculement de source (phone → physical_tracker
@@ -764,15 +787,22 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
     if (deliveryId) {
       where.deliveryId = deliveryId;
     }
-    const last = await this.prisma.gpsPosition.findFirst({
-      where,
+    // Fenêtre SYMÉTRIQUE (±DEDUP_CLOCK_SKEW_S), comme saveBatch : seule une vraie
+    // retransmission (même instant ±1 s) est un doublon. Avant, tout point ANTÉRIEUR au
+    // dernier stocké (diff négative ≤ 1 s) était rejeté — or un traceur GT06 renvoie des
+    // fixes bufferisés APRÈS des fixes plus récents (audit 2026-09-21 : 65 positions
+    // valides, dont des pics à 79 km/h, perdues en une journée ; le backfill ne repart
+    // que de la dernière position et ne les rattrape pas).
+    // Une seule requête : la position la plus proche AU-DESSOUS de ts + 1 s. C'est un
+    // doublon si elle est à moins de 1 s de ts (avant OU après) ; une position
+    // strictement plus ancienne que ts - 1 s laisse passer (fix en retard légitime).
+    const windowMs = DEDUP_CLOCK_SKEW_S * 1000;
+    const nearest = await this.prisma.gpsPosition.findFirst({
+      where: { ...where, timestamp: { lte: new Date(timestamp.getTime() + windowMs) } },
       orderBy: { timestamp: 'desc' },
       select: { timestamp: true },
     });
-    if (!last) return false;
-
-    const diffMs = timestamp.getTime() - last.timestamp.getTime();
-    return diffMs <= DEDUP_CLOCK_SKEW_S * 1000;
+    return !!nearest && nearest.timestamp.getTime() >= timestamp.getTime() - windowMs;
   }
 
   private async generateAlerts(
