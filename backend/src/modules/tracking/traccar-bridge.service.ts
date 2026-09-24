@@ -219,7 +219,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
    * Début (ms) de la quarantaine des fixes de RÉVEIL peu fiables, par véhicule (voir
    * evaluateWakeFix). En mémoire : un redémarrage la remet à zéro, sans conséquence.
    */
-  private readonly wakeQuarantine = new Map<string, number>();
+  private readonly wakeQuarantine = new Map<string, { sinceMs: number; lastMs: number }>();
   /** Dernier silence (horodatage du dernier fix) déjà traité par véhicule — voir checkSilentPhysicalDevices. */
   private readonly silentAlerted = new Map<string, string>();
   private static readonly ANCHOR_BUFFER_SIZE = 20;
@@ -1413,6 +1413,7 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
             // Quarantaine des fixes de réveil peu fiables (voir evaluateWakeFix) — même règle
             // que le temps réel, sur l'historique rattrapé.
             let backfillQuarantineSince: number | null = null;
+            let backfillQuarantineLast: number | null = null;
             const backfillHistory: Array<{
               latitude: number;
               longitude: number;
@@ -1448,9 +1449,11 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
                   ? (timestamp.getTime() - lastBackfillPos.timestamp.getTime()) / 1000
                   : null,
                 quarantineSinceMs: backfillQuarantineSince,
+                quarantineLastMs: backfillQuarantineLast,
                 fixTimeMs: timestamp.getTime(),
               });
               backfillQuarantineSince = backfillWake.quarantineSinceMs;
+              backfillQuarantineLast = backfillWake.quarantineLastMs;
               if (backfillWake.quarantine) {
                 this.logger.warn(
                   `Backfill: fix de réveil peu fiable ignoré pour device ${pos.deviceId} à ${timestamp.toISOString()}`,
@@ -1736,11 +1739,16 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           gapSincePrevSec: lastDb
             ? (timestamp.getTime() - lastDb.timestamp.getTime()) / 1000
             : null,
-          quarantineSinceMs: this.wakeQuarantine.get(vehicleMapping.id) ?? null,
+          quarantineSinceMs: this.wakeQuarantine.get(vehicleMapping.id)?.sinceMs ?? null,
+          quarantineLastMs: this.wakeQuarantine.get(vehicleMapping.id)?.lastMs ?? null,
           fixTimeMs: timestamp.getTime(),
         });
         if (wake.quarantineSinceMs == null) this.wakeQuarantine.delete(vehicleMapping.id);
-        else this.wakeQuarantine.set(vehicleMapping.id, wake.quarantineSinceMs);
+        else
+          this.wakeQuarantine.set(vehicleMapping.id, {
+            sinceMs: wake.quarantineSinceMs,
+            lastMs: wake.quarantineLastMs ?? wake.quarantineSinceMs,
+          });
         if (wake.quarantine) {
           this.logger.warn(
             `Fix de réveil peu fiable ignoré (${satCount} satellites après silence) pour device ` +

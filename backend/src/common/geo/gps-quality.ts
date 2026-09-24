@@ -151,6 +151,13 @@ export function computeCombinedAccuracy(
 // qu'un fix fiable arrive (cas normal : il est alors accepté tel quel, même s'il est
 // loin — le véhicule a pu réellement bouger pendant la veille), ou après
 // WAKE_QUARANTINE_MAX_S de fixes faibles seuls (ciel limité : jamais de traceur bloqué).
+//
+// Une quarantaine dont le dernier fix faible date de plus de WAKE_QUARANTINE_STALE_S est
+// PÉRIMÉE (le traceur s'est rendormi avant d'envoyer un fix fiable) : le fix suivant
+// ouvre un NOUVEL épisode. Sans cette règle (audit trajet 2026-09-22), la quarantaine
+// restée ouverte depuis la veille (21/09 15:14 UTC) paraissait durer depuis 12 h au
+// réveil suivant et était levée d'office : 8 fixes à 7-8 satellites stockés, faux trajet
+// de ~800 m à 112 km/h et +3 km dans le rapport carburant du jour.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** En dessous, un fix qui suit un long silence n'est pas fiable (GPS pas convergé). */
@@ -159,6 +166,12 @@ export const WAKE_TRUST_MIN_SAT = 10;
 export const WAKE_SILENCE_MIN_S = 120;
 /** Durée max (s) pendant laquelle des fixes faibles restent en quarantaine. */
 export const WAKE_QUARANTINE_MAX_S = 120;
+/**
+ * Silence (s) après lequel une quarantaine encore ouverte est périmée (nouvel épisode).
+ * Bien au-delà de WAKE_QUARANTINE_MAX_S : un traceur qui n'envoie que des fixes faibles
+ * espacés de quelques minutes finit toujours libéré (jamais de traceur bloqué).
+ */
+export const WAKE_QUARANTINE_STALE_S = 600;
 
 export interface WakeFixInput {
   /** `attributes.sat` du fix (inconnu/absent → jamais considéré faible). */
@@ -167,6 +180,8 @@ export interface WakeFixInput {
   gapSincePrevSec: number | null;
   /** Horodatage (ms) du début de la quarantaine en cours pour ce véhicule, sinon null. */
   quarantineSinceMs: number | null;
+  /** Horodatage (ms) du dernier fix mis en quarantaine (absent → quarantineSinceMs). */
+  quarantineLastMs?: number | null;
   /** Horodatage (ms) du fix évalué. */
   fixTimeMs: number;
 }
@@ -176,21 +191,44 @@ export interface WakeFixVerdict {
   quarantine: boolean;
   /** Nouvel état de quarantaine à mémoriser pour ce véhicule (null = aucune). */
   quarantineSinceMs: number | null;
+  /** Dernier fix mis en quarantaine, à mémoriser avec quarantineSinceMs (null = aucune). */
+  quarantineLastMs: number | null;
 }
 
 export function evaluateWakeFix(input: WakeFixInput): WakeFixVerdict {
+  const NONE: WakeFixVerdict = {
+    quarantine: false,
+    quarantineSinceMs: null,
+    quarantineLastMs: null,
+  };
   const satN = Number(input.sat);
   const weak = input.sat != null && Number.isFinite(satN) && satN > 0 && satN < WAKE_TRUST_MIN_SAT;
   // Fix fiable (ou sans information de satellites) : met fin à toute quarantaine.
-  if (!weak) return { quarantine: false, quarantineSinceMs: null };
+  if (!weak) return NONE;
 
   if (input.quarantineSinceMs != null) {
-    const elapsedS = (input.fixTimeMs - input.quarantineSinceMs) / 1000;
-    if (elapsedS >= WAKE_QUARANTINE_MAX_S) return { quarantine: false, quarantineSinceMs: null };
-    return { quarantine: true, quarantineSinceMs: input.quarantineSinceMs };
+    const lastMs = Math.max(
+      input.quarantineLastMs ?? input.quarantineSinceMs,
+      input.quarantineSinceMs,
+    );
+    const stale = (input.fixTimeMs - lastMs) / 1000 > WAKE_QUARANTINE_STALE_S;
+    if (!stale) {
+      const elapsedS = (input.fixTimeMs - input.quarantineSinceMs) / 1000;
+      if (elapsedS >= WAKE_QUARANTINE_MAX_S) return NONE;
+      return {
+        quarantine: true,
+        quarantineSinceMs: input.quarantineSinceMs,
+        quarantineLastMs: Math.max(lastMs, input.fixTimeMs),
+      };
+    }
+    // Quarantaine périmée : on évalue ce fix comme un nouveau réveil (ci-dessous).
   }
 
   const afterSilence = input.gapSincePrevSec == null || input.gapSincePrevSec > WAKE_SILENCE_MIN_S;
-  if (!afterSilence) return { quarantine: false, quarantineSinceMs: null }; // trajet continu
-  return { quarantine: true, quarantineSinceMs: input.fixTimeMs };
+  if (!afterSilence) return NONE; // trajet continu
+  return {
+    quarantine: true,
+    quarantineSinceMs: input.fixTimeMs,
+    quarantineLastMs: input.fixTimeMs,
+  };
 }

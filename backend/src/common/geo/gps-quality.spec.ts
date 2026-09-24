@@ -145,7 +145,7 @@ describe('evaluateWakeFix — fix de réveil peu fiable (audit téléportation 2
       quarantineSinceMs: null,
       fixTimeMs: T,
     });
-    expect(v).toEqual({ quarantine: true, quarantineSinceMs: T });
+    expect(v).toEqual({ quarantine: true, quarantineSinceMs: T, quarantineLastMs: T });
   });
 
   it('le 2e fix faible à côté du 1er RESTE en quarantaine (il ne peut pas « corroborer » le premier)', () => {
@@ -166,7 +166,7 @@ describe('evaluateWakeFix — fix de réveil peu fiable (audit téléportation 2
       quarantineSinceMs: T,
       fixTimeMs: T + 40_000,
     });
-    expect(v).toEqual({ quarantine: false, quarantineSinceMs: null });
+    expect(v).toEqual({ quarantine: false, quarantineSinceMs: null, quarantineLastMs: null });
   });
 
   it('un fix à 15 satellites après un long silence est accepté tel quel (jamais bloqué)', () => {
@@ -193,7 +193,7 @@ describe('evaluateWakeFix — fix de réveil peu fiable (audit téléportation 2
       quarantineSinceMs: T,
       fixTimeMs: T + WAKE_QUARANTINE_MAX_S * 1000,
     });
-    expect(v).toEqual({ quarantine: false, quarantineSinceMs: null });
+    expect(v).toEqual({ quarantine: false, quarantineSinceMs: null, quarantineLastMs: null });
   });
 
   it('nombre de satellites absent ou invalide : jamais considéré faible (aucune hypothèse)', () => {
@@ -210,5 +210,81 @@ describe('evaluateWakeFix — fix de réveil peu fiable (audit téléportation 2
       evaluateWakeFix({ sat: 5, gapSincePrevSec: null, quarantineSinceMs: null, fixTimeMs: T })
         .quarantine,
     ).toBe(true);
+  });
+  it('quarantaine PÉRIMÉE (traceur rendormi pendant la quarantaine) : le réveil suivant est remis en quarantaine (cas réel 22/09)', () => {
+    // 21/09 15:14:06 UTC : fix faible mis en quarantaine, puis plus rien jusqu'au
+    // lendemain 03:52:51 → avant correctif, « quarantaine depuis 12 h » = levée d'office.
+    const since = Date.parse('2026-09-21T15:14:06Z');
+    const v = evaluateWakeFix({
+      sat: 7,
+      gapSincePrevSec: 45_298,
+      quarantineSinceMs: since,
+      quarantineLastMs: Date.parse('2026-09-21T15:14:11Z'),
+      fixTimeMs: Date.parse('2026-09-22T03:52:51Z'),
+    });
+    expect(v.quarantine).toBe(true);
+    expect(v.quarantineSinceMs).toBe(Date.parse('2026-09-22T03:52:51Z'));
+  });
+
+  it('rejeu du 22/09 : les 8 fixes à 7-8 satellites sont écartés, le fix à 10 satellites est accepté', () => {
+    let since: number | null = Date.parse('2026-09-21T15:14:06Z');
+    let last: number | null = Date.parse('2026-09-21T15:14:11Z');
+    const t0 = Date.parse('2026-09-22T03:52:51Z');
+    const sats = [7, 7, 8, 8, 8, 8, 8, 8, 10];
+    const verdicts = sats.map((sat, i) => {
+      const fixTimeMs = t0 + i * 5000;
+      const v = evaluateWakeFix({
+        sat,
+        gapSincePrevSec: 45_298 + i * 5,
+        quarantineSinceMs: since,
+        quarantineLastMs: last,
+        fixTimeMs,
+      });
+      since = v.quarantineSinceMs;
+      last = v.quarantineLastMs;
+      return v.quarantine;
+    });
+    expect(verdicts).toEqual([true, true, true, true, true, true, true, true, false]);
+  });
+
+  it('fixes faibles continus : la quarantaine se lève bien après WAKE_QUARANTINE_MAX_S (pas prise pour périmée)', () => {
+    let since: number | null = null;
+    let last: number | null = null;
+    let lifted: number | null = null;
+    for (let i = 0; i * 5 <= WAKE_QUARANTINE_MAX_S + 10; i++) {
+      const v = evaluateWakeFix({
+        sat: 8,
+        gapSincePrevSec: 5000 + i * 5,
+        quarantineSinceMs: since,
+        quarantineLastMs: last,
+        fixTimeMs: T + i * 5000,
+      });
+      since = v.quarantineSinceMs;
+      last = v.quarantineLastMs;
+      if (!v.quarantine && lifted == null) lifted = i * 5;
+    }
+    expect(lifted).toBe(WAKE_QUARANTINE_MAX_S);
+  });
+
+  it('fixes faibles espacés de quelques minutes (< WAKE_QUARANTINE_STALE_S) : libérés, jamais bloqués', () => {
+    const v = evaluateWakeFix({
+      sat: 7,
+      gapSincePrevSec: 5000,
+      quarantineSinceMs: T,
+      quarantineLastMs: T,
+      fixTimeMs: T + 300_000,
+    });
+    expect(v.quarantine).toBe(false);
+  });
+
+  it('même fix périmé ré-émis par Traccar (même horodatage) : reste en quarantaine', () => {
+    const v = evaluateWakeFix({
+      sat: 9,
+      gapSincePrevSec: 5000,
+      quarantineSinceMs: T,
+      quarantineLastMs: T,
+      fixTimeMs: T,
+    });
+    expect(v.quarantine).toBe(true);
   });
 });
