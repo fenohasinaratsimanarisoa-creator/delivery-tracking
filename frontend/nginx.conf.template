@@ -62,6 +62,14 @@ server {
     }
 
     location = /index.html {
+        # En-têtes de sécurité des PAGES du site (audit A→Z 2026-09-24 : aucun sur « / »,
+        # seul /api en avait). Répétés dans chaque location : un add_header dans une
+        # location annule l'héritage de ceux du bloc server. Pas sur /api/ (le backend
+        # pose déjà les siens — un doublon rendrait X-Frame-Options invalide).
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate" always;
         add_header Pragma "no-cache" always;
         add_header Expires "0" always;
@@ -70,11 +78,19 @@ server {
 
     location /assets/ {
         expires 1y;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         add_header Cache-Control "public, immutable" always;
         try_files $uri =404;
     }
 
     location / {
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate" always;
         add_header Pragma "no-cache" always;
         add_header Expires "0" always;
