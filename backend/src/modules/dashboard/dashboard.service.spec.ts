@@ -70,11 +70,19 @@ describe('DashboardService', () => {
     expect(mockPrisma.delivery.count).toHaveBeenNthCalledWith(1, {
       where: {
         companyId: 'company-1',
+        deletedAt: null,
         createdAt: {
           gte: expect.any(Date),
           lt: expect.any(Date),
         },
       },
+    });
+    // Livraisons et véhicules supprimés exclus des totaux (audit A→Z 2026-09-24).
+    expect(mockPrisma.delivery.count).toHaveBeenNthCalledWith(2, {
+      where: { companyId: 'company-1', deletedAt: null },
+    });
+    expect(mockPrisma.vehicle.count).toHaveBeenCalledWith({
+      where: { companyId: 'company-1', isActive: true, deletedAt: null },
     });
     // driver.count filtre deletedAt: null pour exclure les chauffeurs soft-supprimés
     expect(mockPrisma.driver.count).toHaveBeenCalledWith({

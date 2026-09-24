@@ -21,7 +21,9 @@ export class ReportsService {
     const cached = await this.cache.get<any>(cacheKey);
     if (cached) return cached;
 
-    const where = { companyId, createdAt: { gte: periodStart, lte: periodEnd } };
+    // deletedAt: null — une livraison supprimée ne compte plus dans les statistiques (audit A→Z
+    // 2026-09-24 : « 39 livraisons, 37 complétées, 95 % » affichés pour 2 livraisons réelles).
+    const where = { companyId, deletedAt: null, createdAt: { gte: periodStart, lte: periodEnd } };
 
     const [total, statusBreakdown, completed] = await Promise.all([
       this.prisma.delivery.count({ where }),
@@ -242,7 +244,7 @@ export class ReportsService {
     groupBy: 'day' | 'week' | 'month',
   ): Promise<{ label: string; count: number }[]> {
     const deliveries = await this.prisma.delivery.findMany({
-      where: { companyId, createdAt: { gte: from, lte: to } },
+      where: { companyId, deletedAt: null, createdAt: { gte: from, lte: to } },
       select: { createdAt: true },
       orderBy: { createdAt: 'asc' },
     });

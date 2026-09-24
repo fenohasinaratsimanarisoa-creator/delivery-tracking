@@ -55,7 +55,7 @@ export class DigestService {
       try {
         const [deliveries, fuelAnomalies, groupedNotifications] = await Promise.all([
           this.prisma.delivery.findMany({
-            where: { companyId: company.id, createdAt: { gte: since } },
+            where: { companyId: company.id, deletedAt: null, createdAt: { gte: since } },
           }),
           this.prisma.fuelLog.findMany({
             where: {

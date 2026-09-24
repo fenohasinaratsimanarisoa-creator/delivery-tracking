@@ -30,11 +30,12 @@ export class DashboardService {
       anomalies,
       recentLogs,
     ] = await Promise.all([
+      // deletedAt: null partout : les éléments supprimés ne comptent plus (audit A→Z 2026-09-24).
       this.prisma.delivery.count({
-        where: { companyId, createdAt: { gte: today, lt: tomorrow } },
+        where: { companyId, deletedAt: null, createdAt: { gte: today, lt: tomorrow } },
       }),
-      this.prisma.delivery.count({ where: { companyId } }),
-      this.prisma.vehicle.count({ where: { companyId, isActive: true } }),
+      this.prisma.delivery.count({ where: { companyId, deletedAt: null } }),
+      this.prisma.vehicle.count({ where: { companyId, isActive: true, deletedAt: null } }),
       this.prisma.driver.count({ where: { companyId, isActive: true, deletedAt: null } }),
       // M3 : avant, les totaux étaient calculés sur les 50 derniers pleins (take: 50)
       // puis étiquetés « Total Fuel / Total Distance » dans le PDF/Excel — chiffres
@@ -92,7 +93,9 @@ export class DashboardService {
       'cancelled',
     ] as const;
     const counts = await Promise.all(
-      statuses.map((status) => this.prisma.delivery.count({ where: { companyId, status } })),
+      statuses.map((status) =>
+        this.prisma.delivery.count({ where: { companyId, status, deletedAt: null } }),
+      ),
     );
     const result = statuses.map((status, i) => ({ status, count: counts[i] }));
 
@@ -118,6 +121,7 @@ export class DashboardService {
       this.prisma.delivery.findMany({
         where: {
           companyId,
+          deletedAt: null,
           status: { in: ['delivered', 'failed'] },
           createdAt: { gte: thirtyDaysAgo },
         },
@@ -126,6 +130,7 @@ export class DashboardService {
       this.prisma.delivery.findMany({
         where: {
           companyId,
+          deletedAt: null,
           status: { in: ['delivered', 'failed'] },
           createdAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo },
         },
