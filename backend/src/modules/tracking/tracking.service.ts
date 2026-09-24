@@ -2531,6 +2531,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         timestamp: Date;
         vehicle_id: string;
         delivery_id: string | null;
+        created_at: Date;
         minutes_ago: number;
       }>
     >`
@@ -2547,6 +2548,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         gp.timestamp,
         gp.vehicle_id,
         gp.delivery_id,
+        gp.created_at,
         EXTRACT(EPOCH FROM (NOW() - gp.timestamp)) / 60 AS minutes_ago
       FROM vehicles v
       -- Dernière position de CHAQUE véhicule par un accès indexé (vehicle_id, timestamp) :
@@ -2555,7 +2557,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
       -- Seq Scan sur gps_positions).
       CROSS JOIN LATERAL (
         SELECT g.driver_id, g.latitude, g.longitude, g.speed, g.heading, g.accuracy,
-               g.suspect, g.timestamp, g.vehicle_id, g.delivery_id
+               g.suspect, g.timestamp, g.vehicle_id, g.delivery_id, g.created_at
         FROM gps_positions g
         WHERE g.vehicle_id = v.id
         ORDER BY g.timestamp DESC
@@ -2620,6 +2622,9 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         vehicleId: p.vehicle_id,
         deliveryId: p.delivery_id,
         minutesAgo: Number(p.minutes_ago),
+        // Heure de réception : sert à dater la fraîcheur du signal côté carte, sans
+        // dépendre de l'horloge du traceur (dérive GT06, audit trajets 2026-09-21).
+        receivedAt: p.created_at,
       };
     });
   }

@@ -147,7 +147,7 @@ interface SearchResult {
 }
 
 import type { VehicleData } from './vehicleMap';
-import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, effectiveStatus, liveSpeedLabel, isMovingSpeed, signalLostSinceMs, rawPositionDiverges, type FollowReference } from './vehicleMap';
+import { mergePositionUpdate, mergeBootstrapPositions, shouldFollowRecenter, effectiveStatus, liveSpeedLabel, isMovingSpeed, signalLostSinceMs, freshnessTimestamp, rawPositionDiverges, type FollowReference } from './vehicleMap';
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
@@ -186,7 +186,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
     // rotation, couleur, confiance, focus) est ensuite piloté par
     // syncVehicleMarker sur l'élément existant, sans recréation d'icône.
     const marker = L.marker([vehicle.lat, vehicle.lng], { icon: createVehicleIcon(), zIndexOffset: focused ? 1000 : 0 }).addTo(map);
-    syncVehicleMarker(marker, vehicle, effectiveStatus(vehicle.status, vehicle.timestamp, now), !!focused);
+    syncVehicleMarker(marker, vehicle, effectiveStatus(vehicle.status, freshnessTimestamp(vehicle), now), !!focused);
 
     const popupContent = document.createElement('div');
     popupContent.style.minWidth = '180px';
@@ -213,7 +213,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
     // Rotation / couleur / confiance / mouvement-arrêt / focus : appliqués sur
     // l'élément existant (pas de setIcon → pas de redémarrage de l'animation
     // CSS du halo = pas de scintillement à chaque fix GPS).
-    syncVehicleMarker(marker, vehicle, effectiveStatus(vehicle.status, vehicle.timestamp, now), !!focused);
+    syncVehicleMarker(marker, vehicle, effectiveStatus(vehicle.status, freshnessTimestamp(vehicle), now), !!focused);
     marker.setZIndexOffset(focused ? 1000 : 0);
 
     const nowMs = Date.now();
@@ -323,9 +323,9 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
     syncVehicleMarker(
       marker,
       vehicle,
-      effectiveStatus(vehicle.status, vehicle.timestamp, now),
+      effectiveStatus(vehicle.status, freshnessTimestamp(vehicle), now),
       !!focused,
-      signalLostSinceMs(vehicle.timestamp, now) !== null,
+      signalLostSinceMs(freshnessTimestamp(vehicle), now) !== null,
     );
   }, [now, vehicle, focused]);
 
@@ -423,7 +423,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
       detail.appendChild(row);
     };
     if (vehicle.speed != null)
-      line(`Vitesse · ${liveSpeedLabel(vehicle.speed, vehicle.status, vehicle.timestamp, now)}`);
+      line(`Vitesse · ${liveSpeedLabel(vehicle.speed, vehicle.status, freshnessTimestamp(vehicle), now)}`);
     if (vehicle.accuracy !== undefined) line(`Précision · ±${Math.round(vehicle.accuracy)} m`);
     if (vehicle.heading != null) line(`Cap · ${vehicle.heading.toFixed(0)}°`);
     if (vehicle.routeDistance && vehicle.routeDistance > 0)
@@ -447,7 +447,7 @@ function AnimatedMarker({ vehicle, disableAnimation, focused, now }: { vehicle: 
     // Statut DÉRIVÉ (pas vehicle.status brut) : un traceur motion-triggered
     // n'envoie rien à l'arrêt, donc `vehicle.status` resterait bloqué sur
     // 'moving' indéfiniment sans cette correction basée sur `now`.
-    const displayStatus = effectiveStatus(vehicle.status, vehicle.timestamp, now);
+    const displayStatus = effectiveStatus(vehicle.status, freshnessTimestamp(vehicle), now);
     const variant =
       displayStatus === 'moving' ? 'enroute' : displayStatus === 'offline' ? 'offline' : 'idle';
     const badge = document.createElement('div');
@@ -1025,7 +1025,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                 // Statut DÉRIVÉ (voir effectiveStatus) : sans ça, un véhicule
                 // arrêté depuis un moment (traceur motion-triggered muet à
                 // l'arrêt) restait affiché "en mouvement" dans cette liste.
-                const displayStatus = effectiveStatus((v.status as VehicleData['status']) ?? 'static', v.timestamp, now);
+                const displayStatus = effectiveStatus((v.status as VehicleData['status']) ?? 'static', freshnessTimestamp(v), now);
                 const isOffline = v.isOffline || displayStatus === 'offline';
                 return (
                 <div
@@ -1121,7 +1121,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
             </div>
 
             <div className={styles.driverCardStatusRow}>
-              <VehicleStatusPill status={mapVehicleStatus(effectiveStatus(selectedDriver.status, selectedDriver.timestamp, now))} size="sm" />
+              <VehicleStatusPill status={mapVehicleStatus(effectiveStatus(selectedDriver.status, freshnessTimestamp(selectedDriver), now))} size="sm" />
             </div>
 
             <div className={styles.driverCardBody}>
@@ -1131,7 +1131,7 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                   value={liveSpeedLabel(
                     selectedDriver.speed,
                     selectedDriver.status,
-                    selectedDriver.timestamp,
+                    freshnessTimestamp(selectedDriver),
                     now,
                   )}
                 />
@@ -1175,13 +1175,13 @@ export default function RealTimeMap({ deliveryId, readOnly, initialPositions, de
                 fréquence (`now`) déclenche le render même quand le véhicule
                 s'arrête — le bandeau apparaît/disparaît tout seul, sans
                 re-sélectionner le véhicule. */}
-            {effectiveStatus(selectedDriver.status, selectedDriver.timestamp, now) === 'offline' ? (
+            {effectiveStatus(selectedDriver.status, freshnessTimestamp(selectedDriver), now) === 'offline' ? (
               <div className={`${styles.warningBanner} ${styles.warningBannerOffline}`}>
                 <NavigationOff size={13} className={styles.warningIcon} aria-hidden="true" />
                 {t('map.panel.offlineWarning')}
               </div>
             ) : (() => {
-              const lostMs = signalLostSinceMs(selectedDriver.timestamp, now);
+              const lostMs = signalLostSinceMs(freshnessTimestamp(selectedDriver), now);
               if (lostMs !== null) {
                 const sec = Math.round(lostMs / 1000);
                 const dur = sec < 90 ? `${sec} s` : `${Math.round(sec / 60)} min`;

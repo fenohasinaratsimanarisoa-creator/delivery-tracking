@@ -11,6 +11,8 @@ import {
   OFFLINE_TIMEOUT_MIN,
   SIGNAL_LOST_MS,
   signalLostSinceMs,
+  freshnessTimestamp,
+  CLOCK_LAG_MAX_MS,
   FALLBACK_DRIVER_NAME,
   rawPositionDiverges,
   STATUS_STATIC_DEBOUNCE_MS,
@@ -366,5 +368,40 @@ describe('mergePositionUpdate — anti-recul et hystérésis (audit 2026-09-19)'
     let m = mergePositionUpdate(new Map(), upd({ timestamp: T(0), speed: 0 }));
     m = mergePositionUpdate(m, upd({ timestamp: T(5), speed: 0 }));
     expect(m.get('veh-1')?.status).toBe('static');
+  });
+});
+
+describe('freshnessTimestamp — horloge du traceur en retard (audit trajets 2026-09-21)', () => {
+  const fix = '2026-09-24T14:30:02.000Z';
+
+  it('fix reçu 32 s après son heure (horloge GT06 en retard) : la fraîcheur se date à la réception', () => {
+    const receivedAt = '2026-09-24T14:30:34.000Z';
+    expect(freshnessTimestamp({ timestamp: fix, receivedAt })).toBe(receivedAt);
+    // 40 s après la réception : signal frais, alors que le fix a 72 s (> SIGNAL_LOST_MS).
+    const now = Date.parse(receivedAt) + 40_000;
+    expect(signalLostSinceMs(fix, now)).not.toBeNull();
+    expect(signalLostSinceMs(freshnessTimestamp({ timestamp: fix, receivedAt }), now)).toBeNull();
+  });
+
+  it("sans heure de réception : heure du fix (comportement d'avant)", () => {
+    expect(freshnessTimestamp({ timestamp: fix })).toBe(fix);
+  });
+
+  it("rattrapage d'historique (réception très postérieure au fix) : heure du fix, jamais « frais » à tort", () => {
+    const receivedAt = new Date(Date.parse(fix) + CLOCK_LAG_MAX_MS + 1000).toISOString();
+    expect(freshnessTimestamp({ timestamp: fix, receivedAt })).toBe(fix);
+  });
+
+  it('réception antérieure au fix (incohérent) : heure du fix', () => {
+    expect(freshnessTimestamp({ timestamp: fix, receivedAt: '2026-09-24T14:29:00.000Z' })).toBe(fix);
+  });
+
+  it('mergePositionUpdate et mergeBootstrapPositions renseignent receivedAt', () => {
+    const live = mergePositionUpdate(new Map(), baseUpdate('v1', 'd1'));
+    expect(live.get('v1')?.receivedAt).toBeTruthy();
+    const boot = mergeBootstrapPositions(new Map(), [
+      { vehicleId: 'v2', latitude: -18.9, longitude: 47.5, timestamp: fix, receivedAt: '2026-09-24T14:30:34.000Z' },
+    ]);
+    expect(boot.get('v2')?.receivedAt).toBe('2026-09-24T14:30:34.000Z');
   });
 });

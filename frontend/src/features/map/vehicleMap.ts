@@ -21,6 +21,8 @@ export interface VehicleData {
   suspect?: boolean;
   /** Horodatage du dernier fix « en mouvement » — sert à l'hystérésis du statut. */
   lastMovingAt?: string;
+  /** Heure de RÉCEPTION du dernier fix (serveur au chargement, navigateur en direct). */
+  receivedAt?: string;
 }
 
 export interface LivePositionInput {
@@ -38,6 +40,8 @@ export interface LivePositionInput {
   timestamp: string;
   deliveryId?: string;
   minutesAgo?: number;
+  /** Heure d'enregistrement serveur du fix (`created_at`). */
+  receivedAt?: string;
 }
 
 export interface PositionUpdateInput {
@@ -145,6 +149,28 @@ export const STALE_MOVEMENT_MS = 120_000;
  * avance réellement (ex. un state rafraîchi par setInterval) pour que
  * l'affichage se corrige tout seul même sans nouvel événement socket.
  */
+/**
+ * Écart max accepté entre l'heure du fix et sa réception pour dater la FRAÎCHEUR du
+ * signal par la réception. Au-delà, le fix est un rattrapage d'historique (backfill) :
+ * sa propre heure fait foi.
+ */
+export const CLOCK_LAG_MAX_MS = 5 * 60_000;
+
+/**
+ * Horodatage à utiliser pour l'ÂGE du signal (statut, « signal perdu », vitesse en direct).
+ * Audit trajets 2026-09-21 : l'horloge interne du GT06 retarde d'environ 3 s par jour
+ * (21 s → 32 s en 4 jours, remise à ~5 s au redémarrage du traceur). Dater l'âge par
+ * l'heure du fix aurait fini par afficher « signal perdu » (> 60 s) en permanence, même
+ * en roulant. L'heure de réception ne dépend pas de l'horloge du traceur. L'heure du fix
+ * reste celle AFFICHÉE et stockée.
+ */
+export function freshnessTimestamp(v: { timestamp?: string; receivedAt?: string }): string | undefined {
+  if (!v.receivedAt || !v.timestamp) return v.timestamp;
+  const lag = Date.parse(v.receivedAt) - Date.parse(v.timestamp);
+  if (!Number.isFinite(lag) || lag < 0 || lag > CLOCK_LAG_MAX_MS) return v.timestamp;
+  return v.receivedAt;
+}
+
 export function effectiveStatus(
   status: VehicleData['status'],
   timestamp: string | undefined,
@@ -265,6 +291,7 @@ export function mergePositionUpdate(
       heading: update.heading ?? undefined,
       accuracy: update.accuracy ?? undefined,
       timestamp: update.timestamp,
+      receivedAt: new Date().toISOString(),
       suspect: true,
     });
   } else {
@@ -291,6 +318,7 @@ export function mergePositionUpdate(
       deliveryId: update.deliveryId,
       confidence: update.confidence ?? (update.accuracy ? Math.max(0.1, 1 - update.accuracy / 50) : 1),
       timestamp: update.timestamp,
+      receivedAt: new Date().toISOString(),
       status: nextStatus,
       lastMovingAt,
       suspect: false,
@@ -329,6 +357,7 @@ export function mergeBootstrapPositions(
       deliveryId: pos.deliveryId ?? undefined,
       confidence: pos.accuracy ? Math.max(0.1, 1 - pos.accuracy / 50) : 1,
       timestamp: pos.timestamp,
+      receivedAt: pos.receivedAt,
       status: isOffline ? 'offline' : isMovingSpeed(pos.speed) ? 'moving' : 'static',
       suspect: pos.suspect ?? false,
       eta: etaFor ? etaFor(pos) : undefined,
