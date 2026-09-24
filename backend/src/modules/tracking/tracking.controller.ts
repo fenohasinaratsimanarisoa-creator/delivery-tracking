@@ -189,8 +189,27 @@ export class TrackingController {
       "Vue temps réel de TOUS les véhicules actifs avec leur durée de silence GPS (depuis la dernière position reçue), le seuil d'alerte par source (phone 5 min / traceur 10 min), et la dernière position connue. Permet de vérifier d'un coup d'œil si un véhicule ne transmet plus — alerte détectée automatiquement par le moniteur serveur (notification dashboard + journal).",
   })
   @Get('silences')
-  getTrackingSilences(@CurrentUser('companyId') companyId: string) {
-    return this.trackingService.getTrackingSilences(companyId);
+  async getTrackingSilences(@CurrentUser('companyId') companyId: string) {
+    const silences = await this.trackingService.getTrackingSilences(companyId);
+    // TRACEUR ENDORMI ≠ SIGNAL PERDU (audit A→Z 2026-09-24) : un GT06 garé cesse d'envoyer
+    // des positions mais continue ses paquets de veille ; Traccar le voit joignable. La
+    // page affichait « SIGNAL PERDU » + « panne SIM/matériel » pour une moto garée. Même
+    // règle que l'alerte de silence du pont (dernier contact Traccar < seuil).
+    const silentTrackers = silences.filter(
+      (s) => s.inSilence && s.source === 'physical_tracker' && s.traccarDeviceId,
+    );
+    if (silentTrackers.length === 0) return silences;
+    const contacts = await this.traccarBridgeService.getDeviceLastContacts();
+    if (!contacts) return silences;
+    for (const s of silentTrackers) {
+      const last = contacts.get(String(s.traccarDeviceId));
+      if (last != null && Date.now() - last <= s.thresholdMin * 60_000) {
+        s.trackerAsleep = true;
+        s.probableSilenceCause =
+          'Traceur en veille (véhicule à l’arrêt) : il reste joignable et reprendra dès que le véhicule bougera.';
+      }
+    }
+    return silences;
   }
 
   @UseGuards(JwtAuthGuard, CompanyScopeGuard, RolesGuard)

@@ -2067,6 +2067,7 @@
     "since": "since",
     "neverConnected": "Never connected",
     "silent": "SIGNAL LOST",
+    "asleep": "ASLEEP",
     "ok": "OK",
     "coverageTitle": "Tracking recorded today, per vehicle",
     "noCoverage": "No delivery completed today",

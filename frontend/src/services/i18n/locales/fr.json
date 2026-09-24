@@ -2067,6 +2067,7 @@
     "since": "depuis",
     "neverConnected": "Jamais connecté",
     "silent": "SIGNAL PERDU",
+    "asleep": "EN VEILLE",
     "ok": "OK",
     "coverageTitle": "Suivi enregistré aujourd'hui, par véhicule",
     "noCoverage": "Aucune livraison terminée aujourd'hui",

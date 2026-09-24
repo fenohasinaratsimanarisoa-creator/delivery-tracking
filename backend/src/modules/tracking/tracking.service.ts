@@ -341,6 +341,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         brand: true,
         model: true,
         positionSource: true,
+        traccarDeviceId: true,
         driver: { select: { id: true, firstName: true, lastName: true } },
         deliveries: {
           where: { status: { in: ['in_progress', 'assigned'] }, deletedAt: null },
@@ -379,6 +380,7 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         brand: vehicle.brand,
         model: vehicle.model,
         source,
+        traccarDeviceId: vehicle.traccarDeviceId ?? null,
         driverId: vehicle.driver?.id ?? null,
         driverName: vehicle.driver
           ? `${vehicle.driver.firstName} ${vehicle.driver.lastName}`
@@ -395,6 +397,8 @@ export class TrackingService implements OnModuleInit, OnModuleDestroy {
         silenceMin: elapsedMin === null ? null : Math.round(elapsedMin * 10) / 10,
         thresholdMin,
         inSilence: elapsedMin !== null && elapsedMin > thresholdMin,
+        // Renseigné par le contrôleur (contact Traccar) : traceur silencieux mais joignable.
+        trackerAsleep: false,
         neverConnected: elapsedMin === null,
         silenceStartedAt: journal?.startedAt ?? null,
         probableSilenceCause,

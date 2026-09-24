@@ -16,6 +16,8 @@ interface SilenceEntry {
   silenceMin: number | null;
   thresholdMin: number;
   inSilence: boolean;
+  /** Traceur silencieux mais toujours joignable par Traccar (veille, véhicule garé). */
+  trackerAsleep?: boolean;
   neverConnected: boolean;
   silenceStartedAt: string | null;
   probableSilenceCause: string | null;
@@ -76,7 +78,9 @@ export default function TrackingHealthPage() {
     return `${Math.floor(min / 60)}h${Math.round(min % 60).toString().padStart(2, '0')}`;
   };
 
-  const inSilenceCount = silences.filter((s) => s.inSilence || s.neverConnected).length;
+  // Un traceur en veille (garé, toujours joignable) n'est pas un signal perdu.
+  const lost = (s: SilenceEntry) => s.inSilence && !s.trackerAsleep;
+  const inSilenceCount = silences.filter((s) => lost(s) || s.neverConnected).length;
   const activeCount = silences.length;
 
   const coverageColor = (pct: number) => (pct >= 95 ? 'var(--color-teal)' : pct >= 75 ? 'var(--color-accent)' : 'var(--color-red)');
@@ -175,10 +179,10 @@ export default function TrackingHealthPage() {
                         </span>
                       </td>
                       <td className={styles.tableCell}>
-                        <span className={styles.signalAge} style={{ color: s.inSilence ? 'var(--color-red)' : 'var(--color-teal)' }}>
+                        <span className={styles.signalAge} style={{ color: lost(s) ? 'var(--color-red)' : s.trackerAsleep ? 'var(--color-text-secondary)' : 'var(--color-teal)' }}>
                           {formatSilence(s.silenceMin)}
                         </span>
-                        {s.silenceStartedAt && s.inSilence && (
+                        {s.silenceStartedAt && lost(s) && (
                           <span className={styles.silenceSince}>
                             {t('trackingHealth.since') || 'depuis'}{' '}
                             {new Date(s.silenceStartedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -187,11 +191,13 @@ export default function TrackingHealthPage() {
                       </td>
                       <td className={styles.tableCell}>{s.thresholdMin} min</td>
                       <td className={styles.tableCell}>
-                        <span className={`${styles.statusPill} ${s.inSilence ? styles.statusPillOff : styles.statusPillOn}`}>
+                        <span className={`${styles.statusPill} ${lost(s) ? styles.statusPillOff : s.trackerAsleep ? styles.statusPillIdle : styles.statusPillOn}`}>
                           <span className={styles.statusDot} />
                           {s.neverConnected
                             ? (t('trackingHealth.neverConnected') || 'Jamais connecté')
-                            : s.inSilence
+                            : s.trackerAsleep
+                              ? t('trackingHealth.asleep', 'EN VEILLE')
+                              : s.inSilence
                               ? (t('trackingHealth.silent') || 'SILENCE')
                               : (t('trackingHealth.ok') || 'OK')}
                         </span>

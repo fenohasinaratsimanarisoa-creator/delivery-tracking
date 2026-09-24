@@ -985,7 +985,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           priority: NotificationPriority.medium,
           title: 'Traceur physique hors ligne',
           message,
-          userId: vehicle.driver.userId,
+          // Sans userId : visible par toute l'entreprise (admin/dispatcher ET chauffeur).
+          // Adressée au seul chauffeur, l'alerte n'apparaissait pas dans les Notifications
+          // de l'admin (audit A→Z 2026-09-24 : 971 notifications, 0 lue, page admin vide).
         });
       }
     }
@@ -996,6 +998,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
    * par device Traccar. null si Traccar est indisponible : l'appelant garde alors la
    * règle d'alerte d'avant (mieux vaut une alerte de trop qu'une panne ignorée).
    */
+  /**
+   * Dernier contact Traccar par device (paquets de veille inclus) — page « Santé du
+   * tracking ». null si Traccar est indisponible.
+   */
+  getDeviceLastContacts(): Promise<Map<string, number> | null> {
+    return this.fetchReachableDevices(0);
+  }
+
   private async fetchReachableDevices(timeoutMin: number): Promise<Map<string, number> | null> {
     if (!this.sessionCookie) return null;
     try {

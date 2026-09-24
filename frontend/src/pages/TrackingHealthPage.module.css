@@ -278,6 +278,12 @@
   border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
+.statusPillIdle {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--color-text-secondary);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
 .statusPillOff {
   background: rgba(239, 68, 68, 0.12);
   color: var(--color-red);

@@ -97,6 +97,8 @@ describe('TraccarBridgeService — alerte de silence du traceur', () => {
     await check();
     expect(notifications.create).toHaveBeenCalledTimes(1);
     expect(notifications.create.mock.calls[0][1].title).toBe('Traceur physique hors ligne');
+    // Visible par toute l'entreprise (admin compris), pas seulement le chauffeur.
+    expect(notifications.create.mock.calls[0][1].userId).toBeUndefined();
   });
 
   it("l'alerte est UNIQUE par silence même si Redis est indisponible (mémoire du service)", async () => {
