@@ -875,9 +875,14 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       select: {
         id: true,
         companyId: true,
+        traccarDeviceId: true,
         driver: { select: { id: true, userId: true } },
       },
     });
+
+    // Chargé au plus une fois par passage, et seulement si un véhicule est sur le point
+    // d'alerter (undefined = pas encore chargé, null = Traccar indisponible).
+    let reachableDevices: Map<string, number> | null | undefined;
 
     for (const vehicle of vehiclesWithTrackers) {
       if (!vehicle.driver?.userId) continue;
@@ -930,6 +935,24 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           continue;
         }
 
+        // TRACEUR ENDORMI ≠ TRACEUR PERDU (audit trajets 2026-09-21) : un GT06 garé cesse
+        // d'envoyer des positions — souvent dès ~15 km/h en arrivant, ce qui trompait la
+        // règle « en roulant » ci-dessus — mais continue ses paquets de veille toutes les
+        // 5 min : Traccar le voit toujours joignable. Alertes du 21/09 15:27 et 24/09 14:55 :
+        // moto garée, traceur en veille, message « panne SIM/matériel » à tort. On n'alerte
+        // que si Traccar a lui aussi perdu le contact. Pas de mémorisation ici : si la veille
+        // s'interrompt pendant ce silence, le passage suivant alertera.
+        if (reachableDevices === undefined) {
+          reachableDevices = await this.fetchReachableDevices(timeout);
+        }
+        const lastContactMs =
+          vehicle.traccarDeviceId != null
+            ? reachableDevices?.get(String(vehicle.traccarDeviceId))
+            : undefined;
+        if (lastContactMs != null && Date.now() - lastContactMs <= timeout * 60_000) {
+          continue;
+        }
+
         this.silentAlerted.set(vehicle.id, silenceId);
         if (this.redis) {
           await this.redis.setex(cooldownKey, 24 * 60 * 60, '1');
@@ -965,6 +988,34 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
           userId: vehicle.driver.userId,
         });
       }
+    }
+  }
+
+  /**
+   * Dernier contact Traccar (`lastUpdate`, mis à jour aussi par les paquets de veille)
+   * par device Traccar. null si Traccar est indisponible : l'appelant garde alors la
+   * règle d'alerte d'avant (mieux vaut une alerte de trop qu'une panne ignorée).
+   */
+  private async fetchReachableDevices(timeoutMin: number): Promise<Map<string, number> | null> {
+    if (!this.sessionCookie) return null;
+    try {
+      const res = await fetch(`${this.traccarUrl}/api/devices`, {
+        headers: { Cookie: this.sessionCookie, Accept: 'application/json' },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) return null;
+      const devices: TraccarApiDevice[] = await res.json();
+      const map = new Map<string, number>();
+      for (const d of devices) {
+        const t = d.lastUpdate ? Date.parse(d.lastUpdate) : NaN;
+        if (Number.isFinite(t)) map.set(String(d.id), t);
+      }
+      return map;
+    } catch (err: any) {
+      this.logger.warn(
+        `Traccar /api/devices indisponible pour l'alerte de silence (seuil ${timeoutMin} min) : ${err.message}`,
+      );
+      return null;
     }
   }
 
@@ -1139,12 +1190,22 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
       const cookie = await this.authenticate();
       const wsUrl = this.traccarUrl.replace(/^http/, 'ws') + '/api/socket';
 
-      this.socket = new WebSocket(wsUrl, {
+      // UN SEUL SOCKET À LA FOIS (audit trajets 2026-09-21) : le renouvellement de session
+      // (30 min) faisait disconnect() puis connect() ; l'événement 'close' de l'ANCIEN socket
+      // arrivait ensuite, effaçait la nouvelle session et relançait un 2e connect() qui
+      // écrasait `this.socket` sans fermer le précédent. Un socket fuyait à chaque
+      // renouvellement : 139 connexions ouvertes après 3 jours, chaque position traitée
+      // ~139 fois. Tout socket précédent est désormais détaché et coupé ici, et les
+      // événements d'un socket qui n'est plus le socket courant sont ignorés.
+      this.dropSocket();
+      const sock = new WebSocket(wsUrl, {
         headers: { Cookie: cookie },
         handshakeTimeout: 10000,
       });
+      this.socket = sock;
 
-      this.socket.on('open', () => {
+      sock.on('open', () => {
+        if (this.socket !== sock) return;
         this.connected = true;
         this.disconnectStartTime = null;
         this.reconnectAttempts = 0;
@@ -1153,7 +1214,8 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         this.performBackfill();
       });
 
-      this.socket.on('message', async (data: Buffer) => {
+      sock.on('message', async (data: Buffer) => {
+        if (this.socket !== sock) return;
         this.lastMessageAt = Date.now();
         try {
           const text = data.toString();
@@ -1170,7 +1232,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         }
       });
 
-      this.socket.on('close', async (code: number) => {
+      sock.on('close', async (code: number) => {
+        if (this.socket !== sock) return; // ancien socket remplacé : rien à faire
+        this.socket = null;
         this.connected = false;
         this.sessionCookie = null;
         if (!this.disconnectStartTime) this.disconnectStartTime = Date.now();
@@ -1178,9 +1242,9 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
         this.scheduleReconnect();
       });
 
-      this.socket.on('error', (err: Error) => {
+      sock.on('error', (err: Error) => {
         this.logger.error(`Traccar bridge socket error: ${err.message}`);
-        this.socket?.close();
+        sock.close();
       });
     } catch (err: any) {
       this.logger.error(`Traccar bridge connection failed: ${err.message}`);
@@ -1203,14 +1267,29 @@ export class TraccarBridgeService implements OnModuleInit, OnModuleDestroy {
     this.reconnectTimer = setTimeout(() => this.connect(), delay);
   }
 
+  /**
+   * Détache et coupe le socket courant : plus aucun de ses événements n'est traité
+   * (son 'close' tardif ne relance donc pas de reconnexion en double) et la connexion
+   * est fermée immédiatement, même à moitié morte (socket « zombie »).
+   */
+  private dropSocket() {
+    const old = this.socket;
+    if (!old) return;
+    this.socket = null;
+    old.removeAllListeners();
+    old.on('error', () => undefined);
+    try {
+      old.terminate();
+    } catch {
+      /* déjà fermé */
+    }
+  }
+
   private disconnect() {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.backfillTimer) clearTimeout(this.backfillTimer);
     if (this.sessionExpiryTimer) clearTimeout(this.sessionExpiryTimer);
-    if (this.socket) {
-      this.socket.close();
-      this.socket = null;
-    }
+    this.dropSocket();
     this.connected = false;
     this.sessionCookie = null;
     this.lastMessageAt = null;

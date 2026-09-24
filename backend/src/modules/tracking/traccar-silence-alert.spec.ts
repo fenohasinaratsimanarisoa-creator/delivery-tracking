@@ -16,6 +16,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 const VEHICLE = {
   id: 'vehicle-1',
   companyId: 'c1',
+  traccarDeviceId: '1',
   driver: { id: 'd1', userId: 'u1' },
 };
 
@@ -155,5 +156,71 @@ describe('TraccarBridgeService — alerte de silence du traceur', () => {
     notifications.create.mockClear();
     await check();
     expect(notifications.create).not.toHaveBeenCalled();
+  });
+  describe('traceur endormi mais joignable (paquets de veille) — audit trajets 2026-09-21', () => {
+    const realFetch = global.fetch;
+    const devices = (lastUpdateMinAgo: number | null) =>
+      jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [
+          {
+            id: 1,
+            status: 'online',
+            lastUpdate:
+              lastUpdateMinAgo == null ? null : minutesAgo(lastUpdateMinAgo).toISOString(),
+          },
+        ],
+      });
+    beforeEach(() => {
+      (service as any).sessionCookie = 'JSESSIONID=x';
+    });
+    afterEach(() => {
+      global.fetch = realFetch;
+    });
+
+    it('cas réel du 24/09 : dernier fix à 15 km/h puis silence, veille reçue il y a 2 min → AUCUNE alerte', async () => {
+      global.fetch = devices(2) as any;
+      tracking.getLastPosition.mockResolvedValue(lastFix(16, 4));
+      await check();
+      expect(notifications.create).not.toHaveBeenCalled();
+    });
+
+    it('la veille s’arrête pendant le même silence : le passage suivant alerte', async () => {
+      global.fetch = devices(2) as any;
+      tracking.getLastPosition.mockResolvedValue(lastFix(16, 4));
+      await check();
+      global.fetch = devices(20) as any;
+      await check();
+      expect(notifications.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('livraison en cours, traceur injoignable (dernier contact > seuil) : alerte', async () => {
+      global.fetch = devices(40) as any;
+      prisma.delivery.findFirst.mockResolvedValue({ id: 'del-1' });
+      tracking.getLastPosition.mockResolvedValue(lastFix(40, 0));
+      await check();
+      expect(notifications.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('Traccar indisponible : règle d’avant (alerte)', async () => {
+      global.fetch = jest.fn().mockRejectedValue(new Error('ECONNREFUSED')) as any;
+      tracking.getLastPosition.mockResolvedValue(lastFix(20, 8));
+      await check();
+      expect(notifications.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('une seule requête Traccar par passage, même avec plusieurs véhicules silencieux', async () => {
+      const f = devices(2);
+      global.fetch = f as any;
+      prisma.vehicle.findMany.mockResolvedValue([
+        VEHICLE,
+        { ...VEHICLE, id: 'vehicle-2', traccarDeviceId: '2' },
+      ]);
+      tracking.getLastPosition.mockResolvedValue(lastFix(20, 8));
+      await check();
+      expect(f).toHaveBeenCalledTimes(1);
+      // vehicle-2 (device 2) absent de Traccar → alerte ; vehicle-1 joignable → rien
+      expect(notifications.create).toHaveBeenCalledTimes(1);
+    });
   });
 });
