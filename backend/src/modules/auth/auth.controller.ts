@@ -199,7 +199,10 @@ export class AuthController {
     }
   }
 
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  // 20/min par IP (audit A→Z 2026-09-24) : à 5/min, chaque rechargement complet de page
+  // consomme un refresh → 429 dès le 5e onglet/rechargement dans la minute. Le refresh
+  // exige un jeton aléatoire valide (cookie httpOnly) : pas de risque de force brute.
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Public()
   // PAS de @SkipCsrf ici : la rotation hostile du refresh token via formulaire
   // cross-site est précisément ce que CsrfGuard neutralise (cookie+header).
