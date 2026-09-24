@@ -215,10 +215,12 @@ export class NotificationsService {
   @Cron('0 3 * * 0')
   async purgeOldReadNotifications() {
     if (!(await acquireCronLock(this.redis, 'notifications.purgeOldRead', 3600))) return;
-    this.logger.log('Purging read notifications older than 90 days...');
+    this.logger.log('Purging read or resolved notifications older than 90 days...');
     const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    // Lues OU résolues (audit A→Z 2026-09-24) : une alerte résolue sans avoir été
+    // « lue » n'était jamais purgée. Les alertes ni lues ni résolues restent (à traiter).
     const result = await this.prisma.notification.deleteMany({
-      where: { readAt: { lt: cutoff } },
+      where: { OR: [{ readAt: { lt: cutoff } }, { resolvedAt: { lt: cutoff } }] },
     });
     this.logger.log(`Purged ${result.count} old read notifications`);
   }

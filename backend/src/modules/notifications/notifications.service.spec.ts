@@ -39,6 +39,17 @@ describe('NotificationsService', () => {
     );
   });
 
+  it('purge hebdo : notifications LUES ou RÉSOLUES de plus de 90 jours (jamais les alertes à traiter)', async () => {
+    mockPrisma.notification.deleteMany.mockResolvedValueOnce({ count: 3 });
+    await service.purgeOldReadNotifications();
+    const where = mockPrisma.notification.deleteMany.mock.calls[0][0].where;
+    expect(where.OR).toHaveLength(2);
+    expect(where.OR[0].readAt.lt).toBeInstanceOf(Date);
+    expect(where.OR[1].resolvedAt.lt).toBeInstanceOf(Date);
+    const ageDays = (Date.now() - where.OR[1].resolvedAt.lt.getTime()) / 86_400_000;
+    expect(Math.round(ageDays)).toBe(90);
+  });
+
   it('lists notifications by company and optional user', async () => {
     mockPrisma.notification.findMany.mockResolvedValueOnce([{ id: 'notif-1' }]);
 
