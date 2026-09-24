@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { LOG_REDACT } from '../common/logging/redact-paths';
 import { LoggerModule } from 'nestjs-pino';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { RedisModule } from '../common/redis/redis.module';
@@ -18,18 +19,7 @@ import { QueueModule } from './queue.module';
     LoggerModule.forRoot({
       pinoHttp: {
         autoLogging: false,
-        redact: {
-          paths: [
-            'req.headers.authorization',
-            'req.headers.cookie',
-            'body.password',
-            'body.token',
-            'body.accessToken',
-            'body.refreshToken',
-            'body.secret',
-          ],
-          censor: '[REDACTED]',
-        },
+        redact: LOG_REDACT,
         level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
       },
     }),

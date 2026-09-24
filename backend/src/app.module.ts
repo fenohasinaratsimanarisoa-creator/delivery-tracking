@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { SubscriptionGuard } from './common/guards/subscription.guard';
 import { ScheduleModule } from '@nestjs/schedule';
+import { LOG_REDACT } from './common/logging/redact-paths';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import Redis from 'ioredis';
@@ -66,27 +67,8 @@ import { TenantModule } from './common/tenant/tenant.module';
           userId: (req as any).user?.id,
           companyId: (req as any).user?.companyId,
         }),
-        redact: {
-          paths: [
-            'req.headers.authorization',
-            'req.headers.cookie',
-            // Le cookie de session ENTRANT est redacté ci-dessus, mais le
-            // Set-Cookie de SORTIE (refreshToken/csrf-token fraîchement émis
-            // par /auth/login, /auth/refresh, /auth/register…) ne l'était
-            // pas : chaque rotation de refresh token écrivait le JWT en
-            // clair dans les logs applicatifs (constaté en prod le
-            // 2026-08-26 — un token de session réel visible via `docker
-            // logs`). pino-http expose les en-têtes de réponse via
-            // res.headers, sérialisés en tableau pour set-cookie.
-            'res.headers["set-cookie"]',
-            'body.password',
-            'body.token',
-            'body.accessToken',
-            'body.refreshToken',
-            'body.secret',
-          ],
-          censor: '[REDACTED]',
-        },
+        // Liste commune API/worker, voir common/logging/redact-paths.ts.
+        redact: LOG_REDACT,
         level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
       },
     }),
