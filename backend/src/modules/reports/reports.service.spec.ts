@@ -321,11 +321,21 @@ describe('ReportsService', () => {
     it('attaches the average driving score when DriverScore data exists for the period', async () => {
       mockCache.get.mockResolvedValueOnce(null);
       mockPrisma.driver.findMany.mockResolvedValueOnce([
-        { id: 'driver-1', firstName: 'Alice', lastName: 'Driver', phone: null, isActive: true, deliveries: [] },
+        {
+          id: 'driver-1',
+          firstName: 'Alice',
+          lastName: 'Driver',
+          phone: null,
+          isActive: true,
+          deliveries: [],
+        },
       ]);
       mockDriverScoreService.getScoreSummary.mockResolvedValueOnce(
         new Map([
-          ['driver-1', { avgScore: 87, daysScored: 5, distanceKm: 320, speedingEvents: 2, harshEvents: 1 }],
+          [
+            'driver-1',
+            { avgScore: 87, daysScored: 5, distanceKm: 320, speedingEvents: 2, harshEvents: 1 },
+          ],
         ]),
       );
 

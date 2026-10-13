@@ -831,7 +831,7 @@ describe('DeliveriesService - State Machine', () => {
       expect(mockPrisma.delivery.findMany).not.toHaveBeenCalled();
     });
 
-    it('persiste tourSequence dans l\'ORDRE renvoyé par OSRM (pas l\'ordre d\'entrée)', async () => {
+    it("persiste tourSequence dans l'ORDRE renvoyé par OSRM (pas l'ordre d'entrée)", async () => {
       mockPrisma.delivery.findMany.mockResolvedValueOnce([
         { id: 'del-a', deliveryLat: -18.91, deliveryLng: 47.52 },
         { id: 'del-b', deliveryLat: -18.95, deliveryLng: 47.55 },
@@ -930,7 +930,7 @@ describe('DeliveriesService - State Machine', () => {
       expect(mockRouting.optimizeTrip).not.toHaveBeenCalled();
     });
 
-    it("ne modifie JAMAIS le comportement de bulkAction (méthode indépendante)", async () => {
+    it('ne modifie JAMAIS le comportement de bulkAction (méthode indépendante)', async () => {
       // Garde-fou explicite demandé : optimizeTour ne doit pas toucher au chemin
       // bulkAction existant. On revérifie qu'un bulkAction 'delete' classique
       // fonctionne toujours après l'ajout d'optimizeTour dans la même classe.
@@ -1419,8 +1419,8 @@ describe('DeliveriesService - State Machine', () => {
       () => {
         const cliPath = path.join(__dirname, '__fixtures__/parse-pdf-cli.ts');
         const stdout = execFileSync(
-          'npx',
-          ['ts-node', '--transpile-only', cliPath, REAL_FIXTURE_PATH],
+          process.execPath,
+          [require.resolve('ts-node/dist/bin'), '--transpile-only', cliPath, REAL_FIXTURE_PATH],
           {
             cwd: path.join(__dirname, '../../..'),
             encoding: 'utf-8',

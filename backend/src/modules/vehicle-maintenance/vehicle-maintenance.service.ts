@@ -1,4 +1,11 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, Optional, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  Optional,
+  Inject,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type Redis from 'ioredis';
 import { NotificationType, NotificationPriority } from '@prisma/client';
@@ -144,7 +151,10 @@ export class VehicleMaintenanceService {
     kmRemaining: number | null,
     daysRemaining: number | null,
   ): MaintenanceStatus {
-    if ((kmRemaining !== null && kmRemaining <= 0) || (daysRemaining !== null && daysRemaining <= 0)) {
+    if (
+      (kmRemaining !== null && kmRemaining <= 0) ||
+      (daysRemaining !== null && daysRemaining <= 0)
+    ) {
       return 'overdue';
     }
     if (
@@ -294,15 +304,17 @@ export class VehicleMaintenanceService {
 
           await this.notifications.create(company.id, {
             type: NotificationType.maintenance_due,
-            priority: item.status === 'overdue' ? NotificationPriority.high : NotificationPriority.medium,
+            priority:
+              item.status === 'overdue' ? NotificationPriority.high : NotificationPriority.medium,
             title: `Entretien ${item.status === 'overdue' ? 'en retard' : 'à prévoir'} : ${item.label}`,
             message: `${item.vehicleLabel} — ${item.label} (${parts.join(', ')})`,
             link,
           });
           alertsCreated++;
         }
-      } catch (err: any) {
-        this.logger.error(`Failed maintenance check for company ${company.id}: ${err.message}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Failed maintenance check for company ${company.id}: ${message}`);
       }
     }
 

@@ -258,7 +258,11 @@ describe('VehiclesService', () => {
     it('crée le device Traccar depuis le seul IMEI et lie le véhicule automatiquement (create)', async () => {
       enableTraccar();
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null); // plate check
-      mockCreateDeviceResponse({ id: 555, name: 'Toyota Hilux — TRK-001', uniqueId: '123456789012345' });
+      mockCreateDeviceResponse({
+        id: 555,
+        name: 'Toyota Hilux — TRK-001',
+        uniqueId: '123456789012345',
+      });
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null); // checkTraccarDeviceIdUniqueness('555')
       mockPrisma.vehicle.create.mockResolvedValueOnce({
         id: 'vehicle-1',
@@ -282,7 +286,7 @@ describe('VehiclesService', () => {
       expect(mockPrisma.vehicle.create.mock.calls[0][0].data.imei).toBeUndefined();
     });
 
-    it("une erreur Traccar à la création (ex. IMEI déjà enregistré) empêche la création du véhicule", async () => {
+    it('une erreur Traccar à la création (ex. IMEI déjà enregistré) empêche la création du véhicule', async () => {
       enableTraccar();
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null); // plate check
       jest.spyOn(service as any, 'authenticateTraccar').mockResolvedValue('cookie=abc');
@@ -312,7 +316,11 @@ describe('VehiclesService', () => {
         model: 'Hilux',
         licensePlate: 'TRK-001',
       }); // findOne
-      mockCreateDeviceResponse({ id: 999, name: 'Toyota Hilux — TRK-001', uniqueId: '999888777666555' });
+      mockCreateDeviceResponse({
+        id: 999,
+        name: 'Toyota Hilux — TRK-001',
+        uniqueId: '999888777666555',
+      });
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce(null); // checkTraccarDeviceIdUniqueness('999')
       mockPrisma.vehicle.update.mockResolvedValueOnce({ id: 'vehicle-1', traccarDeviceId: '999' });
 

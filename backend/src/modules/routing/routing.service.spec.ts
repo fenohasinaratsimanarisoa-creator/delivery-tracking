@@ -264,7 +264,13 @@ describe('RoutingService', () => {
       ],
       trips: [
         {
-          geometry: { coordinates: [[47.55, -18.95], [47.53, -18.87], [47.52, -18.91]] },
+          geometry: {
+            coordinates: [
+              [47.55, -18.95],
+              [47.53, -18.87],
+              [47.52, -18.91],
+            ],
+          },
           distance: 8000,
           duration: 600,
         },

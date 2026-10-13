@@ -170,7 +170,7 @@ export class WebhooksService {
         },
         select: { id: true },
       });
-    } catch (err: any) {
+    } catch {
       // Une erreur de lecture des webhooks ne doit JAMAIS faire échouer l'opération
       // métier qui a déclenché l'événement (ex. transition de livraison déjà committée).
       return;

@@ -178,7 +178,7 @@ describe('VehicleMaintenanceService', () => {
       createdAt: new Date('2026-01-01T00:00:00Z'),
     };
 
-    it("utilise la date du dernier MaintenanceRecord comme référence quand il existe", async () => {
+    it('utilise la date du dernier MaintenanceRecord comme référence quand il existe', async () => {
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce(vehicle);
       mockPrisma.vehicleMaintenanceSchedule.findMany.mockResolvedValueOnce([baseSchedule]);
       mockPrisma.maintenanceRecord.findFirst.mockResolvedValueOnce({

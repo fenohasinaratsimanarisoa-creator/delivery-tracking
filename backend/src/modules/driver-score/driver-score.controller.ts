@@ -14,7 +14,8 @@ export class DriverScoreController {
 
   @Get('summary')
   async summary(@CurrentUser('companyId') companyId: string, @Query('days') daysParam?: string) {
-    const days = Number.isFinite(Number(daysParam)) && Number(daysParam) > 0 ? Number(daysParam) : 30;
+    const days =
+      Number.isFinite(Number(daysParam)) && Number(daysParam) > 0 ? Number(daysParam) : 30;
     const to = new Date();
     const from = new Date(to.getTime() - days * 86_400_000);
     const summary = await this.driverScoreService.getScoreSummary(companyId, from, to);

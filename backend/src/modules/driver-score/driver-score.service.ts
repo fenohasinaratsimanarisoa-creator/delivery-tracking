@@ -80,7 +80,12 @@ export class DriverScoreService {
     return { speedingEvents, harshEvents };
   }
 
-  private computePenalty(events: number, distanceKm: number, perEvent: number, cap: number): number {
+  private computePenalty(
+    events: number,
+    distanceKm: number,
+    perEvent: number,
+    cap: number,
+  ): number {
     if (events === 0) return 0;
     const normalizedEvents =
       distanceKm >= MIN_DISTANCE_FOR_NORMALIZATION_KM
@@ -183,7 +188,9 @@ export class DriverScoreService {
           scoresUpserted++;
         }
       } catch (err: any) {
-        this.logger.error(`Failed driver score computation for company ${company.id}: ${err.message}`);
+        this.logger.error(
+          `Failed driver score computation for company ${company.id}: ${err.message}`,
+        );
       }
     }
 
@@ -208,7 +215,13 @@ export class DriverScoreService {
 
     const agg = new Map<
       string,
-      { total: number; count: number; distanceKm: number; speedingEvents: number; harshEvents: number }
+      {
+        total: number;
+        count: number;
+        distanceKm: number;
+        speedingEvents: number;
+        harshEvents: number;
+      }
     >();
     for (const row of rows) {
       const entry = agg.get(row.driverId) ?? {

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { NotificationType, NotificationPriority } from '@prisma/client';
+import { NotificationType, NotificationPriority, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
 export interface AlertsQuery {
@@ -21,7 +21,7 @@ export class AlertsService {
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    const where: any = { companyId };
+    const where = { companyId } as Prisma.NotificationWhereInput;
 
     // Scope strict par driver : un driver ne voit QUE les alertes qui le
     // concernent — celles qui le ciblent directement (userId) ou qui portent
@@ -111,7 +111,7 @@ export class AlertsService {
   }
 
   async stats(companyId: string, period?: string) {
-    const where: any = {
+    const where: Prisma.NotificationWhereInput = {
       companyId,
       resolved: false,
       type: { not: NotificationType.delivery_status },
@@ -150,7 +150,7 @@ export class AlertsService {
       }),
     ]);
 
-    const prevWhere = { ...where, createdAt: undefined };
+    const prevWhere: Prisma.NotificationWhereInput = { ...where, createdAt: undefined };
     if (period === '7d') {
       prevWhere.createdAt = {
         lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),

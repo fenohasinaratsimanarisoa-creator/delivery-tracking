@@ -1,4 +1,4 @@
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 WORKDIR /app
 COPY package*.json ./
 # --include=dev : garantit que typescript/ts-node (utilisés par nest build ET le
@@ -10,7 +10,7 @@ COPY tsconfig*.json ./
 COPY src ./src
 RUN npx nest build
 
-FROM node:20-slim AS runner
+FROM node:22-slim AS runner
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates wget && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/dist ./dist

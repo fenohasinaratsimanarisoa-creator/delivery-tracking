@@ -55,7 +55,7 @@ describe('DriverScoreService', () => {
       expect(service.computeScore(1000, 1000, 100)).toBe(40);
     });
 
-    it("garde le compte BRUT (sans extrapolation) sous le seuil minimal de distance (20km)", () => {
+    it('garde le compte BRUT (sans extrapolation) sous le seuil minimal de distance (20km)', () => {
       // 2 évènements sur 5km : si on normalisait à 100km, on obtiendrait
       // 2/(5/100)=40 évènements → pénalité écrasante pour un trajet minuscule.
       // Sous MIN_DISTANCE_FOR_NORMALIZATION_KM, on pénalise le compte brut.
@@ -171,7 +171,11 @@ describe('DriverScoreService', () => {
         { driverId: 'drv-2', score: 70, distanceKm: 50, speedingEvents: 3, harshEvents: 1 },
       ]);
 
-      const result = await service.getScoreSummary('comp-1', new Date('2026-09-01'), new Date('2026-09-30'));
+      const result = await service.getScoreSummary(
+        'comp-1',
+        new Date('2026-09-01'),
+        new Date('2026-09-30'),
+      );
 
       expect(result.get('drv-1')).toEqual({
         avgScore: 85,
