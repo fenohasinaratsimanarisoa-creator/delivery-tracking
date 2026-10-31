@@ -289,3 +289,105 @@
   padding-top: var(--space-sm);
   margin-top: var(--space-xs);
 }
+
+/* ─── Mobile premium : cartes aérées, titre en tête, libellés discrets ─── */
+.mobileCardContainer {
+  gap: 12px;
+}
+
+.mobileCard {
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.mobileColumnRow {
+  align-items: center;
+  padding: 10px 0;
+}
+
+.mobileLabel {
+  font-weight: var(--weight-medium, 500);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+  min-width: 0;
+}
+
+.mobileCard > .mobileColumnRow:first-child,
+.mobileSelectRow + .mobileColumnRow {
+  display: block;
+  padding: 0 0 12px;
+  font-size: var(--text-base, 0.9375rem);
+  font-weight: 600;
+}
+
+.mobileCard > .mobileColumnRow:first-child .mobileLabel,
+.mobileSelectRow + .mobileColumnRow .mobileLabel {
+  display: none;
+}
+
+.mobileCard > .mobileColumnRow:first-child .mobileValue,
+.mobileSelectRow + .mobileColumnRow .mobileValue {
+  display: block;
+  text-align: left;
+}
+
+.mobileActions {
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
+/* ─── Carte mobile en grille 2 colonnes : libellé au-dessus, valeur dessous ───
+   Divise la hauteur d'une carte par ~2 et aligne l'œil sur une lecture en Z. */
+.mobileCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 16px;
+  row-gap: 14px;
+}
+
+.mobileCard > .mobileSelectRow,
+.mobileCard > .mobileColumnRow:first-child,
+.mobileCard > .mobileActions {
+  grid-column: 1 / -1;
+}
+
+.mobileCard > .mobileColumnRow {
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 0;
+  border-bottom: 0;
+  min-width: 0;
+}
+
+.mobileCard > .mobileColumnRow:not(:first-child) .mobileValue {
+  text-align: left;
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.mobileSelectRow + .mobileColumnRow {
+  grid-column: 1 / -1;
+}
+
+.mobileSelectRow {
+  margin-bottom: -6px;
+}
+
+/* Case de sélection : discrète, en haut à droite de la carte (plus de ligne dédiée) */
+.mobileCard { position: relative; }
+.mobileCard > .mobileSelectRow {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  margin: 0;
+  grid-column: auto;
+  z-index: 1;
+}
+.mobileCard > .mobileSelectRow + .mobileColumnRow { padding-right: 40px; }
+.mobileCard > .mobileActions { margin-top: -2px; padding-top: 10px; }

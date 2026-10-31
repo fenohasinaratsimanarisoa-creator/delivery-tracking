@@ -134,7 +134,7 @@ function MiniChart({ data }: { data: DeliveryStat[] }) {
       </div>
       <ResponsiveContainer width="100%" height={110}>
         <BarChart data={displayData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-          <XAxis dataKey="statusLabel" tick={{ fontSize: 9, fill: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
+          <XAxis dataKey="statusLabel" tick={{ fontSize: 10, fill: 'var(--color-text-tertiary)', fontFamily: 'var(--font-body)' }} axisLine={false} tickLine={false} />
           <YAxis hide />
           <Tooltip {...chartTooltip} />
           <Bar dataKey="count" radius={[5, 5, 0, 0]}>
@@ -158,7 +158,9 @@ function FuelMiniChart({ data }: { data: FuelChartPoint[] }) {
       </div>
       <ResponsiveContainer width="100%" height={110}>
         <LineChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-          <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-text-tertiary)', fontFamily: 'var(--font-body)' }} axisLine={false} tickLine={false}
+            interval="preserveStartEnd" minTickGap={28}
+            tickFormatter={(d: string) => (/^\d{4}-\d{2}-\d{2}/.test(String(d)) ? `${String(d).slice(8, 10)}/${String(d).slice(5, 7)}` : String(d))} />
           <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
           <Tooltip {...chartTooltip} />
           <Line type="monotone" dataKey="consumption" stroke="var(--color-teal)" strokeWidth={2} dot={false}
@@ -182,8 +184,8 @@ function RecentDeliveriesMini() {
 
   const statusColor: Record<string, string> = {
     pending: 'var(--color-text-tertiary)',
-    assigned: 'var(--color-accent)',
-    in_progress: 'var(--color-status-moving)',
+    assigned: '#B7791F',
+    in_progress: '#3B6FD4',
     delivered: 'var(--color-teal)',
     failed: 'var(--color-red)',
     cancelled: 'var(--color-text-tertiary)',
@@ -211,10 +213,15 @@ function RecentDeliveriesMini() {
           {deliveries.map((d: RecentDelivery) => (
             <div key={d.id} className={styles.recentItem}>
               <span className={styles.recentDot} style={{ background: statusColor[d.status] || 'var(--color-text-tertiary)' }} />
-              <span className={styles.recentItemTitle}>{d.title}</span>
+              <span className={styles.recentItemTitle}>
+                <span className={styles.recentMain}>{d.title.split(' \u2014 ')[0]}</span>
+                {d.title.includes(' \u2014 ') && (
+                  <span className={styles.recentSub}>{d.title.split(' \u2014 ').slice(1).join(' \u2014 ')}</span>
+                )}
+              </span>
               <span
                 className={styles.recentStatusPill}
-                style={{ color: statusColor[d.status] || 'var(--color-text-tertiary)', borderColor: statusColor[d.status] || 'var(--color-text-tertiary)' }}
+                style={{ color: statusColor[d.status] || 'var(--color-text-tertiary)', ['--pill' as string]: statusColor[d.status] || 'var(--color-text-tertiary)' }}
               >
                 {statusLabel[d.status] || d.status}
               </span>
@@ -276,6 +283,46 @@ function MaintenanceDueMini() {
         ))}
       </div>
     </div>
+  );
+}
+
+
+type HeroStat = { icon: React.ElementType; label: string; value: number | string | undefined; color: string };
+
+// Carte héros mobile : LE chiffre du jour en grand, trois repères en dessous.
+// Un seul point focal par écran — hiérarchie visuelle de premier niveau.
+function MobileHero({ today, todayLabel, stats, reliability }: {
+  today: number | undefined;
+  todayLabel: string;
+  stats: HeroStat[];
+  reliability: { score: number; total: number } | null;
+}) {
+  const animated = useCountUp(typeof today === 'number' ? today : 0, { duration: 900, decimals: 0 });
+  const showScore = !!reliability && reliability.total >= LOW_SAMPLE_THRESHOLD;
+  return (
+    <section className={styles.hero}>
+      <div className={styles.heroTop}>
+        <span className={styles.heroLabel}>
+          <span className={styles.heroLive} />
+          {todayLabel}
+        </span>
+        {showScore && <span className={styles.heroScore}>{reliability!.score}%</span>}
+      </div>
+      <div className={styles.heroValue}>{typeof today === 'number' ? animated : '\u2014'}</div>
+      <div className={styles.heroStats}>
+        {stats.map((st, i) => {
+          const Icon = st.icon;
+          const warn = i === 0 && typeof st.value === 'number' && st.value > 0;
+          return (
+            <div key={st.label} className={`${styles.heroStat} ${warn ? styles.heroStatWarn : ''}`}>
+              <Icon size={14} className={styles.heroStatIcon} />
+              <span className={styles.heroStatValue}>{st.value ?? '\u2014'}</span>
+              <span className={styles.heroStatLabel}>{st.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -418,55 +465,48 @@ export default function DashboardPage() {
         )}
 
       {isMobile && (
-        /* Mobile layout: stacked below map */
+        /* Mobile premium : en-tête éditorial, chiffres clés sans cadre superflu,
+           carte en vignette arrondie, puis analyses. Un seul niveau de cartes. */
         <div className={`${styles.mobileLayout} ${styles.dashboardMobileOnly}`}>
-          <div className={styles.mobileMap}>
-            <RealTimeMap />
-          </div>
+          <header className={styles.mHeader}>
+            <span className={styles.kicker}>{t('dashboard.kicker')}</span>
+            <h1 className={styles.mobileTitle}>{t('dashboard.title')}</h1>
+            <span className={styles.mDate}>{formatDateLong(new Date())}</span>
+          </header>
 
           <div className={styles.mobileStack}>
-            <div className={styles.mobileTitleRow}>
-              <span className={styles.titleIconChip}><Gauge size={18} /></span>
-              <div className={styles.headerText}>
-                <span className={styles.kicker}>{t('dashboard.kicker')}</span>
-                <h1 className={styles.mobileTitle}>{t('dashboard.title')}</h1>
-              </div>
-              {perfectMonth && <PerfectMonthBadge month={currentMonth} />}
+            {perfectMonth && <PerfectMonthBadge month={currentMonth} />}
+
+            <MobileHero
+              today={kpis?.deliveriesToday}
+              todayLabel={t('dashboard.heroToday', { defaultValue: "Livraisons aujourd'hui" })}
+              stats={[kpiItems[0], kpiItems[2], kpiItems[3]]}
+              reliability={reliability}
+            />
+
+            <div className={styles.kpiGrid}>
+              <KpiCard {...kpiItems[4]} />
+              <KpiCard {...kpiItems[5]} />
             </div>
 
-            {kpis && reliability && (
-              <ReliabilityScore score={reliability.score} trend={reliability.trend} total={reliability.total} />
-            )}
+            <section className={styles.mobileMap} aria-label={t('nav.map')}>
+              <RealTimeMap />
+            </section>
 
-            <div className={styles.kpiPanel}>
-              <div className={styles.kpiPanelHeader}>
-                <span className={styles.kpiPanelDot} />
-                <span className={styles.kpiPanelTitle}>{t('dashboard.overviewTitle')}</span>
-              </div>
-              <div className={styles.kpiGrid}>
-                {kpiItems.map((item) => (
-                  <KpiCard key={item.label} {...item} />
-                ))}
-              </div>
-            </div>
+            <RecentDeliveriesMini />
+            <MaintenanceDueMini />
 
             {anyChart && (
               <>
                 {deliveryStats.length > 0 && <MiniChart data={deliveryStats} />}
                 {fuelData.length > 0 && <FuelMiniChart data={fuelData} />}
-                <RecentDeliveriesMini />
-                <MaintenanceDueMini />
               </>
             )}
 
-            {error && (
-              <div className={styles.mobileError}>
-                {error}
-              </div>
-            )}
-          </div>
+            {error && <div className={styles.mobileError}>{error}</div>}
 
-          <OnboardingChecklist />
+            <OnboardingChecklist />
+          </div>
         </div>
       )}
     </>

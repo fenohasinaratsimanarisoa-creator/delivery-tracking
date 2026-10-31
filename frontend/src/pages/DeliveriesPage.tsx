@@ -683,7 +683,7 @@ export default function DeliveriesPage() {
                   // Ordre de tournée optimisée (mvpromax.md §1.1) — colonne purement
                   // additive : vide (—) tant qu'aucune optimisation n'a été lancée sur
                   // cette livraison, aucun impact sur les livraisons jamais concernées.
-                  key: 'tourSequence', label: t('deliveries.table.tourSequence'),
+                  key: 'tourSequence', mobileHidden: true, label: t('deliveries.table.tourSequence'),
                   render: (r: Delivery) => r.tourSequence != null ? (
                     <Badge variant="accent" size="sm">#{r.tourSequence}</Badge>
                   ) : (
@@ -727,11 +727,11 @@ export default function DeliveriesPage() {
                   render: (r: Delivery) => <DriverCell driver={r.driver} unassignedLabel={t('deliveries.table.unassigned')} />,
                 },
                 {
-                  key: 'createdAt', label: t('deliveries.table.date'), sortable: true,
+                  key: 'createdAt', mobileHidden: true, label: t('deliveries.table.date'), sortable: true,
                   render: (r: Delivery) => <DateCell delivery={r} />,
                 },
                 {
-                  key: 'clientPhone', label: t('deliveries.table.clientPhone'),
+                  key: 'clientPhone', mobileHidden: true, label: t('deliveries.table.clientPhone'),
                   render: (r: Delivery) => (
                     r.clientPhone
                       ? <span className={styles.phoneCell}>{r.clientPhone}</span>
@@ -739,11 +739,11 @@ export default function DeliveriesPage() {
                   ),
                 },
                 {
-                  key: 'amount', label: t('deliveries.table.amount'),
+                  key: 'amount', mobileHidden: true, label: t('deliveries.table.amount'),
                   render: (r: Delivery) => <AmountCell amount={r.amount} />,
                 },
                 {
-                  key: 'description', label: t('deliveries.table.description'),
+                  key: 'description', mobileHidden: true, label: t('deliveries.table.description'),
                   render: (r: Delivery) => <DescriptionCell delivery={r} />,
                 },
               ]}

@@ -10,7 +10,7 @@ import {
   ChevronsUpDown,
   Inbox,
 } from 'lucide-react';
-import { useIsMobile } from '../hooks/useIsMobile';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import Skeleton from './Skeleton';
 import EmptyState from './EmptyState';
 import Pagination from './Pagination';
@@ -23,6 +23,8 @@ interface Column<T> {
   sortable?: boolean;
   /** Alignement selon le TYPE de donnée. `right` active aussi `tabular-nums`. */
   align?: 'left' | 'right' | 'center';
+  /** Masquée dans la vue cartes mobile (champs secondaires, accessibles au détail). */
+  mobileHidden?: boolean;
 }
 
 interface Props<T> {
@@ -54,7 +56,7 @@ export default function DataTable<T>({
   selectable, selectedIds, onSelectionChange,
 }: Props<T>) {
   const { t } = useTranslation();
-  const isMobile = useIsMobile();
+  const isMobile = useBreakpoint() !== 'desktop';
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -145,7 +147,7 @@ export default function DataTable<T>({
                   </button>
                 </div>
               )}
-              {columns.map((col) => (
+              {columns.filter((col) => !col.mobileHidden).map((col) => (
                 <div key={col.key} className={styles.mobileColumnRow}>
                   <span className={styles.mobileLabel}>{col.label}</span>
                   <span className={`${styles.mobileValue} ${alignClass(col.align)}`}>

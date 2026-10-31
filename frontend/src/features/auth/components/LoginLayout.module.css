@@ -125,3 +125,32 @@
     max-width: 440px;
   }
 }
+
+/* Mobile premium : la carte de connexion devient une feuille plein cadre, sans cadre décoratif */
+@media (max-width: 600px) {
+  .formPanel {
+    padding: 0;
+    align-items: stretch;
+    background:
+      radial-gradient(120% 50% at 50% 0%, color-mix(in srgb, var(--color-accent) 16%, transparent) 0%, transparent 70%),
+      var(--color-bg);
+  }
+  .glassCard {
+    max-width: none;
+    min-height: 100dvh;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+    padding: calc(48px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px));
+    background: transparent;
+    backdrop-filter: none;
+  }
+  .glassCard::before,
+  .glassCard::after,
+  .glassCard > [class*="corner"] {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .cardCornerTop, .cardCornerBottom, .cardGlowLine { display: none; }
+}

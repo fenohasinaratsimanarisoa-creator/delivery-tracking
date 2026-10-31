@@ -172,3 +172,49 @@
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-lg, 8px);
 }
+
+/* ─── Mobile premium ─── */
+@media (max-width: 767px) {
+  .page {
+    padding: 24px 16px 120px;
+    min-height: 100%;
+    background: radial-gradient(120% 40% at 0% 0%, color-mix(in srgb, var(--color-accent) 7%, transparent) 0%, transparent 70%), var(--color-bg);
+  }
+  .pageTitle {
+    font-family: var(--font-body);
+    font-size: 1.75rem;
+    letter-spacing: -0.035em;
+    margin-bottom: 20px;
+  }
+  .controlsRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 14px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 20px;
+  }
+  .controlsRow label { font-size: 0.75rem; color: var(--color-text-tertiary); }
+  .select,
+  .dateInput {
+    width: 100%;
+    max-width: none;
+    min-height: 48px;
+    padding: 0 14px;
+    border-radius: 14px;
+    font-size: 1rem;
+  }
+  .statsRow {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .stat {
+    min-width: 0;
+    padding: 14px;
+    border-radius: 18px;
+  }
+  .statLabel { text-transform: none; letter-spacing: 0; font-size: 0.75rem; }
+  .statValue { font-size: 1.5rem; font-weight: 650; letter-spacing: -0.03em; }
+}

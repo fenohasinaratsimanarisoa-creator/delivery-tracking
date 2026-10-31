@@ -322,7 +322,7 @@
    mobile. On réserve le même espace explicitement ici. */
 @media (max-width: 767px) {
   .legend {
-    bottom: calc(72px + env(safe-area-inset-bottom, 0px) + var(--space-lg));
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
   }
 
   /* Même réservation pour le sélecteur de fond de carte (MapLayerSwitcher,
@@ -336,7 +336,44 @@
      Empilés verticalement à la place — plus jamais de collision. */
   .pageWrap {
     --map-controls-bottom-safe: calc(
-      72px + env(safe-area-inset-bottom, 0px) + var(--space-lg) + 44px
+      92px + env(safe-area-inset-bottom, 0px) + 56px
     );
+  }
+}
+
+/* Mobile premium : légende en pilule flottante épurée, sans astuce desktop */
+@media (max-width: 767px) {
+  .legend {
+    left: 16px;
+    right: 16px;
+    padding: 8px 10px;
+    border-radius: 22px;
+    background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid var(--color-border-subtle);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  }
+  .legendHint,
+  .legendDivider {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .searchContainer {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    left: 16px;
+    right: 16px;
+  }
+  .searchBar {
+    min-height: 52px;
+    padding: 0 16px;
+    border-radius: 26px;
+    border-color: var(--color-border-subtle);
+    background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
   }
 }

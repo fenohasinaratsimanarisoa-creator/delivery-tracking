@@ -1,0 +1,377 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   MOBILE PREMIUM — couche de design système (≤ 767px uniquement)
+   Normes : grille 4/8 pt, gouttière 16 px, cibles tactiles ≥ 44 px,
+   échelle typographique 11/13/15/17/28, un seul accent, une seule
+   hiérarchie : Titre large → métadonnée → contenu en cartes.
+   Les pages partagent les mêmes noms de classes ; on les cible par
+   [class*="…"] (CSS Modules conserve le nom local dans le hash).
+   Rien ne s'applique au desktop.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+  :root:root:root {
+    --m-gutter: 16px;
+    --m-radius-card: 20px;
+    --m-radius-control: 14px;
+    --m-hairline: color-mix(in srgb, var(--color-text) 8%, transparent);
+    --m-shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04);
+  }
+
+  /* Teinte d'accent mélangée à la SURFACE (pas à la transparence) : plus de gris boueux.
+     Posée sur #root (spécificité d'id) pour passer devant les variables du thème. */
+  #root {
+    --color-accent-muted: color-mix(in srgb, #2fbf7f 9%, var(--color-surface));
+  }
+
+  body {
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ── Conteneur de page ── */
+  [class*="pageContainer"] {
+    padding: 8px var(--m-gutter) 32px !important;
+    gap: 20px !important;
+    height: auto !important;
+    min-height: 100%;
+    overflow: visible !important;
+    overflow-x: clip !important;
+    max-width: none !important;
+    background:
+      radial-gradient(120% 40% at 0% 0%, color-mix(in srgb, var(--color-accent) 7%, transparent) 0%, transparent 70%);
+  }
+  [class*="pageContainer"] > * {
+    flex-shrink: 0;
+  }
+
+  /* Le texte à chasse fixe est réservé aux données (plaques, IMEI) — jamais aux libellés d'interface */
+  [class*="Pill"], [class*="toggle"], [class*="Toggle"], [class*="chip"], [class*="Chip"] {
+    font-family: var(--font-body) !important;
+  }
+
+  /* ── En-tête : titre large iOS-style, rien de décoratif ── */
+  [class*="pageHeader"] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 14px !important;
+    padding-top: 16px;
+  }
+  [class*="titleIconChip"] {
+    display: none !important;
+  }
+  [class*="kicker"] {
+    font-size: 0.6875rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.14em !important;
+    margin-bottom: 6px !important;
+  }
+  [class*="pageTitle"] {
+    font-family: var(--font-body) !important;
+    font-size: 1.75rem !important;
+    line-height: 1.15 !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.035em !important;
+    text-shadow: none !important;
+  }
+  [class*="pageSubtitle"],
+  [class*="subtitle"] {
+    margin-top: 4px;
+    font-size: 0.9375rem !important;
+    line-height: 1.4;
+    color: var(--color-text-secondary) !important;
+  }
+
+  /* Rangée d'actions de l'en-tête : défilement horizontal, jamais 3 lignes */
+  [class*="headerActions"],
+  [class*="pageActions"] {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 calc(var(--m-gutter) * -1);
+    padding: 2px var(--m-gutter);
+  }
+  [class*="headerActions"]::-webkit-scrollbar,
+  [class*="pageActions"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ── Chiffres clés : grille 2 colonnes, la dernière tuile impaire s'étire ── */
+  [class*="kpiGrid"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+  [class*="kpiGrid"] > [class*="kpiCard"]:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  /* ── Chiffres clés : tuiles sobres, chiffre dominant ── */
+  [class*="kpiCard"] {
+    background: var(--color-surface) !important;
+    border: 1px solid var(--m-hairline) !important;
+    border-radius: var(--m-radius-card) !important;
+    box-shadow: var(--m-shadow-card) !important;
+    padding: 14px !important;
+    gap: 12px !important;
+  }
+  [class*="kpiCard"]::before,
+  [class*="kpiCard"]::after {
+    display: none !important;
+  }
+  [class*="kpiIcon"] {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 10px !important;
+  }
+  [class*="kpiValue"] {
+    font-family: var(--font-body) !important;
+    font-size: 1.75rem !important;
+    font-weight: 650 !important;
+    letter-spacing: -0.04em !important;
+    line-height: 1 !important;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text) !important;
+  }
+  [class*="kpiLabel"] {
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+    color: var(--color-text-tertiary) !important;
+  }
+
+  /* ── Recherche & champs : 48 px, 16 px (pas de zoom iOS) ── */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 1rem !important;
+  }
+  [class*="searchInputWrapper"] {
+    max-width: 100% !important;
+    width: 100%;
+  }
+  [class*="searchInputWrapper"] input {
+    min-height: 48px;
+    border-radius: var(--m-radius-control) !important;
+    background: var(--color-surface) !important;
+    border: 1px solid var(--m-hairline) !important;
+    box-shadow: var(--m-shadow-card);
+  }
+
+
+  /* ── Navigation de section (Paramètres) : rangée de pilules défilante ── */
+  [class*="tabsGrid"] {
+    display: flex !important;
+    overflow-x: auto;
+    gap: 8px !important;
+    margin: 0 calc(var(--m-gutter) * -1);
+    padding: 2px var(--m-gutter);
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--m-gutter);
+  }
+  [class*="tabsGrid"]::-webkit-scrollbar { display: none; }
+  [class*="tabCard"] {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 0 16px !important;
+    border-radius: 999px !important;
+    scroll-snap-align: start;
+  }
+  [class*="tabCard"]::after,
+  [class*="tabDesc"] { display: none !important; }
+  [class*="tabText"] { display: block; }
+
+  /* ── Filtres (Alertes…) : un seul panneau compact, chips sur une ligne ── */
+  [class*="filtersPanel"] {
+    padding: 14px 0 !important;
+    gap: 14px !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  [class*="filterChipsRow"] {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    margin: 0 calc(var(--m-gutter) * -1);
+    padding: 2px var(--m-gutter);
+    scrollbar-width: none;
+  }
+  [class*="filterChipsRow"]::-webkit-scrollbar { display: none; }
+  [class*="filterChip"]:not([class*="Row"]) {
+    flex: 0 0 auto;
+    min-height: 40px;
+    white-space: nowrap;
+  }
+  [class*="filterLabel"] {
+    padding: 0;
+    font-size: 0.6875rem !important;
+    letter-spacing: 0.1em !important;
+  }
+
+  /* Pas de halo lumineux sur les éléments actifs : une bordure nette suffit */
+  [class*="tabActive"],
+  [class*="Active"][class*="Card"],
+  [class*="optionActive"],
+  [class*="selected"] {
+    box-shadow: 0 0 0 1px var(--color-accent) inset !important;
+  }
+  [class*="tabActive"] [class*="tabIcon"] { box-shadow: none !important; }
+
+  /* ── Boutons : cibles ≥ 44 px, rayon cohérent ── */
+  button:where(:not([class*="iconButton"]):not([class*="item"]):not([class*="leaflet"])) {
+    min-height: 44px;
+  }
+  [class*="Button_"],
+  [class*="btn"] {
+    border-radius: var(--m-radius-control) !important;
+    font-weight: 600;
+  }
+
+  /* ── Cartes génériques & panneaux ── */
+  [class*="Card_card"],
+  [class*="chartCard"],
+  [class*="panel"] {
+    border-radius: var(--m-radius-card) !important;
+    border-color: var(--m-hairline) !important;
+  }
+
+  /* ── Onglets : contrôle segmenté défilant ── */
+  [class*="Tabs_"] [role="tablist"],
+  [class*="tabsWrap"],
+  [class*="reports-tabs-wrap"] {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  /* ── Liste en cartes (DataTable mobile) ── */
+  [class*="_mobileCard_"] {
+    border-color: var(--m-hairline) !important;
+    box-shadow: var(--m-shadow-card) !important;
+  }
+
+  /* Cartes de liste posées directement sur le fond : plus de « carte dans une carte » */
+  [class*="Card_root"]:has([class*="mobileCardContainer"]) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* ── Badges / pastilles : lisibles, jamais en capitales criardes ── */
+  [class*="Badge_"] {
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  /* ── Feuilles / modales : bottom-sheet arrondi ── */
+  [class*="Modal_"] [role="dialog"],
+  [class*="dt-dialog-card"] {
+    border-radius: 28px 28px 0 0 !important;
+  }
+
+  /* Cartes : le pincement remplace les boutons +/- (qui chevauchaient la recherche) */
+  .leaflet-control-zoom {
+    display: none !important;
+  }
+
+  /* ── Éléments décoratifs desktop retirés (pilules « vérifié », jauges) ── */
+  [class*="verifiedPill"],
+  [class*="headerMeter"],
+  [class*="liveChip"] {
+    display: none !important;
+  }
+
+  /* ── Barre de filtres : recherche pleine largeur, puis chips défilantes ── */
+  [class*="filtersRow"] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+  [class*="filtersRow"] > [class*="Wrapper"],
+  [class*="filtersRow"] > [class*="search"] {
+    width: 100%;
+    flex: none;
+  }
+
+  /* ═══ Mouvement : entrée en cascade + retour tactile ═══ */
+  @keyframes m-rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  [class*="pageContainer"] > *,
+  [class*="mobileStack"] > *,
+  [class*="mHeader"] {
+    animation: m-rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  [class*="pageContainer"] > :nth-child(2),
+  [class*="mobileStack"] > :nth-child(1) { animation-delay: 40ms; }
+  [class*="pageContainer"] > :nth-child(3),
+  [class*="mobileStack"] > :nth-child(2) { animation-delay: 90ms; }
+  [class*="pageContainer"] > :nth-child(4),
+  [class*="mobileStack"] > :nth-child(3) { animation-delay: 140ms; }
+  [class*="pageContainer"] > :nth-child(5),
+  [class*="mobileStack"] > :nth-child(4) { animation-delay: 190ms; }
+  [class*="pageContainer"] > :nth-child(n+6),
+  [class*="mobileStack"] > :nth-child(n+5) { animation-delay: 240ms; }
+
+  [class*="kpiCard"],
+  [class*="_mobileCard_"],
+  [class*="sheetItem"],
+  [class*="recentItem"],
+  [class*="tabCard"],
+  [class*="filterChip"] {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.18s ease, border-color 0.18s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  [class*="kpiCard"]:active,
+  [class*="_mobileCard_"]:active,
+  [class*="sheetItem"]:active,
+  [class*="tabCard"]:active,
+  [class*="filterChip"]:active {
+    transform: scale(0.97);
+  }
+  button:active:not(:disabled) {
+    transition: transform 0.12s ease;
+  }
+
+  /* Défilement fluide, sans rebond parasite ni sélection de texte sur les contrôles */
+  html { scroll-behavior: smooth; }
+  [class*="appLayoutMain"] { overscroll-behavior-y: contain; }
+  button, [role="button"] { user-select: none; -webkit-user-select: none; }
+
+  /* Squelettes : balayage de lumière discret */
+  [class*="Skeleton_"] {
+    border-radius: 12px !important;
+  }
+
+  /* Focus clavier/lecteur d'écran : anneau net, jamais supprimé */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 10px;
+  }
+
+  /* Titres de section au sein des pages (h2/h3) : hiérarchie nette */
+  [class*="pageContainer"] h2 {
+    font-size: 1.1875rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+  }
+
+  /* Pas d'animation décorative en boucle (halo pulsant) */
+  [class*="titleIconChip"],
+  [class*="kpiIcon"] {
+    animation: none !important;
+    box-shadow: none !important;
+  }
+}
+
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  [class*="pageContainer"] > *,
+  [class*="mobileStack"] > *,
+  [class*="mHeader"] { animation: none !important; }
+  html { scroll-behavior: auto; }
+}

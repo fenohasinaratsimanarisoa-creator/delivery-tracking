@@ -13,8 +13,14 @@ import styles from './MapLayerSwitcher.module.css';
 
 const STORAGE_KEY = 'dt_map_layer';
 
+// Sans choix explicite de l'utilisateur, la carte suit le thème : fond sombre
+// (dark-v11, sobre) en mode sombre, plan standard sinon — pas de dalle blanche
+// aveuglante au milieu d'une interface sombre.
+function defaultLayer(): string {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'planDark' : 'plan';
+}
 function getSavedLayer(): string {
-  try { return localStorage.getItem(STORAGE_KEY) || 'plan'; } catch { return 'plan'; }
+  try { return localStorage.getItem(STORAGE_KEY) || defaultLayer(); } catch { return defaultLayer(); }
 }
 function saveLayer(layer: string) {
   try { localStorage.setItem(STORAGE_KEY, layer); } catch {}

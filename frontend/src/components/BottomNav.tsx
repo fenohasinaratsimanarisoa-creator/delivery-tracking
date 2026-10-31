@@ -78,7 +78,7 @@ export default function BottomNav() {
                 <Icon className={styles.icon} />
                 {showBadge && <span className={styles.badge}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
               </span>
-              <span className={styles.label}>{item.label}</span>
+              <span className={styles.label}>{item.path === '/map' ? t('nav.mapShort', { defaultValue: 'Carte' }) : item.label}</span>
             </button>
           );
         })}

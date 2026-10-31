@@ -7,6 +7,7 @@ import { initNativeOAuthListener } from './services/native/nativeAuth';
 import { initApiOverrideBanner } from './services/api/config';
 import { resetServiceWorkerAndReload } from './services/pwa/reset';
 import { isChunkLoadError, recoverFromChunkLoadError } from './services/pwa/chunkRecovery';
+import './styles/mobile-premium.css';
 
 initSentry();
 initNativeOAuthListener();

@@ -737,3 +737,18 @@
     min-width: 0;
   }
 }
+
+/* Mobile premium : trois repères du jour sur une seule rangée compacte */
+@media (max-width: 767px) {
+  .summaryRow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .summaryCard {
+    padding: 12px;
+    gap: 8px;
+    border-radius: 18px;
+  }
+  .summaryIcon { width: 28px; height: 28px; border-radius: 9px; }
+  .summaryLabel { text-transform: none; letter-spacing: 0; font-size: 0.6875rem; line-height: 1.2; }
+}

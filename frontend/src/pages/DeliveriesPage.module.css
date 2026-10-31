@@ -841,3 +841,55 @@
     min-width: 0;
   }
 }
+
+/* ─── Mobile premium : KPI en bandeau défilant compact (au lieu de 4 grosses
+   tuiles qui repoussaient la liste hors de l'écran) ─── */
+@media (max-width: 767px) {
+  .kpiGrid {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    margin: 0 calc(var(--space-lg, 16px) * -1);
+    padding: 2px var(--space-lg, 16px);
+    scrollbar-width: none;
+  }
+  .kpiGrid::-webkit-scrollbar {
+    display: none;
+  }
+  .kpiCard {
+    flex: 0 0 auto;
+    min-width: 120px;
+    padding: 12px 14px;
+    border-radius: 18px;
+    scroll-snap-align: start;
+  }
+  .kpiCard::before {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .kpiGrid {
+    scroll-padding-inline: var(--space-lg, 16px);
+  }
+  /* La liste ne doit plus se réduire dans un cadre à défilement interne :
+     elle s'étale et c'est la page qui défile. */
+  .pageContainer {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+  .pageContainer > * {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .kpiGrid {
+    padding-bottom: 10px;
+    margin-bottom: -10px;
+    background: transparent;
+  }
+  .importModeToggle { font-family: var(--font-body); font-size: 0.8125rem; }
+}

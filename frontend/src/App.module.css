@@ -43,7 +43,7 @@
 /* Keep page content clear of the fixed BottomNav on mobile */
 @media (max-width: 767px) {
   .appLayoutMain {
-    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   }
 }
 
