@@ -18,8 +18,16 @@ http://169.58.237.88 {
 	redir https://169-58-237-88.sslip.io{uri} permanent
 }
 
-# Si un jour un vrai domaine à vous pointe vers l'IP publique de la VM :
-# ajoutez un bloc supplémentaire ci-dessous avec ce domaine (même syntaxe
-# que le bloc sslip.io ci-dessus) — Caddy obtient seul son propre certificat,
-# aucune autre configuration à changer. Le bloc sslip.io peut rester en
-# parallèle sans conflit.
+# Domaine propre : pistio.dev (acheté chez Cloudflare Registrar). Prérequis :
+# enregistrement DNS A pistio.dev → 169.58.237.88, proxy Cloudflare DÉSACTIVÉ
+# (nuage gris, « DNS only »), sinon Caddy ne peut pas obtenir son certificat.
+# Caddy obtient/renouvelle seul le certificat Let's Encrypt. Le bloc sslip.io
+# reste en parallèle (ancien APK, liens déjà partagés) sans conflit.
+pistio.dev {
+	reverse_proxy frontend:80
+}
+
+# www.pistio.dev → apex (enregistrement A/CNAME www à créer aussi).
+www.pistio.dev {
+	redir https://pistio.dev{uri} permanent
+}
