@@ -27,7 +27,12 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 // tuiles 512 px + zoomOffset -1, avec le suffixe @2x posé nous-mêmes pour la
 // netteté. Les étiquettes ont alors leur taille nominale (~2× plus grandes
 // qu'avant sur écran normal, ~4× sur écran dense).
-const MAPBOX_512 = { tileSize: 512, zoomOffset: -1, retinaSuffix: true } as const;
+//
+// DEUXIÈME PALIER (« encore trop petits ») : tuiles 512 px affichées sur 1024 px
+// CSS (tileSize 1024 + zoomOffset -2) → étiquettes ×2 par rapport à la taille
+// nominale, et moins de noms entassés. Contrepartie : le texte est agrandi
+// (légèrement plus doux sur écran dense) — compromis assumé pour la lisibilité.
+const MAPBOX_512 = { tileSize: 1024, zoomOffset: -2, retinaSuffix: true } as const;
 
 // Config centralisée des tuiles. Les écrans 4K/HiDPI affichent ~2x plus de
 // pixels : les fournisseurs qui le supportent exposent des tuiles @2x via le
@@ -48,13 +53,15 @@ export const TILE_PROVIDERS: Record<
   plan: {
     key: 'plan',
     name: 'Plan',
-    // "streets-v12" (PAS "navigation-day-v1" — testé puis rejeté : ce style
+    // 2026-10-31 : "light-v11" (gris très doux, noms de lieux en avant) remplace
+    // "streets-v12" dont les aplats verts/jaunes/bleus dominaient la carte et
+    // noyaient les étiquettes. Toujours sobre. Ancienne note : "streets-v12" (PAS "navigation-day-v1" — testé puis rejeté : ce style
     // colore les grands axes en vert vif, trop "GPS voiture", pas assez sobre
     // pour un dashboard flotte pro). Labels de lieux/rues déjà nets à ce
     // niveau ; le style "navigation" n'apporte que du contraste de couleur, pas
     // de vraie lisibilité en plus.
     url: MAPBOX_TOKEN
-      ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
+      ? `https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/512/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
       : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: MAPBOX_TOKEN
       ? '&copy; Mapbox &copy; OpenStreetMap contributors'
