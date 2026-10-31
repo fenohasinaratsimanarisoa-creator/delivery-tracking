@@ -47,6 +47,16 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:scheme="https"
+                    android:host="pistio.dev"
+                    android:pathPrefix="/auth/callback" />
+            </intent-filter>
+
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
                     android:host="169-58-237-88.sslip.io"
                     android:pathPrefix="/auth/callback" />
             </intent-filter>
