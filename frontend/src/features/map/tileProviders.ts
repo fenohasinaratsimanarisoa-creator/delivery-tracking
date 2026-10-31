@@ -6,6 +6,11 @@ export interface TileProviderConfig {
   maxZoom: number;
   maxNativeZoom?: number;
   detectRetina?: boolean;
+  /** Tuiles vectorielles Mapbox rendues en 512 px (étiquettes à taille nominale). */
+  tileSize?: number;
+  zoomOffset?: number;
+  /** Remplace {r} par '@2x' sur écran dense, sans le mécanisme detectRetina de Leaflet. */
+  retinaSuffix?: boolean;
 }
 
 // Token PUBLIC Mapbox (préfixe pk., fait pour être embarqué côté client — voir
@@ -14,6 +19,15 @@ export interface TileProviderConfig {
 // MapLayerSwitcher.tsx), on garde alors seulement le Satellite Esri (zoom natif
 // limité à 17, voir plus bas).
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
+
+// LISIBILITÉ DES NOMS DE LIEUX : l'endpoint « /tiles/256 » rend les étiquettes à
+// mi-taille, et `detectRetina` de Leaflet les réduit ENCORE de moitié sur les
+// écrans denses (il demande des tuiles z+1 affichées en 128 px) — d'où des noms
+// de villes illisibles sur téléphone. Configuration recommandée par Mapbox :
+// tuiles 512 px + zoomOffset -1, avec le suffixe @2x posé nous-mêmes pour la
+// netteté. Les étiquettes ont alors leur taille nominale (~2× plus grandes
+// qu'avant sur écran normal, ~4× sur écran dense).
+const MAPBOX_512 = { tileSize: 512, zoomOffset: -1, retinaSuffix: true } as const;
 
 // Config centralisée des tuiles. Les écrans 4K/HiDPI affichent ~2x plus de
 // pixels : les fournisseurs qui le supportent exposent des tuiles @2x via le
@@ -40,25 +54,25 @@ export const TILE_PROVIDERS: Record<
     // niveau ; le style "navigation" n'apporte que du contraste de couleur, pas
     // de vraie lisibilité en plus.
     url: MAPBOX_TOKEN
-      ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
+      ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
       : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: MAPBOX_TOKEN
       ? '&copy; Mapbox &copy; OpenStreetMap contributors'
       : '&copy; OpenStreetMap contributors',
     maxZoom: 20,
-    ...(MAPBOX_TOKEN ? { detectRetina: true } : { maxNativeZoom: 19 }),
+    ...(MAPBOX_TOKEN ? MAPBOX_512 : { maxNativeZoom: 19 }),
   },
   planDark: {
     key: 'planDark',
     name: 'Sombre',
     url: MAPBOX_TOKEN
-      ? `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
+      ? `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/512/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
       : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: MAPBOX_TOKEN
       ? '&copy; Mapbox &copy; OpenStreetMap contributors'
       : '&copy; OpenStreetMap contributors',
     maxZoom: 20,
-    ...(MAPBOX_TOKEN ? { detectRetina: true } : { maxNativeZoom: 19 }),
+    ...(MAPBOX_TOKEN ? MAPBOX_512 : { maxNativeZoom: 19 }),
   },
   planLight: {
     key: 'planLight',
@@ -99,11 +113,11 @@ export const TILE_PROVIDERS: Record<
     key: 'satelliteHD',
     name: 'Satellite HD',
     url: MAPBOX_TOKEN
-      ? `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/256/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
+      ? `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/512/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`
       : '',
     attribution: '&copy; Mapbox &copy; OpenStreetMap contributors',
     maxZoom: 22,
-    detectRetina: true,
+    ...MAPBOX_512,
   },
 };
 
@@ -120,5 +134,11 @@ export function tileLayerProps(p: TileProviderConfig) {
     maxZoom: p.maxZoom,
     ...(p.maxNativeZoom ? { maxNativeZoom: p.maxNativeZoom } : {}),
     ...(p.detectRetina ? { detectRetina: true } : {}),
+    ...(p.tileSize ? { tileSize: p.tileSize } : {}),
+    ...(p.zoomOffset !== undefined ? { zoomOffset: p.zoomOffset } : {}),
+    // `r` alimente le gabarit d'URL {r} (Leaflet utilise toute option inconnue).
+    ...(p.retinaSuffix
+      ? { r: typeof window !== 'undefined' && window.devicePixelRatio > 1 ? '@2x' : '' }
+      : {}),
   };
 }

@@ -6,7 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
 import { Package, User, Truck, Zap } from 'lucide-react';
 import api from '../services/api/client';
-import { TILE_PROVIDERS } from '../features/map/tileProviders';
+import { TILE_PROVIDERS, tileLayerProps } from '../features/map/tileProviders';
 import { enableRetinaDefaultMarker, createPinIcon } from '../features/map/markerIcons';
 import Badge from '../components/Badge';
 import { DELIVERY_STATUS_VARIANT } from '../services/deliveryStatus';
@@ -160,9 +160,7 @@ export default function ClientTrackingPage() {
       <div className={styles.mapArea}>
         <MapContainer center={center} zoom={13} maxZoom={Math.max(...Object.values(TILE_PROVIDERS).map((p) => p.maxZoom))} style={{ height: '100%', width: '100%' }}>
           <TileLayer
-            attribution={TILE_PROVIDERS.plan.attribution}
-            url={TILE_PROVIDERS.plan.url}
-            maxZoom={TILE_PROVIDERS.plan.maxZoom}
+            {...tileLayerProps(TILE_PROVIDERS.plan)}
             detectRetina
           />
           <Polyline positions={path} color="blue" weight={3} opacity={0.6} />

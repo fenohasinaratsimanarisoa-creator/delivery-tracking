@@ -10,7 +10,7 @@ import api from '../services/api/client';
 import Badge from '../components/Badge';
 import { DELIVERY_STATUS_VARIANT } from '../services/deliveryStatus';
 import type { Delivery } from '../types';
-import { TILE_PROVIDERS } from '../features/map/tileProviders';
+import { TILE_PROVIDERS, tileLayerProps } from '../features/map/tileProviders';
 import { enableRetinaDefaultMarker } from '../features/map/markerIcons';
 import styles from './DeliveryDetailPage.module.css';
 
@@ -96,9 +96,7 @@ export default function DeliveryDetailPage() {
         <div className={styles.mapContainer}>
           <MapContainer center={center} zoom={13} maxZoom={TILE_PROVIDERS.plan.maxZoom} style={{ height: '100%', width: '100%' }}>
             <TileLayer
-              attribution={TILE_PROVIDERS.plan.attribution}
-              url={TILE_PROVIDERS.plan.url}
-              maxZoom={TILE_PROVIDERS.plan.maxZoom}
+              {...tileLayerProps(TILE_PROVIDERS.plan)}
               detectRetina
             />
             <Marker position={[d.pickupLat!, d.pickupLng!]} />

@@ -9,7 +9,7 @@ import { useGpsPreload } from '../hooks/useGpsPreload'
 import { getApiBaseUrl } from '../services/api/config'
 import type { GeocodingResult } from '../services/geocoding/types'
 import { MG_COMMUNES } from '../services/geocoding/mg-communes'
-import { TILE_PROVIDERS } from '../features/map/tileProviders'
+import { TILE_PROVIDERS, tileLayerProps } from '../features/map/tileProviders'
 import { enableRetinaDefaultMarker } from '../features/map/markerIcons'
 import styles from './LocationSearchInput.module.css'
 
@@ -265,9 +265,7 @@ export default memo(function LocationSearchInput({
         <div className={styles.mapContainer}>
           <MapContainer center={mapPos} zoom={16} maxZoom={TILE_PROVIDERS.plan.maxZoom} style={{ height: '100%', width: '100%' }} zoomControl={true}>
             <TileLayer
-              attribution={TILE_PROVIDERS.plan.attribution}
-              url={TILE_PROVIDERS.plan.url}
-              maxZoom={TILE_PROVIDERS.plan.maxZoom}
+              {...tileLayerProps(TILE_PROVIDERS.plan)}
               detectRetina
             />
             <DraggableMarker position={mapPos} onChange={handleMapConfirm} /><MapUpdater center={mapPos} />
