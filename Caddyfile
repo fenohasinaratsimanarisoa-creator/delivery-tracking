@@ -31,3 +31,8 @@ pistio.dev {
 www.pistio.dev {
 	redir https://pistio.dev{uri} permanent
 }
+
+# Suivi Plante (autre projet sur ce VPS, /opt/suivie-plante) : HTTPS ici, application dans son propre conteneur
+suivi.169-58-237-88.sslip.io {
+	reverse_proxy suivie-web:80
+}
